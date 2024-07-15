@@ -1,0 +1,9 @@
+# Default config: https://github.com/DavidAnson/markdownlint/blob/main/schema/.markdownlint.yaml
+# Note that this config affects both the formatter (conform) and the linter/lsp
+# If you wish to affect just one of those, change the options in the relevant plugin file directly
+MD013:
+  line_length: 900
+
+# Set the spaces for unordered list indentation
+MD007:
+  indent: 4

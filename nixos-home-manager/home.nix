@@ -495,7 +495,7 @@ programs.waybar = {
   xdg.enable = true;
   # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";
   xdg.configFile.nvim = {
-  	source = ./nvim; # Fix this path - I gave up trying to fight it
+  	source = ../nvim; # Fix this path - I gave up trying to fight it
 	recursive = true;
   };
 
