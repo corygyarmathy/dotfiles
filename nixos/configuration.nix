@@ -180,7 +180,15 @@ in
     LC_TELEPHONE = "en_AU.UTF-8";
     LC_TIME = "en_AU.UTF-8";
   };
-  
+
+  # Enable dynamically linked executables to run
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    # Add any missing dynamic libraries for unpackaged programs
+    # here, NOT in environment.systemPackages
+    stdenv.cc.cc
+    libGL
+  ]; 
   # Enable the X11 windowing system.
   # services.xserver.enable = true;
 

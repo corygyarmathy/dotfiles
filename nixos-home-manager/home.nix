@@ -309,11 +309,11 @@ in
   };
 
  # Configure stylix in home manager (for RICEing)
-stylix = {
-	targets = {
-	    xfce.enable = true;
-	};
-};
+# stylix = {
+# 	targets = {
+# 	    xfce.enable = true;
+# 	};
+# };
 
   # Configure Hyprshade profiles (blue light filter)
   home.file.".config/hypr/hyprshade.toml".text = ''
@@ -495,8 +495,9 @@ programs.waybar = {
   xdg.enable = true;
   # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";
   xdg.configFile.nvim = {
-  	source = ../nvim; # Fix this path - I gave up trying to fight it
-	recursive = true;
+    # source = ../nvim;
+    source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/dotfiles/nvim";
+    # recursive = true;
   };
 
   # home.folder.".config/nvim".source = "git/nvim";
@@ -512,7 +513,9 @@ programs.waybar = {
 	google-chrome
   	
   	# Development
-  	libgcc # GNU Compiler Collection: C, C++, Objective-C, Fortran, OpenMP for C/C++/Fortran, and Ada, and libraries for these languages 
+  	gcc
+	libgcc # GNU Compiler Collection: C, C++, Objective-C, Fortran, OpenMP for C/C++/Fortran, and Ada, and libraries for these languages 
+	python3
   	
   	# Media
   	gimp
@@ -523,12 +526,13 @@ programs.waybar = {
   	# Utilities
   	git
 	gh # GitHub - used for authenticating with GitHub
-	git-credential-manager
-	dotnetCorePackages.sdk_8_0_3xx # .NET # Requirement for git-credential-manager # https://nixos.wiki/wiki/DotNET
-	# dotnet-runtime_8 # Requirement for git-credential-manager # https://nixos.wiki/wiki/DotNET
+	git-credential-manager # gcm
+	dotnetCorePackages.sdk_8_0_3xx # Re: gcm # https://nixos.wiki/wiki/DotNET
 	gnupg # gpg # Requirement for git-credential-manager
 	pinentry-all # gnupg interface to passphrase input # Requirement for gnupg
 	pass-wayland # Requirement for git-credential-manager
+	lazygit # TUI for git
+
   	wget
   	wireshark
   	nmap
@@ -536,11 +540,16 @@ programs.waybar = {
   	ddcui # Dispay management tool
   	lshw # Used to get hardware info (such as the Bus ID for the GPUs)
   	alacritty # Terminal emulator
-  	ripgrep
+  	ripgrep # Requirement for nvim
+	gnumake # Requirement for nvim
+	unzip # Requirement for nvim
+	xclip # Requirement for nvim
+	nodePackages.npm # JS Node Package Manager # Requirement for nvim (mason plugin)
 	xfce.thunar # File manager
 	xfce.xfconf # Required for thunar
 	xfce.thunar-archive-plugin # Zip / unzip plugin for Thunar
 	file-roller # Archive (.zip) manager for GNOME, required for thunar-archive-plugin
+	steam-run # Allows running dynamically linked executables, made for steam
 
 	# Wayland / Hyprland
   	# waybar # Status bar for Wayland # Only needs to be enabled once
