@@ -161,7 +161,10 @@ return {
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
-        'markdownlint',
+        'luacheck', -- Used to lint Lua code
+        'markdownlint', -- Used to format Markdown documents
+        'nil', -- LSP for nix (nix-os) code
+        --'nixfmt', -- Formatter for nix (nix-os) code -- TODO: nixfmt not supported by Mason: investigate solution
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 

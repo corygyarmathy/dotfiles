@@ -27,6 +27,7 @@ return { -- Autoformat
     formatters_by_ft = {
       lua = { 'stylua' },
       markdown = { 'markdownlint' },
+      nix = { 'nixfmt' },
       -- Conform can also run multiple formatters sequentially
       -- python = { "isort", "black" },
       --
@@ -37,8 +38,16 @@ return { -- Autoformat
     -- Customise formatters
     formatters = {
       markdownlint = {
+        -- prepend_args = function()
+        --   -- Different file paths depending on whether it's on Windows or not
+        --   if vim.fn.has 'win32' == 1 and vim.fn.has 'wsl' == 0 then
+        --     return '--config=' .. vim.fn.stdpath 'config' .. '\\lua\\plugins\\linterConfigs\\' .. 'markdownlint.yaml'
+        --   else
+        --     return '--config=' .. vim.fn.stdpath 'config' .. '/lua/plugins/linterConfigs/' .. 'markdownlint.yaml'
+        --   end
+        -- end,
         prepend_args = {
-          '--config=' .. vim.fn.stdpath 'config' .. '\\lua\\plugins\\linterConfigs\\' .. 'markdownlint.yaml',
+          '--config=' .. vim.fn.stdpath 'config' .. '/lua/plugins/linterConfigs/' .. 'markdownlint.yaml',
         },
       },
     },

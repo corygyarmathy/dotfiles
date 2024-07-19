@@ -4,14 +4,20 @@ return {
     event = { 'BufReadPre', 'BufNewFile' },
     config = function()
       local lint = require 'lint'
-      local lintConfig = vim.fn.stdpath 'config' .. '\\lua\\plugins\\linterConfigs\\'
+      local lintConfig = function()
+        if vim.fn.has 'win32' == 1 and vim.fn.has 'wsl' == 0 then
+          return vim.fn.stdpath 'config' .. '\\lua\\plugins\\linterConfigs\\'
+        else
+          return vim.fn.stdpath 'config' .. '/lua/plugins/linterConfigs/'
+        end
+      end
       lint.linters_by_ft = {
         markdown = { 'markdownlint' },
         lua = { 'luacheck' },
       }
       -- Linter configs
       lint.linters.markdownlint.args = {
-        '--config=' .. lintConfig .. 'markdownlint.yaml',
+        '--config=' .. lintConfig() .. 'markdownlint.yaml',
       }
 
       -- Create autocommand which carries out the actual linting

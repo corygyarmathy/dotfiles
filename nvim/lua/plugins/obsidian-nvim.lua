@@ -23,10 +23,24 @@ return {
     -- When obsidian.nvim is loaded by your plugin man/ger, it will automatically set
     -- the workspace to the first workspace in the list whose `path` is a parent of the
     -- current markdown file being edited.
+    -- workspaces = function()
+    --   -- Different file paths depending on whether it's on Windows or not
+    --   if vim.fn.has 'win32' == 1 and vim.fn.has 'wsl' == 0 then
+    --     return {
+    --       name = 'personal',
+    --       path = 'C:\\Users\\coryg\\Documents\\personal-notes',
+    --     }
+    --   else
+    --     return {
+    --       name = 'personal',
+    --       path = '~/git/personal-notes',
+    --     }
+    --   end
+    -- end,
     workspaces = {
       {
         name = 'personal',
-        path = 'C:\\Users\\coryg\\Documents\\personal-notes',
+        path = '~/git/personal-notes',
       },
     },
 
@@ -40,18 +54,18 @@ return {
     -- levels defined by "vim.log.levels.*".
     log_level = vim.log.levels.INFO,
     -- FIXME: Fix up the daily note templating / formatting settings
-    daily_notes = {
-      -- Optional, if you keep daily notes in a separate directory.
-      folder = '_Daily Notes',
-      -- Optional, if you want to change the date format for the ID of daily notes.
-      date_format = '%Y-%m-%d',
-      -- Optional, if you want to change the date format of the default alias of daily notes.
-      alias_format = '%B %-d, %Y',
-      -- Optional, default tags to add to each new daily note created.
-      default_tags = { 'Daily' },
-      -- Optional, if you want to automatically insert a template from your template directory like 'daily.md'
-      template = 'Templates/Daily Note Template.md',
-    },
+    -- daily_notes = {
+    --   -- Optional, if you keep daily notes in a separate directory.
+    --   folder = '_Daily Notes',
+    --   -- Optional, if you want to change the date format for the ID of daily notes.
+    --   date_format = '%Y-%m-%d',
+    --   -- Optional, if you want to change the date format of the default alias of daily notes.
+    --   alias_format = '%B %-d, %Y',
+    --   -- Optional, default tags to add to each new daily note created.
+    --   default_tags = { 'Daily' },
+    --   -- Optional, if you want to automatically insert a template from your template directory like 'daily.md'
+    --   template = 'Templates/Daily Note Template.md',
+    -- },
 
     -- Optional, completion of wiki links, local markdown links, and tags using nvim-cmp.
     completion = {
@@ -179,13 +193,13 @@ return {
     end,
 
     -- Optional, for templates (see below).
-    templates = {
-      folder = 'templates',
-      date_format = '%Y-%m-%d',
-      time_format = '%H:%M',
-      -- A map for custom variables, the key should be the variable and the value a function
-      substitutions = {},
-    },
+    -- templates = {
+    --   folder = 'templates',
+    --   date_format = '%Y-%m-%d',
+    --   time_format = '%H:%M',
+    --   -- A map for custom variables, the key should be the variable and the value a function
+    --   substitutions = {},
+    -- },
 
     -- Optional, by default when you use `:ObsidianFollowLink` on a link to an external
     -- URL it will be ignored but you can customize this behavior here.
