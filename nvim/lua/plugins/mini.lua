@@ -55,7 +55,7 @@ return { -- Collection of various small independent plugins/modules
     -- Force default Vim notifications to use mini.notify
     vim.notify = MiniNotify.make_notify()
 
-    require('mini.starter').setup()
+    -- require('mini.starter').setup()
     -- ... and there is more!
     --  Check out: https://github.com/echasnovski/mini.nvim
   end,
