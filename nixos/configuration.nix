@@ -9,7 +9,7 @@
   ...
 }:
 let
-    thermald-conf =./thermald-conf.xml; #/home/coryg/git/nixos-config/nixos/thermald-conf.xml;
+  thermald-conf = ./thermald-conf.xml; # /home/coryg/git/nixos-config/nixos/thermald-conf.xml;
 in
 {
   # You can import other NixOS modules here
@@ -25,7 +25,7 @@ in
     # ./users.nix
 
     inputs.stylix.nixosModules.stylix # Importing Stylix: used for RICEing, imports into home-manager automatically
-    
+
     inputs.hardware.nixosModules.common-cpu-intel
     inputs.hardware.nixosModules.common-gpu-nvidia
     inputs.hardware.nixosModules.common-pc-laptop
@@ -33,55 +33,55 @@ in
 
     # Import your generated (nixos-generate-config) hardware configuration
     ./hardware-configuration.nix
-    
+
     # Import home-manager's NixOS module
     inputs.home-manager.nixosModules.home-manager
   ];
-  
-    # Bootloader.
+
+  # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.kernelParams = [ 
-  	"acpi_rev_override" # Default sugggested Dell XPS 15 config
-  	"nvidia-drm.modeset=1" # Used for Wayland compat.
-  	"nvidia-drm.fbdev=1" # Used for Wayland compat.
+  boot.kernelParams = [
+    "acpi_rev_override" # Default sugggested Dell XPS 15 config
+    "nvidia-drm.modeset=1" # Used for Wayland compat.
+    "nvidia-drm.fbdev=1" # Used for Wayland compat.
   ];
-  
+
   # This will save you money and possibly your life!
   services.thermald.enable = lib.mkDefault true;
 
   # Thermald doesn't have a default config for the 9500 yet, the one in this repo
   # was generated with dptfxtract-static (https://github.com/intel/dptfxtract)
   services.thermald.configFile = lib.mkDefault thermald-conf;
-  
+
   # WiFi speed is slow and crashes by default (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
   # disable_11ax - required until ax driver support is fixed (disable_11ax=1)
   # power_save - works well on this card
   boot.extraModprobeConfig = ''
     options iwlwifi power_save=1
   '';
-  
+
   ## Nvidiaa Drivers / GPU ##
-  
+
   # Enable OpenGL
   hardware.opengl = {
     enable = true;
   };
-  
+
   hardware.nvidia = {
 
     # Modesetting is required.
     modesetting.enable = true;
-    
-    prime = {
-	    # Enables sync mode, dGPU will not fully go to sleep
-	    # sync.enable = true;
-	    
-	    # Bus ID of the Intel GPU.
-	    intelBusId = lib.mkDefault "PCI:0:2:0";
 
-	    # Bus ID of the NVIDIA GPU.
-	    nvidiaBusId = lib.mkDefault "PCI:1:0:0";
+    prime = {
+      # Enables sync mode, dGPU will not fully go to sleep
+      # sync.enable = true;
+
+      # Bus ID of the Intel GPU.
+      intelBusId = lib.mkDefault "PCI:0:2:0";
+
+      # Bus ID of the NVIDIA GPU.
+      nvidiaBusId = lib.mkDefault "PCI:1:0:0";
     };
 
     # Nvidia power management. Experimental, and can cause sleep/suspend to fail.
@@ -89,7 +89,7 @@ in
     # up from sleep. This fixes it by saving the entire VRAM memory to /tmp/ instead 
     # of just the bare essentials.
     powerManagement.enable = true;
-    
+
     # Fine-grained power management. Turns off GPU when not in use.
     # Experimental and only works on modern Nvidia GPUs (Turing or newer).
     powerManagement.finegrained = false;
@@ -136,34 +136,36 @@ in
     };
   };
 
-  nix = let
-    flakeInputs = lib.filterAttrs (_: lib.isType "flake") inputs;
-  in {
-    settings = {
-      # Enable flakes and new 'nix' command
-      experimental-features = "nix-command flakes";
-      # Opinionated: disable global registry
-      flake-registry = "";
-      # Workaround for https://github.com/NixOS/nix/issues/9574
-      nix-path = config.nix.nixPath;
-      substituters = ["https://hyprland.cachix.org"]; # Required for Hyprland
-      trusted-public-keys = ["hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="]; # Required for Hyprland
-    };
-    # Opinionated: disable channels
-    channel.enable = false;
+  nix =
+    let
+      flakeInputs = lib.filterAttrs (_: lib.isType "flake") inputs;
+    in
+    {
+      settings = {
+        # Enable flakes and new 'nix' command
+        experimental-features = "nix-command flakes";
+        # Opinionated: disable global registry
+        flake-registry = "";
+        # Workaround for https://github.com/NixOS/nix/issues/9574
+        nix-path = config.nix.nixPath;
+        substituters = [ "https://hyprland.cachix.org" ]; # Required for Hyprland
+        trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ]; # Required for Hyprland
+      };
+      # Opinionated: disable channels
+      channel.enable = false;
 
-    # Opinionated: make flake registry and nix path match flake inputs
-    registry = lib.mapAttrs (_: flake: {inherit flake;}) flakeInputs;
-    nixPath = lib.mapAttrsToList (n: _: "${n}=flake:${n}") flakeInputs;
-  };
+      # Opinionated: make flake registry and nix path match flake inputs
+      registry = lib.mapAttrs (_: flake: { inherit flake; }) flakeInputs;
+      nixPath = lib.mapAttrsToList (n: _: "${n}=flake:${n}") flakeInputs;
+    };
 
   # TODO: Set your hostname
   networking.hostName = "nixos";
-  
-    # Enable networking
+
+  # Enable networking
   networking.networkmanager.enable = true;
-  
-    # Set your time zone.
+
+  # Set your time zone.
   time.timeZone = "Australia/Perth";
 
   # Select internationalisation properties.
@@ -188,50 +190,50 @@ in
     # here, NOT in environment.systemPackages
     stdenv.cc.cc
     libGL
-  ]; 
+  ];
   # Enable the X11 windowing system.
   # services.xserver.enable = true;
 
   # Enable the GNOME Desktop Environment.
   # services.xserver.displayManager.gdm.enable = true;
   # services.xserver.desktopManager.gnome.enable = true;
-  
+
   # Enable Wayland
   services.xserver = {
-  	enable = true;
-  	videoDrivers = ["nvidia"];
-  	displayManager.gdm = {
-  		enable = true;
-  		wayland = true;
-	};
+    enable = true;
+    videoDrivers = [ "nvidia" ];
+    displayManager.gdm = {
+      enable = true;
+      wayland = true;
+    };
   };
-  
+
   # Enable the Hyprland compositor
   programs.hyprland = {
-	enable = true;
-	xwayland.enable = true;
-	# Ensures you're using the most up-to-date package (probably another way of doing this)
-	package = inputs.hyprland.packages."${pkgs.system}".hyprland;
+    enable = true;
+    xwayland.enable = true;
+    # Ensures you're using the most up-to-date package (probably another way of doing this)
+    package = inputs.hyprland.packages."${pkgs.system}".hyprland;
   };
-  
+
   # Required for Hyprland on Nvidia
   environment.sessionVariables = {
-  	# If your cusor becomes inviseble
-  	WLR_NO_HARDWARE_CURSORS = "1";
-  	# Hint Electron apps to use Wayland
-  	NIXOS_OZONE_WL = "1";
-  	
-  	# Required variables for Nvidea
-  	LIBVA_DRIVER_NAME = "nvidia";
-  	XDG_SESSION_TYPE = "wayland";
-  	GBM_BACKEND = "nvidia-drm";
-	# Required for .NET (using .NET SDK 8)
-	DOTNET_ROOT = "${pkgs.dotnet-sdk_8}";
- };
- 
- # Required for Wayland
- security.polkit.enable = true;
- 
+    # If your cusor becomes inviseble
+    WLR_NO_HARDWARE_CURSORS = "1";
+    # Hint Electron apps to use Wayland
+    NIXOS_OZONE_WL = "1";
+
+    # Required variables for Nvidea
+    LIBVA_DRIVER_NAME = "nvidia";
+    XDG_SESSION_TYPE = "wayland";
+    GBM_BACKEND = "nvidia-drm";
+    # Required for .NET (using .NET SDK 8)
+    DOTNET_ROOT = "${pkgs.dotnet-sdk_8}";
+  };
+
+  # Required for Wayland
+  security.polkit.enable = true;
+
   # Handles desktop windows interactions between each other (e.g. screen sharing)
   # xdg.portal.enable = true;
   # xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
@@ -241,41 +243,41 @@ in
     layout = "us";
     variant = "";
   };
-  
+
   stylix = {
-  	enable = true;
-        base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-medium.yaml";
-	polarity = "dark"; # "light" or "either" - sets light or dark mode
-	image = ../nixos-home-manager/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
-	
-	cursor = {
-		package = pkgs.bibata-cursors;
-        	name = "Bibata-Modern-Ice";
-		size = 24;
-	};
+    enable = true;
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-medium.yaml";
+    polarity = "dark"; # "light" or "either" - sets light or dark mode
+    image = ../nixos-home-manager/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
 
-	fonts = {
-	    serif = {
-	      package = pkgs.dejavu_fonts;
-	      name = "DejaVu Serif";
-	    };
+    cursor = {
+      package = pkgs.bibata-cursors;
+      name = "Bibata-Modern-Ice";
+      size = 24;
+    };
 
-	    sansSerif = {
-	      package = pkgs.dejavu_fonts;
-	      name = "DejaVu Sans";
-	    };
+    fonts = {
+      serif = {
+        package = pkgs.dejavu_fonts;
+        name = "DejaVu Serif";
+      };
 
-	    monospace = {
-	      package = pkgs.dejavu_fonts;
-	      name = "DejaVu Sans Mono";
-	    };
+      sansSerif = {
+        package = pkgs.dejavu_fonts;
+        name = "DejaVu Sans";
+      };
 
-	    emoji = {
-	      package = pkgs.noto-fonts-emoji;
-	      name = "Noto Color Emoji";
-	    };
-	  };
-	};
+      monospace = {
+        package = pkgs.dejavu_fonts;
+        name = "DejaVu Sans Mono";
+      };
+
+      emoji = {
+        package = pkgs.noto-fonts-emoji;
+        name = "Noto Color Emoji";
+      };
+    };
+  };
 
   # Enable CUPS to print documents.
   services.printing.enable = true;
@@ -313,37 +315,38 @@ in
         # TODO: Add your SSH public key(s) here, if you plan on using SSH to connect
       ];
       # TODO: Be sure to add any other groups you need (such as networkmanager, audio, docker, etc)
-      extraGroups = [ "networkmanager" "wheel" "plugdev" ]; # plugdev needed for firmware flashing of Ergodox keyboards
+      extraGroups = [
+        "networkmanager"
+        "wheel"
+        "plugdev"
+      ]; # plugdev needed for firmware flashing of Ergodox keyboards
     };
   };
-  
-    # List packages installed in system profile. To search, run:
+
+  # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-  #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-	gnome-firmware
-	inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
-	# nvidia-utils # Nvidea userspace graphics drivers
-	egl-wayland # Required in order to enable compatibility between the EGL API and the Wayland protocol
-	qt5.qtwayland # Required for Wayland / Hyprland # Not sure if needed.
-    	qt6.qtwayland # Required for Wayland / Hyprland # Not sure if needed.
+    #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
+    gnome-firmware
+    inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
+    # nvidia-utils # Nvidea userspace graphics drivers
+    egl-wayland # Required in order to enable compatibility between the EGL API and the Wayland protocol
+    qt5.qtwayland # Required for Wayland / Hyprland # Not sure if needed.
+    qt6.qtwayland # Required for Wayland / Hyprland # Not sure if needed.
 
-	base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
-        bibata-cursors # Imporst cursors
+    base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
+    bibata-cursors # Imporst cursors
   ];
-  
+
   # Install fonts (system wide)
   fonts.packages = with pkgs; [
+    dejavu_fonts # Fonts
+    noto-fonts-emoji # Fonts
+    nerdfonts # Fonts
+    font-awesome # Fonts
+  ];
 
-
-	dejavu_fonts # Fonts
-	noto-fonts-emoji # Fonts
-	nerdfonts # Fonts
-        font-awesome # Fonts
-
-	];
-  
-services.fwupd.enable = true;
+  services.fwupd.enable = true;
 
   # This setups a SSH server. Very important if you're setting up a headless system.
   # Feel free to remove if you don't need it.
@@ -357,9 +360,9 @@ services.fwupd.enable = true;
       # PasswordAuthentication = false;
     };
   };
- 
- services.onedrive.enable = true; # Install and start OneDrive client
-  
+
+  services.onedrive.enable = true; # Install and start OneDrive client
+
   # GnuPG config
   programs.gnupg.agent = {
     enable = true;
@@ -369,8 +372,10 @@ services.fwupd.enable = true;
   };
   services.pcscd.enable = true;
 
-home-manager = {
-    extraSpecialArgs = { inherit inputs outputs; };
+  home-manager = {
+    extraSpecialArgs = {
+      inherit inputs outputs;
+    };
     users = {
       # Import your home-manager configuration
       coryg = import ../nixos-home-manager/home.nix;
