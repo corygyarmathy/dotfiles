@@ -530,11 +530,6 @@ in
   # Starship configuration (sourcing toml file for config, so I can use starship on other systems)
   xdg.configFile."starship.toml".source = ../starship/starship.toml;
   programs.starship.enable = true;
-  #   enable = true;
-  #   settings = {
-  #     # add_newline = true;
-  #   };
-  # };
 
   programs.spotify-player.settings = {
     theme = "default";
