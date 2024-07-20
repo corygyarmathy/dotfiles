@@ -22,7 +22,7 @@ let
   # dbus-update required for Hyprshade
   # Removed from above: ${pkgs.swww}/bin/swww init &  ${pkgs.swww}/bin/swww img ${/home/coryg/git/nixos-config/home-manager/wallpaper.jpg} &
   browser = "google-chrome-stable"; # Switching as Firefox is crashing in Hyprland / Wayland when maximising YouTube videos
-  terminal = "foot";
+  terminal = "alacritty";
   fileManager = "thunar";
   mod = "SUPER";
 
@@ -523,7 +523,32 @@ in
     source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/dotfiles/nvim"; # Apparently sourcing the file this way works better with nvim? Not sure.
   };
 
-  # home.folder.".config/nvim".source = "git/nvim";
+  # Bash config
+  programs.bash.enable = true;
+  programs.starship.enableBashIntegration = true;
+
+  # Starship configuration (sourcing toml file for config, so I can use starship on other systems)
+  xdg.configFile."starship.toml".source = ../starship/starship.toml;
+  programs.starship.enable = true;
+  #   enable = true;
+  #   settings = {
+  #     # add_newline = true;
+  #   };
+  # };
+
+  programs.spotify-player.settings = {
+    theme = "default";
+    playback_window_position = "Top";
+    copy_command = {
+      command = "wl-copy";
+      args = [ ];
+    };
+    device = {
+      audio_cache = true; # Caches to $APP_CACHE ($HOME/.cache/...)
+      normalization = true; # Enables audio normalisation between songs
+      autoplay = true; # Autoplays similar songs
+    };
+  };
 
   # Add stuff for your user as you see fit:
   # programs.neovim.enable = true;
@@ -543,8 +568,10 @@ in
     lua
     luajitPackages.luarocks # Lua package manager
     nodejs
+    openssl
 
     nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
+
     # Media
     gimp
     obs-studio
@@ -566,9 +593,10 @@ in
     ddcutil # Display management UI
     ddcui # Dispay management tool
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
-    # alacritty # Terminal emulator
-    foot # Terminal emulator
+    alacritty # Terminal emulator
+    # foot # Terminal emulator
     tmux # Terminal multiplexer
+    starship # Shell prompt
     ripgrep # Requirement for nvim
     gnumake # Requirement for nvim
     unzip # Requirement for nvim
@@ -581,6 +609,8 @@ in
     xfce.thunar-archive-plugin # Zip / unzip plugin for Thunar
     file-roller # Archive (.zip) manager for GNOME, required for thunar-archive-plugin
     steam-run # Allows running dynamically linked executables, made for steam
+    alsa-lib # Linux Sound library # Req for spotify-player
+    libdbusmenu-gtk3 # Library for passing menu structures across DBus # Req for spotify-player
 
     # Wayland / Hyprland
     waybar # Status bar for Wayland # Only needs to be enabled once
@@ -594,7 +624,10 @@ in
     discord
     zotero
     steam
-    spotify
+    ## spotify
+    # spotifyd
+    # spotify-tui
+    spotify-player # Spotify terminal client
     calibre
 
     # Custom Scripts
