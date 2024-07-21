@@ -250,7 +250,7 @@ in
 
   stylix = {
     enable = true;
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-medium.yaml";
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-pale.yaml";
     polarity = "dark"; # "light" or "either" - sets light or dark mode
     image = ../nixos-home-manager/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
 
