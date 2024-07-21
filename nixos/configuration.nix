@@ -244,6 +244,10 @@ in
     variant = "";
   };
 
+  # Required for USB storage devices to auto-mount
+  services.gvfs.enable = true;
+  services.udisks2.enable = true;
+
   stylix = {
     enable = true;
     base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-medium.yaml";
@@ -336,6 +340,10 @@ in
 
     base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
     bibata-cursors # Imporst cursors
+
+    usbutils
+    udiskie
+    udisks
   ];
 
   # Install fonts (system wide)
