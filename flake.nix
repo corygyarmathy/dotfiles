@@ -19,9 +19,8 @@
     # Used for setting system colours / styling
     stylix.url = "github:danth/stylix";
 
-    # Overriding the Hyprland flake, so it's using the most up-to-date version
-    hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1";
-
+    # Hyprland
+    hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1"; # Use most recent version
     # Import the Hyprland plugin manager
     hyprland-plugins = {
       url = "github:hyprwm/hyprland-plugins";
@@ -54,15 +53,18 @@
       # Your custom packages
       # Accessible through 'nix build', 'nix shell', etc
       packages = forAllSystems (system: import ./nixos-pkgs nixpkgs.legacyPackages.${system});
+
       # Formatter for your nix files, available through 'nix fmt'
       # Other options beside 'alejandra' include 'nixpkgs-fmt'
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra);
+      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra); # TODO: asses if I want to use this formatter
 
       # Your custom packages and modifications, exported as overlays
       overlays = import ./nixos-overlays { inherit inputs; };
+
       # Reusable nixos modules you might want to export
       # These are usually stuff you would upstream into nixpkgs
       nixosModules = import ./nixos-modules/nixos;
+
       # Reusable home-manager modules you might want to export
       # These are usually stuff you would upstream into home-manager
       homeManagerModules = import ./nixos-modules/home-manager;
@@ -70,7 +72,7 @@
       # NixOS configuration entrypoint
       # Available through 'nixos-rebuild --flake .#your-hostname'
       nixosConfigurations = {
-        # FIXME replace with your hostname
+        # FIXME: replace with your hostname
         nixos = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs outputs;
