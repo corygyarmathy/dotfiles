@@ -531,6 +531,15 @@ in
   xdg.configFile."starship.toml".source = ../starship/starship.toml;
   programs.starship.enable = true;
 
+  # Alacritty config (terminal editor)
+  programs.alacritty = {
+    enable = true;
+    settings = {
+      window = {
+        opacity = lib.mkForce 0.8;
+      };
+    };
+  };
   programs.spotify-player.settings = {
     theme = "default";
     playback_window_position = "Top";
