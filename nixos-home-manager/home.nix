@@ -518,8 +518,6 @@ in
   xdg.enable = true;
   # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";
   xdg.configFile.nvim = {
-    # source = ../nvim;
-    # recursive = true;
     source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/dotfiles/nvim"; # Apparently sourcing the file this way works better with nvim? Not sure.
   };
 
@@ -540,6 +538,8 @@ in
       };
     };
   };
+
+  # Spotify player settings
   programs.spotify-player.settings = {
     theme = "default";
     playback_window_position = "Top";
@@ -627,9 +627,6 @@ in
     discord
     zotero
     steam
-    ## spotify
-    # spotifyd
-    # spotify-tui
     spotify-player # Spotify terminal client
     calibre
 
