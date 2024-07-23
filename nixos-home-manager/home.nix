@@ -557,11 +557,11 @@ in
 
     # Development
     gcc
-    libgcc # GNU Compiler Collection: C, C++, Objective-C, Fortran, OpenMP for C/C++/Fortran, and Ada, and libraries for these languages
+    libgcc # GNU Compiler Collection: C, C++, Objective-C, Fortran, OpenMP for C/C++/Fortran, and Ada, and libraries for these languages # TODO: Do I need this?
     python3
     cargo # Rust package manager
     lua
-    luajitPackages.luarocks # Lua package manager
+    luajitPackages.luarocks # Lua package manager # TODO: Do I need this?
     nodejs
     openssl
 
@@ -589,7 +589,6 @@ in
     ddcui # Dispay management tool
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
     alacritty # Terminal emulator
-    # foot # Terminal emulator
     tmux # Terminal multiplexer
     starship # Shell prompt
     ripgrep # Requirement for nvim
