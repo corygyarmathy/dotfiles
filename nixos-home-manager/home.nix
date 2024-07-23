@@ -535,6 +535,7 @@ in
     settings = {
       window = {
         opacity = lib.mkForce 0.8;
+        padding.x = 10;
       };
     };
   };
