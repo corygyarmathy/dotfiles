@@ -11,6 +11,9 @@ return { -- Autoformat
       desc = '[F]ormat buffer',
     },
   },
+  -- This will provide type hinting with LuaLS
+  ---@module "conform"
+  ---@type conform.setupOpts
   opts = {
     notify_on_error = true,
     format_on_save = function(bufnr)
