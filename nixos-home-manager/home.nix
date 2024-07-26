@@ -602,6 +602,8 @@ in
     wget
     wireshark
     nmap
+    # ruffle # Adobe flash player emulator
+    # lightspark # Adobe flash player emulator
     ddcutil # Display management UI
     ddcui # Dispay management tool
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
