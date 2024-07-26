@@ -54,6 +54,8 @@ in
   # was generated with dptfxtract-static (https://github.com/intel/dptfxtract)
   services.thermald.configFile = lib.mkDefault thermald-conf;
 
+  services.hardware.bolt.enable = true; # Enable and install Gnome Thunderbolt utility (Bolt)
+
   # WiFi speed is slow and crashes by default (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
   # disable_11ax - required until ax driver support is fixed (disable_11ax=1)
   # power_save - works well on this card
