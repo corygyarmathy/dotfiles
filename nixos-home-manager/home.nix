@@ -101,12 +101,14 @@ in
       ];
 
       cursor = {
-        "no_hardware_cursors" = true; # Compatibility with Nvidea
+        "no_hardware_cursors" = true; # Compatibility with Nvidia
       };
 
       # See https://wiki.hyprland.org/Configuring/Monitors/
       monitor = ",preferred,auto,auto";
 
+      # Window rules (configured how different windows / apps behave)
+      # Refer to: https://wiki.hyprland.org/Configuring/Window-Rules/
       general = {
         gaps_in = 5;
         gaps_out = 5;
@@ -210,10 +212,9 @@ in
         workspace_swipe_forever = true;
       };
 
-      xwayland.force_zero_scaling = true;
+      xwayland.force_zero_scaling = true; # Fixes blurry xwayland apps
 
       debug.disable_logs = false;
-
       # mouse movements
       bindm = [
         "${mod}, mouse:272, movewindow"
@@ -267,6 +268,8 @@ in
 
           # Take screenshot of all sceens
           ", Print, exec, grimblast copy area"
+
+          # TODO: add screenshot key bindings
         ]
         ++ (
           # workspaces
@@ -323,6 +326,7 @@ in
   # 	};
   # };
 
+  # TODO: Redo this using Home-Manager options
   # Configure Hyprshade profiles (blue light filter)
   home.file.".config/hypr/hyprshade.toml".text = ''
     [[shades]]
