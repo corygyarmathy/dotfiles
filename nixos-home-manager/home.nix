@@ -632,6 +632,14 @@ in
     swww # Wallpaper daemon
     rofi-wayland # Uplauncher for Wayland
     hyprshade # Used for 'night mode' blue light filter
+    # TODO: Figure out these screenshot things:
+    # I can do grimblast copy area currently - do I need everything else?
+    # wayshot # CLI screenshot utility
+    grim # Req: wayshot
+    slurp # Req: wayshot
+    wl-clipboard # Enables saving screenshots to clipboard # Req: wayshot
+
+    grimblast # Helper for screenshots within Hyprland
 
     # Entertainment
     discord
