@@ -79,6 +79,8 @@ in
   wayland.windowManager.hyprland = {
 
     enable = true;
+    xwayland.enable = true;
+    systemd.enable = true;
 
     plugins = [
       # inputs.hyprland-plugins.packages."${pkgs.system}".borders-plus-plus
