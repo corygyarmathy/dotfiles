@@ -5,6 +5,7 @@ format = """
 $os\
 $username\
 $shell\
+$sudo\
 [](bg:color_yellow fg:color_orange)\
 $directory\
 [](fg:color_yellow bg:color_aqua)\
@@ -85,6 +86,14 @@ pwsh_indicator = ''
 unknown_indicator = '?_'
 format = '[ $indicator ]($style)'
 style = "bg:color_orange fg:color_fg0"
+
+[sudo]
+disabled = false
+style = "bg:color_orange fg:color_fg0"
+symbol = '󱕴 '
+format = '[$symbol]($style)'
+
+# Directory section
 
 [directory]
 style = "fg:color_fg0 bg:color_yellow"
