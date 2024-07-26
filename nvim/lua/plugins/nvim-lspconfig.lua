@@ -164,6 +164,7 @@ return {
         'luacheck', -- Used to lint Lua code
         'markdownlint', -- Used to format Markdown documents
         'nil', -- LSP for nix (nix-os) code
+        'taplo', -- LSP for TOML
         --'nixfmt', -- Formatter for nix (nix-os) code -- TODO: nixfmt not supported by Mason: investigate solution
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
