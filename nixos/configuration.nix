@@ -328,7 +328,6 @@ in
 
   # TODO: Configure your system-wide user settings (groups, etc), add more users as needed.
   users.users = {
-    # FIXME: Replace with your username
     coryg = {
       # TODO: You can set an initial password for your user.
       # If you do, you can skip setting a root password by passing '--no-root-passwd' to nixos-install.
@@ -343,8 +342,8 @@ in
       extraGroups = [
         "networkmanager"
         "wheel"
-        "plugdev"
-      ]; # plugdev needed for firmware flashing of Ergodox keyboards
+        "plugdev" # needed for firmware flashing of Ergodox keyboards
+      ];
     };
   };
 
@@ -356,12 +355,13 @@ in
     inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
     # nvidia-utils # Nvidea userspace graphics drivers
     egl-wayland # Required in order to enable compatibility between the EGL API and the Wayland protocol
-    qt5.qtwayland # Required for Wayland / Hyprland # Not sure if needed.
-    qt6.qtwayland # Required for Wayland / Hyprland # Not sure if needed.
+    qt5.qtwayland # Required for Wayland / Hyprland
+    qt6.qtwayland # Required for Wayland / Hyprland
 
     base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
-    bibata-cursors # Imporst cursors
+    bibata-cursors # Imports cursors
 
+    # USB utils - needed for auto-mounting USB storage devices
     usbutils
     udiskie
     udisks
@@ -375,6 +375,7 @@ in
     font-awesome # Fonts
   ];
 
+  # TODO: check what this is for
   services.fwupd.enable = true;
 
   # This setups a SSH server. Very important if you're setting up a headless system.
