@@ -539,8 +539,9 @@ in
         ];
 
         hyprland.window = {
-          format = "{}";
-          max-length = 40;
+          format = "{title}";
+          separate-outputs = true;
+          max-length = 20;
         };
 
         # Modules configuration
