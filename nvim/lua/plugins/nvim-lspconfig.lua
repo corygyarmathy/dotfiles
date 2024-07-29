@@ -135,10 +135,12 @@ return {
       local servers = {
         -- See `:help lspconfig-all` for a list of all the pre-configured LSPs
         powershell_es = { init_options = { enableProfileLoading = false } },
+
         lua_ls = {
           -- cmd = {...},
           -- filetypes = { ...},
           -- capabilities = {},
+
           settings = {
             Lua = {
               completion = {
@@ -149,6 +151,7 @@ return {
         },
       }
 
+      -- TODO: Move the Mason setup into its own file
       -- Ensure the servers and tools above are installed
       --  To check the current status of installed tools and/or manually install
       --  other tools, you can run
