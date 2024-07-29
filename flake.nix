@@ -36,6 +36,7 @@
       self,
       nixpkgs,
       home-manager,
+      stylix,
       ...
     }@inputs:
     let
@@ -82,7 +83,15 @@
           };
           modules = [
             ./nixos/configuration.nix # > Our main nixos configuration file <
-            inputs.stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
+            stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
+            # home-manager.nixosModules.home-manager
+            # {
+            #   home-manager.extraSpecialArgs = {
+            #     # inherit username;
+            #     inherit inputs;
+            #     # inherit host;
+            #   };
+            # }
           ];
         };
       };
