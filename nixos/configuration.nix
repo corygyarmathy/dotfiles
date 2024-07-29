@@ -278,8 +278,8 @@ in
     image = ../nixos-home-manager/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
 
     cursor = {
-      package = pkgs.bibata-cursors;
-      name = "Bibata-Modern-Ice";
+      package = pkgs.rose-pine-cursor;
+      name = "BreezeX-RosePine-Linux";
       size = 24;
     };
 
