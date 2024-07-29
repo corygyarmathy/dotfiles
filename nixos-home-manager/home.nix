@@ -74,7 +74,6 @@ in
 
   # Configure Wayland / hyrland
   wayland.windowManager.hyprland = {
-
     enable = true;
     xwayland.enable = true;
     systemd.enable = true;
@@ -335,6 +334,10 @@ in
   '';
 
   # Configure waybar (status bar for wayland)
+
+  xdg.configFile."waybar/rose-pine.css" = {
+    source = ../waybar/rose-pine.css; # Sourcing css file for config)
+  };
   # NOTE: options for waybar - https://home-manager-options.extranix.com/?query=waybar&release=master
   # TODO: Figure out how to run the bash command 'pkill waybar' when rebuilding (as it launches it again, even if it's already running)
   # TODO: Refer to the above config options and configure it
@@ -342,15 +345,171 @@ in
     enable = true; # Only needs to be 'enabled' once - either here or in the packages
     systemd.enable = true;
     style = ''
-      ${builtins.readFile "${pkgs.waybar}/etc/xdg/waybar/style.css"}
+      @import "./rose-pine.css";
 
-      window#waybar {
-        background: transparent;
-        border-bottom: none;
+      * {
+        border: none;
+        border-radius: 0;
+        font-family: "JetBrainsMono NFM ExtraBold";
+        font-weight: bold;
+        font-size: 16px;
+        min-height: 0;
       }
 
-      #waybar {
-        color: white;
+      window#waybar {
+        background: rgba(21, 18, 27, 0);
+        color: @text;
+      }
+
+      tooltip {
+        background: @base;
+        border-radius: 4px;
+        border-width: 2px;
+        border-style: solid;
+        border-color: @overlay;
+      }
+
+      #workspaces button {
+        padding: 5px;
+        color: @highlightMed;
+        margin-right: 5px;
+      }
+
+      #workspaces button.active {
+        color: @text;
+      }
+
+      #workspaces button.focused {
+        color: @subtle;
+        background: @love;
+        border-radius: 8px;
+      }
+
+      #workspaces button.urgent {
+        color: @base;
+        background: @pine;
+        border-radius: 8px;
+      }
+
+      #workspaces button:hover {
+        background: @highlightLow;
+        color: @text;
+        border-radius: 8px;
+      }
+
+      #custom-power_profile,
+      #window,
+      #clock,
+      #battery,
+      #pulseaudio,
+      #network,
+      #bluetooth,
+      #temperature,
+      #workspaces,
+      #tray,
+      #memory,
+      #cpu,
+      #backlight {
+        background: @base;
+        opacity: 0.9;
+        padding: 0px 10px;
+        margin: 3px 0px;
+        margin-top: 15px;
+        border: 2px solid @pine;
+      }
+
+      #memory {
+        color: #3e8fb0;
+        border-left: 0px;
+        border-right: 0px;
+      }
+
+      #cpu {
+        color: @foam;
+        border-left: 0px;
+        border-right: 0px;
+      }
+
+      #temperature {
+        color: @gold;
+        border-left: 0px;
+        border-right: 0px;
+      }
+
+      #temperature.critical {
+        border-left: 0px;
+        border-right: 0px;
+        color: @love;
+      }
+
+      #backlight {
+        color: @text;
+        border-radius: 0px 8px 8px 0px;
+        margin-right: 20px;
+      }
+
+      #tray {
+        border-radius: 8px;
+        margin-left: 10px;
+        margin-right: 0px;
+      }
+
+      #workspaces {
+        background: @base;
+        border-radius: 8px;
+        margin-left: 10px;
+        padding-right: 0px;
+        padding-left: 5px;
+      }
+
+      #custom-power_profile {
+        color: @foam;
+        border-left: 0px;
+        border-right: 0px;
+      }
+
+      #window {
+        border-radius: 8px;
+        margin-left: 60px;
+        margin-right: 60px;
+      }
+
+      window#waybar.empty {
+        background-color: transparent;
+      }
+
+      window#waybar.empty #window {
+        padding: 0px;
+        margin: 0px;
+        border: 0px;
+        /*  background-color: rgba(66,66,66,0.5); */ /* transparent */
+        background-color: transparent;
+      }
+
+      #clock {
+        color: @text;
+        background: @pine;
+        border-radius: 8px;
+        margin-left: 20px;
+      }
+
+      #network {
+        color: @love;
+        border-radius: 8px 0px 0px 8px;
+        border-right: 0px;
+      }
+
+      #pulseaudio {
+        color: @iris;
+        border-radius: 8px 0px 0px 8px;
+        border-right: 0px;
+      }
+
+      #battery {
+        color: @foam;
+        border-radius: 0 8px 8px 0;
+        margin-right: 10px;
+        border-left: 0px;
       }
     '';
     settings = [
@@ -363,17 +522,26 @@ in
           "icon-size" = 18;
 
         };
-        modules-center = [ "clock" ];
-        modules-left = [ "hyprland/workspaces" ];
+        modules-center = [ "hyprland/window" ];
+        modules-left = [
+          "clock"
+          "tray"
+          "hyprland/workspaces"
+        ];
         modules-right = [
-          "pulseaudio"
           "network"
           "cpu"
           "memory"
           "temperature"
           "battery"
-          "tray"
+          "pulseaudio"
+          "backlight"
         ];
+
+        hyprland.window = {
+          format = "{}";
+          max-length = 40;
+        };
 
         # Modules configuration
         hyprland.workspaces = {
@@ -418,24 +586,23 @@ in
         };
         clock = {
           interval = 60;
-          format-alt = "{:%Y-%m-%d}";
-          tooltip-format = "{:%Y-%m-%d | %H:%M}";
+          format-alt = "{: %R  %d/%m}}";
+          tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
         };
         cpu = {
           format = "{usage}% ";
           tooltip = true;
-          color = "ffffff";
         };
         memory = {
           format = "{}% ";
         };
         network = {
-          interval = 1;
+          interval = 30;
           format-alt = "{ifname}: {ipaddr}/{cidr}";
           format-disconnected = "Disconnected ⚠";
           format-ethernet = "{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}";
           format-linked = "{ifname} (No IP) ";
-          format-wifi = "{essid} ({signalStrength}%) ";
+          format-wifi = "{signalStrength}% ";
         };
         pulseaudio = {
           format = "{volume}% {icon} {format_source}";
