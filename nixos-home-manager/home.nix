@@ -16,9 +16,6 @@ let
     udiskie &
     dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE
     hyprshade auto
-
-    sleep 1
-
   '';
   # dbus-update required for Hyprshade
   # Removed from above: ${pkgs.swww}/bin/swww init &  ${pkgs.swww}/bin/swww img ${/home/coryg/git/nixos-config/home-manager/wallpaper.jpg} &
@@ -44,7 +41,7 @@ in
     # outputs.homeManagerModules.example
 
     # Importing Nix-Colors (for system colour settings)
-    # inputs.nix-colors.homeManagerModules.default
+    inputs.nix-colors.homeManagerModules.default
 
     # You can also split up your configuration and import pieces of it here:
     # ./nvim.nix
@@ -96,8 +93,8 @@ in
         "XDG_SESSION_TYPE,wayland" # Required for Nvidia
         "GBM_BACKEND,nvidia-drm" # Required for Nvidia
         "__GLX_VENDOR_LIBRARY_NAME,nvidia" # Required for Nvidia
-        "GTK_THEME,Dark-Theme" # Not sure if needed, trying to get dark mode working
-        "QT_QPA_PLATFORMTHEME,qt5ct" # Again, not sure if needed
+        # "GTK_THEME,Dark-Theme" # Not sure if needed, trying to get dark mode working
+        # "QT_QPA_PLATFORMTHEME,qt5ct" # Again, not sure if needed
       ];
 
       cursor = {
@@ -568,6 +565,46 @@ in
     indicator = true;
   };
 
+  # Themeing
+
+  # gtk = {
+  #   enable = true;
+  #   theme = {
+  #     name = "oomox-rose-pine";
+  #     package = pkgs.rose-pine-gtk-theme;
+  #   };
+  #   cursorTheme = {
+  #     name = "BreezeX-RoséPine";
+  #     package = pkgs.rose-pine-cursor;
+  #   };
+  #   iconTheme = {
+  #     name = "oomox-rose-pine";
+  #     package = pkgs.rose-pine-icon-theme;
+  #   };
+  #
+  #   gtk3.extraConfig = {
+  #     gtk-application-prefer-dark-theme = 1;
+  #   };
+  #   gtk4.extraConfig = {
+  #     gtk-application-prefer-dark-theme = 1;
+  #   };
+  #   # gtk4.extraConfig = "gtk-application-prefer-dark-theme=1";
+  # };
+  #
+  # qt = {
+  #   enable = true;
+  #   platformTheme = "gtk";
+  #   style = {
+  #     name = "adwaita-dark";
+  #   };
+  # };
+  #
+  # xdg.portal.config = {
+  #   common = {
+  #     "org.freedesktop.appearance" = 1; # Prefer dark mode
+  #   };
+  # };
+
   # Add stuff for your user as you see fit:
   # programs.neovim.enable = true;
   home.packages = with pkgs; [
@@ -653,6 +690,11 @@ in
     steam
     spotify-player # Spotify terminal client
     calibre
+
+    # RICE / aesthetics
+    rose-pine-gtk-theme
+    rose-pine-icon-theme
+    rose-pine-cursor
 
     # Custom Scripts
     hyprshade-script # I don't think this works... need to investigate further

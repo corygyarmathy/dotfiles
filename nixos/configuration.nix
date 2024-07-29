@@ -24,7 +24,8 @@ in
     # You can also split up your configuration and import pieces of it here:
     # ./users.nix
 
-    inputs.stylix.nixosModules.stylix # Importing Stylix: used for RICEing, imports into home-manager automatically
+    # inputs.stylix.nixosModules.stylix # Importing Stylix: used for RICEing, imports into home-manager automatically
+    # Commenting out as I'm putting in Flake as experiment
 
     inputs.hardware.nixosModules.common-cpu-intel
     inputs.hardware.nixosModules.common-gpu-nvidia
@@ -271,7 +272,8 @@ in
 
   stylix = {
     enable = true;
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-pale.yaml";
+    autoEnable = true; # Enables stylix themes for all applications
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/rose-pine.yaml";
     polarity = "dark"; # "light" or "either" - sets light or dark mode
     image = ../nixos-home-manager/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
 
@@ -354,12 +356,18 @@ in
     gnome-firmware
     inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
     # nvidia-utils # Nvidea userspace graphics drivers
+    xdg-desktop-portal-hyprland # Req. for Hyprland # xdg-desktop-portal backend for Hyprland
+    xdg-desktop-portal-gtk # Req. for Hyprland # filepicker for XDPH
     egl-wayland # Required in order to enable compatibility between the EGL API and the Wayland protocol
     qt5.qtwayland # Required for Wayland / Hyprland
     qt6.qtwayland # Required for Wayland / Hyprland
 
     base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
     bibata-cursors # Imports cursors
+    glib # Core object system for GNOME
+    dconf
+    xdg-utils # A set of command line tools that assist applications with a variety of desktop integration tasks
+    gtk3
 
     # USB utils - needed for auto-mounting USB storage devices
     usbutils

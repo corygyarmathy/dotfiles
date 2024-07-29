@@ -19,6 +19,9 @@
     # Used for setting system colours / styling
     stylix.url = "github:danth/stylix";
 
+    # Used for standardising colours, using Base16 themes
+    nix-colors.url = "github:misterio77/nix-colors";
+
     # Hyprland
     hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1"; # Use most recent version
     # Import the Hyprland plugin manager
@@ -56,7 +59,7 @@
 
       # Formatter for your nix files, available through 'nix fmt'
       # Other options beside 'alejandra' include 'nixpkgs-fmt'
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra); # TODO: asses if I want to use this formatter
+      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra); # TODO: use this formatter?
 
       # Your custom packages and modifications, exported as overlays
       overlays = import ./nixos-overlays { inherit inputs; };
@@ -78,8 +81,8 @@
             inherit inputs outputs;
           };
           modules = [
-            # > Our main nixos configuration file <
-            ./nixos/configuration.nix
+            ./nixos/configuration.nix # > Our main nixos configuration file <
+            inputs.stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
           ];
         };
       };
