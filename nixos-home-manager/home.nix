@@ -41,7 +41,7 @@ in
     # outputs.homeManagerModules.example
 
     # Importing Nix-Colors (for system colour settings)
-    inputs.nix-colors.homeManagerModules.default
+    # inputs.nix-colors.homeManagerModules.default
 
     # You can also split up your configuration and import pieces of it here:
     # ./nvim.nix
@@ -93,8 +93,6 @@ in
         "XDG_SESSION_TYPE,wayland" # Required for Nvidia
         "GBM_BACKEND,nvidia-drm" # Required for Nvidia
         "__GLX_VENDOR_LIBRARY_NAME,nvidia" # Required for Nvidia
-        # "GTK_THEME,Dark-Theme" # Not sure if needed, trying to get dark mode working
-        # "QT_QPA_PLATFORMTHEME,qt5ct" # Again, not sure if needed
       ];
 
       cursor = {
