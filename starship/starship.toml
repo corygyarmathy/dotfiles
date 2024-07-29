@@ -30,7 +30,7 @@ $time\
 [ ](fg:color_bg1)\
 $line_break$character"""
 
-palette = 'gruvbox_dark'
+palette = 'rose_pine_dawn'
 
 [palettes.gruvbox_dark]
 color_fg0 = '#fbf1c7'
@@ -43,6 +43,30 @@ color_orange = '#d65d0e'
 color_purple = '#b16286'
 color_red = '#cc241d'
 color_yellow = '#d79921'
+
+[palettes.rose_pine]
+color_fg0 = '#e0def4'    # text
+color_bg1 = '#1f1d2e'    # surface
+color_bg3 = '#26233a'    # overlay
+color_blue = '#3e8fb0'   # pine-moon
+color_aqua = '#9ccfd8'   # foam
+color_green = '#31748f'  # pine
+color_orange = '#f6c177' # gold
+color_purple = '#c4a7e7' # iris
+color_red = '#eb6f92'    # love
+color_yellow = '#ebbcba' # rose
+
+[palettes.rose_pine_dawn]
+color_fg0 = '#e0def4'    # text
+color_bg1 = '#191724'    # base
+color_bg3 = '#26233a'    # overlay
+color_blue = '#286983'   # pine
+color_aqua = '#56949f'   # foam
+color_green = '#31748f'  # pine
+color_orange = '#ea9d34' # gold
+color_purple = '#907aa9' # iris
+color_red = '#b4637a'    # love
+color_yellow = '#d7827e' # rose
 
 [os]
 disabled = false
