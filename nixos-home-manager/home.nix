@@ -409,6 +409,8 @@ in
       #tray,
       #memory,
       #cpu,
+      #disk,
+      #user,
       #backlight {
         background: @base;
         opacity: 0.9;
@@ -420,6 +422,12 @@ in
 
       #memory {
         color: #3e8fb0;
+        border-left: 0px;
+        border-right: 0px;
+      }
+
+      #disk {
+        color: @iris;
         border-left: 0px;
         border-right: 0px;
       }
@@ -490,7 +498,6 @@ in
         color: @text;
         background: @pine;
         border-radius: 8px;
-        margin-left: 20px;
       }
 
       #network {
@@ -501,8 +508,9 @@ in
 
       #pulseaudio {
         color: @iris;
-        border-radius: 8px 0px 0px 8px;
-        border-right: 0px;
+        border-radius: 8px;
+        margin-right: 10px;
+        padding-right: 5px;
       }
 
       #battery {
@@ -520,17 +528,17 @@ in
         tray = {
           spacing = 5;
           "icon-size" = 18;
-
+          "show-passive-items" = true;
         };
-        # modules-center = [ "hyprland/window" ];
+        modules-center = [ "clock" ];
         modules-left = [
-          "clock"
-          "tray"
           "hyprland/workspaces"
+          "tray"
         ];
         modules-right = [
           "network"
           "cpu"
+          "disk"
           "memory"
           "temperature"
           "battery"
@@ -542,6 +550,11 @@ in
           format = "{title}";
           separate-outputs = true;
           max-length = 20;
+        };
+
+        disk = {
+          interval = 120;
+          format = "{percentage_used}% ";
         };
 
         # Modules configuration
@@ -588,7 +601,7 @@ in
         clock = {
           interval = 60;
           format-alt = "{: %R  %d/%m}}";
-          tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
+          tooltip-format = "<big>{:%Y %B %d}</big>\n<tt><small>{calendar}</small></tt>";
         };
         cpu = {
           format = "{usage}% ";
