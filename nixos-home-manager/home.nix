@@ -522,7 +522,7 @@ in
           "icon-size" = 18;
 
         };
-        modules-center = [ "hyprland/window" ];
+        # modules-center = [ "hyprland/window" ];
         modules-left = [
           "clock"
           "tray"
