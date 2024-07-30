@@ -48,6 +48,12 @@ in
     "nvidia-drm.fbdev=1" # Used for Wayland compat.
   ];
 
+  # Kernel modules
+  boot.kernelModules = [ "i2c-dev" ]; # req. for ddcutil (monitor brightness control)
+  services.udev.extraRules = ''
+    KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
+  ''; # req. for ddcutil (monitor brightness control)
+
   # This will save you money and possibly your life!
   services.thermald.enable = lib.mkDefault true;
 
@@ -345,6 +351,7 @@ in
         "networkmanager"
         "wheel"
         "plugdev" # needed for firmware flashing of Ergodox keyboards
+        "i2c" # req. for ddcutil (monitor brightness control)
       ];
     };
   };
