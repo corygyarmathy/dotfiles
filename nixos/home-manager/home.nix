@@ -24,6 +24,7 @@ let
   fileManager = "thunar";
   mod = "SUPER";
 
+  # FIXME: fix this script
   # Hyprscade config script - I feel like this doesn't work
   hyprshade-script = pkgs.pkgs.writeShellScriptBin "hyprshade-script" ''
      	 hyprshade install
@@ -701,7 +702,7 @@ in
   xdg.enable = true;
   # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";
   xdg.configFile.nvim = {
-  # TODO: check if this is the right way of sourcing - could use the standard xdg relative referencing?
+    # TODO: check if this is the right way of sourcing - could use the standard xdg relative referencing?
     source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/dotfiles/pkgs/nvim"; # Apparently sourcing the file this way works better with nvim? Not sure.
   };
 
