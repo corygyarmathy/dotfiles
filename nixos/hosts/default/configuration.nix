@@ -49,10 +49,12 @@ in
   ];
 
   # Kernel modules
-  boot.kernelModules = [ "i2c-dev" ]; # req. for ddcutil (monitor brightness control)
-  services.udev.extraRules = ''
-    KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
-  ''; # req. for ddcutil (monitor brightness control)
+  # boot.kernelModules = [ "i2c-dev" ]; # req. for ddcutil (monitor brightness control)
+  # services.udev.extraRules = ''
+  #   KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
+  # ''; # req. for ddcutil (monitor brightness control)
+
+  hardware.i2c.enable = true; # req. for ddcutil (monitor brightness control)
 
   # This will save you money and possibly your life!
   services.thermald.enable = lib.mkDefault true;
