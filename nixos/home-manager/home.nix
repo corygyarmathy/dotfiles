@@ -719,7 +719,7 @@ in
     enable = true;
     settings = {
       window = {
-        opacity = lib.mkForce 0.8;
+        opacity = lib.mkForce 0.85;
         padding.x = 10;
       };
     };
