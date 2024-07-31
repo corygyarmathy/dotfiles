@@ -56,22 +56,22 @@
     {
       # Your custom packages
       # Accessible through 'nix build', 'nix shell', etc
-      packages = forAllSystems (system: import ./nixos-pkgs nixpkgs.legacyPackages.${system});
+      packages = forAllSystems (system: import ./pkgs/nixos-pkgs nixpkgs.legacyPackages.${system});
 
       # Formatter for your nix files, available through 'nix fmt'
       # Other options beside 'alejandra' include 'nixpkgs-fmt'
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra); # TODO: use this formatter?
 
       # Your custom packages and modifications, exported as overlays
-      overlays = import ./nixos-overlays { inherit inputs; };
+      overlays = import ./nixos/nixos-overlays { inherit inputs; };
 
       # Reusable nixos modules you might want to export
       # These are usually stuff you would upstream into nixpkgs
-      nixosModules = import ./nixos-modules/nixos;
+      nixosModules = import ./nixos/nixos-modules/nixos;
 
       # Reusable home-manager modules you might want to export
       # These are usually stuff you would upstream into home-manager
-      homeManagerModules = import ./nixos-modules/home-manager;
+      homeManagerModules = import ./nixos/nixos-modules/home-manager;
 
       # NixOS configuration entrypoint
       # Available through 'nixos-rebuild --flake .#your-hostname'
@@ -82,7 +82,7 @@
             inherit inputs outputs;
           };
           modules = [
-            ./nixos/configuration.nix # > Our main nixos configuration file <
+            ./nixos/hosts/default/configuration.nix # > Our main nixos configuration file <
             stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
             # home-manager.nixosModules.home-manager
             # {
