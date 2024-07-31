@@ -285,10 +285,11 @@ in
     polarity = "dark"; # "light" or "either" - sets light or dark mode
     image = ../../../wallpapers/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
 
+    # TODO: replace with catppuccin cursor
     cursor = {
       package = pkgs.rose-pine-cursor;
       name = "BreezeX-RosePine-Linux";
-      size = 24;
+      size = 28;
     };
 
     fonts = {
