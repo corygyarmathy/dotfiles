@@ -281,7 +281,7 @@ in
     autoEnable = true; # Enables stylix themes for all applications
     base16Scheme = "${pkgs.base16-schemes}/share/themes/rose-pine.yaml";
     polarity = "dark"; # "light" or "either" - sets light or dark mode
-    image = ../../wallpapers/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
+    image = ../../../wallpapers/wallpaper.jpg; # Sets wallpaper, ""s are not required for path
 
     cursor = {
       package = pkgs.rose-pine-cursor;
