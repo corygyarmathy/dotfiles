@@ -19,6 +19,12 @@ return { -- You can easily change to a different colorscheme.
   end,
   opts = {
     transparent_background = true,
+    custom_highlights = function(colors)
+      return {
+        Comment = { fg = colors.surface2 },
+        LineNr = { fg = colors.surface2 },
+      }
+    end,
   },
 }
 
