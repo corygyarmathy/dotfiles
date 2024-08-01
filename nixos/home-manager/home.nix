@@ -10,6 +10,7 @@
 }:
 let
   # Startup script for Wayland / Hyprland
+  # FIXME: only run these packages if they're installed??
   startupScript = pkgs.pkgs.writeShellScriptBin "start" ''
     ${pkgs.waybar}/bin/waybar &
     ${pkgs.dunst}/bin/dunst init &
@@ -38,15 +39,16 @@ in
 {
   # You can import other home-manager modules here
   imports = [
-    # If you want to use modules your own flake exports (from modules/home-manager):
-    # outputs.homeManagerModules.example
-
-    # Importing Nix-Colors (for system colour settings)
-    # inputs.nix-colors.homeManagerModules.default
-
-    # You can also split up your configuration and import pieces of it here:
-    # ./nvim.nix
+    # Importing home-manager modules through default.nix
+    # NOTE: these need to be enabled for them to apply.
+    ../../pkgs
   ];
+
+  # Enabling self-defined home-manager modules
+  nvim.enable = true;
+  waybar.enable = true;
+  rofi.enable = true;
+  starship.enable = true;
 
   nixpkgs = {
     # You can add overlays here
@@ -74,6 +76,7 @@ in
   };
 
   # Configure Wayland / hyrland
+  # TODO: split into separate module
   wayland.windowManager.hyprland = {
     enable = true;
     xwayland.enable = true;
@@ -323,6 +326,7 @@ in
 
   # TODO: Redo this using Home-Manager options
   # Configure Hyprshade profiles (blue light filter)
+  # TODO: split into separate module
   home.file.".config/hypr/hyprshade.toml".text = ''
     [[shades]]
     name = "vibrance"
@@ -334,329 +338,10 @@ in
     end_time = 06:00:00   # optional if you have more than one shade with start_time
   '';
 
-  # Configure waybar (status bar for wayland)
-
-  xdg.configFile."waybar/rose-pine.css" = {
-    source = ../../pkgs/waybar/rose-pine.css; # Sourcing css file for config)
-  };
-  # NOTE: options for waybar - https://home-manager-options.extranix.com/?query=waybar&release=master
-  # TODO: Figure out how to run the bash command 'pkill waybar' when rebuilding (as it launches it again, even if it's already running)
-  # TODO: Refer to the above config options and configure it
-  programs.waybar = {
-    enable = true; # Only needs to be 'enabled' once - either here or in the packages
-    systemd.enable = true;
-    style = ''
-      @import "./rose-pine.css";
-
-      * {
-        border: none;
-        border-radius: 0;
-        font-family: "JetBrainsMono NFM ExtraBold";
-        font-weight: bold;
-        font-size: 16px;
-        min-height: 0;
-      }
-
-      window#waybar {
-        background: rgba(21, 18, 27, 0);
-        color: @text;
-      }
-
-      tooltip {
-        background: @base;
-        border-radius: 4px;
-        border-width: 2px;
-        border-style: solid;
-        border-color: @overlay;
-      }
-
-      #workspaces button {
-        padding: 5px;
-        color: @highlightMed;
-        margin-right: 5px;
-      }
-
-      #workspaces button.active {
-        color: @text;
-      }
-
-      #workspaces button.focused {
-        color: @subtle;
-        background: @love;
-        border-radius: 8px;
-      }
-
-      #workspaces button.urgent {
-        color: @base;
-        background: @pine;
-        border-radius: 8px;
-      }
-
-      #workspaces button:hover {
-        background: @highlightLow;
-        color: @text;
-        border-radius: 8px;
-      }
-
-      #custom-power_profile,
-      #window,
-      #clock,
-      #battery,
-      #pulseaudio,
-      #network,
-      #bluetooth,
-      #temperature,
-      #workspaces,
-      #tray,
-      #memory,
-      #cpu,
-      #disk,
-      #user,
-      #backlight {
-        background: @base;
-        opacity: 0.9;
-        padding: 0px 10px;
-        margin: 3px 0px;
-        margin-top: 15px;
-        border: 2px solid @pine;
-      }
-
-      #memory {
-        color: #3e8fb0;
-        border-left: 0px;
-        border-right: 0px;
-      }
-
-      #disk {
-        color: @iris;
-        border-left: 0px;
-        border-right: 0px;
-      }
-
-      #cpu {
-        color: @foam;
-        border-left: 0px;
-        border-right: 0px;
-      }
-
-      #temperature {
-        color: @gold;
-        border-left: 0px;
-        border-right: 0px;
-      }
-
-      #temperature.critical {
-        border-left: 0px;
-        border-right: 0px;
-        color: @love;
-      }
-
-      #backlight {
-        color: @text;
-        border-radius: 0px 8px 8px 0px;
-        margin-right: 20px;
-      }
-
-      #tray {
-        border-radius: 8px;
-        margin-left: 10px;
-        margin-right: 0px;
-      }
-
-      #workspaces {
-        background: @base;
-        border-radius: 8px;
-        margin-left: 10px;
-        padding-right: 0px;
-        padding-left: 5px;
-      }
-
-      #custom-power_profile {
-        color: @foam;
-        border-left: 0px;
-        border-right: 0px;
-      }
-
-      #window {
-        border-radius: 8px;
-        margin-left: 60px;
-        margin-right: 60px;
-      }
-
-      window#waybar.empty {
-        background-color: transparent;
-      }
-
-      window#waybar.empty #window {
-        padding: 0px;
-        margin: 0px;
-        border: 0px;
-        /*  background-color: rgba(66,66,66,0.5); */ /* transparent */
-        background-color: transparent;
-      }
-
-      #clock {
-        color: @text;
-        background: @pine;
-        border-radius: 8px;
-      }
-
-      #network {
-        color: @love;
-        border-radius: 8px 0px 0px 8px;
-        border-right: 0px;
-      }
-
-      #pulseaudio {
-        color: @iris;
-        border-radius: 8px;
-        margin-right: 10px;
-        padding-right: 5px;
-      }
-
-      #battery {
-        color: @foam;
-        border-radius: 0 8px 8px 0;
-        margin-right: 10px;
-        border-left: 0px;
-      }
-    '';
-    settings = [
-      {
-        height = 30;
-        layer = "top";
-        position = "top";
-        tray = {
-          spacing = 5;
-          "icon-size" = 18;
-          "show-passive-items" = true;
-        };
-        modules-center = [ "clock" ];
-        modules-left = [
-          "hyprland/workspaces"
-          "tray"
-        ];
-        modules-right = [
-          "network"
-          "cpu"
-          "disk"
-          "memory"
-          "temperature"
-          "battery"
-          "pulseaudio"
-          "backlight"
-        ];
-
-        hyprland.window = {
-          format = "{title}";
-          separate-outputs = true;
-          max-length = 20;
-        };
-
-        disk = {
-          interval = 120;
-          format = "{percentage_used}% ";
-        };
-
-        # Modules configuration
-        hyprland.workspaces = {
-          "on-click" = "activate";
-          # "active-only": false;
-          "all-outputs" = true;
-          "format" = "{icon}";
-          "format-icons" = {
-            "1" = "󰈹";
-            "2" = "";
-            "3" = "";
-            "4" = "";
-            "5" = "";
-            "6" = "";
-            "7" = "󰠮";
-            "8" = "";
-            "9" = "";
-            "10" = "";
-            # "","";
-            # "urgent": "";
-            # "active": "";
-            # "default": "";
-          };
-        };
-
-        battery = {
-          format = "{capacity}% {icon}";
-          format-alt = "{time} {icon}";
-          format-charging = "{capacity}% ";
-          format-icons = [
-            ""
-            ""
-            ""
-            ""
-            ""
-          ];
-          format-plugged = "{capacity}% ";
-          states = {
-            critical = 15;
-            warning = 30;
-          };
-        };
-        clock = {
-          interval = 60;
-          format-alt = "{: %R  %d/%m}}";
-          tooltip-format = "<big>{:%Y %B %d}</big>\n<tt><small>{calendar}</small></tt>";
-        };
-        cpu = {
-          format = "{usage}% ";
-          tooltip = true;
-        };
-        memory = {
-          format = "{}% ";
-        };
-        network = {
-          interval = 30;
-          format-alt = "{ifname}: {ipaddr}/{cidr}";
-          format-disconnected = "Disconnected ⚠";
-          format-ethernet = "{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}";
-          format-linked = "{ifname} (No IP) ";
-          format-wifi = "{signalStrength}% ";
-        };
-        pulseaudio = {
-          format = "{volume}% {icon} {format_source}";
-          format-bluetooth = "{volume}% {icon} {format_source}";
-          format-bluetooth-muted = " {icon} {format_source}";
-          format-icons = {
-            car = "";
-            default = [
-              ""
-              ""
-              ""
-            ];
-            handsfree = "";
-            headphones = "";
-            headset = "";
-            phone = "";
-            portable = "";
-          };
-          format-muted = " {format_source}";
-          format-source = "{volume}% ";
-          format-source-muted = "";
-          on-click = "pavucontrol";
-        };
-        temperature = {
-          critical-threshold = 80;
-          format = "{temperatureC}°C {icon}";
-          format-icons = [
-            ""
-            ""
-            ""
-          ];
-        };
-      }
-    ];
-  };
-
   # Devices
 
   # Configure firmware flashing for Ergodox keyboards
+  # TODO: split into separate module
   home.file."/etc/udev/rules.d/50-zsa.rules".text = ''
       	# Rules for Oryx web flashing and live training
     	KERNEL=="hidraw*", ATTRS{idVendor}=="16c0", MODE="0664", GROUP="plugdev"
@@ -691,6 +376,7 @@ in
   };
 
   # Git config
+  # TODO: split into separate module
   programs.git = {
     # enable = true; # Don't believe enabling here is required, package installed below
     userName = "Cory Gyarmathy";
@@ -698,23 +384,11 @@ in
     # git config --global credential.credentialStore gpg
   };
 
-  # Neovim config
-  xdg.enable = true;
-  # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";
-  xdg.configFile.nvim = {
-    # TODO: check if this is the right way of sourcing - could use the standard xdg relative referencing?
-    source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/dotfiles/pkgs/nvim"; # Apparently sourcing the file this way works better with nvim? Not sure.
-  };
-
   # Bash config
   programs.bash.enable = true;
-  programs.starship.enableBashIntegration = true;
-
-  # Starship configuration (sourcing toml file for config, so I can use starship on other systems)
-  xdg.configFile."starship.toml".source = ../../pkgs/starship/starship.toml;
-  programs.starship.enable = true;
 
   # Alacritty config (terminal editor)
+  # TODO: split into separate module
   programs.alacritty = {
     enable = true;
     settings = {
@@ -725,17 +399,8 @@ in
     };
   };
 
-  # Rofi config
-  xdg.configFile."rofi/userconfig" = {
-    source = ../../pkgs/rofi/config.rasi;
-  };
-  # Rofi themes
-  xdg.dataFile."rofi/themes" = {
-    source = ../../pkgs/rofi/themes;
-    recursive = true;
-  };
-
   # Spotify player settings
+  # TODO: split into separate module
   programs.spotify-player = {
     settings = {
       theme = "rose-pine";
@@ -826,7 +491,6 @@ in
   # programs.neovim.enable = true;
   home.packages = with pkgs; [
     # Productivity
-    neovim
     firefox
     obsidian
     libreoffice
@@ -869,14 +533,6 @@ in
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
     alacritty # Terminal emulator
     tmux # Terminal multiplexer
-    starship # Shell prompt
-    ripgrep # Requirement for nvim
-    gnumake # Requirement for nvim
-    unzip # Requirement for nvim
-    xclip # Requirement for nvim
-    fd # Re: for nvim. # Alternative to find
-    tree-sitter # Re: for nvim (tree sitter)
-    nodePackages.npm # JS Node Package Manager # Requirement for nvim (mason plugin)
     xfce.thunar # File manager
     xfce.xfconf # Required for thunar
     xfce.thunar-archive-plugin # Zip / unzip plugin for Thunar
@@ -887,11 +543,9 @@ in
     libdbusmenu-gtk3 # Library for passing menu structures across DBus # Req for spotify-player
 
     # Wayland / Hyprland
-    waybar # Status bar for Wayland # Only needs to be enabled once
     dunst # Notification daemon
     libnotify # Required for Dunst
     swww # Wallpaper daemon
-    rofi-wayland # Uplauncher for Wayland
     hyprshade # Used for 'night mode' blue light filter
     # TODO: Figure out these screenshot things:
     # I can do grimblast copy area currently - do I need everything else?
