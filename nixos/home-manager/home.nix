@@ -725,6 +725,16 @@ in
     };
   };
 
+  # Rofi config
+  xdg.configFile."rofi/userconfig" = {
+    source = ../../pkgs/rofi/config.rasi;
+  };
+  # Rofi themes
+  xdg.dataFile."rofi/themes" = {
+    source = ../../pkgs/rofi/themes;
+    recursive = true;
+  };
+
   # Spotify player settings
   programs.spotify-player = {
     settings = {
