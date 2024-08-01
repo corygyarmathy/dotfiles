@@ -41,6 +41,7 @@
     }@inputs:
     let
       inherit (self) outputs;
+      # TODO: investigate this option - not exactly sure what it should be set to. Okay to leave as is?
       # Supported systems for your flake packages, shell, etc.
       systems = [
         "aarch64-linux"
@@ -77,12 +78,13 @@
       # Available through 'nixos-rebuild --flake .#your-hostname'
       nixosConfigurations = {
         # NOTE: the below ' x = ' defines the hostname, which is set by networking.hostname
-        nixos = nixpkgs.lib.nixosSystem {
+        # TODO: change hostname of Dell laptop system
+        xps15 = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs outputs;
           };
           modules = [
-            ./nixos/hosts/default/configuration.nix # > Our main nixos configuration file <
+            ./nixos/hosts/xps15/configuration.nix # > Our main nixos configuration file <
             stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
           ];
         };

@@ -171,7 +171,7 @@ in
     };
 
   # TODO: Set your hostname
-  networking.hostName = "nixos";
+  networking.hostName = "xps15";
 
   # Enable networking
   networking.networkmanager.enable = true;
