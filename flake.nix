@@ -84,14 +84,6 @@
           modules = [
             ./nixos/hosts/default/configuration.nix # > Our main nixos configuration file <
             stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
-            # home-manager.nixosModules.home-manager
-            # {
-            #   home-manager.extraSpecialArgs = {
-            #     # inherit username;
-            #     inherit inputs;
-            #     # inherit host;
-            #   };
-            # }
           ];
         };
       };
