@@ -76,7 +76,7 @@
       # NixOS configuration entrypoint
       # Available through 'nixos-rebuild --flake .#your-hostname'
       nixosConfigurations = {
-        # FIXME: replace with your hostname
+        # NOTE: the below ' x = ' defines the hostname, which is set by networking.hostname
         nixos = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs outputs;
