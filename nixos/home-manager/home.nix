@@ -24,7 +24,6 @@ let
   terminal = "alacritty";
   fileManager = "thunar";
   mod = "SUPER";
-
 in
 {
   # You can import other home-manager modules here
@@ -372,46 +371,6 @@ in
     indicator = true;
   };
 
-  # Themeing
-
-  # gtk = {
-  #   enable = true;
-  #   theme = {
-  #     name = "oomox-rose-pine";
-  #     package = pkgs.rose-pine-gtk-theme;
-  #   };
-  #   cursorTheme = {
-  #     name = "BreezeX-RoséPine";
-  #     package = pkgs.rose-pine-cursor;
-  #   };
-  #   iconTheme = {
-  #     name = "oomox-rose-pine";
-  #     package = pkgs.rose-pine-icon-theme;
-  #   };
-  #
-  #   gtk3.extraConfig = {
-  #     gtk-application-prefer-dark-theme = 1;
-  #   };
-  #   gtk4.extraConfig = {
-  #     gtk-application-prefer-dark-theme = 1;
-  #   };
-  #   # gtk4.extraConfig = "gtk-application-prefer-dark-theme=1";
-  # };
-  #
-  # qt = {
-  #   enable = true;
-  #   platformTheme = "gtk";
-  #   style = {
-  #     name = "adwaita-dark";
-  #   };
-  # };
-  #
-  # xdg.portal.config = {
-  #   common = {
-  #     "org.freedesktop.appearance" = 1; # Prefer dark mode
-  #   };
-  # };
-
   # Add stuff for your user as you see fit:
   # programs.neovim.enable = true;
   home.packages = with pkgs; [
@@ -463,7 +422,6 @@ in
     xfce.tumbler # Req. for thunar # Generates image previews
     file-roller # Archive (.zip) manager for GNOME, required for thunar-archive-plugin
     steam-run # Allows running dynamically linked executables, made for steam
-
     # Wayland / Hyprland
     dunst # Notification daemon
     libnotify # Required for Dunst
