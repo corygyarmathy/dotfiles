@@ -9,5 +9,6 @@
     ./waybar
     ./rofi
     ./alacritty.nix
+    ./spotify-player.nix
   ];
 }
