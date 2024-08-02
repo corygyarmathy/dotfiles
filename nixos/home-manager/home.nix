@@ -25,16 +25,6 @@ let
   fileManager = "thunar";
   mod = "SUPER";
 
-  # FIXME: fix this script
-  # Hyprscade config script - I feel like this doesn't work
-  hyprshade-script = pkgs.pkgs.writeShellScriptBin "hyprshade-script" ''
-     	 hyprshade install
-    	 systemctl --user enable --now hyprshade.timer
-    	 
-    	 sleep 1 
-
-    	 hyprshade auto
-  '';
 in
 {
   # You can import other home-manager modules here
@@ -51,6 +41,7 @@ in
   starship.enable = true;
   alacritty.enable = true;
   spotify-player.enable = true;
+  hyprshade.enable = true;
 
   nixpkgs = {
     # You can add overlays here
@@ -326,20 +317,6 @@ in
     };
   };
 
-  # TODO: Redo this using Home-Manager options
-  # Configure Hyprshade profiles (blue light filter)
-  # TODO: split into separate module
-  home.file.".config/hypr/hyprshade.toml".text = ''
-    [[shades]]
-    name = "vibrance"
-    default = true  # shader to use during times when there is no other shader scheduled
-
-    [[shades]]
-    name = "blue-light-filter"
-    start_time = 19:00:00
-    end_time = 06:00:00   # optional if you have more than one shade with start_time
-  '';
-
   # Devices
 
   # Configure firmware flashing for Ergodox keyboards
@@ -491,7 +468,6 @@ in
     dunst # Notification daemon
     libnotify # Required for Dunst
     swww # Wallpaper daemon
-    hyprshade # Used for 'night mode' blue light filter
     # TODO: Figure out these screenshot things:
     # I can do grimblast copy area currently - do I need everything else?
     # wayshot # CLI screenshot utility
@@ -512,8 +488,6 @@ in
     rose-pine-icon-theme
     rose-pine-cursor
 
-    # Custom Scripts
-    hyprshade-script # I don't think this works... need to investigate further
   ];
 
   # Enable home-manager
