@@ -318,11 +318,11 @@ in
   };
 
   # Configure stylix in home manager (for RICEing)
-  # stylix = {
-  # 	targets = {
-  # 	    xfce.enable = true;
-  # 	};
-  # };
+  stylix = {
+    targets = {
+      waybar.enable = false; # Disabling as I have a custom configuration
+    };
+  };
 
   # TODO: Redo this using Home-Manager options
   # Configure Hyprshade profiles (blue light filter)
