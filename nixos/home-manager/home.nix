@@ -55,7 +55,9 @@
   # Configure stylix in home manager (for RICEing)
   stylix = {
     targets = {
-      waybar.enable = false; # Disabling as I have a custom configuration
+      # Disabling as I have a custom configuration
+      waybar.enable = false;
+      vim.enable = false; # Covers both vim and nvim
     };
   };
 
