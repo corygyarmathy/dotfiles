@@ -78,7 +78,6 @@
       # Available through 'nixos-rebuild --flake .#your-hostname'
       nixosConfigurations = {
         # NOTE: the below ' x = ' defines the hostname, which is set by networking.hostname
-        # TODO: change hostname of Dell laptop system
         xps15 = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs outputs;
@@ -86,6 +85,14 @@
           modules = [
             ./nixos/hosts/xps15/configuration.nix # > Our main nixos configuration file <
             stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
+
+            # make home-manager as a module of nixos
+            # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
+            home-manager.nixosModules.home-manager
+            {
+              home-manager.users.coryg = import ./nixos/home-manager/home.nix;
+              # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
+            }
           ];
         };
       };

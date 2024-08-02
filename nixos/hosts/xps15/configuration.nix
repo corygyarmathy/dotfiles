@@ -417,15 +417,15 @@ in
   };
   services.pcscd.enable = true;
 
-  home-manager = {
-    extraSpecialArgs = {
-      inherit inputs outputs;
-    };
-    users = {
-      # Import your home-manager configuration
-      coryg = import ../../home-manager/home.nix;
-    };
-  };
+  # home-manager = {
+  #   extraSpecialArgs = {
+  #     inherit inputs outputs;
+  #   };
+  #   users = {
+  #     # Import your home-manager configuration
+  #     coryg = import ../../home-manager/home.nix;
+  #   };
+  # };
 
   # This value determines the NixOS release from which the default
   # settings for stateful data, like file locations and database versions
