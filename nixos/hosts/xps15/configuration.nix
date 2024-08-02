@@ -248,20 +248,17 @@ in
 
   # Required for Hyprland on Nvidia
   environment.sessionVariables = {
-    # If your cusor becomes inviseble
-    WLR_NO_HARDWARE_CURSORS = "1";
-    # Hint Electron apps to use Wayland
-    NIXOS_OZONE_WL = "1";
-
+    WLR_NO_HARDWARE_CURSORS = "1"; # If your cusor becomes inviseble
+    NIXOS_OZONE_WL = "1"; # Hint Electron apps to use Wayland
     # Required variables for Nvidea
     LIBVA_DRIVER_NAME = "nvidia";
     XDG_SESSION_TYPE = "wayland";
     GBM_BACKEND = "nvidia-drm";
-    # Required for .NET (using .NET SDK 8)
-    DOTNET_ROOT = "${pkgs.dotnet-sdk_8}";
+
+    DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
   };
 
-  # Required for Wayland
+  # Required for Wayland / Hyprland
   security.polkit.enable = true;
 
   # Handles desktop windows interactions between each other (e.g. screen sharing)
