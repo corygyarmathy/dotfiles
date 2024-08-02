@@ -8,5 +8,6 @@
     ./starship
     ./waybar
     ./rofi
+    ./alacritty.nix
   ];
 }

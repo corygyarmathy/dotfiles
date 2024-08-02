@@ -49,6 +49,7 @@ in
   waybar.enable = true;
   rofi.enable = true;
   starship.enable = true;
+  alacritty.enable = true;
 
   nixpkgs = {
     # You can add overlays here
@@ -387,18 +388,6 @@ in
   # Bash config
   programs.bash.enable = true;
 
-  # Alacritty config (terminal editor)
-  # TODO: split into separate module
-  programs.alacritty = {
-    enable = true;
-    settings = {
-      window = {
-        opacity = lib.mkForce 0.85;
-        padding.x = 10;
-      };
-    };
-  };
-
   # Spotify player settings
   # TODO: split into separate module
   programs.spotify-player = {
@@ -531,7 +520,6 @@ in
     ddcutil # Display management UI
     ddcui # Dispay management tool
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
-    alacritty # Terminal emulator
     tmux # Terminal multiplexer
     xfce.thunar # File manager
     xfce.xfconf # Required for thunar
