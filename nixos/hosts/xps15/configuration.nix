@@ -75,7 +75,7 @@ in
   ## Nvidiaa Drivers / GPU ##
 
   # Enable OpenGL
-  hardware.opengl = {
+  hardware.graphics = {
     enable = true;
   };
 
