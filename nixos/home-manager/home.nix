@@ -362,9 +362,6 @@ in
     # git config --global credential.credentialStore gpg
   };
 
-  # Bash config
-  programs.bash.enable = true;
-
   # KDE Connect - syncs notifications
   services.kdeconnect = {
     enable = true;
@@ -389,6 +386,7 @@ in
     luajitPackages.luarocks # Lua package manager # TODO: Do I need this?
     nodejs
     openssl
+    bash
 
     nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
 
