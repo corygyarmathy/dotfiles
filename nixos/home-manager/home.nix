@@ -138,6 +138,7 @@
     xfce.tumbler # Req. for thunar # Generates image previews
     file-roller # Archive (.zip) manager for GNOME, required for thunar-archive-plugin
     steam-run # Allows running dynamically linked executables, made for steam
+    lsd # Next-gen 'ls' command
 
     # Entertainment
     discord
