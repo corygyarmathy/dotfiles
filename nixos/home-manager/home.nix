@@ -105,6 +105,7 @@
     nodejs
     openssl
     bash
+    go
 
     nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
 
