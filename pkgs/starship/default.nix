@@ -14,11 +14,15 @@
 
   config = lib.mkIf config.nvim.enable {
     # Starship configuration
-    xdg.enable = true;
-    programs.starship.enableBashIntegration = true;
+    # xdg.enable = true;
+    # programs.starship.enableBashIntegration = true;
 
-    xdg.configFile."starship.toml".source = ./starship.toml;
-    programs.starship.enable = true;
+    programs.starship = {
+      enable = true;
+      settings = pkgs.lib.importTOML ./starship.toml;
+      enableBashIntegration = true;
+    };
+    # xdg.configFile."starship/starship.toml".source = ./starship.toml;
 
     home.packages = with pkgs; [
       starship # Shell prompt
