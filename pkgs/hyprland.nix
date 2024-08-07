@@ -18,7 +18,7 @@ let
   '';
   # dbus-update required for Hyprshade
   # Removed from above: ${pkgs.swww}/bin/swww init &  ${pkgs.swww}/bin/swww img ${/home/coryg/git/nixos-config/home-manager/wallpaper.jpg} &
-  browser = "google-chrome-stable"; # Switching as Firefox is crashing in Hyprland / Wayland when maximising YouTube videos
+  browser = "firefox";
   terminal = "alacritty";
   fileManager = "thunar";
   mod = "SUPER";
