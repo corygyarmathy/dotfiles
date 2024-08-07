@@ -66,6 +66,10 @@
     username = "coryg";
     homeDirectory = "/home/coryg";
   };
+  # Bash config
+  programs.bash = {
+    enable = true; # Req. for starship to work
+  };
 
   # Git config
   # TODO: split into separate module
