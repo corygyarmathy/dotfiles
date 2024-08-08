@@ -27,6 +27,8 @@
   hyprland.enable = true;
   ergodox.enable = true;
 
+  # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
+
   nixpkgs = {
     # You can add overlays here
     overlays = [
@@ -140,7 +142,7 @@
     file-roller # Archive (.zip) manager for GNOME, required for thunar-archive-plugin
     steam-run # Allows running dynamically linked executables, made for steam
     lsd # Next-gen 'ls' command
-    (pkgs.callPackage ../../pkgs/nixos-pkgs/bootdevcli { }) # Custom building package # Used for boot.dev course
+    # (pkgs.callPackage ../../pkgs/nixos-pkgs/bootdevcli { }) # Custom building package # Used for boot.dev course # TODO: figure out how to do custom packages better?
 
     # Entertainment
     discord

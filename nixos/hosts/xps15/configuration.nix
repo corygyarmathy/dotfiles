@@ -246,16 +246,16 @@ in
     package = inputs.hyprland.packages."${pkgs.system}".hyprland;
   };
 
-  # Required for Hyprland on Nvidia
   environment.sessionVariables = {
+    # Required for Hyprland on Nvidia
     WLR_NO_HARDWARE_CURSORS = "1"; # If your cusor becomes inviseble
     NIXOS_OZONE_WL = "1"; # Hint Electron apps to use Wayland
-    # Required variables for Nvidea
     LIBVA_DRIVER_NAME = "nvidia";
     XDG_SESSION_TYPE = "wayland";
     GBM_BACKEND = "nvidia-drm";
 
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
+    PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
   };
 
   # Required for Wayland / Hyprland
