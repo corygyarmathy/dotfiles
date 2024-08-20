@@ -256,6 +256,7 @@ in
 
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
     PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
+    GIT_EDITOR = "nvim"; # Set git default editor to nvim
   };
 
   # Required for Wayland / Hyprland
