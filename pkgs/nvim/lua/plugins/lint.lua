@@ -14,6 +14,7 @@ return {
       lint.linters_by_ft = {
         markdown = { 'markdownlint' },
         lua = { 'luacheck' },
+        python = { 'ruff' },
       }
       -- Linter configs
       lint.linters.markdownlint.args = {

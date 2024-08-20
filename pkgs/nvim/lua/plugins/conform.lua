@@ -31,6 +31,7 @@ return { -- Autoformat
       lua = { 'stylua' },
       markdown = { 'markdownlint' },
       nix = { 'nixfmt' },
+      python = { 'ruff_format' },
       -- Conform can also run multiple formatters sequentially
       -- python = { "isort", "black" },
       --

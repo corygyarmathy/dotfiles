@@ -135,6 +135,14 @@ return {
       local servers = {
         -- See `:help lspconfig-all` for a list of all the pre-configured LSPs
         powershell_es = { init_options = { enableProfileLoading = false } },
+        basedpyright = {
+          settings = {
+            basedpyright = {
+              -- https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#basedpyright
+              -- analysis = {},
+            },
+          },
+        },
 
         lua_ls = {
           -- cmd = {...},
@@ -169,6 +177,7 @@ return {
         'nil', -- LSP for nix (nix-os) code
         'taplo', -- LSP for TOML
         --'nixfmt', -- Formatter for nix (nix-os) code -- TODO: nixfmt not supported by Mason: investigate solution
+        'ruff', -- Formatter for python
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
