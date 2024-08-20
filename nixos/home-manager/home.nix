@@ -143,6 +143,8 @@
     steam-run # Allows running dynamically linked executables, made for steam
     lsd # Next-gen 'ls' command
     # (pkgs.callPackage ../../pkgs/nixos-pkgs/bootdevcli { }) # Custom building package # Used for boot.dev course # TODO: figure out how to do custom packages better?
+    unixtools.xxd # xxd creates a hex dump of a given file or standard input.
+    pandoc # Conversion between documentation formats
 
     # Entertainment
     discord
