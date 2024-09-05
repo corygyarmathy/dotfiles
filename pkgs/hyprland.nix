@@ -1,4 +1,4 @@
-# hyprland.nix
+# hyprland.nixhypr
 
 {
   pkgs,
@@ -142,6 +142,11 @@ in
           preserve_split = true;
         };
 
+        render = {
+          # we do, in fact, want direct scanout
+          direct_scanout = true;
+
+        };
         misc = {
           # disable auto polling for config file changes
           # disable_autoreload = true;
@@ -154,8 +159,6 @@ in
           # enable variable refresh rate (effective depending on hardware)
           # vrr = 1;
 
-          # we do, in fact, want direct scanout
-          no_direct_scanout = false;
         };
 
         # touchpad gestures
