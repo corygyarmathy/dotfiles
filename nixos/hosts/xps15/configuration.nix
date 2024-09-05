@@ -66,7 +66,6 @@ in
   services.hardware.bolt.enable = true; # Enable and install Gnome Thunderbolt utility (Bolt)
 
   # WiFi speed is slow and crashes by default (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
-  # disable_11ax - required until ax driver support is fixed (disable_11ax=1)
   # power_save - works well on this card
   boot.extraModprobeConfig = ''
     options iwlwifi power_save=1
@@ -103,6 +102,7 @@ in
 
     # Fine-grained power management. Turns off GPU when not in use.
     # Experimental and only works on modern Nvidia GPUs (Turing or newer).
+    # TODO: Investigate if this can be turned on
     powerManagement.finegrained = false;
 
     # Use the NVidia open source kernel module (not to be confused with the
@@ -290,6 +290,7 @@ in
       size = 28;
     };
 
+    # TODO: Investigate new fonts
     fonts = {
       serif = {
         package = pkgs.dejavu_fonts;
@@ -367,7 +368,6 @@ in
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
     gnome-firmware
     inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
     # nvidia-utils # Nvidea userspace graphics drivers
@@ -424,16 +424,6 @@ in
     # pass init <gpg-id>
   };
   services.pcscd.enable = true;
-
-  # home-manager = {
-  #   extraSpecialArgs = {
-  #     inherit inputs outputs;
-  #   };
-  #   users = {
-  #     # Import your home-manager configuration
-  #     coryg = import ../../home-manager/home.nix;
-  #   };
-  # };
 
   # This value determines the NixOS release from which the default
   # settings for stateful data, like file locations and database versions

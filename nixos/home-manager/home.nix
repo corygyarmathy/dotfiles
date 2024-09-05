@@ -17,6 +17,7 @@
   ];
 
   # Enabling self-defined home-manager modules
+  # TODO: Investigate adding prefix to these options - e.g. coryg.nvim.enable
   nvim.enable = true;
   waybar.enable = true;
   rofi.enable = true;
@@ -76,7 +77,6 @@
   # Git config
   # TODO: split into separate module
   programs.git = {
-    # enable = true; # Don't believe enabling here is required, package installed below
     userName = "Cory Gyarmathy";
     userEmail = "cory.gyarmathy@gmail.com";
     # git config --global credential.credentialStore gpg
@@ -109,7 +109,6 @@
     bash
     go
     jdk # Java Development Kit
-
     nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
 
     # Media
