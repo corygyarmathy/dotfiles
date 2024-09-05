@@ -108,6 +108,7 @@
     openssl
     bash
     go
+    jdk # Java Development Kit
 
     nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
 
@@ -145,6 +146,9 @@
     # (pkgs.callPackage ../../pkgs/nixos-pkgs/bootdevcli { }) # Custom building package # Used for boot.dev course # TODO: figure out how to do custom packages better?
     unixtools.xxd # xxd creates a hex dump of a given file or standard input.
     pandoc # Conversion between documentation formats
+    wine-wayland
+    wineWowPackages.waylandFull
+    winetricks
 
     # Entertainment
     discord
@@ -156,6 +160,9 @@
     rose-pine-gtk-theme
     rose-pine-icon-theme
     rose-pine-cursor
+
+    # Drivers
+    gutenprint # Drivers for many different printers from many different vendors.
   ];
 
   # Enable home-manager
