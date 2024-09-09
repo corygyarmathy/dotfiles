@@ -5,5 +5,6 @@
   imports = [
     ./hyprland.nix
     ./gnome.nix
+    ./nvidia.nix
   ];
 }
