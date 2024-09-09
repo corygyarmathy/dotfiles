@@ -19,7 +19,7 @@
   # Enabling self-defined home-manager modules
   # TODO: Investigate adding prefix to these options - e.g. coryg.nvim.enable
   cg.home.nvim.enable = true;
-  cg.home.waybar.enable = true;
+  cg.home.waybar.enable = true; # TODO: Investigate replacing with alternative
   cg.home.rofi.enable = true;
   cg.home.starship.enable = true;
   cg.home.alacritty.enable = true;
