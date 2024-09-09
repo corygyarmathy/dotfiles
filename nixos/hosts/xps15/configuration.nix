@@ -71,6 +71,19 @@ in
     options iwlwifi power_save=1
   '';
 
+  # Bluetooth
+  hardware.bluetooth = {
+    enable = true; # enables support for Bluetooth
+    powerOnBoot = true; # powers up the default Bluetooth controller on boot
+    settings = {
+      General = {
+        Enable = "Source,Sink,Media,Socket";
+      };
+    };
+  };
+
+  services.blueman.enable = true;
+
   ## Nvidiaa Drivers / GPU ##
 
   # Enable OpenGL
@@ -325,7 +338,10 @@ in
   };
 
   # Enable sound with pipewire.
-  hardware.pulseaudio.enable = false;
+  hardware.pulseaudio = {
+    enable = false;
+    package = pkgs.pulseaudioFull; # Enable extra codecs. Req. for bluetooth.
+  };
   security.rtkit.enable = true;
   services.pipewire = {
     enable = true;
@@ -383,6 +399,7 @@ in
     dconf
     xdg-utils # A set of command line tools that assist applications with a variety of desktop integration tasks
     gtk3
+    blueman # Bluetooth utilities
 
     # USB utils - needed for auto-mounting USB storage devices
     usbutils

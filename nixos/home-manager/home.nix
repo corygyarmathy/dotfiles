@@ -30,6 +30,8 @@
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
 
+  services.mpris-proxy.enable = true; # Req. for bluetooth media controls
+
   nixpkgs = {
     # You can add overlays here
     overlays = [
