@@ -9,10 +9,10 @@
 {
 
   options = {
-    alacritty.enable = lib.mkEnableOption "enables alacritty";
+    cg.home.alacritty.enable = lib.mkEnableOption "enables alacritty";
   };
 
-  config = lib.mkIf config.alacritty.enable {
+  config = lib.mkIf config.cg.home.alacritty.enable {
     # Alacritty config (terminal editor)
     # TODO: split into separate module
     programs.alacritty = {

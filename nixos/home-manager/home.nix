@@ -18,15 +18,15 @@
 
   # Enabling self-defined home-manager modules
   # TODO: Investigate adding prefix to these options - e.g. coryg.nvim.enable
-  nvim.enable = true;
-  waybar.enable = true;
-  rofi.enable = true;
-  starship.enable = true;
-  alacritty.enable = true;
-  spotify-player.enable = true;
-  hyprshade.enable = true;
-  hyprland.enable = true;
-  ergodox.enable = true;
+  cg.home.nvim.enable = true;
+  cg.home.waybar.enable = true;
+  cg.home.rofi.enable = true;
+  cg.home.starship.enable = true;
+  cg.home.alacritty.enable = true;
+  cg.home.spotify-player.enable = true;
+  cg.home.hyprshade.enable = true;
+  cg.home.hyprland.enable = true;
+  cg.home.ergodox.enable = true;
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
 

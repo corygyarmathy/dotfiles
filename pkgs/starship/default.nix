@@ -9,10 +9,10 @@
 {
 
   options = {
-    starship.enable = lib.mkEnableOption "enables starship";
+    cg.home.starship.enable = lib.mkEnableOption "enables starship";
   };
 
-  config = lib.mkIf config.nvim.enable {
+  config = lib.mkIf config.cg.home.starship.enable {
     # Starship configuration
     # xdg.enable = true;
     # programs.starship.enableBashIntegration = true;

@@ -9,10 +9,10 @@
 {
 
   options = {
-    ergodox.enable = lib.mkEnableOption "enables ergodox";
+    cg.home.ergodox.enable = lib.mkEnableOption "enables ergodox";
   };
 
-  config = lib.mkIf config.ergodox.enable {
+  config = lib.mkIf config.cg.home.ergodox.enable {
     # Configure firmware flashing for Ergodox keyboards
     # TODO: split into separate module
     home.file."/etc/udev/rules.d/50-zsa.rules".text = ''

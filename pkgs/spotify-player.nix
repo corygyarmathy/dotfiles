@@ -9,10 +9,10 @@
 {
 
   options = {
-    spotify-player.enable = lib.mkEnableOption "enables spotify-player";
+    cg.home.spotify-player.enable = lib.mkEnableOption "enables spotify-player";
   };
 
-  config = lib.mkIf config.spotify-player.enable {
+  config = lib.mkIf config.cg.home.spotify-player.enable {
     # Spotify player settings
     # TODO: split into separate module
     programs.spotify-player = {

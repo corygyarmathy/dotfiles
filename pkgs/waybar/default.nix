@@ -9,10 +9,10 @@
 {
 
   options = {
-    waybar.enable = lib.mkEnableOption "enables waybar";
+    cg.home.waybar.enable = lib.mkEnableOption "enables waybar";
   };
 
-  config = lib.mkIf config.waybar.enable {
+  config = lib.mkIf config.cg.home.waybar.enable {
     # Configure waybar (status bar for wayland)
     xdg.enable = true;
 

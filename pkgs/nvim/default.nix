@@ -9,10 +9,10 @@
 {
 
   options = {
-    nvim.enable = lib.mkEnableOption "enables nvim";
+    cg.home.nvim.enable = lib.mkEnableOption "enables nvim";
   };
 
-  config = lib.mkIf config.nvim.enable {
+  config = lib.mkIf config.cg.home.nvim.enable {
     # waybar config
     xdg.enable = true;
     # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";

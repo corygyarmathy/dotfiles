@@ -26,10 +26,12 @@ in
 {
 
   options = {
-    hyprland.enable = lib.mkEnableOption "enables hyprland";
+    cg.home.hyprland.enable = lib.mkEnableOption "enables hyprland";
   };
 
-  config = lib.mkIf config.hyprland.enable {
+  config = lib.mkIf config.cg.home.hyprland.enable {
+    # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
+
     # Configure Wayland / hyrland
     wayland.windowManager.hyprland = {
       enable = true;

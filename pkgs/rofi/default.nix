@@ -9,10 +9,10 @@
 {
 
   options = {
-    rofi.enable = lib.mkEnableOption "enables rofi";
+    cg.home.rofi.enable = lib.mkEnableOption "enables rofi";
   };
 
-  config = lib.mkIf config.rofi.enable {
+  config = lib.mkIf config.cg.home.rofi.enable {
     # Rofi config
     xdg.configFile."rofi/userconfig" = {
       source = ./config.rasi;

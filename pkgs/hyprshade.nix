@@ -22,10 +22,10 @@ in
 {
 
   options = {
-    hyprshade.enable = lib.mkEnableOption "enables hyprshade";
+    cg.home.hyprshade.enable = lib.mkEnableOption "enables hyprshade";
   };
 
-  config = lib.mkIf config.hyprshade.enable {
+  config = lib.mkIf config.cg.home.hyprshade.enable {
     # TODO: Redo this using Home-Manager options
     # Configure Hyprshade profiles (blue light filter)
     # TODO: split into separate module
