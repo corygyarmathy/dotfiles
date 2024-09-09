@@ -11,13 +11,11 @@
   };
 
   config = lib.mkIf config.cg.gnome.enable {
-    # Enable the X11 windowing system.
-    services.xserver.enable = true;
-
-    # Enable the GNOME Desktop Environment.
-    services.xserver.displayManager = {
-      gdm.enable = true;
-      gnome.enable = true;
+    # Enable the X11 windowing system, and GNOME desktop environment
+    services.xserver = {
+      enable = true;
+      displayManager.gdm.enable = true;
+      desktopManager.gnome.enable = true;
     };
 
     # Handles desktop windows interactions between each other (e.g. screen sharing)
