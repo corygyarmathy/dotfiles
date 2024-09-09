@@ -37,15 +37,19 @@ in
 
     # Import home-manager's NixOS module
     inputs.home-manager.nixosModules.home-manager
+
+    # Import all Modules (they need to be enabled to turn on)
+    outputs.nixosModules
   ];
+
+  # Toggle modules
+  cg.hyprland.enable = true;
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelParams = [
     "acpi_rev_override" # Default sugggested Dell XPS 15 config
-    "nvidia-drm.modeset=1" # Used for Wayland compat.
-    "nvidia-drm.fbdev=1" # Used for Wayland compat.
   ];
 
   # Kernel modules
@@ -183,7 +187,7 @@ in
       nixPath = lib.mapAttrsToList (n: _: "${n}=flake:${n}") flakeInputs;
     };
 
-  # TODO: Set your hostname
+  # Set the system hostname
   networking.hostName = "xps15";
 
   # Enable networking
@@ -241,39 +245,11 @@ in
   # services.xserver.displayManager.gdm.enable = true;
   # services.xserver.desktopManager.gnome.enable = true;
 
-  # Enable Wayland
-  services.xserver = {
-    enable = true;
-    videoDrivers = [ "nvidia" ];
-    displayManager.gdm = {
-      enable = true;
-      wayland = true;
-    };
-  };
-
-  # Enable the Hyprland compositor
-  programs.hyprland = {
-    enable = true;
-    xwayland.enable = true;
-    # Ensures you're using the most up-to-date package (probably another way of doing this)
-    package = inputs.hyprland.packages."${pkgs.system}".hyprland;
-  };
-
   environment.sessionVariables = {
-    # Required for Hyprland on Nvidia
-    WLR_NO_HARDWARE_CURSORS = "1"; # If your cusor becomes inviseble
-    NIXOS_OZONE_WL = "1"; # Hint Electron apps to use Wayland
-    LIBVA_DRIVER_NAME = "nvidia";
-    XDG_SESSION_TYPE = "wayland";
-    GBM_BACKEND = "nvidia-drm";
-
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
     PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
     GIT_EDITOR = "nvim"; # Set git default editor to nvim
   };
-
-  # Required for Wayland / Hyprland
-  security.polkit.enable = true;
 
   # Handles desktop windows interactions between each other (e.g. screen sharing)
   # xdg.portal.enable = true;
@@ -386,12 +362,6 @@ in
   environment.systemPackages = with pkgs; [
     gnome-firmware
     inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
-    # nvidia-utils # Nvidea userspace graphics drivers
-    xdg-desktop-portal-hyprland # Req. for Hyprland # xdg-desktop-portal backend for Hyprland
-    xdg-desktop-portal-gtk # Req. for Hyprland # filepicker for XDPH
-    egl-wayland # Required in order to enable compatibility between the EGL API and the Wayland protocol
-    qt5.qtwayland # Required for Wayland / Hyprland
-    qt6.qtwayland # Required for Wayland / Hyprland
 
     base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
     bibata-cursors # Imports cursors
