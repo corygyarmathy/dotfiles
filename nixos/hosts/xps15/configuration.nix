@@ -35,6 +35,12 @@ in
   cg.hyprland.enable = true;
   cg.gnome.enable = false;
 
+  environment.sessionVariables = {
+    DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
+    PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
+    GIT_EDITOR = "nvim"; # Set git default editor to nvim
+  };
+
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
@@ -52,6 +58,9 @@ in
   };
 
   services.hardware.bolt.enable = true; # Enable and install Gnome Thunderbolt utility (Bolt)
+
+  # Enable touchpad support (enabled default in most desktopManager).
+  services.libinput.enable = true;
 
   # WiFi speed is slow and crashes by default (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
   # power_save - works well on this card
@@ -120,31 +129,6 @@ in
 
     # Optionally, you may need to select the appropriate driver version for your specific GPU.
     package = config.boot.kernelPackages.nvidiaPackages.production;
-  };
-
-  nixpkgs = {
-    # You can add overlays here
-    overlays = [
-      # Add overlays your own flake exports (from overlays and pkgs dir):
-      outputs.overlays.additions
-      outputs.overlays.modifications
-      outputs.overlays.unstable-packages
-
-      # You can also add overlays exported from other flakes:
-      # neovim-nightly-overlay.overlays.default
-
-      # Or define it inline, for example:
-      # (final: prev: {
-      #   hi = final.hello.overrideAttrs (oldAttrs: {
-      #     patches = [ ./change-hello-to-hi.patch ];
-      #   });
-      # })
-    ];
-    # Configure your nixpkgs instance
-    config = {
-      # Disable if you don't want unfree packages
-      allowUnfree = true;
-    };
   };
 
   nix =
@@ -221,12 +205,6 @@ in
     stdenv.cc.cc
     libGL
   ];
-
-  environment.sessionVariables = {
-    DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
-    PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
-    GIT_EDITOR = "nvim"; # Set git default editor to nvim
-  };
 
   # Configure keymap in X11
   services.xserver.xkb = {
@@ -306,9 +284,6 @@ in
     #media-session.enable = true;
   };
 
-  # Enable touchpad support (enabled default in most desktopManager).
-  services.libinput.enable = true;
-
   # Configure your system-wide user settings (groups, etc), add more users as needed.
   users.users = {
     coryg = {
@@ -328,6 +303,31 @@ in
         "plugdev" # needed for firmware flashing of Ergodox keyboards
         "i2c" # req. for ddcutil (monitor brightness control)
       ];
+    };
+  };
+
+  nixpkgs = {
+    # You can add overlays here
+    overlays = [
+      # Add overlays your own flake exports (from overlays and pkgs dir):
+      outputs.overlays.additions
+      outputs.overlays.modifications
+      outputs.overlays.unstable-packages
+
+      # You can also add overlays exported from other flakes:
+      # neovim-nightly-overlay.overlays.default
+
+      # Or define it inline, for example:
+      # (final: prev: {
+      #   hi = final.hello.overrideAttrs (oldAttrs: {
+      #     patches = [ ./change-hello-to-hi.patch ];
+      #   });
+      # })
+    ];
+    # Configure your nixpkgs instance
+    config = {
+      # Disable if you don't want unfree packages
+      allowUnfree = true;
     };
   };
 
