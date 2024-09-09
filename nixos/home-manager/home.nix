@@ -66,7 +66,7 @@
     };
   };
 
-  # TODO: Set your username
+  # Create the user
   home = {
     username = "coryg";
     homeDirectory = "/home/coryg";

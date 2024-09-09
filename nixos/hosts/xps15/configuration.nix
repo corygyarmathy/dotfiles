@@ -86,7 +86,7 @@ in
     };
   };
 
-  services.blueman.enable = true;
+  services.blueman.enable = true; # Bluetooth utility / tray icon
 
   ## Nvidiaa Drivers / GPU ##
 
@@ -359,11 +359,11 @@ in
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    gnome-firmware
     inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
 
     base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
     bibata-cursors # Imports cursors
+    gnome-firmware # Firmware GUI manager
     glib # Core object system for GNOME
     dconf
     xdg-utils # A set of command line tools that assist applications with a variety of desktop integration tasks
