@@ -4,5 +4,6 @@
   # List your module files here
   imports = [
     ./hyprland.nix
+    ./gnome.nix
   ];
 }

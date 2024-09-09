@@ -33,6 +33,7 @@ in
 
   # Toggle modules
   cg.hyprland.enable = true;
+  cg.gnome.enable = false;
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
@@ -220,22 +221,12 @@ in
     stdenv.cc.cc
     libGL
   ];
-  # Enable the X11 windowing system.
-  # services.xserver.enable = true;
-
-  # Enable the GNOME Desktop Environment.
-  # services.xserver.displayManager.gdm.enable = true;
-  # services.xserver.desktopManager.gnome.enable = true;
 
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
     PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
     GIT_EDITOR = "nvim"; # Set git default editor to nvim
   };
-
-  # Handles desktop windows interactions between each other (e.g. screen sharing)
-  # xdg.portal.enable = true;
-  # xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
 
   # Configure keymap in X11
   services.xserver.xkb = {
@@ -349,7 +340,7 @@ in
     bibata-cursors # Imports cursors
     gnome-firmware # Firmware GUI manager
     glib # Core object system for GNOME
-    dconf
+    dconf # Req. for GNOME apps (if not running GNOME)
     xdg-utils # A set of command line tools that assist applications with a variety of desktop integration tasks
     gtk3
     blueman # Bluetooth utilities
