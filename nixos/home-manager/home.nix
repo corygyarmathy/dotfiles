@@ -14,10 +14,10 @@
     # Importing home-manager modules through default.nix
     # NOTE: these need to be enabled for them to apply.
     ../../pkgs
+    # outputs.homeManagerModules 
   ];
 
   # Enabling self-defined home-manager modules
-  # TODO: Investigate adding prefix to these options - e.g. coryg.nvim.enable
   cg.home.nvim.enable = true;
   cg.home.waybar.enable = true; # TODO: Investigate replacing with alternative
   cg.home.rofi.enable = true;
