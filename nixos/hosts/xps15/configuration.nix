@@ -14,19 +14,7 @@ in
 {
   # You can import other NixOS modules here
   imports = [
-    # If you want to use modules your own flake exports (from modules/nixos):
-    # outputs.nixosModules.example
-
-    # Or modules from other flakes (such as nixos-hardware):
-    # inputs.hardware.nixosModules.common-cpu-amd
-    # inputs.hardware.nixosModules.common-ssd
-
-    # You can also split up your configuration and import pieces of it here:
-    # ./users.nix
-
-    # inputs.stylix.nixosModules.stylix # Importing Stylix: used for RICEing, imports into home-manager automatically
-    # Commenting out as I'm putting in Flake as experiment
-
+    # Importing hardware flakes
     inputs.hardware.nixosModules.common-cpu-intel
     inputs.hardware.nixosModules.common-gpu-nvidia
     inputs.hardware.nixosModules.common-pc-laptop
@@ -39,6 +27,7 @@ in
     inputs.home-manager.nixosModules.home-manager
 
     # Import all Modules (they need to be enabled to turn on)
+    # Imported via flake outputs
     outputs.nixosModules
   ];
 
@@ -52,20 +41,14 @@ in
     "acpi_rev_override" # Default sugggested Dell XPS 15 config
   ];
 
-  # Kernel modules
-  # boot.kernelModules = [ "i2c-dev" ]; # req. for ddcutil (monitor brightness control)
-  # services.udev.extraRules = ''
-  #   KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
-  # ''; # req. for ddcutil (monitor brightness control)
-
   hardware.i2c.enable = true; # req. for ddcutil (monitor brightness control)
 
-  # This will save you money and possibly your life!
-  services.thermald.enable = lib.mkDefault true;
-
-  # Thermald doesn't have a default config for the 9500 yet, the one in this repo
-  # was generated with dptfxtract-static (https://github.com/intel/dptfxtract)
-  services.thermald.configFile = lib.mkDefault thermald-conf;
+  services.thermald = {
+    enable = lib.mkDefault true; # monitors and controls temperature in laptops, tablets.
+    # Thermald doesn't have a default config for the 9500 yet, the one in this repo
+    # was generated with dptfxtract-static (https://github.com/intel/dptfxtract)
+    configFile = lib.mkDefault thermald-conf;
+  };
 
   services.hardware.bolt.enable = true; # Enable and install Gnome Thunderbolt utility (Bolt)
 
@@ -88,7 +71,7 @@ in
 
   services.blueman.enable = true; # Bluetooth utility / tray icon
 
-  ## Nvidiaa Drivers / GPU ##
+  ## Nvidia Drivers / GPU ##
 
   # Enable OpenGL
   hardware.graphics = {
@@ -264,6 +247,7 @@ in
   services.gvfs.enable = true;
   services.udisks2.enable = true;
 
+  # RICE settings
   stylix = {
     enable = true;
     autoEnable = true; # Enables stylix themes for all applications
@@ -334,10 +318,10 @@ in
   # Enable touchpad support (enabled default in most desktopManager).
   services.libinput.enable = true;
 
-  # TODO: Configure your system-wide user settings (groups, etc), add more users as needed.
+  # Configure your system-wide user settings (groups, etc), add more users as needed.
   users.users = {
     coryg = {
-      # TODO: You can set an initial password for your user.
+      # You can set an initial password for your user.
       # If you do, you can skip setting a root password by passing '--no-root-passwd' to nixos-install.
       # Be sure to change it (using passwd) after rebooting!
       # initialPassword = "correcthorsebatterystaple";
