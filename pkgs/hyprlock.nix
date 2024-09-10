@@ -50,8 +50,8 @@
             check_color = "rgb(204, 136, 34)";
             fail_color = "rgb(204, 34, 34)"; # if authentication failed, changes outer_color and fail message color
             fail_text = "<i>$FAIL <b>($ATTEMPTS)</b></i>"; # can be set to empty
-            fail_timeout = 1000; # milliseconds before fail_text and fail_color disappears
-            fail_transition = 200; # transition time in ms between normal outer_color and fail_color
+            fail_timeout = 500; # milliseconds before fail_text and fail_color disappears
+            fail_transition = 0; # transition time in ms between normal outer_color and fail_color
             capslock_color = -1;
             numlock_color = -1;
             bothlock_color = -1; # when both locks are active. -1 means don't change outer color (same for above)
