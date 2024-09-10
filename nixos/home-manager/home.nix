@@ -158,6 +158,7 @@
     zotero
     steam
     calibre
+    gargoyle # Used for running games
 
     # RICE / aesthetics
     rose-pine-gtk-theme
