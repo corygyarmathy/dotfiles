@@ -33,7 +33,6 @@ in
 
   # Toggle modules
   cg.hyprland.enable = true;
-  cg.hyprlock.enable = false;
   cg.gnome.enable = false;
   cg.nvidia.enable = true;
 

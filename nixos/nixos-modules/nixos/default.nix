@@ -4,7 +4,6 @@
   # List your module files here
   imports = [
     ./hyprland.nix
-    ./hyprlock.nix
     ./gnome.nix
     ./nvidia.nix
   ];
