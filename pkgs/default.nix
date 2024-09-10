@@ -12,6 +12,7 @@
     ./hyprshade.nix # TODO: Include in hyprland.nix ?
     ./spotify-player.nix
     ./hyprland.nix
+    ./hyprlock.nix
     ./ergodox.nix
   ];
 }

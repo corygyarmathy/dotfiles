@@ -26,6 +26,7 @@
   cg.home.spotify-player.enable = true;
   cg.home.hyprshade.enable = true;
   cg.home.hyprland.enable = true;
+  cg.home.hyprlock.enable = true;
   cg.home.ergodox.enable = true;
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
