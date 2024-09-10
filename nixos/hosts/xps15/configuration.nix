@@ -289,6 +289,7 @@ in
 
     base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
     bibata-cursors # Imports cursors
+
     gnome-firmware # Firmware GUI manager
     glib # Core object system for GNOME
     dconf # Req. for GNOME apps (if not running GNOME)
