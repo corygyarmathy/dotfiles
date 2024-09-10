@@ -107,11 +107,11 @@
             on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off"; # Screen off
             on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # Screen on
           }
-          {
-            # TODO: make it so I can wake from suspend with external keyboard, don't have to open laptop
-            timeout = 1800; # 30min
-            on-timeout = "systemctl suspend"; # suspend pc
-          }
+          # {
+          #   # TODO: make it so I can wake from suspend with external keyboard, don't have to open laptop
+          #   timeout = 1800; # 30min
+          #   on-timeout = "systemctl suspend"; # suspend pc
+          # }
         ];
       };
     };
