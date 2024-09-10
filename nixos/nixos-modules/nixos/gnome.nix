@@ -20,6 +20,5 @@
 
     # Handles desktop windows interactions between each other (e.g. screen sharing)
     xdg.portal.enable = true;
-    xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
   };
 }

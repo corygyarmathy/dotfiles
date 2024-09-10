@@ -293,7 +293,6 @@ in
     glib # Core object system for GNOME
     dconf # Req. for GNOME apps (if not running GNOME)
     xdg-utils # A set of command line tools that assist applications with a variety of desktop integration tasks
-    gtk3
     blueman # Bluetooth utilities
 
     # USB utils - needed for auto-mounting USB storage devices
