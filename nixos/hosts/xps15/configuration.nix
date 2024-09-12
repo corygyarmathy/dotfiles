@@ -32,8 +32,8 @@ in
   ];
 
   # Toggle modules
-  cg.hyprland.enable = true;
-  cg.gnome.enable = false;
+  cg.hyprland.enable = false;
+  cg.gnome.enable = true;
   cg.nvidia.enable = true;
 
   environment.sessionVariables = {
