@@ -14,5 +14,7 @@
     ./hyprland.nix
     ./hyprlock.nix
     ./ergodox.nix
+    ./ssh.nix
+    ./sops-nix.nix
   ];
 }

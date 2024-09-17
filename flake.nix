@@ -13,7 +13,7 @@
 
     # Home manager
     home-manager.url = "github:nix-community/home-manager";
-    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
 
     # Imports hardware dependencies
     hardware.url = "github:nixos/nixos-hardware";
@@ -75,12 +75,10 @@
       overlays = import ./nixos/nixos-overlays { inherit inputs; };
 
       # Reusable nixos modules you might want to export
-      # These are usually stuff you would upstream into nixpkgs
       nixosModules = import ./nixos/nixos-modules/nixos;
 
       # Reusable home-manager modules you might want to export
-      # These are usually stuff you would upstream into home-manager
-      homeManagerModules = import ./nixos/nixos-modules/home-manager;
+      # homeManagerModules = import ./nixos/nixos-modules/home-manager;
 
       # NixOS configuration entrypoint
       # Available through 'nixos-rebuild --flake .#your-hostname'
