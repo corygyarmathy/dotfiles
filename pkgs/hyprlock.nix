@@ -34,7 +34,7 @@
         input-field = [
           {
             size = "350, 50";
-            outline_thickness = 3;
+            outline_thickness = 2;
             dots_size = 0.3; # Scale of input-field height, 0.2 - 0.8
             dots_spacing = 0.15; # Scale of dots' absolute size, 0.0 - 1.0
             dots_center = false;
@@ -42,7 +42,7 @@
             outer_color = "rgb(151515)";
             inner_color = "rgb(200, 200, 200)";
             font_color = "rgb(10, 10, 10)";
-            fade_on_empty = "true";
+            fade_on_empty = "false";
             fade_timeout = "5000"; # Milliseconds before fade_on_empty is triggered.
             placeholder_text = "<i>Input Password...</i>"; # Text rendered in the input box when it's empty.
             hide_input = "false";
@@ -107,6 +107,8 @@
             on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off"; # Screen off
             on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # Screen on
           }
+          # FIXME: waking from suspend failing, review boot4.log
+          # Fails even when Nvidia power management disabled - to investigate 
           # {
           #   # TODO: make it so I can wake from suspend with external keyboard, don't have to open laptop
           #   timeout = 1800; # 30min
