@@ -32,6 +32,10 @@
       inputs.hyprland.follows = "hyprland";
     };
 
+    # SOPS-Nix
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs-unstable";
+
   };
 
   outputs =
@@ -40,6 +44,7 @@
       nixpkgs,
       home-manager,
       stylix,
+      sops-nix,
       ...
     }@inputs:
     let
@@ -88,6 +93,7 @@
           modules = [
             ./nixos/hosts/xps15/configuration.nix # > Our main nixos configuration file <
             stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
+            sops-nix.nixosModules.sops
 
             # make home-manager as a module of nixos
             # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`

@@ -35,6 +35,7 @@ in
   cg.hyprland.enable = false;
   cg.gnome.enable = true;
   cg.nvidia.enable = true;
+  cg.sops-nix.enable = true;
 
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
@@ -104,6 +105,10 @@ in
       registry = lib.mapAttrs (_: flake: { inherit flake; }) flakeInputs;
       nixPath = lib.mapAttrsToList (n: _: "${n}=flake:${n}") flakeInputs;
     };
+
+  home-manager.sharedModules = [
+    inputs.sops-nix.homeManagerModules.sops
+  ];
 
   # Set the system hostname
   networking.hostName = "xps15";

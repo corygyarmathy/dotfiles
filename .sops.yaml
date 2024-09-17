@@ -1,0 +1,14 @@
+keys:
+  - &users:
+    - &coryg age1g02vwy6867g9v4w58d4v52h3q37slhd0gjyygh9eramdfshw0ats0wkc5x # Public age key for user
+  - &hosts:
+    - &xps15 age1aqvdthnw8k7wn3z90qf8f8d3fupchhf55ecdafn5yr4axad75f3qvst4dg # Public ssh > age key for host
+  - &host_users:
+    - &xps15_coryg age1r340dyc4wwn82x9d63mepsw4g3j3csdqcgjwvyh43u8kd5sqauqqh7j653 # Public age key for host_user
+creation_rules:
+  - path_regex: secrets.yaml$
+    key_groups:
+      - age:
+        - *coryg # Refers to above &coryg key
+        - *xps15
+        - *host_users

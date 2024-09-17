@@ -28,6 +28,7 @@
   cg.home.hyprland.enable = false;
   cg.home.hyprlock.enable = false;
   cg.home.ergodox.enable = true;
+  cg.home.sops-nix.enable = true;
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
 
@@ -152,6 +153,7 @@
     wine-wayland
     wineWowPackages.waylandFull
     winetricks
+    age # Generate / encrypt with age keys
 
     # Entertainment
     discord

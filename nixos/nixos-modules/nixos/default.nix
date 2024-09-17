@@ -6,5 +6,6 @@
     ./hyprland.nix
     ./gnome.nix
     ./nvidia.nix
+    ./sops-nix
   ];
 }
