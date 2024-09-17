@@ -32,8 +32,8 @@ in
   ];
 
   # Toggle modules
-  cg.hyprland.enable = false;
-  cg.gnome.enable = true;
+  cg.hyprland.enable = true;
+  cg.gnome.enable = false;
   cg.nvidia.enable = true;
   cg.sops-nix.enable = true;
 
