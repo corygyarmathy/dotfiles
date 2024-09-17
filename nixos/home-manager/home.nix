@@ -14,7 +14,7 @@
     # Importing home-manager modules through default.nix
     # NOTE: these need to be enabled for them to apply.
     ../../pkgs
-    # outputs.homeManagerModules 
+    # outputs.homeManagerModules
   ];
 
   # Enabling self-defined home-manager modules

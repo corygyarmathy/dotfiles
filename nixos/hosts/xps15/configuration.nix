@@ -29,6 +29,7 @@ in
     # Import all Modules (they need to be enabled to turn on)
     # Imported via flake outputs
     outputs.nixosModules
+
   ];
 
   # Toggle modules
@@ -41,6 +42,7 @@ in
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
     PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
     GIT_EDITOR = "nvim"; # Set git default editor to nvim
+    EDITOR = "nvim"; # set system default editor to nvim
   };
 
   # Bootloader.
@@ -331,6 +333,7 @@ in
     };
   };
 
+  # Monitoring as logs indicate this may be causing system crashes when resuming from sleep
   services.onedrive.enable = true; # Install and start OneDrive client
 
   # GnuPG config
