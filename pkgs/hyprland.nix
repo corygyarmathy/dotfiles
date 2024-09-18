@@ -226,6 +226,7 @@ in
             "${mod} SHIFT ALT, bracketright, movecurrentworkspacetomonitor, r"
 
             # Take screenshot of all sceens
+            # FIXME: not currently working / setup
             ", Print, exec, grimblast copy area"
 
             # TODO: add screenshot key bindings
@@ -253,10 +254,12 @@ in
 
         bindl = [
           # Monitor events
+          # Disable laptop monitor in lid close, enable on lid open
           ", switch:on:Lid Switch, exec, hyprctl keyword monitor \"eDP-1, disable\""
           ", switch:off:Lid Switch, exec ,hyprctl keyword monitor \"eDP-1,3840x2400, 0x0, 1\""
 
           # media controls
+          # FIXME: doesn't work
           ", XF86AudioPlay, exec, playerctl play-pause"
           ", XF86AudioPrev, exec, playerctl previous"
           ", XF86AudioNext, exec, playerctl next"
