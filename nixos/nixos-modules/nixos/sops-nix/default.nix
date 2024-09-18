@@ -47,12 +47,13 @@
         # These age keys are are unique for the user on each host and are generated on their own (i.e. they are not derived
         # from an ssh key).
         # TODO: programatically set username (replace 'coryg')
-        "user_age_keys/coryg/${config.networking.hostName}" = {
-          owner = config.users.users.coryg.name;
-          inherit (config.users.users.coryg) group;
-          # We need to ensure the entire directory structure is that of the user...
-          path = "/home/coryg/.config/sops/age/keys.txt";
-        };
+        # FIXME: concerned about the security / permissions of this key: to investigate
+        # "user_age_keys/coryg/${config.networking.hostName}" = {
+        #   owner = config.users.users.coryg.name;
+        #   inherit (config.users.users.coryg) group;
+        #   # We need to ensure the entire directory structure is that of the user...
+        #   path = "/home/coryg/.config/sops/age/keys.txt";
+        # };
         # TODO: investigate if this is the correct method
         # TODO: investigate if the key is stored securely on the system
         # - Research best practices for ssh keys
