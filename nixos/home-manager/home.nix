@@ -15,6 +15,7 @@
     # NOTE: these need to be enabled for them to apply.
     ../../pkgs
     # outputs.homeManagerModules
+    ../nixos-modules/home-manager
   ];
 
   # Enabling self-defined home-manager modules
