@@ -16,5 +16,6 @@
     ./ergodox.nix
     ./ssh.nix
     ./sops-nix.nix
+    ./stylix.nix
   ];
 }

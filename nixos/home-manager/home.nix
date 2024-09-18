@@ -31,6 +31,7 @@
   cg.home.ergodox.enable = true;
   cg.home.ssh.enable = true;
   cg.home.sops-nix.enable = true;
+  cg.home.stylix.enable = true;
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
 
@@ -58,15 +59,6 @@
     config = {
       # Disable if you don't want unfree packages
       allowUnfree = true;
-    };
-  };
-
-  # Configure stylix in home manager (for RICEing)
-  stylix = {
-    targets = {
-      # Disabling as I have a custom configuration
-      waybar.enable = false;
-      vim.enable = false; # Covers both vim and nvim
     };
   };
 

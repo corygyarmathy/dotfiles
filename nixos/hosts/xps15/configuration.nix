@@ -37,6 +37,7 @@ in
   cg.gnome.enable = false;
   cg.nvidia.enable = true;
   cg.sops-nix.enable = true;
+  cg.stylix.enable = true;
 
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
@@ -82,7 +83,6 @@ in
       };
     };
   };
-
   services.blueman.enable = true; # Bluetooth utility / tray icon
 
   nix =
@@ -174,46 +174,6 @@ in
   services.gvfs.enable = true;
   services.udisks2.enable = true;
 
-  # RICE settings
-  # TODO: move into separate module
-  stylix = {
-    enable = true;
-    autoEnable = true; # Enables stylix themes for all applications
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/catppuccin-mocha.yaml";
-    polarity = "dark"; # "light" or "either" - sets light or dark mode
-    image = ../../../wallpapers/wallhaven-1h3u9zr.jpg; # Sets wallpaper, ""s are not required for path
-
-    # TODO: replace with catppuccin cursor
-    cursor = {
-      package = pkgs.rose-pine-cursor;
-      name = "BreezeX-RosePine-Linux";
-      size = 28;
-    };
-
-    # TODO: Investigate new fonts
-    fonts = {
-      serif = {
-        package = pkgs.dejavu_fonts;
-        name = "DejaVu Serif";
-      };
-
-      sansSerif = {
-        package = pkgs.dejavu_fonts;
-        name = "DejaVu Sans";
-      };
-
-      monospace = {
-        package = pkgs.dejavu_fonts;
-        name = "DejaVu Sans Mono";
-      };
-
-      emoji = {
-        package = pkgs.noto-fonts-emoji;
-        name = "Noto Color Emoji";
-      };
-    };
-  };
-
   # Enable CUPS to print documents.
   services.printing.enable = true;
   # Enable printer autodiscovery
@@ -294,9 +254,6 @@ in
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
-
-    base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
-    bibata-cursors # Imports cursors
 
     gnome-firmware # Firmware GUI manager
     glib # Core object system for GNOME
