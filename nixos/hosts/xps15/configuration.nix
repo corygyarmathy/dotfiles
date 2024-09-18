@@ -16,7 +16,6 @@ in
   imports = [
     # Importing hardware flakes
     inputs.hardware.nixosModules.common-cpu-intel
-    inputs.hardware.nixosModules.common-gpu-nvidia
     inputs.hardware.nixosModules.common-pc-laptop
     inputs.hardware.nixosModules.common-pc-laptop-ssd
 
@@ -29,7 +28,6 @@ in
     # Import all Modules (they need to be enabled to turn on)
     # Imported via flake outputs
     outputs.nixosModules
-
   ];
 
   # Toggle modules
@@ -74,6 +72,7 @@ in
   '';
 
   # Bluetooth
+  # TODO: make separate module
   hardware.bluetooth = {
     enable = true; # enables support for Bluetooth
     powerOnBoot = true; # powers up the default Bluetooth controller on boot
@@ -85,6 +84,7 @@ in
   };
   services.blueman.enable = true; # Bluetooth utility / tray icon
 
+  # Configure nix itself
   nix =
     let
       flakeInputs = lib.filterAttrs (_: lib.isType "flake") inputs;
@@ -97,7 +97,7 @@ in
         flake-registry = "";
         # Workaround for https://github.com/NixOS/nix/issues/9574
         nix-path = config.nix.nixPath;
-        substituters = [ "https://hyprland.cachix.org" ]; # Required for Hyprland
+        substituters = [ "https://hyprland.cachix.org" ]; # Required for Hyprland, https://wiki.hyprland.org/Nix/Cachix/
         trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ]; # Required for Hyprland
       };
       # Opinionated: disable channels
@@ -109,10 +109,11 @@ in
     };
 
   home-manager.sharedModules = [
-    inputs.sops-nix.homeManagerModules.sops
+    inputs.sops-nix.homeManagerModules.sops # Imports sops-nix hm module
   ];
 
   # Set the system hostname
+  # TODO: set hostname through variable?
   networking.hostName = "xps15";
 
   # Enable networking
@@ -205,6 +206,8 @@ in
 
   # Configure your system-wide user settings (groups, etc), add more users as needed.
   users.users = {
+    # TODO: set username through variable?
+    # TODO: set user password through sops-nix?
     coryg = {
       # You can set an initial password for your user.
       # If you do, you can skip setting a root password by passing '--no-root-passwd' to nixos-install.
@@ -215,7 +218,7 @@ in
       openssh.authorizedKeys.keys = [
         # TODO: Add your SSH public key(s) here, if you plan on using SSH to connect
       ];
-      # TODO: Be sure to add any other groups you need (such as networkmanager, audio, docker, etc)
+      # The groups that the defined user is a member of
       extraGroups = [
         "networkmanager"
         "wheel"
@@ -269,8 +272,6 @@ in
 
   # Install fonts (system wide)
   fonts.packages = with pkgs; [
-    dejavu_fonts # Fonts
-    noto-fonts-emoji # Fonts
     nerdfonts # Fonts
     font-awesome # Fonts
   ];
@@ -295,6 +296,7 @@ in
   services.onedrive.enable = true; # Install and start OneDrive client
 
   # GnuPG config
+  # TODO: check if I still need this
   programs.gnupg.agent = {
     enable = true;
     enableSSHSupport = true;
@@ -309,5 +311,6 @@ in
   # this value at the release version of the first install of this system.
   # Before changing this value read the documentation for this option
   # https://nixos.wiki/wiki/FAQ/When_do_I_update_stateVersion
+  # TL;DR: update upon OS re-install
   system.stateVersion = "23.05";
 }

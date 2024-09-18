@@ -1,6 +1,7 @@
 {
   lib,
   config,
+  pkgs,
   ...
 }:
 {
@@ -19,5 +20,11 @@
         vim.enable = false; # Covers both vim and nvim
       };
     };
+    home.packages = with pkgs; [
+      # RICE / aesthetics
+      # TODO: are these needed?
+      rose-pine-gtk-theme
+      rose-pine-icon-theme
+    ];
   };
 }

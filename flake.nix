@@ -3,12 +3,11 @@
 
   inputs = {
     # Nixpkgs
+    # TODO: change to the most recent channel URL
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     # You can access packages and modules from different nixpkgs revs
-    # at the same time. Here's an working example:
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     # Also see the 'unstable-packages' overlay at 'overlays/default.nix'.
-
     nixpkgs-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
 
     # Home manager
@@ -20,9 +19,6 @@
 
     # Used for setting system colours / styling
     stylix.url = "github:danth/stylix";
-
-    # Used for standardising colours, using Base16 themes
-    nix-colors.url = "github:misterio77/nix-colors";
 
     # Hyprland
     hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1"; # Use most recent version
@@ -99,6 +95,8 @@
             home-manager.nixosModules.home-manager
             {
               home-manager.users.coryg = import ./nixos/home-manager/home.nix;
+              # inherit inputs outputs; # INFO: potential fix for module importing issue?
+
               # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
             }
           ];

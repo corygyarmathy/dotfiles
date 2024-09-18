@@ -19,6 +19,7 @@
   ];
 
   # Enabling self-defined home-manager modules
+  # TODO: move these into the ../nixos-modules/home-manager/ folder
   cg.home.nvim.enable = true;
   cg.home.waybar.enable = true; # TODO: Investigate replacing with alternative
   cg.home.rofi.enable = true;
@@ -34,6 +35,8 @@
   cg.home.stylix.enable = true;
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
+  # See: https://www.reddit.com/r/NixOS/comments/1ajhwxv/hyprland_homemanager_does_not_inherit/
+  # You can also set these in hyprland.nix under 'env'
 
   services.mpris-proxy.enable = true; # Req. for bluetooth media controls
 
@@ -144,7 +147,7 @@
     # (pkgs.callPackage ../../pkgs/nixos-pkgs/bootdevcli { }) # Custom building package # Used for boot.dev course # TODO: figure out how to do custom packages better?
     unixtools.xxd # xxd creates a hex dump of a given file or standard input.
     pandoc # Conversion between documentation formats
-    wine-wayland
+    wine-wayland # TODO: investigate if this is working
     wineWowPackages.waylandFull
     winetricks
     age # Generate / encrypt with age keys
@@ -155,11 +158,6 @@
     steam
     calibre
     gargoyle # Used for running games
-
-    # RICE / aesthetics
-    rose-pine-gtk-theme
-    rose-pine-icon-theme
-    rose-pine-cursor
 
     # Drivers
     gutenprint # Drivers for many different printers from many different vendors.
@@ -172,5 +170,6 @@
   systemd.user.startServices = "sd-switch";
 
   # https://nixos.wiki/wiki/FAQ/When_do_I_update_stateVersion
+  # TL;DR: update upon OS re-install
   home.stateVersion = "23.05";
 }

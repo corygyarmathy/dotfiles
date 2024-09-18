@@ -6,6 +6,9 @@
   ...
 }:
 {
+  imports = [
+    inputs.hardware.nixosModules.common-gpu-nvidia
+  ];
   options = {
     cg.nvidia.enable = lib.mkEnableOption "enables nvidia";
   };

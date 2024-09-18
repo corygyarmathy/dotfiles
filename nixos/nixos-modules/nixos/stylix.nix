@@ -52,6 +52,11 @@
     environment.systemPackages = with pkgs; [
       base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
       bibata-cursors # Imports cursors
+      rose-pine-cursor
+    ];
+    fonts.packages = with pkgs; [
+      dejavu_fonts # Fonts
+      noto-fonts-emoji # Fonts
     ];
   };
 }

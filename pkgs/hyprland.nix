@@ -9,6 +9,7 @@
 let
   # Startup script for Wayland / Hyprland
   # FIXME: only run these packages if they're installed??
+  # FIXME: waybar launches twice - why?
   startupScript = pkgs.pkgs.writeShellScriptBin "start" ''
     ${pkgs.waybar}/bin/waybar &
     ${pkgs.dunst}/bin/dunst init &
@@ -38,6 +39,7 @@ in
       xwayland.enable = true;
       systemd.enable = true;
 
+      # FIXME: plugins not currently working
       plugins = [
         # inputs.hyprland-plugins.packages."${pkgs.system}".borders-plus-plus
       ];
