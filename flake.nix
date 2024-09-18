@@ -78,6 +78,7 @@
       nixosModules = import ./nixos/nixos-modules/nixos;
 
       # Reusable home-manager modules you might want to export
+      # FIXME: this doesn't work for some reason (infinite recursion error)
       # homeManagerModules = import ./nixos/nixos-modules/home-manager;
 
       # NixOS configuration entrypoint

@@ -57,6 +57,7 @@
         # TODO: investigate if the key is stored securely on the system
         # - Research best practices for ssh keys
         # TODO: figure out how to perform the 'ssh-add key_file' command programatically
+        # TODO: investigate if I should add a passphrase to the private key (can do so without regenerating)
         "private_keys/github" = {
           mode = "0400";
           owner = config.users.users.coryg.name;

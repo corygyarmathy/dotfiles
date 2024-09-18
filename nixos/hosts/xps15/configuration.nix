@@ -175,6 +175,7 @@ in
   services.udisks2.enable = true;
 
   # RICE settings
+  # TODO: move into separate module
   stylix = {
     enable = true;
     autoEnable = true; # Enables stylix themes for all applications
