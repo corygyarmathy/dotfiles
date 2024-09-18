@@ -33,6 +33,7 @@
   cg.home.ssh.enable = true;
   cg.home.sops-nix.enable = true;
   cg.home.stylix.enable = true;
+  cg.home.tmux.enable = true;
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
   # See: https://www.reddit.com/r/NixOS/comments/1ajhwxv/hyprland_homemanager_does_not_inherit/
@@ -136,7 +137,6 @@
     ddcutil # Display management UI
     ddcui # Dispay management tool
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
-    tmux # Terminal multiplexer
     xfce.thunar # File manager
     xfce.xfconf # Required for thunar
     xfce.thunar-archive-plugin # Zip / unzip plugin for Thunar
