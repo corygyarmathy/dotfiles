@@ -3,6 +3,7 @@
 {
   # List your module files here
   imports = [
+    ./ddc.nix
     ./hyprland.nix
     ./gnome.nix
     ./nvidia.nix

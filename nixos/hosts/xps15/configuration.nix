@@ -36,6 +36,7 @@ in
   cg.nvidia.enable = true;
   cg.sops-nix.enable = true;
   cg.stylix.enable = true;
+  cg.ddc.enable = true; # Montitor brightness control
 
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
@@ -50,8 +51,6 @@ in
   boot.kernelParams = [
     "acpi_rev_override" # Default sugggested Dell XPS 15 config
   ];
-
-  hardware.i2c.enable = true; # req. for ddcutil (monitor brightness control)
 
   services.thermald = {
     enable = lib.mkDefault true; # monitors and controls temperature in laptops, tablets.
