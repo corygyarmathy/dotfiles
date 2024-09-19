@@ -1,7 +1,4 @@
-# waybar.nix
-
 {
-  pkgs,
   lib,
   config,
   ...
@@ -20,11 +17,9 @@
       source = ./rose-pine.css; # Sourcing css file for config)
     };
     # NOTE: options for waybar - https://home-manager-options.extranix.com/?query=waybar&release=master
-    # TODO: Figure out how to run the bash command 'pkill waybar' when rebuilding (as it launches it again, even if it's already running)
     # TODO: Refer to the above config options and configure it
     programs.waybar = {
       enable = true; # Only needs to be 'enabled' once - either here or in the packages
-      systemd.enable = true;
       style = ''
         @import "./rose-pine.css";
 
@@ -333,9 +328,5 @@
         }
       ];
     };
-
-    home.packages = with pkgs; [
-      waybar # Status bar for Wayland # Only needs to be enabled once
-    ];
   };
 }
