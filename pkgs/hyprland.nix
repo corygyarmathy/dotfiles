@@ -11,6 +11,7 @@ let
   # FIXME: only run these packages if they're installed??
   # FIXME: waybar launches twice - why?
   startupScript = pkgs.pkgs.writeShellScriptBin "start" ''
+    ${pkgs.waybar}/bin/waybar &
     ${pkgs.dunst}/bin/dunst init &
     udiskie &
     dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE
