@@ -1,7 +1,6 @@
 # alacritty.nix
 
 {
-  pkgs,
   lib,
   config,
   ...
@@ -14,7 +13,6 @@
 
   config = lib.mkIf config.cg.home.alacritty.enable {
     # Alacritty config (terminal editor)
-    # TODO: split into separate module
     programs.alacritty = {
       enable = true;
       settings = {
@@ -22,11 +20,10 @@
           opacity = lib.mkForce 0.85;
           padding.x = 10;
         };
+        env = {
+          TERM = "xterm-256color"; # Enable 24-bit colour
+        };
       };
     };
-
-    home.packages = with pkgs; [
-      alacritty # Terminal emulator
-    ];
   };
 }
