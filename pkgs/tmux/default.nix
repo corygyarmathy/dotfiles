@@ -11,17 +11,12 @@
   };
 
   config = lib.mkIf config.cg.home.tmux.enable {
-    # xdg.configFile."tmux/tmux.conf" = {
-    #   source = ./tmux.conf; # Sourcing conf file for config
-    # };
-    # home.packages = with pkgs; [
-    #   tmux # Terminal multiplexer
-    # ];
     programs.tmux = {
-      enable = true;
+      enable = true; # Install tmux
       baseIndex = 1;
       prefix = "C-space";
       mouse = true;
+      tmuxinator.enable = true; # Install tmuxinator
 
       plugins = with pkgs; [
         tmuxPlugins.better-mouse-mode
@@ -49,7 +44,10 @@
         bind -n m-h previous-window
         bind -n m-l next-window
 
+        # Catpuccin options
         set -g @catppuccin_flavour 'mocha'
+        set -g @catppuccin_window_default_text "#{b:pane_current_path} (#W)" # #W is application
+        set -g @catppuccin_window_current_text "#{b:pane_current_path} (#W)" # "{b:pane_current_path}" for directory
 
         # set vi-mode
         set-window-option -g mode-keys vi
@@ -90,6 +88,12 @@
         bind-key -T copy-mode-vi 'C-\' select-pane -l
         # bind-key -T copy-mode-vi 'C-Space' select-pane -t:.+
       '';
+
+      # Import tmuxinator projects / configs
+      xdg.configFile."tmuxinator/" = {
+        source = ./tmuxinator; # Sourcing conf file for config
+        recursive = true;
+      };
     };
   };
 }
