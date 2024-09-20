@@ -88,12 +88,12 @@
         bind-key -T copy-mode-vi 'C-\' select-pane -l
         # bind-key -T copy-mode-vi 'C-Space' select-pane -t:.+
       '';
+    };
 
-      # Import tmuxinator projects / configs
-      xdg.configFile."tmuxinator/" = {
-        source = ./tmuxinator; # Sourcing conf file for config
-        recursive = true;
-      };
+    # Import tmuxinator projects / configs
+    xdg.configFile."tmuxinator/" = {
+      source = ./tmuxinator; # Sourcing conf file for config
+      recursive = true;
     };
   };
 }
