@@ -34,6 +34,7 @@
   cg.home.sops-nix.enable = true;
   cg.home.stylix.enable = true;
   cg.home.tmux.enable = true;
+  cg.home.zellij.enable = false;
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
   # See: https://www.reddit.com/r/NixOS/comments/1ajhwxv/hyprland_homemanager_does_not_inherit/
@@ -151,6 +152,7 @@
     wineWowPackages.waylandFull
     winetricks
     age # Generate / encrypt with age keys
+    tldr # man, but with practical examples instead
 
     # Entertainment
     discord
