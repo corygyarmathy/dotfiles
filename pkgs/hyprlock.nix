@@ -14,7 +14,6 @@
   config = lib.mkIf config.cg.home.hyprlock.enable {
     programs.hyprlock = {
       enable = true;
-      security.pam.services.hyprlock = { }; # Conf. PAM to use hyprlock for auth
       settings = {
         general = {
           grace = 5; # Seconds before password required
