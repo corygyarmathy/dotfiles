@@ -17,5 +17,6 @@
     ./sops-nix.nix
     ./stylix.nix
     ./tmux
+    ./zellij
   ];
 }
