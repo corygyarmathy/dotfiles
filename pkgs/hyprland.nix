@@ -155,9 +155,6 @@ in
 
         };
         misc = {
-          # disable auto polling for config file changes
-          # disable_autoreload = true;
-
           force_default_wallpaper = 0; # Set to 0 or 1 to disable the anime mascot wallpapers
 
           # disable dragging animation
@@ -167,6 +164,22 @@ in
           # vrr = 1;
 
         };
+
+        workspace = [
+          # "r[1-5], monitor:desc:Dell Inc. DELL U3419W 1Y9Q5T2" # Range not working, as per: https://github.com/hyprwm/Hyprland/issues/5180
+          # "r[6-10], monitor:desc: Dell Inc. DELL U2515H X48H66CQ0D1L"
+
+          "1, monitor:desc:Dell Inc. DELL U3419W 1Y9Q5T2"
+          "2, monitor:desc:Dell Inc. DELL U3419W 1Y9Q5T2"
+          "3, monitor:desc:Dell Inc. DELL U3419W 1Y9Q5T2"
+          "4, monitor:desc:Dell Inc. DELL U3419W 1Y9Q5T2"
+          "5, monitor:desc:Dell Inc. DELL U3419W 1Y9Q5T2"
+          "6, monitor:desc:Dell Inc. DELL U2515H X48H66CQ0D1L"
+          "7, monitor:desc:Dell Inc. DELL U2515H X48H66CQ0D1L"
+          "8, monitor:desc:Dell Inc. DELL U2515H X48H66CQ0D1L"
+          "9, monitor:desc:Dell Inc. DELL U2515H X48H66CQ0D1L"
+          "10, monitor:desc:Dell Inc. DELL U2515H X48H66CQ0D1L"
+        ];
 
         # touchpad gestures
         gestures = {
