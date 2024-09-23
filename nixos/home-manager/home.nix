@@ -153,6 +153,7 @@
     winetricks
     age # Generate / encrypt with age keys
     tldr # man, but with practical examples instead
+    pavucontrol # Audio settings GUI
 
     # Entertainment
     discord
