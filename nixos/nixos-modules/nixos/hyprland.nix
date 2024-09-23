@@ -18,15 +18,18 @@
       "nvidia-drm.fbdev=1" # Used for Wayland compat.
     ];
 
-    # Enable Wayland
-    services.xserver = {
-      enable = true;
-      videoDrivers = [ "nvidia" ];
-      displayManager.gdm = {
-        enable = true;
-        wayland = true;
-      };
-    };
+    # Set up display / login manager for Hyprland
+    # NOTE: disabling, as it seems to cause a lot of weird issues
+    # TODO: look into launching hyprland after logging into tty automatically
+
+    # services.xserver = {
+    #   enable = true;
+    #   videoDrivers = [ "nvidia" ];
+    #   displayManager.gdm = {
+    #     enable = true;
+    #     wayland = true;
+    #   };
+    # };
 
     # Enable the Hyprland compositor
     programs.hyprland = {
