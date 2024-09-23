@@ -58,6 +58,7 @@ in
 
         cursor = {
           "no_hardware_cursors" = true; # Compatibility with Nvidia
+          "inactive_timeout" = 20; # Hide cursor after x seconds of inactivity
         };
 
         # See https://wiki.hyprland.org/Configuring/Monitors/
