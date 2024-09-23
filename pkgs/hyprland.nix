@@ -61,7 +61,10 @@ in
         };
 
         # See https://wiki.hyprland.org/Configuring/Monitors/
-        monitor = ",preferred,auto,auto";
+        monitor = [
+          ",preferred,auto,auto"
+          "FALLBACK,1920x1080@60,auto,1" # Workaround re: https://github.com/hyprwm/hyprlock/issues/434
+        ];
 
         # Window rules (configured how different windows / apps behave)
         # Refer to: https://wiki.hyprland.org/Configuring/Window-Rules/
