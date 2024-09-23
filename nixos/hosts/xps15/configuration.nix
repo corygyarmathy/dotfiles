@@ -37,6 +37,7 @@ in
   cg.sops-nix.enable = true;
   cg.stylix.enable = true;
   cg.ddc.enable = true; # Montitor brightness control
+  cg.ergodox.enable = true;
 
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
