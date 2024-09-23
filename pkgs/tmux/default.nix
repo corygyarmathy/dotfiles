@@ -23,6 +23,8 @@
         tmuxPlugins.catppuccin
         tmuxPlugins.sensible
         tmuxPlugins.vim-tmux-navigator
+        tmuxPlugins.resurrect # resurrect old tmux sessions (e.g. after system restart)
+        tmuxPlugins.continuum # automatically save and load tmux sessions. Dep. tmuxPlugins.resurrect
       ];
 
       extraConfig = ''
@@ -43,6 +45,9 @@
         # shift alt vim keys to switch windows
         bind -n m-h previous-window
         bind -n m-l next-window
+
+        # session managetment
+        set -g @continuum-restore 'on' # auto restore tmux sessions
 
         # Catpuccin options
         set -g @catppuccin_flavour 'mocha'
