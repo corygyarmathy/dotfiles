@@ -1,5 +1,3 @@
-# ergodox.nix
-
 {
   pkgs,
   lib,
@@ -9,14 +7,14 @@
 {
 
   options = {
-    cg.home.ergodox.enable = lib.mkEnableOption "enables ergodox";
+    cg.ergodox.enable = lib.mkEnableOption "enables ergodox";
   };
 
-  config = lib.mkIf config.cg.home.ergodox.enable {
+  config = lib.mkIf config.cg.ergodox.enable {
     # Configure firmware flashing for Ergodox keyboards
     # TODO: split into separate module
-    home.file."/etc/udev/rules.d/50-zsa.rules".text = ''
-        	# Rules for Oryx web flashing and live training
+    services.udev.extraRules = ''
+        # Rules for Oryx web flashing and live training
       	KERNEL=="hidraw*", ATTRS{idVendor}=="16c0", MODE="0664", GROUP="plugdev"
       	KERNEL=="hidraw*", ATTRS{idVendor}=="3297", MODE="0664", GROUP="plugdev"
 
@@ -42,6 +40,9 @@
       	SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE:="0666", SYMLINK+="ignition_dfu"
     '';
 
-    home.packages = with pkgs; [ ];
+    environment.systemPackages = with pkgs; [
+      libusb1 # Dependency
+      wally-cli
+    ];
   };
 }

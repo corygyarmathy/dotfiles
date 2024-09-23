@@ -9,5 +9,6 @@
     ./nvidia.nix
     ./sops-nix
     ./stylix.nix
+    ./ergodox.nix
   ];
 }
