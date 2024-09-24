@@ -32,8 +32,9 @@
   cg.home.ssh.enable = true;
   cg.home.sops-nix.enable = true;
   cg.home.stylix.enable = true;
-  cg.home.tmux.enable = true;
+  cg.home.tmux.enable = true; # TODO: sort out tmuxinator vs. continuum (see Prime's workflow)
   cg.home.zellij.enable = false;
+  #TODO: add fish config
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
   # See: https://www.reddit.com/r/NixOS/comments/1ajhwxv/hyprland_homemanager_does_not_inherit/
@@ -122,7 +123,8 @@
 
     # Utilities
     git
-    gh # GitHub - used for authenticating with GitHub
+    gh # GitHub cli - used for authenticating with GitHub
+    # TODO: is gcm still needed?
     git-credential-manager # gcm
     dotnetCorePackages.sdk_8_0_3xx # Re: gcm # https://nixos.wiki/wiki/DotNET
     gnupg # gpg # Requirement for git-credential-manager
@@ -134,8 +136,6 @@
     nmap
     # ruffle # Adobe flash player emulator
     # lightspark # Adobe flash player emulator
-    ddcutil # Display management UI
-    ddcui # Dispay management tool
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
     xfce.thunar # File manager
     xfce.xfconf # Required for thunar
@@ -152,7 +152,7 @@
     winetricks
     age # Generate / encrypt with age keys
     tldr # man, but with practical examples instead
-    pavucontrol # Audio settings GUI
+    pavucontrol # Audio settings GUI # TODO: add to waybar on right click of audio module?
 
     # Entertainment
     discord

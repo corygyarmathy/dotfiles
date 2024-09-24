@@ -36,14 +36,14 @@ in
   cg.nvidia.enable = true;
   cg.sops-nix.enable = true;
   cg.stylix.enable = true;
-  cg.ddc.enable = true; # Montitor brightness control
+  cg.ddc.enable = true; # Montitor brightness control #TODO: add auto-brightness jobs
   cg.ergodox.enable = true;
 
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}"; # Required for .NET (using .NET SDK 8)
     PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
-    GIT_EDITOR = "nvim"; # Set git default editor to nvim
-    EDITOR = "nvim"; # set system default editor to nvim
+    GIT_EDITOR = "nvim"; # Set git default editor
+    EDITOR = "nvim"; # set system default editor
   };
 
   # Bootloader.
@@ -60,10 +60,9 @@ in
     configFile = lib.mkDefault thermald-conf;
   };
 
-  services.hardware.bolt.enable = true; # Enable and install Gnome Thunderbolt utility (Bolt)
+  services.hardware.bolt.enable = true; # Enable userspace daemon to enable security levels for Thunderbolt
 
-  # Enable touchpad support (enabled default in most desktopManager).
-  services.libinput.enable = true;
+  services.libinput.enable = true; # Enable touchpad support (enabled default in most desktopManager).
 
   # WiFi speed is slow and crashes by default (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
   # power_save - works well on this card
