@@ -109,11 +109,11 @@
           }
           # FIXME: waking from suspend failing, review boot4.log
           # Fails even when Nvidia power management disabled - to investigate 
-          # {
-          #   # TODO: make it so I can wake from suspend with external keyboard, don't have to open laptop
-          #   timeout = 1800; # 30min
-          #   on-timeout = "systemctl suspend"; # suspend pc
-          # }
+          {
+            # TODO: make it so I can wake from suspend with external keyboard, don't have to open laptop
+            timeout = 1800; # 30min
+            on-timeout = "systemctl suspend"; # suspend pc
+          }
         ];
       };
     };
