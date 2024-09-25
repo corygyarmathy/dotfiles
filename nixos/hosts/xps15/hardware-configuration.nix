@@ -23,6 +23,10 @@
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
+  boot.resumeDevice = "/dev/disk/by-partlabel/root"; # enable hibernation
+  boot.kernelParams = [
+    "resume_offset=2316288" # CMD to calc: filefrag -v $SWAPFILE_PATH_HERE | awk '$1=="0:" {print substr($4, 1, length($4)-2)}'
+  ];
 
   fileSystems."/" = {
     device = "/dev/disk/by-uuid/2dd2f7c7-16ee-4bfb-82a3-c572c81cf664";
