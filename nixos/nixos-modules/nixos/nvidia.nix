@@ -42,7 +42,8 @@
       # up from sleep. This fixes it by saving the entire VRAM memory to /tmp/ instead 
       # of just the bare essentials.
       # NOTE: when true, seemed to crash display manager when resuming from sleep
-      powerManagement.enable = false;
+      # The display manager also crashes when this is false - trying to re-enable to see if it helps at all
+      powerManagement.enable = true;
 
       # Fine-grained power management. Turns off GPU when not in use.
       # Experimental and only works on modern Nvidia GPUs (Turing or newer).
