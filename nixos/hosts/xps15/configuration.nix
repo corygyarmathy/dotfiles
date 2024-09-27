@@ -83,6 +83,22 @@ in
   };
   services.blueman.enable = true; # Bluetooth utility / tray icon
 
+  # Logitech unifying receiver
+  # TODO: split into module
+  # TODO: do I need this?
+  hardware.logitech.wireless = {
+    enable = true;
+    enableGraphical = true;
+  };
+
+  # Enable USB devices waking from sleep
+  # TODO: not yet working, to investigate further
+  services.udev = {
+    enable = true;
+    extraRules = ''
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="enabled"
+    '';
+  };
   # Configure nix itself
   nix =
     let
