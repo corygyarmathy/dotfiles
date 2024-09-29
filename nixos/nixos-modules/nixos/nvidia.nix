@@ -47,7 +47,9 @@
 
       # Fine-grained power management. Turns off GPU when not in use.
       # Experimental and only works on modern Nvidia GPUs (Turing or newer).
-      powerManagement.finegrained = true;
+      # NOTE: turning off as I am getting error messages about Nvidia card
+      # not being able to be woken from D3 cold to D0 - experimenting
+      powerManagement.finegrained = false;
 
       # Use the NVidia open source kernel module (not to be confused with the
       # independent third-party "nouveau" open source driver).
