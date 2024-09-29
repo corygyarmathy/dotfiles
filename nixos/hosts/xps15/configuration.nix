@@ -237,7 +237,6 @@ in
       extraGroups = [
         "networkmanager"
         "wheel"
-        "plugdev" # needed for firmware flashing of Ergodox keyboards
         "i2c" # req. for ddcutil (monitor brightness control)
       ];
     };
