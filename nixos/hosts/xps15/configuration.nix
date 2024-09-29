@@ -73,7 +73,7 @@ in
   # Bluetooth
   # TODO: make separate module
   hardware.bluetooth = {
-    enable = true; # enables support for Bluetooth
+    enable = false; # enables support for Bluetooth
     powerOnBoot = true; # powers up the default Bluetooth controller on boot
     settings = {
       General = {
@@ -81,7 +81,7 @@ in
       };
     };
   };
-  services.blueman.enable = true; # Bluetooth utility / tray icon
+  services.blueman.enable = false; # Bluetooth utility / tray icon
 
   # Logitech unifying receiver
   # TODO: split into module
