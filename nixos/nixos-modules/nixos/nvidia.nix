@@ -49,7 +49,7 @@
       # Experimental and only works on modern Nvidia GPUs (Turing or newer).
       # NOTE: turning off as I am getting error messages about Nvidia card
       # not being able to be woken from D3 cold to D0 - experimenting
-      powerManagement.finegrained = false;
+      powerManagement.finegrained = true;
 
       # Use the NVidia open source kernel module (not to be confused with the
       # independent third-party "nouveau" open source driver).
@@ -65,7 +65,7 @@
       nvidiaSettings = true;
 
       # Optionally, you may need to select the appropriate driver version for your specific GPU.
-      package = config.boot.kernelPackages.nvidiaPackages.production;
+      package = config.boot.kernelPackages.nvidiaPackages.latest;
     };
   };
 }
