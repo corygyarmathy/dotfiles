@@ -46,12 +46,13 @@ in
     EDITOR = "nvim"; # set system default editor
   };
 
-  # Bootloader.
+  # Boot options
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelParams = [
     "acpi_rev_override" # Default sugggested Dell XPS 15 config
   ];
+  boot.kernelPackages = pkgs.linuxPackages_latest; # Use latest Linux kernel version
 
   services.thermald = {
     enable = lib.mkDefault true; # monitors and controls temperature in laptops, tablets.
