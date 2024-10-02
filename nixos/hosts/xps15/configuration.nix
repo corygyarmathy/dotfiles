@@ -278,7 +278,6 @@ in
     dconf # Req. for GNOME apps (if not running GNOME)
     xdg-utils # A set of command line tools that assist applications with a variety of desktop integration tasks
     blueman # Bluetooth utilities
-    dell-command-configure
 
     # USB utils - needed for auto-mounting USB storage devices
     usbutils
