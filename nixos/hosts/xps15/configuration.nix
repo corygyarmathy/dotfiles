@@ -74,7 +74,7 @@ in
   # Bluetooth
   # TODO: make separate module
   hardware.bluetooth = {
-    enable = false; # enables support for Bluetooth
+    enable = true; # enables support for Bluetooth
     powerOnBoot = true; # powers up the default Bluetooth controller on boot
     settings = {
       General = {
