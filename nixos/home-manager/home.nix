@@ -158,8 +158,8 @@
     discord
     zotero
     steam
-    calibre
-    gargoyle # Used for running games
+    # calibre
+    # gargoyle # Used for running games
 
     # Drivers
     gutenprint # Drivers for many different printers from many different vendors.
