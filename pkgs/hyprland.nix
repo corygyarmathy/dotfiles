@@ -63,6 +63,8 @@ in
 
         # See https://wiki.hyprland.org/Configuring/Monitors/
         monitor = [
+          "desc:Dell Inc. DELL U3419W 1Y9Q5T2, preferred, auto-left, 1"
+          "desc:Dell Inc. DELL U2515H X48H66CQ0D1L, preferred, auto-right, 1"
           ",preferred,auto,auto"
         ];
 
