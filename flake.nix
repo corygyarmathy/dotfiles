@@ -4,15 +4,15 @@
   inputs = {
     # Nixpkgs
     # TODO: change to the most recent channel URL
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.05";
     # You can access packages and modules from different nixpkgs revs
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     # Also see the 'unstable-packages' overlay at 'overlays/default.nix'.
     nixpkgs-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
 
     # Home manager
     home-manager.url = "github:nix-community/home-manager";
-    home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
     # Imports hardware dependencies
     hardware.url = "github:nixos/nixos-hardware";
@@ -30,7 +30,7 @@
 
     # SOPS-Nix
     sops-nix.url = "github:Mic92/sops-nix";
-    sops-nix.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
   };
 
@@ -38,6 +38,8 @@
     {
       self,
       nixpkgs,
+      nixpkgs-stable,
+      nixpkgs-unstable-small,
       home-manager,
       stylix,
       sops-nix,
@@ -95,7 +97,10 @@
             home-manager.nixosModules.home-manager
             {
               home-manager.users.coryg = import ./nixos/home-manager/home.nix;
-              # inherit inputs outputs; # INFO: potential fix for module importing issue?
+              # pkgs = nixpkgs.legacyPackages.x86_64-linux; # Home-manager requires 'pkgs' instance
+              home-manager.extraSpecialArgs = {
+                inherit inputs outputs;
+              };
 
               # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
             }
