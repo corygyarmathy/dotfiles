@@ -270,6 +270,8 @@ in
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
+  # Add a prefix of 'stable.' to use the nixpkgs-stable branch
+  # This can be useful to downgrade a pkg, if needed
   environment.systemPackages = with pkgs; [
     inputs.home-manager.packages.${pkgs.system}.default # Install home-manager automatically
 

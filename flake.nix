@@ -97,12 +97,9 @@
             home-manager.nixosModules.home-manager
             {
               home-manager.users.coryg = import ./nixos/home-manager/home.nix;
-              # pkgs = nixpkgs.legacyPackages.x86_64-linux; # Home-manager requires 'pkgs' instance
               home-manager.extraSpecialArgs = {
                 inherit inputs outputs;
               };
-
-              # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
             }
           ];
         };
