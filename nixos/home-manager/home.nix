@@ -26,6 +26,7 @@
   cg.home.rofi.enable = true;
   cg.home.starship.enable = true;
   cg.home.alacritty.enable = true;
+  cg.home.wezterm.enable = false;
   cg.home.spotify-player.enable = true;
   cg.home.hyprshade.enable = true;
   cg.home.hyprland.enable = true;
@@ -36,6 +37,11 @@
   cg.home.tmux.enable = true; # TODO: sort out tmuxinator vs. continuum (see Prime's workflow)
   cg.home.zellij.enable = false;
   #TODO: add fish config
+
+  programs.wezterm = {
+    enable = true;
+    package = inputs.wezterm.packages.${pkgs.system}.default;
+  };
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
   # See: https://www.reddit.com/r/NixOS/comments/1ajhwxv/hyprland_homemanager_does_not_inherit/
