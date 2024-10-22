@@ -101,7 +101,8 @@
   };
 
   # Add stuff for your user as you see fit:
-  # programs.neovim.enable = true;
+  # Add a prefix of 'stable.' to use the nixpkgs-stable branch
+  # This can be useful to downgrade a pkg, if needed
   home.packages = with pkgs; [
     # Productivity
     firefox
