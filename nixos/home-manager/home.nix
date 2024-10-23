@@ -5,8 +5,10 @@
   outputs,
   lib,
   config,
+  fetchurl,
   pkgs,
   pkgs-stable,
+  coreutils,
   ...
 }:
 {
@@ -56,6 +58,7 @@
       outputs.overlays.additions
       outputs.overlays.modifications
       outputs.overlays.stable-packages
+      outputs.overlays.unstable-small-packages
 
       # You can also add overlays exported from other flakes:
       # neovim-nightly-overlay.overlays.default
@@ -166,9 +169,10 @@
     # Entertainment
     discord
     zotero
+    texstudio # Req. for zotero?
     steam
-    # calibre
-    # gargoyle # Used for running games
+    unstable-small.calibre
+    stable.gargoyle # Used for running games
 
     # Drivers
     gutenprint # Drivers for many different printers from many different vendors.
