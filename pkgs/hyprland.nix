@@ -87,7 +87,7 @@ in
         windowrulev2 = [
           "workspace 3, class:^(obsidian)$"
           "workspace 6, class:^(discord)$"
-          "workspace 7, class:^(zotero)$"
+          "workspace 7, class:^(Zotero)$"
         ];
 
         decoration = {
