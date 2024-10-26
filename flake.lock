@@ -281,11 +281,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1729848063,
-        "narHash": "sha256-1uGIPOSJq4IzoDvgfOF6A3sw5it1WX3ZdYl2+jCkjv8=",
+        "lastModified": 1729894599,
+        "narHash": "sha256-nL9nzNE5/re/P+zOv7NX6bRm5e+DeS1HIufQUJ01w20=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "c77c3bb23390a9ba91860e721edde54856fc5f7a",
+        "rev": "93435d27d250fa986bfec6b2ff263161ff8288cb",
         "type": "github"
       },
       "original": {
@@ -358,11 +358,11 @@
         "xdph": "xdph"
       },
       "locked": {
-        "lastModified": 1729852008,
-        "narHash": "sha256-Rw5fexgBeZ96EPs557mDW3pyTzFm3tVGHWPgPlPSQk8=",
+        "lastModified": 1729905757,
+        "narHash": "sha256-b2c36v8YXJOp4hdYjAmJvYa4It0QwfK0b5UqUnaa82Y=",
         "ref": "refs/heads/main",
-        "rev": "f0e023bff2f2a25ffe5ed3166f55f7274d17c6bc",
-        "revCount": 5373,
+        "rev": "0b29caf9ab86518ff474eed5e7d19c12f96ebbd0",
+        "revCount": 5377,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/hyprwm/Hyprland"
@@ -590,11 +590,11 @@
     },
     "nixpkgs-unstable-small": {
       "locked": {
-        "lastModified": 1729808856,
-        "narHash": "sha256-es7qdVSyBe52caRzOD4JMc0JVQVeNIHmSZ6hhIK2uGs=",
+        "lastModified": 1729895702,
+        "narHash": "sha256-eTgiwk0bz8IHaV/TioIg47BN9NbLwO7mZVNWFNcvZFA=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "bc1400c95a65022d7e1ccb39c495c50b521a0ef1",
+        "rev": "0752b0e37e8a31f3df36e97763a1522c5b8d739c",
         "type": "github"
       },
       "original": {
@@ -719,11 +719,11 @@
         "nixpkgs-stable": "nixpkgs-stable_3"
       },
       "locked": {
-        "lastModified": 1729775275,
-        "narHash": "sha256-J2vtHq9sw1wWm0aTMXpEEAzsVCUMZDTEe5kiBYccpLE=",
+        "lastModified": 1729931925,
+        "narHash": "sha256-3tjYImjVzsSM4sU+wTySF94Yop1spI/XomMBEpljKvQ=",
         "owner": "Mic92",
         "repo": "sops-nix",
-        "rev": "78a0e634fc8981d6b564f08b6715c69a755c4c7d",
+        "rev": "b2211d1a537136cc1d0d5c0af391e8712016b34e",
         "type": "github"
       },
       "original": {
