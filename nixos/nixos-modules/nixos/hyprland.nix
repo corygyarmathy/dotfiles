@@ -16,6 +16,7 @@
     boot.kernelParams = [
       "nvidia-drm.modeset=1" # Used for Wayland compat.
       "nvidia-drm.fbdev=1" # Used for Wayland compat.
+      "nvidia.NVreg_PreserveVideoMemoryAllocations=1" # Addresses Nvidia sleep issues
     ];
 
     # Set up display / login manager for Hyprland
