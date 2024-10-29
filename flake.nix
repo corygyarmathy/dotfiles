@@ -87,7 +87,7 @@
       # NixOS configuration entrypoint
       # Available through 'nixos-rebuild --flake .#your-hostname'
       nixosConfigurations = {
-        # NOTE: the below ' x = ' defines the hostname, which is set by networking.hostname
+        # NOTE: the below 'x = ' defines the hostname, which is set by networking.hostname
         xps15 = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs outputs;
