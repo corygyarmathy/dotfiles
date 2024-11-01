@@ -63,9 +63,9 @@ in
 
         # See https://wiki.hyprland.org/Configuring/Monitors/
         monitor = [
-          ",preferred,auto,auto"
-          "desc:Dell Inc. DELL U3419W 1Y9Q5T2, preferred, auto-left, 1"
-          "desc:Dell Inc. DELL U2515H X48H66CQ0D1L, preferred, auto-right, 1"
+          ",highres@highrr,auto,auto"
+          "desc:Dell Inc. DELL U3419W 1Y9Q5T2, highres@highrr, auto-left, 1"
+          "desc:Dell Inc. DELL U2515H X48H66CQ0D1L, highres@highrr, auto-right, 1"
         ];
 
         # Window rules (configured how different windows / apps behave)
