@@ -100,6 +100,8 @@
         listener = [
           {
             timeout = 150; # In seconds. 300s is 5m
+            # Workaround as per: https://github.com/hyprwm/hyprlock/issues/330 - nixpkgs not yet updated
+            on-timeout = "pidof  ${lib.getExe pkgs.hyprlock}|| ${lib.getExe pkgs.hyprlock}"; # Lock
           }
           {
             timeout = 300;
