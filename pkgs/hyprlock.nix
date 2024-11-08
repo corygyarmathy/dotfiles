@@ -99,11 +99,10 @@
 
         listener = [
           {
-            timeout = 300; # In seconds. 300s is 5m
-            on-timeout = "${lib.getExe pkgs.hyprlock}"; # Lock
+            timeout = 150; # In seconds. 300s is 5m
           }
           {
-            timeout = 305;
+            timeout = 300;
             on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off"; # Screen off
             on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # Screen on
           }
