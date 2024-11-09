@@ -23,7 +23,7 @@
       source = ./config.kdl;
     };
     home.packages = with pkgs; [
-      zellij
+      unstable-small.zellij
       vimPlugins.zellij-nav-nvim
     ];
   };
