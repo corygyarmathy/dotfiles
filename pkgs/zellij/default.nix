@@ -19,9 +19,9 @@
     # NOTE: I want to use Zellj on the next release (after v0.40.1)
     # as it adds a lot of the features I would like, and fixes many
     # existing bugs with the current release.
-    xdg.configFile."zellij/config.kdl" = {
-      source = ./config.kdl;
-    };
+    # xdg.configFile."zellij/config.kdl" = {
+    #   source = ./config.kdl;
+    # };
     home.packages = with pkgs; [
       unstable-small.zellij
       vimPlugins.zellij-nav-nvim
