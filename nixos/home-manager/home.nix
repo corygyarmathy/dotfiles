@@ -37,7 +37,7 @@
   cg.home.sops-nix.enable = true;
   cg.home.stylix.enable = true;
   cg.home.tmux.enable = true; # TODO: sort out tmuxinator vs. continuum (see Prime's workflow)
-  cg.home.zellij.enable = false;
+  cg.home.zellij.enable = true;
   #TODO: add fish config
 
   programs.wezterm = {
