@@ -171,7 +171,7 @@
     zotero
     texstudio # Req. for zotero?
     steam
-    unstable-small.calibre
+    calibre
     stable.gargoyle # Used for running games
 
     # Drivers
