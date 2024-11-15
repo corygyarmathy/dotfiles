@@ -16,9 +16,9 @@ vim.opt.spell = true
 -- vim.opt.shiftwidth = 4
 
 -- Handling wrapping / width
-vim.opt.wrap = true
-vim.opt.linebreak = true
-vim.opt_local.columns = 80
+-- vim.opt.wrap = true
+-- vim.opt.linebreak = true
+-- vim.opt_local.columns = 80
 -- vim.opt.textwidth = 80
 
 --                    + 't'    -- auto-wrap text using textwidth
