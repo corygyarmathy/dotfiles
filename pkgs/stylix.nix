@@ -18,6 +18,7 @@
         # Disabling as I have a custom configuration
         waybar.enable = false;
         vim.enable = false; # Covers both vim and nvim
+        hyprlock.enable = false;
       };
     };
     home.packages = with pkgs; [
