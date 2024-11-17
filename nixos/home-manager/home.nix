@@ -41,7 +41,7 @@
   #TODO: add fish config
 
   programs.wezterm = {
-    enable = true;
+    enable = false;
     package = inputs.wezterm.packages.${pkgs.system}.default;
   };
 
