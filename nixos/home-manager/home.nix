@@ -109,7 +109,7 @@
   home.packages = with pkgs; [
     # Productivity
     firefox
-    obsidian
+    unstable-small.obsidian
     libreoffice
     google-chrome
 
@@ -171,7 +171,7 @@
     zotero
     texstudio # Req. for zotero?
     steam
-    calibre
+    unstable-small.calibre
     stable.gargoyle # Used for running games
 
     # Drivers
