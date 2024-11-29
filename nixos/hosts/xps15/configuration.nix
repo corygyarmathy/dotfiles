@@ -92,6 +92,18 @@ in
     enableGraphical = true;
   };
 
+  systemd.services.solaar = {
+    enable = true;
+    description = "starts solaar (logitech device mgr) at boot";
+    unitConfig = {
+      Type = "simple";
+    };
+    serviceConfig = {
+      ExecStart = "solaar --window=hide";
+    };
+    wantedBy = [ "multi-user.target" ];
+  };
+
   # Enable USB devices waking from sleep
   # TODO: not yet working, to investigate further
   services.udev = {
