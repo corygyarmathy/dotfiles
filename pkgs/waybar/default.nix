@@ -317,6 +317,7 @@
             on-click = "pavucontrol";
           };
           temperature = {
+            thermal-zone = 12; # CPU thermal-zone
             critical-threshold = 80;
             format = "{temperatureC}°C {icon}";
             format-icons = [
