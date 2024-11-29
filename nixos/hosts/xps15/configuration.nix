@@ -93,7 +93,7 @@ in
   };
 
   systemd.services.solaar = {
-    enable = true;
+    enable = false;
     description = "starts solaar (logitech device mgr) at boot";
     unitConfig = {
       Type = "simple";
