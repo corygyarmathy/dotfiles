@@ -99,7 +99,7 @@ in
       Type = "simple";
     };
     serviceConfig = {
-      ExecStart = "solaar --window=hide";
+      ExecStart = "${pkgs.solaar}/bin/solaar --window=hide";
     };
     wantedBy = [ "multi-user.target" ];
   };
