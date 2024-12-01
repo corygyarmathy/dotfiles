@@ -110,7 +110,7 @@ in
   services.udev = {
     enable = true;
     extraRules = ''
-      ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="enabled"
+      ACTION=="add", SUBSYSTEM=="usb", DRIVER=="usb", ATTR{power/wakeup}="enabled"
     '';
   };
   # Configure nix itself
@@ -294,6 +294,7 @@ in
     xdg-utils # A set of command line tools that assist applications with a variety of desktop integration tasks
     blueman # Bluetooth utilities
     libsmbios # library to obtain BIOS information
+    dmidecode # tool that reads information about your system's hardware from the BIOS
 
     # USB utils - needed for auto-mounting USB storage devices
     usbutils
