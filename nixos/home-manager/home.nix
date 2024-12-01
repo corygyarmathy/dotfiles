@@ -162,6 +162,7 @@
     wine-wayland # TODO: investigate if this is working
     wineWowPackages.waylandFull
     winetricks
+    bottles # GUI-wine manager
     age # Generate / encrypt with age keys
     tldr # man, but with practical examples instead
     pavucontrol # Audio settings GUI # TODO: add to waybar on right click of audio module?
@@ -170,7 +171,6 @@
     discord
     zotero
     texstudio # Req. for zotero?
-    steam
     unstable-small.calibre
     stable.gargoyle # Used for running games
 

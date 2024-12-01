@@ -19,6 +19,7 @@
     # Enable OpenGL
     hardware.graphics = {
       enable = true;
+      # enable32bit = true; # On 64-bit systems, whether to also install 32-bit drivers for 32-bit applications (such as Wine).
     };
 
     hardware.nvidia = {
@@ -29,6 +30,11 @@
       prime = {
         # Enables sync mode, dGPU will not fully go to sleep
         # sync.enable = true;
+
+        offload = {
+          enable = true;
+          enableOffloadCmd = true; # Enables nvidia-offload cmd to launch with dGPU
+        };
 
         # Bus ID of the Intel GPU.
         intelBusId = lib.mkDefault "PCI:0:2:0";

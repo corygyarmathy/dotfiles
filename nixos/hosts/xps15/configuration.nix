@@ -44,6 +44,7 @@ in
     PATH = "$PATH:$HOME/go/bin"; # Adding locations to $PATH variable, separated by ':'
     GIT_EDITOR = "nvim"; # Set git default editor
     EDITOR = "nvim"; # set system default editor
+    STEAM_EXTRA_COMPAT_TOOLS_PATHS = "\${HOME}/.steam/root/compatibilitytools.d"; # Used for protonup
   };
 
   # Boot options
@@ -298,7 +299,17 @@ in
     usbutils
     udiskie
     udisks
+
+    protonup
   ];
+
+  # Steam
+  programs.steam = {
+    enable = true;
+    gamescopeSession.enable = true;
+  };
+
+  programs.gamemode.enable = true;
 
   # Install fonts (system wide)
   fonts.packages = with pkgs; [
