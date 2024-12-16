@@ -314,8 +314,9 @@ in
 
   # Install fonts (system wide)
   fonts.packages = with pkgs; [
-    nerdfonts # Fonts
+    # nerdfonts # Fonts
     font-awesome # Fonts
+    # gohufont
   ];
 
   # TODO: check what this is for

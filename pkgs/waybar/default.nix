@@ -26,7 +26,7 @@
         * {
           border: none;
           border-radius: 0;
-          font-family: "JetBrainsMono NFM ExtraBold";
+          font-family: "Hack Nerd Font";
           font-weight: bold;
           font-size: 16px;
           min-height: 0;

@@ -27,25 +27,30 @@
       };
 
       # TODO: Investigate new fonts
+      # NOTE: to figure out the name of each font, use the command: fc-list
       fonts = {
         serif = {
-          package = pkgs.dejavu_fonts;
-          name = "DejaVu Serif";
+          package = pkgs.noto-fonts;
+          name = "Noto Serif";
         };
 
         sansSerif = {
-          package = pkgs.dejavu_fonts;
-          name = "DejaVu Sans";
+          package = pkgs.noto-fonts;
+          name = "Noto Sans";
         };
 
         monospace = {
-          package = pkgs.dejavu_fonts;
-          name = "DejaVu Sans Mono";
+          package = pkgs.hack-font;
+          name = "Hack Nerd Font";
         };
 
         emoji = {
           package = pkgs.noto-fonts-emoji;
           name = "Noto Color Emoji";
+        };
+
+        sizes = {
+          terminal = 12;
         };
       };
     };
@@ -55,8 +60,14 @@
       rose-pine-cursor
     ];
     fonts.packages = with pkgs; [
-      dejavu_fonts # Fonts
+      # dejavu_fonts # Fonts
+      noto-fonts
       noto-fonts-emoji # Fonts
+      hack-font
+      nerd-fonts.hack
+      # pixel-code
+      # gohufont
+      # nerd-fonts.gohufont
     ];
   };
 }
