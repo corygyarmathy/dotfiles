@@ -1,6 +1,7 @@
 # hyprland.nixhypr
 
 {
+  inputs,
   pkgs,
   lib,
   config,
@@ -320,6 +321,7 @@ in
       wl-clipboard # Enables saving screenshots to clipboard # Req: wayshot
 
       grimblast # Helper for screenshots within Hyprland
+      inputs.hyprland-qtutils.packages."${pkgs.system}".default # Dep. for Hyprland
     ];
   };
 }
