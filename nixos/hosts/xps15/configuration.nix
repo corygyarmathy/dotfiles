@@ -135,6 +135,17 @@ in
       # Opinionated: make flake registry and nix path match flake inputs
       registry = lib.mapAttrs (_: flake: { inherit flake; }) flakeInputs;
       nixPath = lib.mapAttrsToList (n: _: "${n}=flake:${n}") flakeInputs;
+
+      optimise = {
+        automatic = true;
+        dates = [ "22:00" ]; # Time optimisation is performed
+      };
+
+      gc = {
+        automatic = true;
+        dates = "21:00"; # When this is run
+        options = "--delete-older-than +10"; # +10 means keep the last 10 generations
+      };
     };
 
   home-manager.sharedModules = [
