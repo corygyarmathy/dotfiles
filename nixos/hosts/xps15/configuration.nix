@@ -244,6 +244,12 @@ in
     #media-session.enable = true;
   };
 
+  virtualisation = {
+    docker = {
+      enable = true;
+    };
+  };
+
   # Configure your system-wide user settings (groups, etc), add more users as needed.
   users.users = {
     # TODO: set username through variable?
@@ -263,6 +269,7 @@ in
         "networkmanager"
         "wheel"
         "i2c" # req. for ddcutil (monitor brightness control)
+        "docker"
       ];
     };
   };
