@@ -116,7 +116,6 @@
     # Development
     gcc
     libgcc # GNU Compiler Collection: C, C++, Objective-C, Fortran, OpenMP for C/C++/Fortran, and Ada, and libraries for these languages # TODO: Do I need this?
-    python3
     cargo # Rust package manager
     lua
     luajitPackages.luarocks # Lua package manager # TODO: Do I need this?
@@ -126,6 +125,9 @@
     go
     jdk # Java Development Kit
     nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
+    # Python
+    python3
+    python313Packages.django # Django for python
 
     # Media
     gimp
