@@ -145,9 +145,8 @@
     go
     jdk # Java Development Kit
     nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
-    # Python
     python3
-    python313Packages.django # Django for python
+    basedpyright # python LSP
 
     # Media
     gimp
