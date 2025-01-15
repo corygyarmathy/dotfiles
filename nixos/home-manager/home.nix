@@ -102,6 +102,13 @@
       fi'';
   };
 
+  # Nix-Direnv config
+  programs.direnv = {
+    enable = true;
+    enableBashIntegration = true;
+    nix-direnv.enable = true;
+  };
+
   # Git config
   # TODO: split into separate module
   programs.git = {
