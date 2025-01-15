@@ -95,6 +95,7 @@
         general = {
           lock_cmd = "${lib.getExe pkgs.hyprlock}";
           before_sleep_cmd = "${lib.getExe pkgs.hyprlock}";
+          after_sleep_cmd = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # to avoid having to press a key twice to turn on the display.
         };
 
         listener = [
@@ -109,7 +110,7 @@
             on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # Screen on
           }
           # FIXME: waking from suspend failing, review boot4.log
-          # Fails even when Nvidia power management disabled - to investigate 
+          # Fails even when Nvidia power management disabled - to investigate
           {
             # TODO: make it so I can wake from suspend with external keyboard, don't have to open laptop
             timeout = 1800; # 30min
