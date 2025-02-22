@@ -1,0 +1,3 @@
+[submodule "pkgs/neovim"]
+	path = pkgs/neovim
+	url = git@github.com:corygyarmathy/nvim.git
