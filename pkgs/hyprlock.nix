@@ -104,11 +104,11 @@
             # Workaround as per: https://github.com/hyprwm/hyprlock/issues/330 - nixpkgs not yet updated
             on-timeout = "pidof  ${lib.getExe pkgs.hyprlock}|| ${lib.getExe pkgs.hyprlock}"; # Lock
           }
-          {
-            timeout = 300;
-            on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off"; # Screen off
-            on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # Screen on
-          }
+          # {
+          #   timeout = 300;
+          #   on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off"; # Screen off
+          #   on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # Screen on
+          # }
           # FIXME: waking from suspend failing, review boot4.log
           # Fails even when Nvidia power management disabled - to investigate
           # {
