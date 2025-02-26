@@ -8,6 +8,7 @@
     ./waybar
     ./rofi
     ./alacritty.nix
+    ./ghostty.nix
     ./wezterm.nix
     ./hyprshade.nix # TODO: Include in hyprland.nix ?
     ./spotify-player.nix

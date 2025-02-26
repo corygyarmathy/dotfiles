@@ -28,6 +28,7 @@
   cg.home.rofi.enable = true;
   cg.home.starship.enable = true;
   cg.home.alacritty.enable = true;
+  cg.home.ghostty.enable = true;
   cg.home.wezterm.enable = false;
   cg.home.spotify-player.enable = true;
   cg.home.hyprshade.enable = true;
