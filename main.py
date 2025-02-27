@@ -3,7 +3,11 @@ from collections import Counter
 
 
 def main():
-    book_path: str = "books/frankenstein.txt"
+    if sys.argv.__len__() == 2:
+        book_path: str = sys.argv[1]
+    else:
+        print("Usage: python3 main.py <path_to_book>")
+        exit(1)
 
     # get book text
     try:
@@ -35,7 +39,7 @@ def print_report(path: str, word_count: int, chars_count: Counter[str]):
     print(f"{word_count} words found in the document")
     print()
     for char, count in chars_count.most_common():
-        print(f" The '{char}' character was found {count} times")
+        print(f"{char}: {count}")
     print("--- End report ---")
 
 
