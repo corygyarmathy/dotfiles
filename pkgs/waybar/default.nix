@@ -83,6 +83,7 @@
         #temperature,
         #workspaces,
         #tray,
+        #idle_inhibitor,
         #memory,
         #cpu,
         #disk,
@@ -210,6 +211,7 @@
           modules-left = [
             "hyprland/workspaces"
             "tray"
+            "idle_inhibitor"
           ];
           modules-right = [
             "network"
@@ -255,6 +257,15 @@
               # "active": "";
               # "default": "";
             };
+          };
+
+          idle_inhibitor = {
+            "format" = "{icon}";
+            "format-icons" = {
+              "activated" = "";
+              "deactivated" = "";
+            };
+            "timeout" = 30.5;
           };
 
           battery = {
