@@ -24,6 +24,8 @@
 
     home.packages = with pkgs; [
       neovim
+      # Requirements
+      fzf
       ripgrep # Requirement for nvim
       gnumake # Requirement for nvim
       unzip # Requirement for nvim
