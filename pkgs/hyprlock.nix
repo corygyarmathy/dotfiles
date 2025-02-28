@@ -93,8 +93,8 @@
       enable = true;
       settings = {
         general = {
-          lock_cmd = "${lib.getExe pkgs.hyprlock}";
-          before_sleep_cmd = "${lib.getExe pkgs.hyprlock}";
+          lock_cmd = "pidof ${lib.getExe pkgs.hyprlock} || ${lib.getExe pkgs.hyprlock}";
+          before_sleep_cmd = "pidof ${lib.getExe pkgs.hyprlock} || ${lib.getExe pkgs.hyprlock}";
           after_sleep_cmd = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # to avoid having to press a key twice to turn on the display.
         };
 
