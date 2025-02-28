@@ -37,14 +37,9 @@
   cg.home.ssh.enable = true;
   cg.home.sops-nix.enable = true;
   cg.home.stylix.enable = true;
-  cg.home.tmux.enable = true; # TODO: sort out tmuxinator vs. continuum (see Prime's workflow)
+  cg.home.tmux.enable = false; # TODO: sort out tmuxinator vs. continuum (see Prime's workflow)
   cg.home.zellij.enable = true;
   #TODO: add fish config
-
-  programs.wezterm = {
-    enable = false;
-    package = inputs.wezterm.packages.${pkgs.system}.default;
-  };
 
   # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
   # See: https://www.reddit.com/r/NixOS/comments/1ajhwxv/hyprland_homemanager_does_not_inherit/

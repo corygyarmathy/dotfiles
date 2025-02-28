@@ -14,8 +14,11 @@
     programs.ghostty = {
       enable = true;
       enableBashIntegration = true;
-      # settings = {
-      # };
+      settings = {
+        background-opacity = 0.85;
+        background-blur = true;
+        # window-padding-x = 10;
+      };
     };
   };
 }
