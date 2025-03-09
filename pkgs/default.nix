@@ -3,7 +3,7 @@
 # Each module is individually enabled as required for them to apply
 {
   imports = [
-    ./nvim
+    ./nvim.nix
     ./starship
     ./waybar
     ./rofi
