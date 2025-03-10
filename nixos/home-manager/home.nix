@@ -204,5 +204,5 @@
 
   # https://nixos.wiki/wiki/FAQ/When_do_I_update_stateVersion
   # TL;DR: update upon OS re-install
-  home.stateVersion = "23.05";
+  home.stateVersion = "24.11";
 }

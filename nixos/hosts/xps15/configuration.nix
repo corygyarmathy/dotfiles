@@ -373,5 +373,5 @@ in
   # Before changing this value read the documentation for this option
   # https://nixos.wiki/wiki/FAQ/When_do_I_update_stateVersion
   # TL;DR: update upon OS re-install
-  system.stateVersion = "23.05";
+  system.stateVersion = "24.11";
 }
