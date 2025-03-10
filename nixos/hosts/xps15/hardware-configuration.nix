@@ -28,19 +28,16 @@
     "resume_offset=2316288" # CMD to calc: filefrag -v $SWAPFILE_PATH_HERE | awk '$1=="0:" {print substr($4, 1, length($4)-2)}'
   ];
 
-  fileSystems."/" = {
-    device = "/dev/disk/by-uuid/2dd2f7c7-16ee-4bfb-82a3-c572c81cf664";
-    fsType = "ext4";
-  };
+  fileSystems."/" =
+    { device = "/dev/disk/by-uuid/b0f7df15-dabb-4efd-8757-8eb07218ac89";
+      fsType = "ext4";
+    };
 
-  fileSystems."/boot" = {
-    device = "/dev/disk/by-uuid/2C78-17B9";
-    fsType = "vfat";
-    options = [
-      "fmask=0022"
-      "dmask=0022"
-    ];
-  };
+  fileSystems."/boot" =
+    { device = "/dev/disk/by-uuid/2C78-17B9";
+      fsType = "vfat";
+      options = [ "fmask=0077" "dmask=0077" ];
+    };
 
   # Create a swapfile
   swapDevices = [
