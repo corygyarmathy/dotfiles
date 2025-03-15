@@ -27,7 +27,7 @@
       url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
     };
-    hyprland-qtutils.url = "github:hyprwm/hyprland-qtutils"; # Dep. for Hyprland
+    # hyprland-qtutils.url = "github:hyprwm/hyprland-qtutils"; # Dep. for Hyprland
 
     # SOPS-Nix
     sops-nix.url = "github:Mic92/sops-nix";
@@ -48,7 +48,7 @@
       home-manager,
       stylix,
       wezterm,
-      hyprland-qtutils,
+      # hyprland-qtutils,
       sops-nix,
       ...
     }@inputs:

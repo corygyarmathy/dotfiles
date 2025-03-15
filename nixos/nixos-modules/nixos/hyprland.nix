@@ -60,8 +60,8 @@
       xdg-desktop-portal-hyprland # Req. for Hyprland # xdg-desktop-portal backend for Hyprland
       # xdg-desktop-portal-gtk # Req. for Hyprland # filepicker for XDPH # Removing, known issues with hyprland
       egl-wayland # Required in order to enable compatibility between the EGL API and the Wayland protocol
-      qt5.qtwayland # Required for Wayland / Hyprland
-      qt6.qtwayland # Required for Wayland / Hyprland
+      # qt5.qtwayland # Required for Wayland / Hyprland
+      # qt6.qtwayland # Required for Wayland / Hyprland
     ];
   };
 }
