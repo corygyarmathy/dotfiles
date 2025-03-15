@@ -185,6 +185,9 @@
     pavucontrol # Audio settings GUI # TODO: add to waybar on right click of audio module?
     ventoy-full
 
+    # LSPs / Language Tools
+    nixd
+
     # Entertainment
     discord
     zotero
