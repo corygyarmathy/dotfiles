@@ -192,7 +192,7 @@
     discord
     zotero
     texstudio # Req. for zotero?
-    unstable-small.calibre
+    calibre
     stable.gargoyle # Used for running games
 
     # Drivers
