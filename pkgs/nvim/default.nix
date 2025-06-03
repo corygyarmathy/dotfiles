@@ -19,7 +19,7 @@
     xdg.configFile.nvim = {
       # Sourcing in this manner is required so that the symlink is read/write (not just read),
       # so plugins can be updated and configs changed without rebuilding the system
-      source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/nvim";
+      source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/dotfiles/pkgs/nvim";
     };
 
     home.packages = with pkgs; [
