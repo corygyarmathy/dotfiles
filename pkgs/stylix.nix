@@ -19,6 +19,7 @@
         waybar.enable = false;
         vim.enable = false; # Covers both vim and nvim
         hyprlock.enable = false;
+        starship.enable = false;
       };
     };
     home.packages = with pkgs; [
