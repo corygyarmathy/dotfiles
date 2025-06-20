@@ -34,7 +34,7 @@ in
   cg.hyprland.enable = true;
   cg.gnome.enable = false;
   cg.nvidia.enable = true;
-  cg.sops-nix.enable = true;
+  cg.sops-nix.enable = false;
   cg.stylix.enable = true;
   cg.ddc.enable = true; # Montitor brightness control #TODO: add auto-brightness jobs
   cg.ergodox.enable = true;
@@ -105,12 +105,12 @@ in
     wantedBy = [ "multi-user.target" ];
   };
 
-  # Enable USB devices waking from sleep
   # TODO: not yet working, to investigate further
   services.udev = {
     enable = true;
     extraRules = ''
-      ACTION=="add", SUBSYSTEM=="usb", DRIVER=="usb", ATTR{power/wakeup}="enabled"
+      # Enable USB devices waking from sleep
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="enabled"
     '';
   };
   # Configure nix itself
