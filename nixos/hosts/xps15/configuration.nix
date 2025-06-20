@@ -226,7 +226,7 @@ in
   };
 
   # Enable sound with pipewire.
-  hardware.pulseaudio = {
+  services.pulseaudio = {
     enable = false;
     package = pkgs.pulseaudioFull; # Enable extra codecs. Req. for bluetooth.
   };
