@@ -33,10 +33,6 @@
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
-    # Wezterm
-    wezterm = {
-      url = "github:wez/wezterm?dir=nix";
-    };
   };
 
   outputs =
@@ -47,7 +43,6 @@
       nixpkgs-unstable-small,
       home-manager,
       stylix,
-      wezterm,
       # hyprland-qtutils,
       sops-nix,
       ...
