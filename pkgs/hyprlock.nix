@@ -94,7 +94,7 @@
       settings = {
         general = {
           lock_cmd = "pidof ${lib.getExe pkgs.hyprlock} || ${lib.getExe pkgs.hyprlock}";
-          before_sleep_cmd = "pidof ${lib.getExe pkgs.hyprlock} || ${lib.getExe pkgs.hyprlock}";
+          before_sleep_cmd = "${pkgs.hyprland}/bin/loginctl lock-session";
           after_sleep_cmd = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # to avoid having to press a key twice to turn on the display.
         };
 
@@ -102,7 +102,7 @@
           {
             timeout = 150; # In seconds. 300s is 5m
             # Workaround as per: https://github.com/hyprwm/hyprlock/issues/330 - nixpkgs not yet updated
-            on-timeout = "pidof  ${lib.getExe pkgs.hyprlock}|| ${lib.getExe pkgs.hyprlock}"; # Lock
+            on-timeout = "${pkgs.hyprland}/bin/loginctl lock-session"; # Lock
           }
           {
             timeout = 300;
