@@ -10,7 +10,7 @@
     ./alacritty.nix
     ./ghostty.nix
     ./wezterm.nix
-    ./hyprsunset.nix
+    ./hyprsunset
     ./spotify-player.nix
     ./hyprland.nix
     ./hyprlock.nix

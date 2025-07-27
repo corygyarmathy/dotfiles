@@ -10,6 +10,10 @@
   };
 
   config = lib.mkIf config.cg.home.hyprsunset.enable {
+    # Hyprsunset config
+    xdg.configFile."hypr/hyprsunset.conf" = {
+      source = ./hyprsunset.conf;
+    };
     home.packages = with pkgs; [
       hyprsunset
     ];
