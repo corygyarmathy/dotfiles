@@ -30,7 +30,7 @@
   cg.home.alacritty.enable = true;
   cg.home.ghostty.enable = true;
   cg.home.spotify-player.enable = true;
-  cg.home.hyprshade.enable = true;
+  cg.home.hyprsunset.enable = true;
   cg.home.hyprland.enable = true;
   cg.home.hyprlock.enable = true;
   cg.home.ssh.enable = true;

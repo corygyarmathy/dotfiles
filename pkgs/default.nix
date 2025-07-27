@@ -10,7 +10,7 @@
     ./alacritty.nix
     ./ghostty.nix
     ./wezterm.nix
-    ./hyprshade.nix # TODO: Include in hyprland.nix ?
+    ./hyprsunset.nix
     ./spotify-player.nix
     ./hyprland.nix
     ./hyprlock.nix

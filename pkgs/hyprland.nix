@@ -16,7 +16,6 @@ let
     ${pkgs.dunst}/bin/dunst init &
     udiskie &
     dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE
-    hyprshade auto
   '';
   # dbus-update required for Hyprshade
   # Removed from above: ${pkgs.swww}/bin/swww init &  ${pkgs.swww}/bin/swww img ${/home/coryg/git/nixos-config/home-manager/wallpaper.jpg} &
