@@ -113,6 +113,12 @@ in
       ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="enabled"
     '';
   };
+
+  services.dbus.enable = true;
+  systemd.user.services.dbus = {
+    enable = true;
+    wantedBy = [ "default.target" ];
+  };
   # Configure nix itself
   nix =
     let
