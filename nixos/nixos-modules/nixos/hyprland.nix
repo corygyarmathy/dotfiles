@@ -12,12 +12,6 @@
 
   config = lib.mkIf config.cg.hyprland.enable {
     # Hyprland config
-    # TODO: enable this only if the Nvidia module / option is also enabled
-    boot.kernelParams = [
-      "nvidia-drm.modeset=1" # Used for Wayland compat.
-      "nvidia-drm.fbdev=1" # Used for Wayland compat.
-      "nvidia.NVreg_PreserveVideoMemoryAllocations=1" # Addresses Nvidia sleep issues
-    ];
 
     # Set up display / login manager for Hyprland
     # NOTE: disabling, as it seems to cause a lot of weird issues

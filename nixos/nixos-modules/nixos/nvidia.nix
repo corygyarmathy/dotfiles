@@ -45,23 +45,23 @@
 
       # Nvidia power management. Experimental, and can cause sleep/suspend to fail.
       # Enable this if you have graphical corruption issues or application crashes after waking
-      # up from sleep. This fixes it by saving the entire VRAM memory to /tmp/ instead 
+      # up from sleep. This fixes it by saving the entire VRAM memory to /tmp/ instead
       # of just the bare essentials.
       # NOTE: when true, seemed to crash display manager when resuming from sleep
       # The display manager also crashes when this is false - trying to re-enable to see if it helps at all
-      powerManagement.enable = true;
+      powerManagement.enable = false;
 
       # Fine-grained power management. Turns off GPU when not in use.
       # Experimental and only works on modern Nvidia GPUs (Turing or newer).
       # NOTE: turning off as I am getting error messages about Nvidia card
       # not being able to be woken from D3 cold to D0 - experimenting
-      powerManagement.finegrained = true;
+      powerManagement.finegrained = false;
 
       # Use the NVidia open source kernel module (not to be confused with the
       # independent third-party "nouveau" open source driver).
-      # Support is limited to the Turing and later architectures. Full list of 
-      # supported GPUs is at: 
-      # https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus 
+      # Support is limited to the Turing and later architectures. Full list of
+      # supported GPUs is at:
+      # https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus
       # Only available from driver 515.43.04+
       # Currently alpha-quality/buggy, so false is currently the recommended setting.
       open = false;
@@ -73,5 +73,12 @@
       # Optionally, you may need to select the appropriate driver version for your specific GPU.
       package = config.boot.kernelPackages.nvidiaPackages.beta;
     };
+
+    boot.kernelParams = [
+      "nvidia-drm.modeset=1" # Used for Wayland compat.
+      "nvidia-drm.fbdev=1" # Used for Wayland compat.
+      # "nvidia.NVreg_PreserveVideoMemoryAllocations=1" # Addresses Nvidia sleep issues
+      "nvidia.NVreg_EnableS0ixPowerManagement=1" # Better S0ix support
+    ];
   };
 }
