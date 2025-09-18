@@ -6,8 +6,7 @@
 }:
 {
   imports = [
-    # Import SOPS-Nix
-    # inputs.sops-nix.homeManagerModules.sops
+    inputs.sops-nix.homeManagerModules.sops
   ];
 
   options = {
@@ -15,31 +14,34 @@
   };
 
   config = lib.mkIf config.cg.home.sops-nix.enable {
-    # Sops-Nix config
     sops = {
-      # This will add secrets.yml to the nix store
-      # You can avoid this by adding a string to the full path instead, i.e.
-      # sops.defaultSopsFile = "/root/.sops/secrets/example.yaml";
-      defaultSopsFile = ../nixos/nixos-modules/nixos/sops-nix/secrets.yaml;
+      # Use a separate secrets file for user-specific secrets
+      # defaultSopsFile = ../secrets/home-secrets.yaml;
+
+      # The age key should be provided by the system
       age = {
-        # This is using an age key that is expected to already be in the filesystem
-        # This is the location of the host specific age-key for ta and will to have been extracted to this location via hosts/common/core/sops.nix on the host
-        keyFile = "/home/coryg/.config/sops/age/keys.txt";
-      };
-      secrets = {
-        # TODO: Figure out how to get this working...
-        # I am putting it in the main sops config for now
-        # Do I need to use the hm module?
-        # "private_keys/github" = {
-        #   path = "/home/coryg/.ssh/id_github2";
-        # };
+        keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+        generateKey = false; # Don't generate, use system-provided
       };
 
-      # This is the actual specification of the secrets.
-      # Secrets with be output to /run/secrets
-      # e.g. /run/ssecrets/private_keys
-      # Secrets required for user creation are handled in respective ./users/$username.nix files
-      # because they will be output to /run/secrets-for-users and only when the user is assigned to a host
+      # Define any user-specific secrets here
+      secrets = {
+        # Example: API tokens, personal configs, etc.
+        "tokens/github" = {
+          mode = "0600";
+          path = "${config.home.homeDirectory}/.config/github/token";
+        };
+      };
     };
+
+    # Ensure the age key is properly linked from the system
+    home.activation.setupSopsAge = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      $DRY_RUN_CMD mkdir -p $HOME/.config/sops/age
+
+      # Link the age key from the system secret
+      if [ -f "/run/secrets/user_age_keys/coryg" ]; then
+        $DRY_RUN_CMD ln -sf /run/secrets/user_age_keys/coryg $HOME/.config/sops/age/keys.txt
+      fi
+    '';
   };
 }

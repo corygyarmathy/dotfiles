@@ -60,16 +60,24 @@
         # TODO: figure out how to perform the 'ssh-add key_file' command programatically
         # TODO: investigate if I should add a passphrase to the private key (can do so without regenerating)
         "private_keys/github" = {
-          mode = "0400";
+          mode = "0600"; # Only owner can read/write
           owner = config.users.users.coryg.name;
-          inherit (config.users.users.coryg) group;
-          path = "/home/coryg/.ssh/id_github";
+          group = config.users.users.coryg.group;
+          # Don't specify path - let sops-nix manage it
+          # The key will be available at config.sops.secrets."private_keys/github".path
         };
       };
     };
 
+    # Create SSH config directory with proper permissions
+    systemd.tmpfiles.rules = [
+      "d /home/coryg/.ssh 0700 coryg users -"
+    ];
+
     environment.systemPackages = with pkgs; [
       sops
+      age
+      ssh-to-age # Useful for converting SSH keys to age keys
     ];
   };
 }
