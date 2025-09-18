@@ -9,7 +9,6 @@
     ./rofi
     ./alacritty.nix
     ./ghostty.nix
-    ./wezterm.nix
     ./hyprsunset
     ./spotify-player.nix
     ./hyprland.nix
