@@ -8,7 +8,7 @@
     ./waybar
     ./rofi
     ./alacritty.nix
-    ./ghostty.nix
+    ./ghostty
     ./hyprsunset
     ./spotify-player.nix
     ./hyprland.nix

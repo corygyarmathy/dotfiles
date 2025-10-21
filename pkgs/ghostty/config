@@ -1,0 +1,6 @@
+# background options
+background-opacity = 0.85;
+background-blur = true;
+
+# shaders
+custom-shader = ./shaders/shader.glsl
