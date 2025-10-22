@@ -13,7 +13,7 @@
   };
 
   config = lib.mkIf config.cg.home.nvim.enable {
-    # waybar config
+    # nvim config
     xdg.enable = true;
     # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";
     xdg.configFile.nvim = {
@@ -32,7 +32,10 @@
       xclip # Requirement for nvim
       fd # Re: for nvim. # Alternative to find
       tree-sitter # Re: for nvim (tree sitter)
-      nodePackages.npm # JS Node Package Manager # Requirement for nvim (mason plugin)
+      imagemagick # Req. for snacks.image
+      statix # Nix linter
+      icu # Req. for marksman lsp
+      # nodePackages.npm # JS Node Package Manager # Requirement for nvim (mason plugin) # Provided by nodejs
     ];
   };
 }

@@ -1,0 +1,6 @@
+# .markdownlint-cli2.yaml
+config:
+  default: true
+  MD007: # indent size
+    indent: 4
+  MD013: false # line-length
