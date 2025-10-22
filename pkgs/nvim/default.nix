@@ -1,5 +1,3 @@
-# nvim.nix
-
 {
   pkgs,
   lib,
@@ -7,35 +5,69 @@
   ...
 }:
 {
-
   options = {
     cg.home.nvim.enable = lib.mkEnableOption "enables nvim";
   };
 
   config = lib.mkIf config.cg.home.nvim.enable {
-    # nvim config
     xdg.enable = true;
-    # xdg.configHome = config.lib.file.mkOutOfStoreSymlink "$HOME/.config";
     xdg.configFile.nvim = {
-      # Sourcing in this manner is required so that the symlink is read/write (not just read),
-      # so plugins can be updated and configs changed without rebuilding the system
       source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/git/dotfiles/pkgs/nvim";
     };
 
     home.packages = with pkgs; [
       neovim
-      # Requirements
+
+      # Core requirements
       fzf
-      ripgrep # Requirement for nvim
-      gnumake # Requirement for nvim
-      unzip # Requirement for nvim
-      xclip # Requirement for nvim
-      fd # Re: for nvim. # Alternative to find
-      tree-sitter # Re: for nvim (tree sitter)
-      imagemagick # Req. for snacks.image
-      statix # Nix linter
-      icu # Req. for marksman lsp
-      # nodePackages.npm # JS Node Package Manager # Requirement for nvim (mason plugin) # Provided by nodejs
+      ripgrep
+      gnumake
+      unzip
+      xclip
+      fd
+      tree-sitter
+
+      # LSP servers
+      basedpyright # Python LSP
+      nodePackages.bash-language-server # Bash LSP
+      docker-compose-language-service # Docker Compose LSP
+      dockerfile-language-server-nodejs # Dockerfile LSP
+      gopls # Go LSP
+      lua-language-server # Lua LSP
+      marksman # Markdown LSP
+      nixd # Nix LSP
+      nodePackages.vscode-langservers-extracted # JSON, HTML, CSS, ESLint LSPs (includes jsonls)
+      powershell-editor-services # PowerShell LSP
+      nodePackages.yaml-language-server # YAML LSP
+      taplo # TOML LSP
+
+      # Formatters
+      stylua # Lua formatter
+      nixfmt-rfc-style # Nix formatter
+      nodePackages.prettier # JS/TS/JSON/YAML/Markdown formatter
+      black # Python formatter (alternative to ruff)
+      gofumpt # Go formatter (stricter than gofmt)
+      goimports # Go imports formatter
+      shfmt # Shell script formatter
+
+      # Linters
+      ruff # Python linter & formatter
+      shellcheck # Shell script linter
+      nodePackages.markdownlint-cli2 # Markdown linter
+      hadolint # Dockerfile linter
+      golangci-lint # Go linter
+      sqlfluff # SQL linter
+
+      # DAP (Debug Adapters)
+      delve # Go debugger
+      # go-debug-adapter is already included with delve
+      python312Packages.debugpy # Python debugger
+
+      # Utilities
+      nodePackages.markdown-toc # Generate table of contents for Markdown
+      imagemagick
+      statix
+      icu
     ];
   };
 }
