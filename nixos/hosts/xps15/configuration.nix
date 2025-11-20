@@ -319,7 +319,7 @@ in
     udiskie
     udisks
 
-    protonup
+    protonup-ng
   ];
 
   # Steam
