@@ -223,8 +223,13 @@ in
     programs.bash = {
       enable = true;
       initExtra = ''
+        # Ensure proper terminal state on shell startup
+        if [[ -n "$ZELLIJ" ]]; then
+          stty sane 2>/dev/null
+        fi
+
         # Bind Ctrl-f to the sessionizer
-        bind -x '"\C-f": "zellij-sessioniser"'
+        bind -x '"\C-f": "exec < /dev/tty; zellij-sessioniser"'
       '';
     };
     home.packages = with pkgs; [
