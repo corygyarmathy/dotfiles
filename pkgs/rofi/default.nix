@@ -24,7 +24,7 @@
     };
 
     home.packages = with pkgs; [
-      rofi-wayland # Uplauncher for Wayland
+      rofi # Uplauncher for Wayland
     ];
   };
 }
