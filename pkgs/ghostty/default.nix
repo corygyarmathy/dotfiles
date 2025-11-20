@@ -21,6 +21,9 @@
         background-blur = true;
         custom-shader = "./shaders/shader.glsl";
         # window-padding-x = 10;
+        keybind = [
+          "ctrl+enter=unbind"
+        ];
       };
     };
   };
