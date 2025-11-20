@@ -46,14 +46,14 @@
       nixfmt-rfc-style # Nix formatter
       nodePackages.prettier # JS/TS/JSON/YAML/Markdown formatter
       black # Python formatter (alternative to ruff)
-      gofumpt # Go formatter (stricter than gofmt)
-      goimports # Go imports formatter
+      gotools # godoc, goimports, callgraph, digraph, stringer or toolstash etc.
       shfmt # Shell script formatter
+      prettier
 
       # Linters
       ruff # Python linter & formatter
       shellcheck # Shell script linter
-      nodePackages.markdownlint-cli2 # Markdown linter
+      markdownlint-cli2 # Markdown linter
       hadolint # Dockerfile linter
       golangci-lint # Go linter
       sqlfluff # SQL linter
@@ -64,10 +64,8 @@
       python312Packages.debugpy # Python debugger
 
       # Utilities
-      nodePackages.markdown-toc # Generate table of contents for Markdown
       imagemagick
       statix
-      icu
     ];
   };
 }
