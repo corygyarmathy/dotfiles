@@ -22,8 +22,8 @@
       source = ./default.kdl;
     };
     home.packages = with pkgs; [
-      unstable-small.zellij
       vimPlugins.zellij-nav-nvim
+      zellij
     ];
   };
 }
