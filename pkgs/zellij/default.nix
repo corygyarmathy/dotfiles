@@ -20,7 +20,7 @@ let
     SPECIFIC_PATHS=(${
       pkgs.lib.concatStringsSep " " [
         "$HOME/.dotfiles"
-        "$HOME/.config/nvim"
+        # "$HOME/.config/nvim"
       ]
     })
 
@@ -163,6 +163,9 @@ let
 
     # Use fzf with key bindings
     selected_display=$(generate_display_list | fzf --ansi \
+      --height=~100% \
+      --layout=reverse \
+      --border=rounded \
       --prompt="Select project: " \
       --header="Enter: Select | Ctrl+D: Delete | Ctrl+K: Kill" \
       --bind="ctrl-d:execute($temp_script delete {})+reload($0 --generate-list)" \
