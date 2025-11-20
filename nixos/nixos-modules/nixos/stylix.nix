@@ -45,7 +45,7 @@
         };
 
         emoji = {
-          package = pkgs.noto-fonts-emoji;
+          package = pkgs.noto-fonts-color-emoji;
           name = "Noto Color Emoji";
         };
 
@@ -62,7 +62,7 @@
     fonts.packages = with pkgs; [
       # dejavu_fonts # Fonts
       noto-fonts
-      noto-fonts-emoji # Fonts
+      noto-fonts-color-emoji # Fonts
       hack-font
       nerd-fonts.hack
       # pixel-code
