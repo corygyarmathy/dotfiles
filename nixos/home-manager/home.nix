@@ -176,6 +176,7 @@
     pavucontrol # Audio settings GUI # TODO: add to waybar on right click of audio module?
     # ventoy-full
     jq # JSON processor
+    httpie
 
     # LSPs / Language Tools
     nixd
