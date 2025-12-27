@@ -104,12 +104,6 @@
     # git config --global credential.credentialStore gpg
   };
 
-  # KDE Connect - syncs notifications
-  services.kdeconnect = {
-    enable = true;
-    indicator = true;
-  };
-
   # Add stuff for your user as you see fit:
   # Add a prefix of 'stable.' to use the nixpkgs-stable branch
   # This can be useful to downgrade a pkg, if needed
