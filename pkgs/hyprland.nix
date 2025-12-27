@@ -11,15 +11,16 @@ let
   # Startup script for Wayland / Hyprland
   # FIXME: only run these packages if they're installed??
   # FIXME: waybar launches twice - why?
-  startupScript = pkgs.pkgs.writeShellScriptBin "start" ''
+  startupScript = pkgs.writeShellScriptBin "start" ''
+    dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE
+    dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
     ${pkgs.waybar}/bin/waybar &
     ${pkgs.dunst}/bin/dunst init &
     udiskie &
-    dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE
   '';
   # dbus-update required for Hyprshade
   # Removed from above: ${pkgs.swww}/bin/swww init &  ${pkgs.swww}/bin/swww img ${/home/coryg/git/nixos-config/home-manager/wallpaper.jpg} &
-  browser = "firefox";
+  browser = "vivaldy";
   terminal = "ghostty";
   fileManager = "thunar";
   mod = "SUPER";
@@ -193,10 +194,10 @@ in
         ];
 
         # touchpad gestures
-        gestures = {
-          workspace_swipe = true;
-          workspace_swipe_forever = true;
-        };
+        # gestures = {
+        #   workspace_swipe = true;
+        #   workspace_swipe_forever = true;
+        # };
 
         xwayland.force_zero_scaling = true; # Fixes blurry xwayland apps
 
@@ -208,76 +209,75 @@ in
           "${mod} ALT, mouse:272, resizewindow"
         ];
 
-        bind =
-          [
-            # compositor commands
-            # Home row (Colemak-dhm): Left: arstg Right: mneio
-            # "${mod} SHIFT, E, exec, pkill Hyprland"
-            "${mod}, C, killactive," # [C]lose
-            "${mod}, F, fullscreen," # [F]ullscreen
-            "${mod}, G, togglegroup," # Toggle [G]roup
-            "${mod} SHIFT, N, changegroupactive, f"
-            "${mod} SHIFT, P, changegroupactive, b"
-            "${mod}, A, togglesplit," # Re-[A]rrange windows ??
-            "${mod}, V, togglefloating,"
-            "${mod}, P, pseudo," # [P]seudo
-            "${mod} ALT, ,resizeactive,"
+        bind = [
+          # compositor commands
+          # Home row (Colemak-dhm): Left: arstg Right: mneio
+          # "${mod} SHIFT, E, exec, pkill Hyprland"
+          "${mod}, C, killactive," # [C]lose
+          "${mod}, F, fullscreen," # [F]ullscreen
+          "${mod}, G, togglegroup," # Toggle [G]roup
+          "${mod} SHIFT, N, changegroupactive, f"
+          "${mod} SHIFT, P, changegroupactive, b"
+          "${mod}, A, togglesplit," # Re-[A]rrange windows ??
+          "${mod}, V, togglefloating,"
+          "${mod}, P, pseudo," # [P]seudo
+          "${mod} ALT, ,resizeactive,"
 
-            # Utility
-            "${mod}, S, exec, pgrep hyprlock || hyprlock" # [S]ecure machine (lock -but L was taken)
+          # Utility
+          "${mod}, S, exec, pgrep hyprlock || hyprlock" # [S]ecure machine (lock -but L was taken)
 
-            # Open Applications
-            "${mod}, B, exec, ${browser}" # Open [B]rowser
-            "${mod}, T, exec, ${terminal}" # Open [T]erminal
-            "${mod}, E, exec, ${fileManager}" # Open [T]erminal
-            "${mod}, U, exec, XDG_CURRENT_DESKTOP=gnome gnome-control-center" # open settings, FIXME: Doesn't work
-            "${mod}, R, exec, rofi -show drun -show-icons" # Open Rofi Application [R]unner
-            "${mod}, W, exec, rofi -show window -show-icons" # Open Rofi [W]indow switcher
+          # Open Applications
+          "${mod}, B, exec, ${browser}" # Open [B]rowser
+          "${mod}, T, exec, ${terminal}" # Open [T]erminal
+          "${mod}, E, exec, ${fileManager}" # Open [T]erminal
+          "${mod}, U, exec, XDG_CURRENT_DESKTOP=gnome gnome-control-center" # open settings, FIXME: Doesn't work
+          "${mod}, R, exec, rofi -show drun -show-icons" # Open Rofi Application [R]unner
+          "${mod}, W, exec, rofi -show window -show-icons" # Open Rofi [W]indow switcher
 
-            # move focus (hjkl)
-            "${mod}, H, movefocus, l" # Left
-            "${mod}, L, movefocus, r" # Right
-            "${mod}, K, movefocus, u" # Up
-            "${mod}, J, movefocus, d" # Down
+          # move focus (hjkl)
+          "${mod}, H, movefocus, l" # Left
+          "${mod}, L, movefocus, r" # Right
+          "${mod}, K, movefocus, u" # Up
+          "${mod}, J, movefocus, d" # Down
 
-            # cycle workspaces
-            "${mod}, bracketleft, workspace, m-1"
-            "${mod}, bracketright, workspace, m+1"
+          # cycle workspaces
+          "${mod}, bracketleft, workspace, m-1"
+          "${mod}, bracketright, workspace, m+1"
 
-            # cycle monitors
-            "${mod} SHIFT, bracketleft, focusmonitor, l"
-            "${mod} SHIFT, bracketright, focusmonitor, r"
+          # cycle monitors
+          "${mod} SHIFT, bracketleft, focusmonitor, l"
+          "${mod} SHIFT, bracketright, focusmonitor, r"
 
-            # send focused workspace to left/right monitors
-            "${mod} SHIFT ALT, bracketleft, movecurrentworkspacetomonitor, l"
-            "${mod} SHIFT ALT, bracketright, movecurrentworkspacetomonitor, r"
+          # send focused workspace to left/right monitors
+          "${mod} SHIFT ALT, bracketleft, movecurrentworkspacetomonitor, l"
+          "${mod} SHIFT ALT, bracketright, movecurrentworkspacetomonitor, r"
 
-            # Take screenshot of all sceens
-            # FIXME: not currently working / setup
-            ", Print, exec, grimblast copy area"
+          # Take screenshot of all sceens
+          # FIXME: not currently working / setup
+          ", Print, exec, grimblast copy area"
 
-            # TODO: add screenshot key bindings
-          ]
-          ++ (
-            # workspaces
-            # binds ${mod} + [shift +] {1..10} to [move to] workspace {1..10}
-            builtins.concatLists (
-              builtins.genList (
-                x:
-                let
-                  ws =
-                    let
-                      c = (x + 1) / 10;
-                    in
-                    builtins.toString (x + 1 - (c * 10));
-                in
-                [
-                  "${mod}, ${ws}, workspace, ${toString (x + 1)}"
-                  "${mod} SHIFT, ${ws}, movetoworkspace, ${toString (x + 1)}"
-                ]
-              ) 10
-            )
-          );
+          # TODO: add screenshot key bindings
+        ]
+        ++ (
+          # workspaces
+          # binds ${mod} + [shift +] {1..10} to [move to] workspace {1..10}
+          builtins.concatLists (
+            builtins.genList (
+              x:
+              let
+                ws =
+                  let
+                    c = (x + 1) / 10;
+                  in
+                  builtins.toString (x + 1 - (c * 10));
+              in
+              [
+                "${mod}, ${ws}, workspace, ${toString (x + 1)}"
+                "${mod} SHIFT, ${ws}, movetoworkspace, ${toString (x + 1)}"
+              ]
+            ) 10
+          )
+        );
 
         bindl = [
           # Monitor events
