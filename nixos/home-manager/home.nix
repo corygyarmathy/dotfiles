@@ -115,7 +115,7 @@
   # This can be useful to downgrade a pkg, if needed
   home.packages = with pkgs; [
     # Productivity
-    firefox
+    vivaldi
     unstable-small.obsidian
     libreoffice
     google-chrome
