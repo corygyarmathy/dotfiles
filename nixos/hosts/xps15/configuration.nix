@@ -165,19 +165,6 @@ in
   # Enable networking
   networking.networkmanager.enable = true;
 
-  # Configure firewall
-  networking.firewall = {
-    enable = true;
-    allowedTCPPortRanges = [
-      {
-      }
-    ];
-    allowedUDPPortRanges = [
-      {
-      }
-    ];
-  };
-
   # Set your time zone.
   time.timeZone = "Australia/Perth";
 
