@@ -177,6 +177,7 @@
     # ventoy-full
     jq # JSON processor
     httpie
+    htop
 
     # LSPs / Language Tools
     nixd
