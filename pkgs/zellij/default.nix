@@ -52,10 +52,28 @@ let
       basename "$full_path"
     }
 
+    # Function to detect project type
+    detect_project_type() {
+      local dir="$1"
+      local icon=" "  # Default to space for alignment
+
+      # Check for various project types (most specific first)
+      [[ -d "$dir/.git" ]] && icon="📁"
+      [[ -f "$dir/flake.nix" ]] && icon="❄️"
+      [[ -f "$dir/Cargo.toml" ]] && icon="🦀"
+      [[ -f "$dir/package.json" ]] && icon="📦"
+      [[ -f "$dir/go.mod" ]] && icon="🐹"
+      [[ -f "$dir/requirements.txt" ]] || [[ -f "$dir/pyproject.toml" ]] && icon="🐍"
+      [[ -f "$dir/pom.xml" ]] || [[ -f "$dir/build.gradle" ]] && icon="☕"
+      [[ -f "$dir/Gemfile" ]] && icon="💎"
+
+      echo "$icon"
+    }
+
     # Function to generate the display list
     generate_display_list() {
       local all_dirs=()
-      
+
       # Add directories from SEARCH_PATHS
       for search_path in "''${SEARCH_PATHS[@]}"; do
         if [[ -d "$search_path" ]]; then
@@ -108,13 +126,22 @@ let
         done < <(zellij ls -n 2>/dev/null)
       fi
       
-      # Create display names with session status
+      # Create display names with session status and project icons
       for dir in "''${sorted_dirs[@]}"; do
         local display_name=$(echo "$dir" | sed "s|^$HOME|~|")
         local session_name=$(basename "$dir")
+        local project_icon=$(detect_project_type "$dir")
+        
+        # Add project icon if detected
+        if [[ -n "$project_icon" ]]; then
+          display_name="$project_icon  ''${display_name}"
+        fi
         
         if [[ -n "''${session_status[$session_name]}" ]]; then
           display_name="''${display_name}''${session_status[$session_name]}"
+        else
+          # Add subtle indicator for non-session dirs
+          display_name="''${display_name} $(tput setaf 240)○$(tput sgr0)"
         fi
         
         echo "$display_name"
@@ -134,7 +161,8 @@ let
 
     extract_session_name() {
       local display_line="$1"
-      local clean_path=$(echo "$display_line" | sed 's/ \x1b\[[0-9;]*m([^)]*)\x1b\[[0-9;]*m$//' | sed 's/ ([^)]*)$//')
+      # Remove icons, status indicators, and ANSI codes
+      local clean_path=$(echo "$display_line" | sed 's/^[^~\/]*//; s/ \x1b\[[0-9;]*m([^)]*)\x1b\[[0-9;]*m$//; s/ ([^)]*)$//; s/ \x1b\[[0-9;]*m○\x1b\[[0-9;]*m$//')
       local full_path
       if [[ "$clean_path" == ~* ]]; then
         full_path="$HOME''${clean_path:1}"
@@ -161,23 +189,113 @@ let
 
     chmod +x "$temp_script"
 
+    # Create preview script
+    preview_script=$(mktemp)
+    cat > "$preview_script" << 'PREVIEWEOF'
+    #!/usr/bin/env bash
+
+    # Extract clean path from display line
+    clean_path=$(echo "$1" | sed 's/^[^~\/]*//; s/ \x1b\[[0-9;]*m([^)]*)\x1b\[[0-9;]*m$//; s/ ([^)]*)$//; s/ \x1b\[[0-9;]*m○\x1b\[[0-9;]*m$//')
+
+    # Convert ~ to $HOME
+    if [[ "$clean_path" == ~* ]]; then
+      full_path="$HOME''${clean_path:1}"
+    else
+      full_path="$clean_path"
+    fi
+
+    session_name=$(basename "$full_path")
+
+    # Show Zellij session info if available
+    if command -v zellij >/dev/null 2>&1; then
+      session_info=$(zellij ls 2>/dev/null | grep "^$session_name ")
+      if [[ -n "$session_info" ]]; then
+        echo -e "\033[1;34m━━━ Zellij Session ━━━\033[0m"
+        echo "$session_info"
+        echo ""
+      fi
+    fi
+
+    # Show git info if available
+    if [ -d "$full_path/.git" ]; then
+      echo -e "\033[1;32m━━━ Git Status ━━━\033[0m"
+      cd "$full_path" 2>/dev/null
+      current_branch=$(git branch --show-current 2>/dev/null)
+      [[ -n "$current_branch" ]] && echo "Branch: $current_branch"
+      
+      last_commit=$(git log -1 --pretty=format:"%ar - %s" 2>/dev/null)
+      [[ -n "$last_commit" ]] && echo "Last commit: $last_commit"
+      
+      # Show git status summary
+      if git status --porcelain 2>/dev/null | grep -q '^'; then
+        echo -e "\033[0;33mUncommitted changes present\033[0m"
+      fi
+      echo ""
+    fi
+
+    # Show statistics
+    echo -e "\033[1;36m━━━ Statistics ━━━\033[0m"
+    file_count=$(find "$full_path" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    dir_count=$(find "$full_path" -maxdepth 1 -type d 2>/dev/null | tail -n +2 | wc -l)
+    size=$(du -sh "$full_path" 2>/dev/null | cut -f1)
+    echo "Files: $file_count | Dirs: $dir_count | Size: $size"
+    echo ""
+
+    # Show README if it exists
+    for readme in README.md readme.md README.org readme.org README.txt readme.txt README; do
+      if [ -f "$full_path/$readme" ]; then
+        echo -e "\033[1;35m━━━ README Preview ━━━\033[0m"
+        if command -v ${pkgs.bat}/bin/bat >/dev/null 2>&1; then
+          ${pkgs.bat}/bin/bat --style=plain --color=always --line-range=:15 "$full_path/$readme" 2>/dev/null
+        else
+          head -15 "$full_path/$readme"
+        fi
+        break
+      fi
+    done
+    PREVIEWEOF
+
+    chmod +x "$preview_script"
+
+    # Detect terminal width for preview handling
+    term_width=$(tput cols 2>/dev/null || echo 80)
+    preview_opts=""
+
+    if [[ $term_width -lt 120 ]]; then
+      # Terminal too narrow, hide preview by default
+      preview_opts="--preview-window=right:60%:wrap:hidden"
+    else
+      # Terminal wide enough, show preview
+      preview_opts="--preview-window=right:60%:wrap"
+    fi
+
     # Use fzf with key bindings
-    selected_display=$(generate_display_list | fzf --ansi \
+    selected_display=$(generate_display_list | ${pkgs.fzf}/bin/fzf --ansi \
       --height=~100% \
       --layout=reverse \
       --border=rounded \
-      --prompt="Select project: " \
-      --header="Enter: Select | Ctrl+D: Delete | Ctrl+K: Kill" \
-      --bind="ctrl-d:execute($temp_script delete {})+reload($0 --generate-list)" \
+      --pointer="▶" \
+      --marker="✓" \
+      --prompt="> " \
+      --header="^K: Kill | ^X: Delete | ^/: Preview | ^U/D: Scroll" \
+      --preview "$preview_script {}" \
+      $preview_opts \
+      --bind="ctrl-/:toggle-preview" \
+      --bind="ctrl-u:preview-half-page-up" \
+      --bind="ctrl-d:preview-half-page-down" \
+      --bind="alt-up:preview-up" \
+      --bind="alt-down:preview-down" \
+      --bind="ctrl-x:execute($temp_script delete {})+reload($0 --generate-list)" \
       --bind="ctrl-k:execute($temp_script kill {})+reload($0 --generate-list)")
 
     rm -f "$temp_script"
+    rm -f "$preview_script"
 
     # Exit if nothing selected
     [[ -z "$selected_display" ]] && exit 0
 
     # Convert display name back to full path
-    clean_display=$(echo "$selected_display" | sed 's/ \x1b\[[0-9;]*m([^)]*)\x1b\[[0-9;]*m$//' | sed 's/ ([^)]*)$//')
+    clean_display=$(echo "$selected_display" | sed 's/^[^~\/]*//; s/ \x1b\[[0-9;]*m([^)]*)\x1b\[[0-9;]*m$//; s/ ([^)]*)$//; s/ \x1b\[[0-9;]*m○\x1b\[[0-9;]*m$//')
 
     if [[ "$clean_display" == ~* ]]; then
       selected_dir="$HOME''${clean_display:1}"
@@ -238,6 +356,8 @@ in
     home.packages = with pkgs; [
       zellij
       zellij-sessioniser
+      tree # For better directory previews
+      bat # For syntax-highlighted README previews
     ];
   };
 }
