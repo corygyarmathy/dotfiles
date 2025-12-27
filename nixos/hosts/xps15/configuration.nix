@@ -105,15 +105,6 @@ in
     wantedBy = [ "multi-user.target" ];
   };
 
-  # TODO: not yet working, to investigate further
-  services.udev = {
-    enable = true;
-    extraRules = ''
-      # Enable USB devices waking from sleep
-      ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="enabled"
-    '';
-  };
-
   services.dbus.enable = true;
   systemd.user.services.dbus = {
     enable = true;
