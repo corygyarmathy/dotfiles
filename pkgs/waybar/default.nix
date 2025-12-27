@@ -259,14 +259,14 @@
             };
           };
 
-          idle_inhibitor = {
-            "format" = "{icon}";
-            "format-icons" = {
-              "activated" = "";
-              "deactivated" = "";
-            };
-            "timeout" = 30.5;
-          };
+          # idle_inhibitor = {
+          #   "format" = "{icon}";
+          #   "format-icons" = {
+          #     "activated" = "";
+          #     "deactivated" = "";
+          #   };
+          #   "timeout" = 30.5;
+          # };
 
           battery = {
             format = "{capacity}% {icon}";
