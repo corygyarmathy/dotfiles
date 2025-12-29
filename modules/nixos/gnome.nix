@@ -1,17 +1,15 @@
+# GNOME desktop environment
 {
-  pkgs,
-  lib,
   config,
+  lib,
+  pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.gnome;
+in {
+  options.cg.gnome.enable = lib.mkEnableOption "GNOME desktop environment";
 
-  options = {
-    cg.gnome.enable = lib.mkEnableOption "enables gnome DE";
-  };
-
-  config = lib.mkIf config.cg.gnome.enable {
-    # Enable the X11 windowing system, and GNOME desktop environment
+  config = lib.mkIf cfg.enable {
     services.xserver = {
       enable = true;
       displayManager.gdm.enable = true;
