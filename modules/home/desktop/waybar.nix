@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.waybar;
-in {
+in
+{
   options.cg.home.waybar.enable = lib.mkEnableOption "Waybar status bar";
 
   config = lib.mkIf cfg.enable {
