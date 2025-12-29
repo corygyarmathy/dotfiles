@@ -1,38 +1,32 @@
 {
-  description = "Your new nix config";
+  description = "Cory's NixOS Configuration";
 
   inputs = {
     # Nixpkgs
-    # TODO: change to the most recent channel URL
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.05";
-    # You can access packages and modules from different nixpkgs revs
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    # Also see the 'unstable-packages' overlay at 'overlays/default.nix'.
     nixpkgs-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
 
-    # Home manager
+    # Home Manager
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
-    # Imports hardware dependencies
+    # Hardware quirks
     hardware.url = "github:nixos/nixos-hardware";
 
-    # Used for setting system colours / styling
+    # Theming
     stylix.url = "github:danth/stylix";
 
-    # Hyprland
-    hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1"; # Use most recent version
-    # Import the Hyprland plugin manager
+    # Hyprland (latest)
+    hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1";
     hyprland-plugins = {
       url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
     };
-    # hyprland-qtutils.url = "github:hyprwm/hyprland-qtutils"; # Dep. for Hyprland
 
-    # SOPS-Nix
+    # Secrets management
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
-
   };
 
   outputs =
@@ -42,69 +36,135 @@
       nixpkgs-stable,
       nixpkgs-unstable-small,
       home-manager,
+      hardware,
       stylix,
-      # hyprland-qtutils,
+      hyprland,
+      hyprland-plugins,
       sops-nix,
       ...
     }@inputs:
     let
-      inherit (self) outputs;
-      # TODO: investigate this option - not exactly sure what it should be set to. Okay to leave as is?
-      # Supported systems for your flake packages, shell, etc.
-      systems = [
-        "aarch64-linux"
-        "i686-linux"
+      # Supported systems
+      supportedSystems = [
         "x86_64-linux"
-        "aarch64-darwin"
-        "x86_64-darwin"
+        "aarch64-linux"
       ];
-      # This is a function that generates an attribute by calling a function you
-      # pass to it, with each system as an argument
-      forAllSystems = nixpkgs.lib.genAttrs systems;
-    in
-    {
-      # Your custom packages
-      # Accessible through 'nix build', 'nix shell', etc
-      packages = forAllSystems (system: import ./pkgs/nixos-pkgs nixpkgs.legacyPackages.${system});
+      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
 
-      # Formatter for your nix files, available through 'nix fmt'
-      # Other options beside 'alejandra' include 'nixpkgs-fmt'
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra); # TODO: use this formatter?
-
-      # Your custom packages and modifications, exported as overlays
-      overlays = import ./nixos/nixos-overlays { inherit inputs; };
-
-      # Reusable nixos modules you might want to export
-      nixosModules = import ./nixos/nixos-modules/nixos;
-
-      # Reusable home-manager modules you might want to export
-      # FIXME: this doesn't work for some reason (infinite recursion error)
-      # homeManagerModules = import ./nixos/nixos-modules/home-manager;
-
-      # NixOS configuration entrypoint
-      # Available through 'nixos-rebuild --flake .#your-hostname'
-      nixosConfigurations = {
-        # NOTE: the below 'x = ' defines the hostname, which is set by networking.hostname
-        xps15 = nixpkgs.lib.nixosSystem {
+      # Helper function to create a NixOS host configuration
+      mkHost =
+        {
+          hostname,
+          system ? "x86_64-linux",
+          extraModules ? [ ],
+        }:
+        nixpkgs.lib.nixosSystem {
+          inherit system;
           specialArgs = {
-            inherit inputs outputs;
+            inherit inputs self;
+            # Make stable packages available as pkgs-stable
+            pkgs-stable = import nixpkgs-stable {
+              inherit system;
+              config.allowUnfree = true;
+            };
+            # Make unstable-small packages available as pkgs-small
+            pkgs-small = import nixpkgs-unstable-small {
+              inherit system;
+              config.allowUnfree = true;
+            };
           };
           modules = [
-            ./nixos/hosts/xps15/configuration.nix # > Our main nixos configuration file <
-            stylix.nixosModules.stylix # Enable configuration through Stylix, bundles home-manager module
+            # Host-specific configuration
+            ./hosts/${hostname}
+
+            # Core module systems
+            home-manager.nixosModules.home-manager
+            stylix.nixosModules.stylix
             sops-nix.nixosModules.sops
 
-            # make home-manager as a module of nixos
-            # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
-            home-manager.nixosModules.home-manager
+            # Shared configuration for all hosts
             {
-              home-manager.users.coryg = import ./nixos/home-manager/home.nix;
-              home-manager.extraSpecialArgs = {
-                inherit inputs outputs;
+              networking.hostName = hostname;
+
+              # Home-manager settings
+              home-manager = {
+                useGlobalPkgs = true;
+                useUserPackages = true;
+                extraSpecialArgs = { inherit inputs self; };
+                sharedModules = [
+                  sops-nix.homeManagerModules.sops
+                ];
               };
+
+              # Nix settings
+              nix = {
+                settings = {
+                  experimental-features = [
+                    "nix-command"
+                    "flakes"
+                  ];
+                  # Hyprland cachix
+                  substituters = [ "https://hyprland.cachix.org" ];
+                  trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
+                };
+                # Automatic garbage collection
+                gc = {
+                  automatic = true;
+                  dates = "weekly";
+                  options = "--delete-older-than 14d";
+                };
+                # Automatic store optimisation
+                optimise = {
+                  automatic = true;
+                  dates = [ "22:00" ];
+                };
+              };
+
+              # Allow unfree packages
+              nixpkgs.config.allowUnfree = true;
             }
+          ]
+          ++ extraModules;
+        };
+    in
+    {
+      # NixOS configurations for each host
+      nixosConfigurations = {
+        xps15 = mkHost {
+          hostname = "xps15";
+          system = "x86_64-linux";
+          extraModules = [
+            # XPS15-specific hardware modules from nixos-hardware
+            hardware.nixosModules.common-cpu-intel
+            hardware.nixosModules.common-pc-laptop
+            hardware.nixosModules.common-pc-laptop-ssd
+            hardware.nixosModules.common-gpu-nvidia
           ];
         };
+
+        # Future hosts can be added like:
+        # server = mkHost {
+        #   hostname = "server";
+        #   system = "x86_64-linux";
+        # };
       };
+
+      # Overlays exported by this flake
+      overlays = import ./overlays { inherit inputs; };
+
+      # Custom packages
+      packages = forAllSystems (system: import ./packages nixpkgs.legacyPackages.${system});
+
+      # Development shell for working on this config
+      devShells = forAllSystems (system: {
+        default = nixpkgs.legacyPackages.${system}.mkShell {
+          packages = with nixpkgs.legacyPackages.${system}; [
+            nil # Nix LSP
+            nixfmt-rfc-style
+            sops
+            age
+          ];
+        };
+      });
     };
 }
