@@ -127,9 +127,22 @@ in {
             show-passive-items = true;
           };
 
-          modules-center = ["clock"];
-          modules-left = ["hyprland/workspaces" "tray" "idle_inhibitor"];
-          modules-right = ["network" "cpu" "disk" "memory" "temperature" "battery" "pulseaudio" "backlight"];
+          modules-center = [ "clock" ];
+          modules-left = [
+            "hyprland/workspaces"
+            "tray"
+            "idle_inhibitor"
+          ];
+          modules-right = [
+            "network"
+            "cpu"
+            "disk"
+            "memory"
+            "temperature"
+            "battery"
+            "pulseaudio"
+            "backlight"
+          ];
 
           "hyprland/window" = {
             format = "{title}";
@@ -142,22 +155,21 @@ in {
             format = "{percentage_used}% ";
           };
 
-            "format-icons" = {
-              "1" = "󰈹";
-              "2" = "";
-              "3" = "";
-              "4" = "";
-              "5" = "";
-              "6" = "";
-              "7" = "󰠮";
-              "8" = "";
-              "9" = "";
-              "10" = "";
-              # "","";
-              # "urgent": "";
-              # "active": "";
-              # "default": "";
-            };
+          format-icons = {
+            "1" = "󰈹";
+            "2" = "";
+            "3" = "";
+            "4" = "";
+            "5" = "";
+            "6" = "";
+            "7" = "󰠮";
+            "8" = "";
+            "9" = "";
+            "10" = "";
+            # "","";
+            # "urgent": "";
+            # "active": "";
+            # "default": "";
           };
 
           battery = {

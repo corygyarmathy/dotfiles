@@ -1,116 +1,71 @@
-# This is your home-manager configuration file
-# Use this to configure your home environment (it replaces ~/.config/nixpkgs/home.nix)
+# XPS 15 - Home-manager configuration for coryg
 {
   inputs,
-  outputs,
-  lib,
   config,
-  fetchurl,
+  lib,
   pkgs,
-  pkgs-stable,
-  coreutils,
   ...
 }:
 {
-  # You can import other home-manager modules here
   imports = [
-    # Importing home-manager modules through default.nix
-    # NOTE: these need to be enabled for them to apply.
-    ../../pkgs
-    # outputs.homeManagerModules
-    ../nixos-modules/home-manager
+    # Home-manager modules
+    ../../modules/home
   ];
 
-  # Enabling self-defined home-manager modules
-  # TODO: move these into the ../nixos-modules/home-manager/ folder
-  cg.home.nvim.enable = true;
-  cg.home.waybar.enable = true; # TODO: Investigate replacing with alternative
-  cg.home.rofi.enable = true;
-  cg.home.starship.enable = true;
-  cg.home.alacritty.enable = true;
-  cg.home.ghostty.enable = true;
-  cg.home.spotify-player.enable = false;
-  cg.home.hyprsunset.enable = true;
-  cg.home.hyprland.enable = true;
-  cg.home.hyprlock.enable = true;
-  cg.home.ssh.enable = true;
-  cg.home.sops-nix.enable = false;
-  cg.home.stylix.enable = true;
-  cg.home.tmux.enable = false; # TODO: sort out tmuxinator vs. continuum (see Prime's workflow)
-  cg.home.zellij.enable = true;
-  #TODO: add fish config
+  # ============================================================================
+  # Module Toggles
+  # ============================================================================
+  cg.home = {
+    # Shell
+    starship.enable = true;
+    zellij.enable = true;
 
-  # NOTE: home.sessionPath doesn't currently work in Hyprland. Use environment.SessionVariables in configuration.nix instead
-  # See: https://www.reddit.com/r/NixOS/comments/1ajhwxv/hyprland_homemanager_does_not_inherit/
-  # You can also set these in hyprland.nix under 'env'
+    # Terminals
+    alacritty.enable = false;
+    ghostty.enable = true;
 
-  services.mpris-proxy.enable = true; # Req. for bluetooth media controls
+    # Desktop
+    hyprland.enable = true;
+    hyprlock.enable = true;
+    hyprsunset.enable = true;
+    waybar.enable = true;
+    rofi.enable = true;
+    stylix.enable = true;
 
-  nixpkgs = {
-    # You can add overlays here
-    overlays = [
-      # Add overlays your own flake exports (from overlays and pkgs dir):
-      outputs.overlays.additions
-      outputs.overlays.modifications
-      outputs.overlays.stable-packages
-      outputs.overlays.unstable-small-packages
+    # Development
+    nvim.enable = true;
+    git.enable = true;
+    direnv.enable = true;
+    ssh.enable = true;
 
-      # You can also add overlays exported from other flakes:
-      # neovim-nightly-overlay.overlays.default
+    # Media
+    spotify-player.enable = false;
 
-      # Or define it inline, for example:
-      # (final: prev: {
-      #   hi = final.hello.overrideAttrs (oldAttrs: {
-      #     patches = [ ./change-hello-to-hi.patch ];
-      #   });
-      # })
-
-    ];
-    # Configure your nixpkgs instance
-    config = {
-      # Disable if you don't want unfree packages
-      allowUnfree = true;
-    };
+    # Secrets (disabled until configured)
+    sops-nix.enable = false;
   };
 
-  # Create the user
+  # ============================================================================
+  # User Info
+  # ============================================================================
   home = {
     username = "coryg";
     homeDirectory = "/home/coryg";
+    stateVersion = "24.11";
   };
 
-  # Bash config
-  programs.bash = {
-    enable = true; # Req. for starship to work
-  };
+  # ============================================================================
+  # Services
+  # ============================================================================
+  services.mpris-proxy.enable = true; # Bluetooth media controls
 
-  # Nix-Direnv config
-  programs.direnv = {
-    enable = true;
-    enableBashIntegration = true;
-    nix-direnv.enable = true;
-    config = {
-      global = {
-        hide_env_diff = true;
-      };
-    };
-  };
-
-  # Git config
-  # TODO: split into separate module
-  programs.git = {
-    userName = "Cory Gyarmathy";
-    userEmail = "cory.gyarmathy@gmail.com";
-    # git config --global credential.credentialStore gpg
-  };
-
-  # Add stuff for your user as you see fit:
-  # Add a prefix of 'stable.' to use the nixpkgs-stable branch
-  # This can be useful to downgrade a pkg, if needed
+  # ============================================================================
+  # Packages
+  # ============================================================================
   home.packages = with pkgs; [
     # Productivity
     vivaldi
-    unstable-small.obsidian
+    obsidian
     libreoffice
     google-chrome
 
@@ -133,20 +88,9 @@
     vlc
 
     # Utilities
-    git
-    gh # GitHub cli - used for authenticating with GitHub
-    # TODO: is gcm still needed?
-    git-credential-manager # gcm
-    dotnetCorePackages.sdk_8_0_3xx # Re: gcm # https://nixos.wiki/wiki/DotNET
-    gnupg # gpg # Requirement for git-credential-manager
-    pinentry-all # gnupg interface to passphrase input # Requirement for gnupg
-    pass-wayland # Requirement for git-credential-manager
-    lazygit # TUI for git
     wget
     wireshark
     nmap
-    # ruffle # Adobe flash player emulator
-    # lightspark # Adobe flash player emulator
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
     xfce.thunar # File manager
     xfce.xfconf # Required for thunar
@@ -155,7 +99,6 @@
     file-roller # Archive (.zip) manager for GNOME, required for thunar-archive-plugin
     steam-run # Allows running dynamically linked executables, made for steam
     lsd # Next-gen 'ls' command
-    # (pkgs.callPackage ../../pkgs/nixos-pkgs/bootdevcli { }) # Custom building package # Used for boot.dev course # TODO: figure out how to do custom packages better?
     unixtools.xxd # xxd creates a hex dump of a given file or standard input.
     pandoc # Conversion between documentation formats
     wine-wayland # TODO: investigate if this is working
@@ -165,32 +108,26 @@
     age # Generate / encrypt with age keys
     tldr # man, but with practical examples instead
     pavucontrol # Audio settings GUI # TODO: add to waybar on right click of audio module?
-    # ventoy-full
     jq # JSON processor
     httpie
     htop
-
-    # LSPs / Language Tools
-    nixd
 
     # Entertainment
     discord
     zotero
     texstudio # Req. for zotero?
     calibre
-    stable.gargoyle # Used for running games
+    gargoyle
 
     # Drivers
     gutenprint # Drivers for many different printers from many different vendors.
   ];
 
-  # Enable home-manager
+  # ============================================================================
+  # Enable Home Manager
+  # ============================================================================
   programs.home-manager.enable = true;
 
-  # Nicely reload system units when changing configs
+  # Reload system units when configs change
   systemd.user.startServices = "sd-switch";
-
-  # https://nixos.wiki/wiki/FAQ/When_do_I_update_stateVersion
-  # TL;DR: update upon OS re-install
-  home.stateVersion = "24.11";
 }
