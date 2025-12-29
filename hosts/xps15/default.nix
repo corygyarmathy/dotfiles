@@ -1,0 +1,247 @@
+# XPS 15 9500 - Main host configuration
+{
+  inputs,
+  config,
+  lib,
+  pkgs,
+  pkgs-stable,
+  ...
+}: {
+  imports = [
+    # Hardware configuration
+    ./hardware.nix
+
+    # NixOS modules
+    ../../modules/nixos
+  ];
+
+  # ============================================================================
+  # Module Toggles
+  # ============================================================================
+  cg = {
+    hyprland.enable = true;
+    gnome.enable = false;
+    nvidia.enable = true;
+    stylix.enable = true;
+    ddc.enable = true;
+    ergodox.enable = true;
+    sops-nix.enable = false; # TODO: Enable when secrets are set up
+  };
+
+  # ============================================================================
+  # Boot Configuration
+  # ============================================================================
+  boot = {
+    loader = {
+      systemd-boot.enable = true;
+      efi.canTouchEfiVariables = true;
+    };
+    kernelPackages = pkgs.linuxPackages_latest;
+    kernelParams = [
+      "acpi_rev_override" # Dell XPS recommended
+    ];
+    # WiFi power save fix (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
+    extraModprobeConfig = ''
+      options iwlwifi power_save=1
+    '';
+  };
+
+  # ============================================================================
+  # Networking
+  # ============================================================================
+  networking.networkmanager.enable = true;
+
+  # ============================================================================
+  # Localisation
+  # ============================================================================
+  time.timeZone = "Australia/Perth";
+  i18n = {
+    defaultLocale = "en_GB.UTF-8";
+    extraLocaleSettings = {
+      LC_ADDRESS = "en_AU.UTF-8";
+      LC_IDENTIFICATION = "en_AU.UTF-8";
+      LC_MEASUREMENT = "en_AU.UTF-8";
+      LC_MONETARY = "en_AU.UTF-8";
+      LC_NAME = "en_AU.UTF-8";
+      LC_NUMERIC = "en_AU.UTF-8";
+      LC_PAPER = "en_AU.UTF-8";
+      LC_TELEPHONE = "en_AU.UTF-8";
+      LC_TIME = "en_AU.UTF-8";
+    };
+  };
+
+  # ============================================================================
+  # Hardware Services
+  # ============================================================================
+
+  # Thermal management (XPS 15 specific config)
+  services.thermald = {
+    enable = true;
+    configFile = ./thermald-conf.xml;
+  };
+
+  # Thunderbolt support
+  services.hardware.bolt.enable = true;
+
+  # Touchpad
+  services.libinput.enable = true;
+
+  # Bluetooth
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = true;
+    settings.General.Enable = "Source,Sink,Media,Socket";
+  };
+  services.blueman.enable = false;
+
+  # Logitech wireless devices
+  hardware.logitech.wireless = {
+    enable = true;
+    enableGraphical = true;
+  };
+
+  # ============================================================================
+  # Audio
+  # ============================================================================
+  services.pulseaudio.enable = false;
+  security.rtkit.enable = true;
+  services.pipewire = {
+    enable = true;
+    alsa.enable = true;
+    alsa.support32Bit = true;
+    pulse.enable = true;
+  };
+
+  # ============================================================================
+  # Display & Input
+  # ============================================================================
+  services.xserver.xkb = {
+    layout = "us";
+    variant = "";
+  };
+
+  # ============================================================================
+  # Services
+  # ============================================================================
+
+  # DBus
+  services.dbus.enable = true;
+  systemd.user.services.dbus = {
+    enable = true;
+    wantedBy = ["default.target"];
+  };
+
+  # USB auto-mounting
+  services.gvfs.enable = true;
+  services.udisks2.enable = true;
+
+  # Printing
+  services.printing.enable = true;
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;
+    openFirewall = true;
+  };
+
+  # Firmware updates
+  services.fwupd.enable = true;
+
+  # OneDrive sync
+  services.onedrive.enable = true;
+
+  # SSH server
+  services.openssh.enable = true;
+
+  # GnuPG agent
+  programs.gnupg.agent = {
+    enable = true;
+    enableSSHSupport = true;
+  };
+  services.pcscd.enable = true;
+
+  # ============================================================================
+  # Virtualisation
+  # ============================================================================
+  virtualisation.docker.enable = true;
+
+  # ============================================================================
+  # Programs
+  # ============================================================================
+
+  # Allow dynamically linked executables
+  programs.nix-ld = {
+    enable = true;
+    libraries = with pkgs; [
+      stdenv.cc.cc
+      libGL
+    ];
+  };
+
+  # Gaming
+  programs.steam = {
+    enable = true;
+    gamescopeSession.enable = true;
+  };
+  programs.gamemode.enable = true;
+
+  # ============================================================================
+  # Environment
+  # ============================================================================
+  environment.sessionVariables = {
+    DOTNET_ROOT = "${pkgs.dotnet-sdk_8}";
+    PATH = "$PATH:$HOME/go/bin";
+    GIT_EDITOR = "nvim";
+    EDITOR = "nvim";
+    STEAM_EXTRA_COMPAT_TOOLS_PATHS = "\${HOME}/.steam/root/compatibilitytools.d";
+  };
+
+  # ============================================================================
+  # System Packages
+  # ============================================================================
+  environment.systemPackages = with pkgs; [
+    # System utilities
+    gnome-firmware
+    glib
+    dconf
+    xdg-utils
+    blueman
+    libsmbios
+    dmidecode
+
+    # USB utilities
+    usbutils
+    udiskie
+    udisks
+
+    # Gaming
+    protonup-ng
+  ];
+
+  # Fonts
+  fonts.packages = with pkgs; [
+    font-awesome
+  ];
+
+  # ============================================================================
+  # Users
+  # ============================================================================
+  users.users.coryg = {
+    description = "Cory Gyarmathy";
+    isNormalUser = true;
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+      "i2c" # For ddcutil
+      "docker"
+    ];
+  };
+
+  # Home-manager configuration for this user
+  home-manager.users.coryg = import ./home.nix;
+
+  # ============================================================================
+  # System Version
+  # ============================================================================
+  # https://nixos.wiki/wiki/FAQ/When_do_I_update_stateVersion
+  system.stateVersion = "24.11";
+}
