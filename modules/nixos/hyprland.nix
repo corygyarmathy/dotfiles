@@ -1,41 +1,23 @@
+# Hyprland compositor - NixOS configuration
 {
-  pkgs,
-  lib,
-  config,
   inputs,
+  config,
+  lib,
+  pkgs,
   ...
-}:
-{
-  options = {
-    cg.hyprland.enable = lib.mkEnableOption "enables hyprland";
-  };
+}: let
+  cfg = config.cg.hyprland;
+in {
+  options.cg.hyprland.enable = lib.mkEnableOption "Hyprland compositor";
 
-  config = lib.mkIf config.cg.hyprland.enable {
-    # Hyprland config
-
-    # Set up display / login manager for Hyprland
-    # NOTE: disabling, as it seems to cause a lot of weird issues
-    # TODO: look into launching hyprland after logging into tty automatically
-
-    # services.xserver = {
-    #   enable = true;
-    #   videoDrivers = [ "nvidia" ];
-    #   displayManager.gdm = {
-    #     enable = true;
-    #     wayland = true;
-    #   };
-    # };
-
-    # Enable the Hyprland compositor
-    # Refer to: https://wiki.hyprland.org/Nix/Hyprland-on-NixOS/
+  config = lib.mkIf cfg.enable {
     programs.hyprland = {
       enable = true;
       xwayland.enable = true;
       # Ensures you're using the most up-to-date package
       package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
       # Make sure to also set the portal package, so that they are in sync
-      portalPackage =
-        inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
+      portalPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
     };
 
     environment.sessionVariables = {
@@ -47,15 +29,11 @@
       GBM_BACKEND = "nvidia-drm";
     };
 
-    # Required for Wayland / Hyprland
     security.polkit.enable = true;
 
     environment.systemPackages = with pkgs; [
-      xdg-desktop-portal-hyprland # Req. for Hyprland # xdg-desktop-portal backend for Hyprland
-      # xdg-desktop-portal-gtk # Req. for Hyprland # filepicker for XDPH # Removing, known issues with hyprland
-      egl-wayland # Required in order to enable compatibility between the EGL API and the Wayland protocol
-      # qt5.qtwayland # Required for Wayland / Hyprland
-      # qt6.qtwayland # Required for Wayland / Hyprland
+      xdg-desktop-portal-hyprland
+      egl-wayland
     ];
   };
 }
