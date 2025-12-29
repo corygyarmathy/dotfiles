@@ -1,83 +1,37 @@
+# SOPS-Nix secrets management
 {
-  pkgs,
-  lib,
   config,
-  inputs,
+  lib,
+  pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.sops-nix;
+in {
+  options.cg.sops-nix.enable = lib.mkEnableOption "SOPS-Nix secrets management";
 
-  imports = [
-    # Import SOPS-Nix
-    # inputs.sops-nix.nixosModules.sops
-  ];
-
-  options = {
-    cg.sops-nix.enable = lib.mkEnableOption "enables sops-nix";
-  };
-
-  config = lib.mkIf config.cg.sops-nix.enable {
-    # sops-nix config
-
+  config = lib.mkIf cfg.enable {
     sops = {
-      # This will add secrets.yml to the nix store
-      # You can avoid this by adding a string to the full path instead, i.e.
-      # sops.defaultSopsFile = "/root/.sops/secrets/example.yaml";
-      defaultSopsFile = ./secrets.yaml;
+      defaultSopsFile = ../../secrets/secrets.yaml;
       age = {
-        # Automatically import SSH keys as age keys
-        sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-        # This is using an age key that is expected to already be in the filesystem
+        sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
         keyFile = "/var/lib/sops-nix/key.txt";
-        # Generate a new key if the key specified above does not exist
         generateKey = true;
-
       };
 
-      # This is the actual specification of the secrets.
-      # Secrets with be output to /run/secrets
-      # e.g. /run/ssecrets/private_keys
-      # Secrets required for user creation are handled in respective ./users/$username.nix files
-      # because they will be output to /run/secrets-for-users and only when the user is assigned to a host
-      secrets = {
-        # For home-manager a separate age key is used to decrypt secrets and must be placed onto the host. This is because
-        # the user doesn't have read permission for the ssh service private key. However, we can bootstrap the age key from
-        # the secrets decrypted by the host key, which allows home-manager secrets to work without manually copying over
-        # the age key.
-        # These age keys are are unique for the user on each host and are generated on their own (i.e. they are not derived
-        # from an ssh key).
-        # TODO: programatically set username (replace 'coryg')
-        # FIXME: concerned about the security / permissions of this key: to investigate
-        # "user_age_keys/coryg/${config.networking.hostName}" = {
-        #   owner = config.users.users.coryg.name;
-        #   inherit (config.users.users.coryg) group;
-        #   # We need to ensure the entire directory structure is that of the user...
-        #   path = "/home/coryg/.config/sops/age/keys.txt";
-        # };
-        # TODO: investigate if this is the correct method
-        # TODO: investigate if the key is stored securely on the system
-        # - Research best practices for ssh keys
-        # TODO: figure out how to perform the 'ssh-add key_file' command programatically
-        # TODO: investigate if I should add a passphrase to the private key (can do so without regenerating)
-        "private_keys/github" = {
-          mode = "0600"; # Only owner can read/write
-          owner = config.users.users.coryg.name;
-          group = config.users.users.coryg.group;
-          # Don't specify path - let sops-nix manage it
-          # The key will be available at config.sops.secrets."private_keys/github".path
-        };
-      };
+      # Define secrets here
+      # secrets = {
+      #   "private_keys/github" = {
+      #     mode = "0600";
+      #     owner = config.users.users.coryg.name;
+      #     group = config.users.users.coryg.group;
+      #   };
+      # };
     };
-
-    # Create SSH config directory with proper permissions
-    systemd.tmpfiles.rules = [
-      "d /home/coryg/.ssh 0700 coryg users -"
-    ];
 
     environment.systemPackages = with pkgs; [
       sops
       age
-      ssh-to-age # Useful for converting SSH keys to age keys
+      ssh-to-age
     ];
   };
 }
