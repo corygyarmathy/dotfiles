@@ -20,7 +20,8 @@ let
   '';
   # dbus-update required for Hyprshade
   # Removed from above: ${pkgs.swww}/bin/swww init &  ${pkgs.swww}/bin/swww img ${/home/coryg/git/nixos-config/home-manager/wallpaper.jpg} &
-  browser = "vivaldy";
+
+  browser = "vivaldi";
   terminal = "ghostty";
   fileManager = "thunar";
   mod = "SUPER";
