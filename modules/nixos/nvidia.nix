@@ -1,84 +1,61 @@
+# Nvidia GPU configuration
 {
-  pkgs,
-  lib,
   config,
-  inputs,
+  lib,
+  pkgs,
   ...
 }:
+let
+  cfg = config.cg.nvidia;
+in
 {
-  imports = [
-    inputs.hardware.nixosModules.common-gpu-nvidia
-  ];
-  options = {
-    cg.nvidia.enable = lib.mkEnableOption "enables nvidia";
+  options.cg.nvidia = {
+    enable = lib.mkEnableOption "Nvidia GPU support";
+
+    prime = {
+      intelBusId = lib.mkOption {
+        type = lib.types.str;
+        default = "PCI:0:2:0";
+        description = "Bus ID of the Intel GPU";
+      };
+      nvidiaBusId = lib.mkOption {
+        type = lib.types.str;
+        default = "PCI:1:0:0";
+        description = "Bus ID of the Nvidia GPU";
+      };
+    };
   };
 
-  config = lib.mkIf config.cg.nvidia.enable {
-    ## Nvidia Drivers / GPU ##
-
-    # Enable OpenGL
-    hardware.graphics = {
-      enable = true;
-      # enable32bit = true; # On 64-bit systems, whether to also install 32-bit drivers for 32-bit applications (such as Wine).
-    };
+  config = lib.mkIf cfg.enable {
+    hardware.graphics.enable = true;
 
     hardware.nvidia = {
-
-      # Modesetting is required.
       modesetting.enable = true;
 
       prime = {
-        # Enables sync mode, dGPU will not fully go to sleep
-        # sync.enable = true;
-
         offload = {
           enable = true;
-          enableOffloadCmd = true; # Enables nvidia-offload cmd to launch with dGPU
+          enableOffloadCmd = true;
         };
-
-        # Bus ID of the Intel GPU.
-        intelBusId = lib.mkDefault "PCI:0:2:0";
-
-        # Bus ID of the NVIDIA GPU.
-        nvidiaBusId = lib.mkDefault "PCI:1:0:0";
+        intelBusId = cfg.prime.intelBusId;
+        nvidiaBusId = cfg.prime.nvidiaBusId;
       };
 
-      # Nvidia power management. Experimental, and can cause sleep/suspend to fail.
-      # Enable this if you have graphical corruption issues or application crashes after waking
-      # up from sleep. This fixes it by saving the entire VRAM memory to /tmp/ instead
-      # of just the bare essentials.
-      # NOTE: when true, seemed to crash display manager when resuming from sleep
-      # The display manager also crashes when this is false - trying to re-enable to see if it helps at all
+      # Power management - can cause issues with sleep/resume
       powerManagement.enable = false;
-
-      # Fine-grained power management. Turns off GPU when not in use.
-      # Experimental and only works on modern Nvidia GPUs (Turing or newer).
-      # NOTE: turning off as I am getting error messages about Nvidia card
-      # not being able to be woken from D3 cold to D0 - experimenting
       powerManagement.finegrained = false;
 
-      # Use the NVidia open source kernel module (not to be confused with the
-      # independent third-party "nouveau" open source driver).
-      # Support is limited to the Turing and later architectures. Full list of
-      # supported GPUs is at:
-      # https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus
-      # Only available from driver 515.43.04+
-      # Currently alpha-quality/buggy, so false is currently the recommended setting.
+      # Use proprietary driver (open source still buggy)
       open = false;
 
-      # Enable the Nvidia settings menu,
-      # accessible via `nvidia-settings`.
       nvidiaSettings = true;
-
-      # Optionally, you may need to select the appropriate driver version for your specific GPU.
       package = config.boot.kernelPackages.nvidiaPackages.beta;
     };
 
     boot.kernelParams = [
-      "nvidia-drm.modeset=1" # Used for Wayland compat.
-      "nvidia-drm.fbdev=1" # Used for Wayland compat.
-      # "nvidia.NVreg_PreserveVideoMemoryAllocations=1" # Addresses Nvidia sleep issues
-      "nvidia.NVreg_EnableS0ixPowerManagement=1" # Better S0ix support
+      "nvidia-drm.modeset=1"
+      "nvidia-drm.fbdev=1"
+      "nvidia.NVreg_EnableS0ixPowerManagement=1"
     ];
   };
 }
