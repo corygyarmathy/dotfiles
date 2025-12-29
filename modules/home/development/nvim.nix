@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.nvim;
-in {
+in
+{
   options.cg.home.nvim.enable = lib.mkEnableOption "Neovim editor";
 
   config = lib.mkIf cfg.enable {
