@@ -119,15 +119,12 @@
     libgcc # GNU Compiler Collection: C, C++, Objective-C, Fortran, OpenMP for C/C++/Fortran, and Ada, and libraries for these languages # TODO: Do I need this?
     cargo # Rust package manager
     lua
-    luajitPackages.luarocks # Lua package manager # TODO: Do I need this?
     nodejs
     openssl
     bash
     go
     jdk # Java Development Kit
-    nixfmt-rfc-style # Formatter for nix (unstable / RFC version)
     python3
-    basedpyright # python LSP
 
     # Media
     gimp
