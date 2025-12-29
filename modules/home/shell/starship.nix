@@ -1,31 +1,23 @@
-# nvim.nix
-
+# Starship prompt
 {
-  pkgs,
-  lib,
   config,
+  lib,
+  pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.home.starship;
+in {
+  options.cg.home.starship.enable = lib.mkEnableOption "Starship prompt";
 
-  options = {
-    cg.home.starship.enable = lib.mkEnableOption "enables starship";
-  };
-
-  config = lib.mkIf config.cg.home.starship.enable {
-    # Starship configuration
-    # xdg.enable = true;
-    # programs.starship.enableBashIntegration = true;
-
+  config = lib.mkIf cfg.enable {
     programs.starship = {
       enable = true;
-      settings = pkgs.lib.importTOML ./starship.toml;
       enableBashIntegration = true;
     };
-    # xdg.configFile."starship/starship.toml".source = ./starship.toml;
 
-    home.packages = with pkgs; [
-      starship # Shell prompt
-    ];
+    # Source external config for portability
+    xdg.configFile."starship.toml".source = ../../../configs/starship/starship.toml;
+
+    home.packages = [pkgs.starship];
   };
 }

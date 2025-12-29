@@ -1,28 +1,25 @@
+# Zellij terminal multiplexer
 {
-  lib,
   config,
+  lib,
   pkgs,
   ...
-}:
-let
+}: let
+  cfg = config.cg.home.zellij;
+
   zellij-switch-version = "0.2.1";
 
+  # Zellij sessioniser script
   zellij-sessioniser = pkgs.writeShellScriptBin "zellij-sessioniser" ''
     #!/usr/bin/env bash
 
-    # Configuration - adjust these to your preferences
-    SEARCH_PATHS=(${
-      pkgs.lib.concatStringsSep " " [
-        "$HOME/git"
-        "$HOME/projects"
-      ]
-    })
-    SPECIFIC_PATHS=(${
-      pkgs.lib.concatStringsSep " " [
-        "$HOME/.dotfiles"
-        # "$HOME/.config/nvim"
-      ]
-    })
+    SEARCH_PATHS=(${lib.concatStringsSep " " [
+      "$HOME/git"
+      "$HOME/projects"
+    ]})
+    SPECIFIC_PATHS=(${lib.concatStringsSep " " [
+      "$HOME/.dotfiles"
+    ]})
 
     # Path to the locally installed plugin
     ZELLIJ_SWITCH_PLUGIN="file:$HOME/.config/zellij/plugins/zellij-switch.wasm"
@@ -315,49 +312,33 @@ let
       zellij attach "$session_name" --create
     fi
   '';
-in
-{
-  options = {
-    cg.home.zellij.enable = lib.mkEnableOption "setting zellij hm settings";
-  };
+in {
+  options.cg.home.zellij.enable = lib.mkEnableOption "Zellij terminal multiplexer";
 
-  config = lib.mkIf config.cg.home.zellij.enable {
-    # Configure zellij
-    xdg = {
-      enable = true;
-      configFile = {
-        "zellij/config.kdl".text =
-          builtins.replaceStrings [ "$XDG_CONFIG_HOME" ] [ config.xdg.configHome ]
-            (builtins.readFile ./config.kdl);
-        "zellij/layouts/default.kdl" = {
-          source = ./default.kdl;
-        };
-        "zellij/plugins/zellij-switch.wasm" = {
-          source = pkgs.fetchurl {
-            url = "https://github.com/mostafaqanbaryan/zellij-switch/releases/download/${zellij-switch-version}/zellij-switch.wasm";
-            hash = "sha256-7yV+Qf/rczN+0d6tMJlC0UZj0S2PWBcPDNq1BFsKIq4=";
-          };
-        };
+  config = lib.mkIf cfg.enable {
+    xdg.enable = true;
+
+    # Source external config files
+    xdg.configFile = {
+      "zellij/config.kdl".source = ../../../configs/zellij/config.kdl;
+      "zellij/layouts/default.kdl".source = ../../../configs/zellij/default.kdl;
+      "zellij/plugins/zellij-switch.wasm".source = pkgs.fetchurl {
+        url = "https://github.com/mostafaqanbaryan/zellij-switch/releases/download/${zellij-switch-version}/zellij-switch.wasm";
+        hash = "sha256-7yV+Qf/rczN+0d6tMJlC0UZj0S2PWBcPDNq1BFsKIq4=";
       };
     };
 
-    programs.bash = {
-      enable = true;
-      initExtra = ''
-        # Ensure proper terminal state on shell startup
-        if [[ -n "$ZELLIJ" ]]; then
-          stty sane 2>/dev/null
-        fi
+    programs.bash.initExtra = ''
+      # Bind Ctrl-f to the sessionizer
+      bind -x '"\C-f": "exec < /dev/tty; zellij-sessioniser"'
+    '';
 
-        # Bind Ctrl-f to the sessionizer
-        bind -x '"\C-f": "exec < /dev/tty; zellij-sessioniser"'
-      '';
-    };
     home.packages = with pkgs; [
       zellij
       zellij-sessioniser
       tree # For better directory previews
       bat # For syntax-highlighted README previews
+      fzf
     ];
   };
 }

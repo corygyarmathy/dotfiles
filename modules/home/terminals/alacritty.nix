@@ -1,18 +1,15 @@
-# alacritty.nix
-
+# Alacritty terminal emulator
 {
-  lib,
   config,
+  lib,
+  pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.home.alacritty;
+in {
+  options.cg.home.alacritty.enable = lib.mkEnableOption "Alacritty terminal";
 
-  options = {
-    cg.home.alacritty.enable = lib.mkEnableOption "enables alacritty";
-  };
-
-  config = lib.mkIf config.cg.home.alacritty.enable {
-    # Alacritty config (terminal editor)
+  config = lib.mkIf cfg.enable {
     programs.alacritty = {
       enable = true;
       settings = {

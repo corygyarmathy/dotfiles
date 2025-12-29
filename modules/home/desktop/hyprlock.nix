@@ -1,17 +1,15 @@
+# Hyprlock screen locker and Hypridle
 {
-  pkgs,
-  lib,
   config,
+  lib,
+  pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.home.hyprlock;
+in {
+  options.cg.home.hyprlock.enable = lib.mkEnableOption "Hyprlock screen locker";
 
-  # TODO: investigate enabling this when the main cg.hyprlock option is enabled
-  options = {
-    cg.home.hyprlock.enable = lib.mkEnableOption "setting hyprlock and hypridle settings";
-  };
-
-  config = lib.mkIf config.cg.home.hyprlock.enable {
+  config = lib.mkIf cfg.enable {
     programs.hyprlock = {
       enable = true;
       settings = {
@@ -25,7 +23,7 @@
             path = "screenshot";
             blur_passes = 3;
             blur_size = 6;
-            noise = 1.17e-2;
+            noise = 0.0117;
             contrast = 0.8916;
             brightness = 0.8172;
           }
@@ -67,8 +65,6 @@
         label = [
           {
             text = "Hello, $DESC";
-            # color = "rgba(${hexToRgb colours.text}, 1.0)";
-            # font_family = theme.fonts.default.name;
             font_size = 64;
             text_align = "center";
             halign = "center";
@@ -77,8 +73,6 @@
           }
           {
             text = "$TIME";
-            # color = "rgba(${hexToRgb colours.subtext1}, 1.0)";
-            # font_family = theme.fonts.default.name;
             font_size = 32;
             text_align = "center";
             halign = "center";

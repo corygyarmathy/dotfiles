@@ -1,26 +1,21 @@
+# Ghostty terminal emulator
 {
-  pkgs,
-  lib,
   config,
+  lib,
+  pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.home.ghostty;
+in {
+  options.cg.home.ghostty.enable = lib.mkEnableOption "Ghostty terminal";
 
-  options = {
-    cg.home.ghostty.enable = lib.mkEnableOption "enables ghostty";
-  };
-
-  config = lib.mkIf config.cg.home.ghostty.enable {
-
-    # Ghostty config (terminal editor)
+  config = lib.mkIf cfg.enable {
     programs.ghostty = {
       enable = true;
-      # enableBashIntegration = true;
       settings = {
         background-opacity = 0.85;
         background-blur = true;
         custom-shader = "./shaders/shader.glsl";
-        # window-padding-x = 10;
         keybind = [
           "ctrl+enter=unbind"
         ];

@@ -1,29 +1,24 @@
+# Stylix home-manager settings
 {
-  lib,
   config,
+  lib,
   pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.home.stylix;
+in {
+  options.cg.home.stylix.enable = lib.mkEnableOption "Stylix home-manager theming";
 
   # TODO: investigate enabling this when the main cg.stylix option is enabled
-  options = {
-    cg.home.stylix.enable = lib.mkEnableOption "setting stylix hm settings";
-  };
-
-  config = lib.mkIf config.cg.home.stylix.enable {
-    # Configure stylix in home manager (for RICEing)
-    stylix = {
-      targets = {
-        # Disabling as I have a custom configuration
-        waybar.enable = false;
-        vim.enable = false; # Covers both vim and nvim
-        hyprlock.enable = false;
-        starship.enable = false;
-      };
+  config = lib.mkIf cfg.enable {
+    stylix.targets = {
+      waybar.enable = false; # Custom config
+      vim.enable = false; # Custom config
+      hyprlock.enable = false; # Custom config
+      starship.enable = false; # Custom config
     };
+
     home.packages = with pkgs; [
-      # RICE / aesthetics
       # TODO: are these needed?
       rose-pine-gtk-theme
       rose-pine-icon-theme

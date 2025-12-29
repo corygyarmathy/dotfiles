@@ -1,30 +1,22 @@
-# nvim.nix
-
+# Rofi application launcher
 {
-  pkgs,
-  lib,
   config,
+  lib,
+  pkgs,
   ...
-}:
-{
+}: let
+  cfg = config.cg.home.rofi;
+in {
+  options.cg.home.rofi.enable = lib.mkEnableOption "Rofi launcher";
 
-  options = {
-    cg.home.rofi.enable = lib.mkEnableOption "enables rofi";
-  };
+  config = lib.mkIf cfg.enable {
+    xdg.configFile."rofi/userconfig".source = ../../../configs/rofi/config.rasi;
 
-  config = lib.mkIf config.cg.home.rofi.enable {
-    # Rofi config
-    xdg.configFile."rofi/userconfig" = {
-      source = ./config.rasi;
-    };
-    # Rofi themes
     xdg.dataFile."rofi/themes" = {
-      source = ./themes;
+      source = ../../../configs/rofi/themes;
       recursive = true;
     };
 
-    home.packages = with pkgs; [
-      rofi # Uplauncher for Wayland
-    ];
+    home.packages = [pkgs.rofi];
   };
 }

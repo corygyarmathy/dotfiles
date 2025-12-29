@@ -1,22 +1,17 @@
+# Hyprsunset blue light filter
 {
-  pkgs,
-  lib,
   config,
+  lib,
+  pkgs,
   ...
-}:
-{
-  options = {
-    cg.home.hyprsunset.enable = lib.mkEnableOption "enables hyprsunset";
-  };
+}: let
+  cfg = config.cg.home.hyprsunset;
+in {
+  options.cg.home.hyprsunset.enable = lib.mkEnableOption "Hyprsunset blue light filter";
 
-  config = lib.mkIf config.cg.home.hyprsunset.enable {
-    # Hyprsunset config
-    xdg.configFile."hypr/hyprsunset.conf" = {
-      source = ./hyprsunset.conf;
-    };
-    home.packages = with pkgs; [
-      hyprsunset
-    ];
+  config = lib.mkIf cfg.enable {
+    xdg.configFile."hypr/hyprsunset.conf".source = ../../../configs/hyprsunset/hyprsunset.conf;
 
+    home.packages = [pkgs.hyprsunset];
   };
 }
