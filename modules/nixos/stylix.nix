@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.stylix;
-in {
+in
+{
   options.cg.stylix.enable = lib.mkEnableOption "Stylix theming";
 
   config = lib.mkIf cfg.enable {
