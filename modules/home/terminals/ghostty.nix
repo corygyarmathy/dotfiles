@@ -12,7 +12,7 @@ in
   options.cg.home.ghostty.enable = lib.mkEnableOption "Ghostty terminal";
 
   config = lib.mkIf cfg.enable {
-    programs.ghostty.enable = true;
+    home.packages = [ pkgs.ghostty ];
 
     # Source portable config file
     # This file can be used standalone on non-NixOS systems
