@@ -31,10 +31,12 @@
     waybar.enable = true;
     rofi.enable = true;
     stylix.enable = true;
+    brightness.enable = true;
+    playerctl.enable = true;
 
     # Desktop Services
-    dunst.enable = true;     # Notification daemon (extracted from hyprland)
-    udiskie.enable = true;   # USB automounting (extracted from hyprland)
+    dunst.enable = true; # Notification daemon (extracted from hyprland)
+    udiskie.enable = true; # USB automounting (extracted from hyprland)
 
     # Development
     nvim.enable = true;
