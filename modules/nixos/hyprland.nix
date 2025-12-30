@@ -26,6 +26,12 @@ in
     # Polkit is required for privilege escalation
     security.polkit.enable = true;
 
+    # XDG portal for screen sharing, file picking, etc.
+    xdg.portal = {
+      enable = true;
+      extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+    };
+
     environment.systemPackages = with pkgs; [
       xdg-desktop-portal-hyprland
       egl-wayland
