@@ -6,7 +6,8 @@
   pkgs,
   pkgs-stable,
   ...
-}: {
+}:
+{
   imports = [
     # Hardware configuration
     ./hardware.nix
@@ -128,7 +129,7 @@
   services.dbus.enable = true;
   systemd.user.services.dbus = {
     enable = true;
-    wantedBy = ["default.target"];
+    wantedBy = [ "default.target" ];
   };
 
   # USB auto-mounting
