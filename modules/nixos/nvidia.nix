@@ -57,5 +57,16 @@ in
       "nvidia-drm.fbdev=1"
       "nvidia.NVreg_EnableS0ixPowerManagement=1"
     ];
+
+    # Environment variables for Nvidia + Wayland/Hyprland
+    environment.sessionVariables = {
+      # Required for Hyprland on Nvidia
+      WLR_NO_HARDWARE_CURSORS = "1";
+      NIXOS_OZONE_WL = "1";
+      LIBVA_DRIVER_NAME = "nvidia";
+      XDG_SESSION_TYPE = "wayland";
+      GBM_BACKEND = "nvidia-drm";
+      __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+    };
   };
 }

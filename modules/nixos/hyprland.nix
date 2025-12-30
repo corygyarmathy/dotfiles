@@ -20,13 +20,6 @@ in {
       portalPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
     };
 
-    environment.sessionVariables = {
-      # Required for Hyprland on Nvidia
-      WLR_NO_HARDWARE_CURSORS = "1"; # If your cusor becomes inviseble
-      NIXOS_OZONE_WL = "1"; # Hint Electron apps to use Wayland
-      LIBVA_DRIVER_NAME = "nvidia";
-      XDG_SESSION_TYPE = "wayland";
-      GBM_BACKEND = "nvidia-drm";
     };
 
     security.polkit.enable = true;
