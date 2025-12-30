@@ -134,11 +134,10 @@
           hostname = "xps15";
           system = "x86_64-linux";
           extraModules = [
-            # XPS15-specific hardware modules from nixos-hardware
-            hardware.nixosModules.common-cpu-intel
-            hardware.nixosModules.common-pc-laptop
-            hardware.nixosModules.common-pc-laptop-ssd
-            hardware.nixosModules.common-gpu-nvidia
+            # Dell XPS 15 9500 with Nvidia - dedicated hardware module
+            # This includes: common-cpu-intel, common-pc-laptop, common-pc-laptop-ssd,
+            # and XPS 15 9500-specific Nvidia PRIME configuration
+            hardware.nixosModules.dell-xps-15-9500-nvidia
           ];
         };
 

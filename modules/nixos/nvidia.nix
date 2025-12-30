@@ -32,15 +32,6 @@ in
     hardware.nvidia = {
       modesetting.enable = true;
 
-      prime = {
-        offload = {
-          enable = true;
-          enableOffloadCmd = true;
-        };
-        intelBusId = cfg.prime.intelBusId;
-        nvidiaBusId = cfg.prime.nvidiaBusId;
-      };
-
       # Power management - can cause issues with sleep/resume
       powerManagement.enable = false;
       powerManagement.finegrained = false;

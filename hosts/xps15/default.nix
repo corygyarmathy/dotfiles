@@ -22,6 +22,8 @@
   cg = {
     hyprland.enable = true;
     gnome.enable = false;
+    # Nvidia is now handled by nixos-hardware dell-xps-15-9500-nvidia module
+    # Our nvidia.nix module provides additional customization on top
     nvidia.enable = true;
     stylix.enable = true;
     ddc.enable = true;
@@ -38,9 +40,7 @@
       efi.canTouchEfiVariables = true;
     };
     kernelPackages = pkgs.linuxPackages_latest;
-    kernelParams = [
-      "acpi_rev_override" # Dell XPS recommended
-    ];
+    # Note: acpi_rev_override is handled by nixos-hardware dell-xps-15-9500 module
     # WiFi power save fix (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
     extraModprobeConfig = ''
       options iwlwifi power_save=1
@@ -75,7 +75,8 @@
   # Hardware Services
   # ============================================================================
 
-  # Thermal management (XPS 15 specific config)
+  # Thermal management (XPS 15 9500 specific config)
+  # Using custom thermald config for better thermal control
   services.thermald = {
     enable = true;
     configFile = ./thermald-conf.xml;
@@ -84,7 +85,7 @@
   # Thunderbolt support
   services.hardware.bolt.enable = true;
 
-  # Touchpad
+  # Touchpad (handled by nixos-hardware common-pc-laptop but we ensure it's enabled)
   services.libinput.enable = true;
 
   # Bluetooth
@@ -206,7 +207,7 @@
     dconf
     xdg-utils
     blueman
-    libsmbios
+    libsmbios # Dell-specific BIOS utilities (fan control, etc.)
     dmidecode
 
     # USB utilities
