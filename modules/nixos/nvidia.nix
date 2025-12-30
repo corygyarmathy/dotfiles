@@ -1,4 +1,7 @@
 # Nvidia GPU configuration
+# This module provides additional customization on top of nixos-hardware modules.
+# For XPS 15 9500, use with: hardware.nixosModules.dell-xps-15-9500-nvidia
+# which already configures PRIME offloading with correct bus IDs.
 {
   config,
   lib,
@@ -10,8 +13,9 @@ let
 in
 {
   options.cg.nvidia = {
-    enable = lib.mkEnableOption "Nvidia GPU support";
+    enable = lib.mkEnableOption "Nvidia GPU customisation";
 
+    # Allow overriding bus IDs for systems not using nixos-hardware modules
     prime = {
       intelBusId = lib.mkOption {
         type = lib.types.str;
@@ -27,25 +31,31 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Ensure graphics are enabled
     hardware.graphics.enable = true;
 
     hardware.nvidia = {
+      # Use modesetting for better Wayland support
       modesetting.enable = true;
 
-      # Power management - can cause issues with sleep/resume
+      # Power management - disabled due to issues with sleep/resume on XPS 15
+      # Enable if you want to test, but be prepared for potential issues
       powerManagement.enable = false;
       powerManagement.finegrained = false;
 
-      # Use proprietary driver (open source still buggy)
+      # Use proprietary driver (open source still has issues)
       open = false;
 
+      # Enable Nvidia settings panel
       nvidiaSettings = true;
       package = config.boot.kernelPackages.nvidiaPackages.beta;
     };
 
+    # Kernel parameters for Nvidia + Wayland
     boot.kernelParams = [
       "nvidia-drm.modeset=1"
       "nvidia-drm.fbdev=1"
+      # S0ix power management for modern standby
       "nvidia.NVreg_EnableS0ixPowerManagement=1"
     ];
 
