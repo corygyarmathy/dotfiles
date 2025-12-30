@@ -5,23 +5,25 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.hyprland;
-in {
+in
+{
   options.cg.hyprland.enable = lib.mkEnableOption "Hyprland compositor";
 
   config = lib.mkIf cfg.enable {
     programs.hyprland = {
       enable = true;
       xwayland.enable = true;
-      # Ensures you're using the most up-to-date package
+      # Use the latest Hyprland from the flake input
       package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
-      # Make sure to also set the portal package, so that they are in sync
-      portalPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
+      # Keep portal in sync with Hyprland version
+      portalPackage =
+        inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
     };
 
-    };
-
+    # Polkit is required for privilege escalation
     security.polkit.enable = true;
 
     environment.systemPackages = with pkgs; [
