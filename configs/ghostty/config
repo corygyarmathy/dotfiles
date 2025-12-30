@@ -1,6 +1,52 @@
-# background options
-background-opacity = 0.85;
-background-blur = true;
+# Ghostty Configuration
+# This file can be used standalone or sourced by home-manager
 
-# shaders
-custom-shader = ./shaders/shader.glsl
+# ==============================================================================
+# Appearance
+# ==============================================================================
+
+# Background transparency
+background-opacity = 0.85
+background-blur-radius = 20
+
+# Font settings
+font-family = "Hack Nerd Font"
+font-size = 12
+
+# Theme (Catppuccin Mocha)
+theme = "catppuccin-mocha"
+
+# ==============================================================================
+# Window
+# ==============================================================================
+
+window-padding-x = 10
+window-padding-y = 10
+window-decoration = true
+
+# ==============================================================================
+# Cursor
+# ==============================================================================
+
+cursor-style = block
+cursor-style-blink = true
+
+# ==============================================================================
+# Scrollback
+# ==============================================================================
+
+scrollback-limit = 10000
+
+# ==============================================================================
+# Key Bindings
+# ==============================================================================
+
+# Unbind problematic keys
+keybind = ctrl+enter=unbind
+
+# ==============================================================================
+# Shaders (optional)
+# ==============================================================================
+
+# Uncomment to enable custom shader
+# custom-shader = ./shaders/shader.glsl

@@ -4,22 +4,24 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.ghostty;
-in {
+in
+{
   options.cg.home.ghostty.enable = lib.mkEnableOption "Ghostty terminal";
 
   config = lib.mkIf cfg.enable {
-    programs.ghostty = {
-      enable = true;
-      settings = {
-        background-opacity = 0.85;
-        background-blur = true;
-        custom-shader = "./shaders/shader.glsl";
-        keybind = [
-          "ctrl+enter=unbind"
-        ];
-      };
+    programs.ghostty.enable = true;
+
+    # Source portable config file
+    # This file can be used standalone on non-NixOS systems
+    xdg.configFile."ghostty/config".source = ../../../configs/ghostty/config;
+
+    # Copy shaders directory if it exists
+    xdg.configFile."ghostty/shaders" = {
+      source = ../../../configs/ghostty/shaders;
+      recursive = true;
     };
   };
 }

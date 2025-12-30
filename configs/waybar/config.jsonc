@@ -1,0 +1,128 @@
+{
+  // Waybar Configuration
+  // This file defines the bar layout and module settings
+  // Can be used standalone or sourced by home-manager
+
+  "height": 30,
+  "layer": "top",
+  "position": "top",
+
+  // Module placement
+  "modules-left": ["hyprland/workspaces", "tray", "idle_inhibitor"],
+  "modules-center": ["clock"],
+  "modules-right": [
+    "network",
+    "cpu",
+    "disk",
+    "memory",
+    "temperature",
+    "battery",
+    "pulseaudio",
+    "backlight",
+  ],
+
+  // ===========================================================================
+  // Tray
+  // ===========================================================================
+  "tray": {
+    "spacing": 5,
+    "icon-size": 18,
+    "show-passive-items": true,
+  },
+
+  // ===========================================================================
+  // Hyprland Modules
+  // ===========================================================================
+  "hyprland/window": {
+    "format": "{title}",
+    "separate-outputs": true,
+    "max-length": 20,
+  },
+
+  "hyprland/workspaces": {
+    "on-click": "activate",
+    "all-outputs": true,
+  },
+
+  // ===========================================================================
+  // System Modules
+  // ===========================================================================
+  "disk": {
+    "interval": 120,
+    "format": "{percentage_used}% ",
+  },
+
+  "cpu": {
+    "format": "{usage}% ",
+    "tooltip": true,
+  },
+
+  "memory": {
+    "format": "{}% ",
+  },
+
+  "temperature": {
+    "thermal-zone": 12,
+    "critical-threshold": 80,
+    "format": "{temperatureC}°C {icon}",
+    "format-icons": ["", "", ""],
+  },
+
+  // ===========================================================================
+  // Battery
+  // ===========================================================================
+  "battery": {
+    "format": "{capacity}% {icon}",
+    "format-alt": "{time} {icon}",
+    "format-charging": "{capacity}% ",
+    "format-icons": ["", "", "", "", ""],
+    "format-plugged": "{capacity}% ",
+    "states": {
+      "critical": 15,
+      "warning": 30,
+    },
+  },
+
+  // ===========================================================================
+  // Clock
+  // ===========================================================================
+  "clock": {
+    "interval": 60,
+    "format-alt": "{: %R  %d/%m}",
+    "tooltip-format": "<big>{:%Y %B %d}</big>\n<tt><small>{calendar}</small></tt>",
+  },
+
+  // ===========================================================================
+  // Network
+  // ===========================================================================
+  "network": {
+    "interval": 30,
+    "format-alt": "{ifname}: {ipaddr}/{cidr}",
+    "format-disconnected": "Disconnected ⚠",
+    "format-ethernet": "{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}",
+    "format-linked": "{ifname} (No IP) ",
+    "format-wifi": "{signalStrength}% ",
+  },
+
+  // ===========================================================================
+  // Audio
+  // ===========================================================================
+  "pulseaudio": {
+    "format": "{volume}% {icon} {format_source}",
+    "format-bluetooth": "{volume}% {icon} {format_source}",
+    "format-bluetooth-muted": " {icon} {format_source}",
+    "format-icons": {
+      "car": "",
+      "default": ["", "", ""],
+      "handsfree": "",
+      "headphones": "",
+      "headset": "",
+      "phone": "",
+      "portable": "",
+    },
+    "format-muted": " {format_source}",
+    "format-source": "{volume}% ",
+    "format-source-muted": "",
+    "on-click": "pavucontrol",
+  },
+}

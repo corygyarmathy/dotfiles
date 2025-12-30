@@ -1,0 +1,67 @@
+# Alacritty Configuration
+# This file can be used standalone or sourced by home-manager
+
+[window]
+opacity = 0.85
+padding.x = 10
+padding.y = 10
+
+[env]
+# Enable 24-bit colour
+TERM = "xterm-256color"
+
+[font]
+size = 12.0
+
+[font.normal]
+family = "Hack Nerd Font"
+style = "Regular"
+
+[font.bold]
+family = "Hack Nerd Font"
+style = "Bold"
+
+[font.italic]
+family = "Hack Nerd Font"
+style = "Italic"
+
+[cursor]
+style = { shape = "Block", blinking = "On" }
+blink_interval = 750
+
+[selection]
+save_to_clipboard = true
+
+[scrolling]
+history = 10000
+multiplier = 3
+
+# Catppuccin Mocha theme colors
+# These will be overridden by Stylix if enabled
+[colors.primary]
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+
+[colors.cursor]
+text = "#1e1e2e"
+cursor = "#f5e0dc"
+
+[colors.normal]
+black = "#45475a"
+red = "#f38ba8"
+green = "#a6e3a1"
+yellow = "#f9e2af"
+blue = "#89b4fa"
+magenta = "#f5c2e7"
+cyan = "#94e2d5"
+white = "#bac2de"
+
+[colors.bright]
+black = "#585b70"
+red = "#f38ba8"
+green = "#a6e3a1"
+yellow = "#f9e2af"
+blue = "#89b4fa"
+magenta = "#f5c2e7"
+cyan = "#94e2d5"
+white = "#a6adc8"

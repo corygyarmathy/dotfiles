@@ -4,23 +4,18 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.alacritty;
-in {
+in
+{
   options.cg.home.alacritty.enable = lib.mkEnableOption "Alacritty terminal";
 
   config = lib.mkIf cfg.enable {
-    programs.alacritty = {
-      enable = true;
-      settings = {
-        window = {
-          opacity = lib.mkForce 0.85;
-          padding.x = 10;
-        };
-        env = {
-          TERM = "xterm-256color"; # Enable 24-bit colour
-        };
-      };
-    };
+    programs.alacritty.enable = true;
+
+    # Source portable config file
+    # This file can be used standalone on non-NixOS systems
+    xdg.configFile."alacritty/alacritty.toml".source = ../../../configs/alacritty/alacritty.toml;
   };
 }
