@@ -28,6 +28,17 @@ in
         description = "Bus ID of the Nvidia GPU";
       };
     };
+
+    # Driver version selection
+    driverPackage = lib.mkOption {
+      type = lib.types.enum [
+        "stable"
+        "beta"
+        "production"
+      ];
+      default = "beta";
+      description = "Which Nvidia driver package to use";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -48,7 +59,15 @@ in
 
       # Enable Nvidia settings panel
       nvidiaSettings = true;
-      package = config.boot.kernelPackages.nvidiaPackages.beta;
+
+      # Driver package selection
+      package =
+        if cfg.driverPackage == "beta" then
+          config.boot.kernelPackages.nvidiaPackages.beta
+        else if cfg.driverPackage == "production" then
+          config.boot.kernelPackages.nvidiaPackages.production
+        else
+          config.boot.kernelPackages.nvidiaPackages.stable;
     };
 
     # Kernel parameters for Nvidia + Wayland
