@@ -5,18 +5,18 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.hyprland;
 
   # Startup script - kept in Nix because it needs package paths
   startupScript = pkgs.writeShellScriptBin "hyprland-startup" ''
+    # Update DBus environment for screen sharing, etc.
     dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE
     dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-    ${pkgs.waybar}/bin/waybar &
-    ${pkgs.dunst}/bin/dunst &
-    udiskie &
   '';
-in {
+in
+{
   options.cg.home.hyprland.enable = lib.mkEnableOption "Hyprland home configuration";
 
   config = lib.mkIf cfg.enable {
@@ -40,13 +40,14 @@ in {
     };
 
     home.packages = with pkgs; [
-      dunst         # Notification daemon
-      libnotify     # Required for Dunst
-      swww          # Wallpaper daemon
-      grim          # Required for screenshots
-      slurp         # Required for screenshots
-      wl-clipboard  # Enables saving screenshots to clipboard
-      grimblast     # Helper for screenshots within Hyprland
+      # Wallpaper
+      swww
+
+      # Screenshots
+      grim # Screenshot utility
+      slurp # Region selection
+      wl-clipboard # Clipboard support
+      grimblast # Helper for Hyprland screenshots
     ];
   };
 }

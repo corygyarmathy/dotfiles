@@ -24,13 +24,17 @@
     alacritty.enable = false;
     ghostty.enable = true;
 
-    # Desktop
+    # Desktop Environment
     hyprland.enable = true;
     hyprlock.enable = true;
     hyprsunset.enable = true;
     waybar.enable = true;
     rofi.enable = true;
     stylix.enable = true;
+
+    # Desktop Services
+    dunst.enable = true;     # Notification daemon (extracted from hyprland)
+    udiskie.enable = true;   # USB automounting (extracted from hyprland)
 
     # Development
     nvim.enable = true;

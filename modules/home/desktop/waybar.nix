@@ -14,6 +14,20 @@ in
   config = lib.mkIf cfg.enable {
     xdg.enable = true;
 
+    # In waybar.nix, add:
+    systemd.user.services.waybar = {
+      Unit = {
+        Description = "Waybar";
+        After = [ "graphical-session.target" ];
+        PartOf = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = "${pkgs.waybar}/bin/waybar";
+        Restart = "on-failure";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
     # Source external config files for portability
     # These files can be used standalone on non-NixOS systems
     xdg.configFile = {
