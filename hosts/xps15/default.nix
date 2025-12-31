@@ -34,10 +34,17 @@
       ];
     };
     auto-upgrade.enable = true;
-    cg.firewall = {
+    firewall = {
       enable = true;
       # allowedTCPPorts = [ 9000 ];
       # presets.development = true;
+    };
+    ssh-hardening = {
+      enable = true;
+      passwordAuthentication = false;
+      authorizedKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDbTFXsV7R/dfJmkYO6vaEktuOp8FczetkR29d2DmQy3 coryg@xps15"
+      ];
     };
   };
 

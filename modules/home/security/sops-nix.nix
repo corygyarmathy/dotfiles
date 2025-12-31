@@ -42,6 +42,9 @@ in
         "private_keys/github" = {
           path = "${config.home.homeDirectory}/.ssh/id_github";
         };
+        "private_keys/personal" = {
+          path = "${config.home.homeDirectory}/.ssh/id_ed25519_personal";
+        };
 
         # Example: Personal API token
         # "tokens/openai" = {
