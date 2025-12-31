@@ -34,6 +34,11 @@
       ];
     };
     auto-upgrade.enable = true;
+    cg.firewall = {
+      enable = true;
+      # allowedTCPPorts = [ 9000 ];
+      # presets.development = true;
+    };
   };
 
   # ============================================================================
