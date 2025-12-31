@@ -74,6 +74,18 @@
   # Networking
   # ============================================================================
   networking.networkmanager.enable = true;
+  # Use encrypted DNS
+  networking.nameservers = [
+    "1.1.1.1#cloudflare-dns.com"
+    "1.0.0.1#cloudflare-dns.com"
+  ];
+  services.resolved = {
+    enable = true;
+    dnssec = "true";
+    extraConfig = ''
+      DNSOverTLS=yes
+    '';
+  };
 
   # ============================================================================
   # Localisation
