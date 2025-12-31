@@ -41,13 +41,16 @@ in
 
     home.packages = with pkgs; [
       # Wallpaper
-      swww
+      swww # is this needed?
 
       # Screenshots
       grim # Screenshot utility
       slurp # Region selection
       wl-clipboard # Clipboard support
       grimblast # Helper for Hyprland screenshots
+
+      # Hypr Utils
+      hyprsysteminfo # System info util
     ];
   };
 }
