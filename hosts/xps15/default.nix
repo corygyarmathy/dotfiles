@@ -46,6 +46,10 @@
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDbTFXsV7R/dfJmkYO6vaEktuOp8FczetkR29d2DmQy3 coryg@xps15"
       ];
     };
+    kernel-hardening = {
+      enable = true;
+      level = "desktop";
+    };
   };
 
   # ============================================================================
