@@ -14,7 +14,6 @@ in
   config = lib.mkIf cfg.enable {
     xdg.enable = true;
 
-    # In waybar.nix, add:
     systemd.user.services.waybar = {
       Unit = {
         Description = "Waybar";

@@ -22,8 +22,6 @@
   cg = {
     hyprland.enable = true;
     gnome.enable = false;
-    # Nvidia is now handled by nixos-hardware dell-xps-15-9500-nvidia module
-    # Our nvidia.nix module provides additional customization on top
     nvidia.enable = true;
     stylix.enable = true;
     ddc.enable = true;
