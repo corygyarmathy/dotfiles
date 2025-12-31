@@ -28,7 +28,13 @@
     stylix.enable = true;
     ddc.enable = true;
     ergodox.enable = true;
-    sops-nix.enable = false; # TODO: Enable when secrets are set up
+    sops-nix.enable = true;
+    wireless = {
+      enable = true;
+      networks = [
+        "Wireless"
+      ];
+    };
   };
 
   # ============================================================================

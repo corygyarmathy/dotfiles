@@ -1,37 +1,71 @@
-# SOPS-Nix secrets management
+# SOPS-Nix secrets management (NixOS level)
+#
+# This module handles system-level secrets like:
+# - SSH host keys
+# - Service credentials
+# - API tokens for system services
+#
+# Setup requirements:
+# 1. Generate host age key: The key is auto-derived from SSH host key
+# 2. Add host public key to secrets/.sops.yaml
+# 3. Create/edit secrets: sops secrets/secrets.yaml
+# 4. Enable this module and define secrets
 {
   config,
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.sops-nix;
-in {
-  options.cg.sops-nix.enable = lib.mkEnableOption "SOPS-Nix secrets management";
+in
+{
+  options.cg.sops-nix = {
+    enable = lib.mkEnableOption "SOPS-Nix secrets management";
+
+    defaultSecretsFile = lib.mkOption {
+      type = lib.types.path;
+      default = ../../secrets/secrets.yaml;
+      description = "Default sops secrets file";
+    };
+  };
 
   config = lib.mkIf cfg.enable {
     sops = {
-      defaultSopsFile = ../../secrets/secrets.yaml;
+      defaultSopsFile = cfg.defaultSecretsFile;
+
+      # Age key configuration
       age = {
-        sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
-        keyFile = "/var/lib/sops-nix/key.txt";
-        generateKey = true;
+        # Use SSH host key to derive age key (no separate key file needed)
+        sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+        # Alternatively, use a dedicated age key file:
+        # keyFile = "/var/lib/sops-nix/key.txt";
+        # generateKey = true;
       };
 
-      # Define secrets here
-      # secrets = {
-      #   "private_keys/github" = {
-      #     mode = "0600";
-      #     owner = config.users.users.coryg.name;
-      #     group = config.users.users.coryg.group;
-      #   };
-      # };
+      # Define system-level secrets here
+      # Each secret will be available at /run/secrets/<name>
+      secrets = {
+        # Example: GitHub SSH key for system-wide git operations
+        # "github-ssh-key" = {
+        #   mode = "0600";
+        #   owner = config.users.users.coryg.name;
+        #   group = config.users.users.coryg.group;
+        #   path = "/home/coryg/.ssh/id_github_sops";
+        # };
+
+        # Example: API token for a service
+        # "some-api-token" = {
+        #   mode = "0400";
+        #   owner = "root";
+        # };
+      };
     };
 
     environment.systemPackages = with pkgs; [
       sops
       age
-      ssh-to-age
+      ssh-to-age # Convert SSH keys to age keys
     ];
   };
 }

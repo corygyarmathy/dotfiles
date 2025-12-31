@@ -47,8 +47,9 @@
     # Media
     spotify-player.enable = false;
 
-    # Secrets (disabled until configured)
-    sops-nix.enable = false;
+    # Secrets
+    sops-nix.enable = true;
+
   };
 
   # ============================================================================
