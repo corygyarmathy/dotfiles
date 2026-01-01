@@ -17,11 +17,6 @@
     # Theming
     stylix.url = "github:danth/stylix";
 
-    # Hyprland (latest)
-    hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1";
-    hyprland-plugins = {
-      url = "github:hyprwm/hyprland-plugins";
-      inputs.hyprland.follows = "hyprland";
     };
 
     # Secrets management
@@ -38,8 +33,6 @@
       home-manager,
       hardware,
       stylix,
-      hyprland,
-      hyprland-plugins,
       sops-nix,
       ...
     }@inputs:

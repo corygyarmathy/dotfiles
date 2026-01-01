@@ -16,11 +16,6 @@ in
     programs.hyprland = {
       enable = true;
       xwayland.enable = true;
-      # Use the latest Hyprland from the flake input
-      package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
-      # Keep portal in sync with Hyprland version
-      portalPackage =
-        inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
     };
 
     # Polkit is required for privilege escalation
