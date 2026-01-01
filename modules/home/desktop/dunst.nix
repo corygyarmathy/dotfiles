@@ -66,7 +66,7 @@ in
           history_length = 20;
 
           # Misc
-          browser = "xdg-open";
+          browser = "vivaldi";
           always_run_script = true;
           title = "Dunst";
           class = "Dunst";
@@ -79,11 +79,11 @@ in
 
         # Timeouts only - colors are set by Stylix
         urgency_low = {
-          timeout = 5;
+          timeout = 10;
         };
 
         urgency_normal = {
-          timeout = 10;
+          timeout = 15;
         };
 
         urgency_critical = {
