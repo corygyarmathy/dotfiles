@@ -81,6 +81,8 @@
     obsidian
     libreoffice
     google-chrome
+    protonvpn-gui
+    proton-vpn-cli
 
     # Development
     gcc
