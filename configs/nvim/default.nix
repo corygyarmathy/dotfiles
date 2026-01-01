@@ -56,7 +56,7 @@
       markdownlint-cli2 # Markdown linter
       hadolint # Dockerfile linter
       golangci-lint # Go linter
-      sqlfluff # SQL linter
+      pkgs-stable.sqlfluff # SQL linter # Temp stable channel - build failure 2026-01-01
 
       # DAP (Debug Adapters)
       delve # Go debugger

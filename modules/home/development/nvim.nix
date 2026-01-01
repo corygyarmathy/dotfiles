@@ -61,7 +61,7 @@ in
       markdownlint-cli2
       hadolint
       golangci-lint
-      sqlfluff
+      # sqlfluff # SQL linter # Temp disable - build failure 2026-01-01
 
       # DAP
       delve
