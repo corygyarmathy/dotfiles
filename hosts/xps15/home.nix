@@ -38,6 +38,12 @@
     dunst.enable = true; # Notification daemon (extracted from hyprland)
     udiskie.enable = true; # USB automounting (extracted from hyprland)
 
+    # Auto-upgrade desktop features (notifications, waybar integration)
+    auto-upgrade-desktop = {
+      enable = true;
+      waybar.enable = true;
+    };
+
     # Development
     nvim.enable = true;
     git.enable = true;

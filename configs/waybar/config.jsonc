@@ -11,6 +11,7 @@
   "modules-left": ["hyprland/workspaces", "tray", "idle_inhibitor", "privacy"],
   "modules-center": ["clock"],
   "modules-right": [
+    "custom/nixos-upgrade",
     "network",
     "cpu",
     "disk",
@@ -20,6 +21,17 @@
     "pulseaudio",
     "backlight",
   ],
+
+  // ===========================================================================
+  // Custom Modules
+  // ===========================================================================
+  "custom/nixos-upgrade": {
+    "exec": "nixos-upgrade-waybar",
+    "return-type": "json",
+    "interval": 30,
+    "on-click": "nixos-upgrade-waybar-click",
+    "tooltip": true,
+  },
 
   // ===========================================================================
   // Tray
