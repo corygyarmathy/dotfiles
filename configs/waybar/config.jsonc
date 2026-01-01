@@ -29,7 +29,9 @@
     "exec": "nixos-upgrade-waybar",
     "return-type": "json",
     "interval": 30,
-    "on-click": "nixos-upgrade-waybar-click",
+    "on-click": "nixos-upgrade-waybar-click --button left",
+    "on-click-right": "nixos-upgrade-waybar-click --button right",
+    "on-click-middle": "nixos-upgrade-waybar-click --button middle",
     "tooltip": true,
   },
 

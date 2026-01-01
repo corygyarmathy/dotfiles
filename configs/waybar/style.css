@@ -4,6 +4,7 @@
  */
 
 @import "./rose-pine.css";
+@import "./nixos-upgrade.css";
 
 /* ==============================================================================
  * Base Styles
@@ -68,7 +69,6 @@ tooltip {
  * ============================================================================== */
 
 #custom-power_profile,
-#custom-nixos-upgrade,
 #window,
 #clock,
 #battery,
@@ -90,38 +90,6 @@ tooltip {
   margin: 3px 0px;
   margin-top: 15px;
   border: 2px solid @pine;
-}
-
-/* ==============================================================================
- * NixOS Upgrade Module
- * ============================================================================== */
-
-#custom-nixos-upgrade {
-  border-radius: 8px 0px 0px 8px;
-  border-right: 0px;
-  padding: 0px 8px;
-}
-
-#custom-nixos-upgrade.up-to-date {
-  color: @foam;
-}
-
-#custom-nixos-upgrade.updating {
-  color: @gold;
-  animation: blink 1s linear infinite;
-}
-
-#custom-nixos-upgrade.reboot-needed {
-  color: @love;
-}
-
-#custom-nixos-upgrade.failed {
-  color: @love;
-  background: @highlightMed;
-}
-
-@keyframes blink {
-  50% { opacity: 0.5; }
 }
 
 /* ==============================================================================

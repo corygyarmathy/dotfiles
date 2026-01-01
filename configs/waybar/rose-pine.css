@@ -20,3 +20,6 @@
 @define-color highlightLow    #21202e;
 @define-color highlightMed    #403d52;
 @define-color highlightHigh   #524f67;
+
+/* Additional colors for upgrade module */
+@define-color green           #9ece6a;

@@ -1,0 +1,389 @@
+#!/usr/bin/env python3
+"""
+Common utilities for NixOS upgrade scripts.
+
+This module provides shared functionality for state management,
+logging, and subprocess execution.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+# Constants
+STATE_DIR = Path("/var/lib/nixos-auto-upgrade")
+STATE_FILE = STATE_DIR / "state.json"
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+
+class UpgradeStatus(Enum):
+    """Possible states of the upgrade system."""
+
+    IDLE = "idle"
+    CHECKING = "checking"
+    BUILDING = "building"
+    APPLYING = "applying"
+    ERROR = "error"
+
+
+@dataclass
+class PendingNixUpdates:
+    """Information about pending Nix package updates."""
+
+    count: int = 0
+    upgraded: int = 0
+    added: int = 0
+    removed: int = 0
+    summary: str = ""
+    requires_reboot: bool = False
+    diff: str = ""
+    notable_packages: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PendingFirmwareUpdates:
+    """Information about pending firmware updates."""
+
+    count: int = 0
+    devices: list[str] = field(default_factory=list)
+    requires_reboot: bool = True  # Firmware updates almost always need reboot
+
+
+@dataclass
+class UpgradeState:
+    """Complete state of the upgrade system."""
+
+    status: UpgradeStatus = UpgradeStatus.IDLE
+    last_check: str | None = None
+    last_apply: str | None = None
+    pending_nix: PendingNixUpdates | None = None
+    pending_firmware: PendingFirmwareUpdates | None = None
+    error_message: str | None = None
+    build_complete: bool = False
+    build_path: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert state to dictionary for JSON serialization."""
+        return {
+            "status": self.status.value,
+            "last_check": self.last_check,
+            "last_apply": self.last_apply,
+            "pending_nix": (
+                {
+                    "count": self.pending_nix.count,
+                    "upgraded": self.pending_nix.upgraded,
+                    "added": self.pending_nix.added,
+                    "removed": self.pending_nix.removed,
+                    "summary": self.pending_nix.summary,
+                    "requires_reboot": self.pending_nix.requires_reboot,
+                    "diff": self.pending_nix.diff,
+                    "notable_packages": self.pending_nix.notable_packages,
+                }
+                if self.pending_nix
+                else None
+            ),
+            "pending_firmware": (
+                {
+                    "count": self.pending_firmware.count,
+                    "devices": self.pending_firmware.devices,
+                    "requires_reboot": self.pending_firmware.requires_reboot,
+                }
+                if self.pending_firmware
+                else None
+            ),
+            "error_message": self.error_message,
+            "build_complete": self.build_complete,
+            "build_path": self.build_path,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> UpgradeState:
+        """Create state from dictionary."""
+        state = cls()
+        state.status = UpgradeStatus(data.get("status", "idle"))
+        state.last_check = data.get("last_check")
+        state.last_apply = data.get("last_apply")
+        state.error_message = data.get("error_message")
+        state.build_complete = data.get("build_complete", False)
+        state.build_path = data.get("build_path")
+
+        if data.get("pending_nix"):
+            nix = data["pending_nix"]
+            state.pending_nix = PendingNixUpdates(
+                count=nix.get("count", 0),
+                upgraded=nix.get("upgraded", 0),
+                added=nix.get("added", 0),
+                removed=nix.get("removed", 0),
+                summary=nix.get("summary", ""),
+                requires_reboot=nix.get("requires_reboot", False),
+                diff=nix.get("diff", ""),
+                notable_packages=nix.get("notable_packages", []),
+            )
+
+        if data.get("pending_firmware"):
+            fw = data["pending_firmware"]
+            state.pending_firmware = PendingFirmwareUpdates(
+                count=fw.get("count", 0),
+                devices=fw.get("devices", []),
+                requires_reboot=fw.get("requires_reboot", True),
+            )
+
+        return state
+
+    def has_pending_updates(self) -> bool:
+        """Check if there are any pending updates."""
+        has_nix = self.pending_nix is not None and self.pending_nix.count > 0
+        has_firmware = (
+            self.pending_firmware is not None and self.pending_firmware.count > 0
+        )
+        return has_nix or has_firmware
+
+    def requires_reboot(self) -> bool:
+        """Check if pending updates require a reboot."""
+        nix_reboot = (
+            self.pending_nix is not None and self.pending_nix.requires_reboot
+        )
+        fw_reboot = (
+            self.pending_firmware is not None
+            and self.pending_firmware.count > 0
+            and self.pending_firmware.requires_reboot
+        )
+        return nix_reboot or fw_reboot
+
+    def get_summary(self) -> str:
+        """Get a human-readable summary of pending updates."""
+        parts: list[str] = []
+
+        if self.pending_nix and self.pending_nix.count > 0:
+            parts.append(self.pending_nix.summary or f"{self.pending_nix.count} packages")
+
+        if self.pending_firmware and self.pending_firmware.count > 0:
+            parts.append(f"{self.pending_firmware.count} firmware")
+
+        if not parts:
+            return "No updates"
+
+        summary = ", ".join(parts)
+        if self.requires_reboot():
+            summary += " (reboot required)"
+        return summary
+
+
+def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
+    """Set up logging for a script."""
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    logger.addHandler(handler)
+
+    return logger
+
+
+def load_state() -> UpgradeState:
+    """Load state from the state file."""
+    if not STATE_FILE.exists():
+        return UpgradeState()
+
+    try:
+        with open(STATE_FILE, "r") as f:
+            data = json.load(f)
+        return UpgradeState.from_dict(data)
+    except (json.JSONDecodeError, OSError):
+        return UpgradeState()
+
+
+def save_state(state: UpgradeState) -> None:
+    """Save state to the state file."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    with open(STATE_FILE, "w") as f:
+        json.dump(state.to_dict(), f, indent=2)
+
+    # Ensure the file is readable by non-root users (for waybar)
+    os.chmod(STATE_FILE, 0o644)
+
+
+def now_iso() -> str:
+    """Get current time in ISO format."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass
+class CommandResult:
+    """Result of a subprocess command."""
+
+    returncode: int
+    stdout: str
+    stderr: str
+
+    @property
+    def success(self) -> bool:
+        """Check if the command succeeded."""
+        return self.returncode == 0
+
+
+def run_command(
+    args: list[str],
+    *,
+    cwd: Path | str | None = None,
+    env: dict[str, str] | None = None,
+    timeout: int | None = None,
+    capture_output: bool = True,
+    check: bool = False,
+) -> CommandResult:
+    """
+    Run a command and return the result.
+
+    Args:
+        args: Command and arguments to run.
+        cwd: Working directory for the command.
+        env: Environment variables (merged with current env).
+        timeout: Timeout in seconds.
+        capture_output: Whether to capture stdout/stderr.
+        check: Whether to raise an exception on non-zero exit.
+
+    Returns:
+        CommandResult with returncode, stdout, and stderr.
+
+    Raises:
+        subprocess.CalledProcessError: If check=True and command fails.
+        subprocess.TimeoutExpired: If timeout is exceeded.
+    """
+    full_env = os.environ.copy()
+    if env:
+        full_env.update(env)
+
+    result = subprocess.run(
+        args,
+        cwd=cwd,
+        env=full_env,
+        timeout=timeout,
+        capture_output=capture_output,
+        text=True,
+    )
+
+    cmd_result = CommandResult(
+        returncode=result.returncode,
+        stdout=result.stdout if capture_output else "",
+        stderr=result.stderr if capture_output else "",
+    )
+
+    if check and not cmd_result.success:
+        raise subprocess.CalledProcessError(
+            result.returncode, args, result.stdout, result.stderr
+        )
+
+    return cmd_result
+
+
+def run_as_user(
+    args: list[str],
+    user: str,
+    *,
+    cwd: Path | str | None = None,
+    env: dict[str, str] | None = None,
+    timeout: int | None = None,
+) -> CommandResult:
+    """Run a command as a specific user using sudo."""
+    sudo_args = ["sudo", "-u", user]
+    if env:
+        for key, value in env.items():
+            sudo_args.extend([f"{key}={value}"])
+    sudo_args.extend(args)
+    return run_command(sudo_args, cwd=cwd, timeout=timeout)
+
+
+def get_flake_owner(flake_dir: Path) -> tuple[str, str]:
+    """Get the owner and group of the flake directory."""
+    import stat as stat_module
+    import pwd
+    import grp
+
+    stat_info = flake_dir.stat()
+    owner = pwd.getpwuid(stat_info.st_uid).pw_name
+    group = grp.getgrgid(stat_info.st_gid).gr_name
+    return owner, group
+
+
+def send_notification(
+    title: str,
+    body: str,
+    *,
+    urgency: str = "normal",
+    icon: str | None = None,
+    timeout: int | None = None,
+) -> None:
+    """
+    Send a desktop notification using notify-send.
+
+    Args:
+        title: Notification title.
+        body: Notification body.
+        urgency: Urgency level (low, normal, critical).
+        icon: Icon name or path.
+        timeout: Timeout in milliseconds (0 for no timeout).
+    """
+    args = ["notify-send", f"--urgency={urgency}"]
+
+    if icon:
+        args.extend(["--icon", icon])
+    if timeout is not None:
+        args.extend(["--expire-time", str(timeout)])
+
+    args.extend([title, body])
+
+    try:
+        run_command(args, check=False)
+    except FileNotFoundError:
+        # notify-send not available, silently ignore
+        pass
+
+
+def is_graphical_session_active() -> bool:
+    """Check if a graphical session is currently active."""
+    # Check for common compositors
+    compositors = ["Hyprland", "gnome-shell", "kwin_wayland", "kwin_x11", "sway"]
+
+    for compositor in compositors:
+        result = run_command(["pgrep", "-x", compositor])
+        if result.success:
+            return True
+
+    # Check loginctl for graphical sessions
+    result = run_command(["loginctl", "list-sessions", "--no-legend"])
+    if result.success and ("wayland" in result.stdout or "x11" in result.stdout):
+        return True
+
+    return False
+
+
+def detect_reboot_required() -> bool:
+    """
+    Check if a reboot is required by comparing booted and current kernels.
+
+    Returns:
+        True if the current kernel differs from the booted kernel.
+    """
+    booted_kernel = Path("/run/booted-system/kernel")
+    current_kernel = Path("/run/current-system/kernel")
+
+    if not booted_kernel.exists() or not current_kernel.exists():
+        return False
+
+    try:
+        booted = booted_kernel.resolve()
+        current = current_kernel.resolve()
+        return booted != current
+    except OSError:
+        return False

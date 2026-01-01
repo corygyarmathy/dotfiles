@@ -35,21 +35,10 @@
     };
     auto-upgrade = {
       enable = true;
-      # Upgrade window: 3:00 AM - 5:00 AM with 45 min random delay
-      dates = "04:00";
-      randomizedDelaySec = "45min";
-      window = {
-        startHour = 3;
-        startMinute = 0;
-        endHour = 5;
-        endMinute = 0;
-      };
-      # Summary detail level: minimal, moderate, or full
-      summaryLevel = "moderate";
-      # Enable firmware updates via fwupd
+      mode = "desktop"; # or "server"
+      flake = "/home/coryg/git/dotfiles";
       firmware.enable = true;
-      # Don't auto-push (do it manually after review)
-      autoPush = false;
+      backgroundBuild.enable = true;
     };
     firewall = {
       enable = true;
