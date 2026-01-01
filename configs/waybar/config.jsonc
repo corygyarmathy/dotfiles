@@ -8,7 +8,7 @@
   "position": "top",
 
   // Module placement
-  "modules-left": ["hyprland/workspaces", "tray", "idle_inhibitor"],
+  "modules-left": ["hyprland/workspaces", "tray", "idle_inhibitor", "privacy"],
   "modules-center": ["clock"],
   "modules-right": [
     "network",
@@ -41,7 +41,7 @@
 
   "hyprland/workspaces": {
     "on-click": "activate",
-    "all-outputs": true,
+    "all-outputs": false,
   },
 
   // ===========================================================================
@@ -124,5 +124,50 @@
     "format-source": "{volume}% ",
     "format-source-muted": "",
     "on-click": "pavucontrol",
+  },
+
+  // ===========================================================================
+  // Utilities
+  // ===========================================================================
+  "idle_inhibitor": {
+    "format": "{icon}",
+    "format-icons": {
+      "activated": "",
+      "deactivated": "",
+    },
+  },
+
+  "privacy": {
+    "icon-spacing": 4,
+    "icon-size": 18,
+    "transition-duration": 250,
+    "modules": [
+      {
+        "type": "screenshare",
+        "tooltip": true,
+        "tooltip-icon-size": 24,
+      },
+      {
+        "type": "audio-out",
+        "tooltip": true,
+        "tooltip-icon-size": 24,
+      },
+      {
+        "type": "audio-in",
+        "tooltip": true,
+        "tooltip-icon-size": 24,
+      },
+    ],
+    "ignore-monitor": true,
+    "ignore": [
+      {
+        "type": "audio-in",
+        "name": "cava",
+      },
+      {
+        "type": "screenshare",
+        "name": "obs",
+      },
+    ],
   },
 }
