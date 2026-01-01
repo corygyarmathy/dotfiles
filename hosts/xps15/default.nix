@@ -51,7 +51,7 @@
       level = "desktop";
     };
     apparmor.enable = true;
-    audit.enable = true;
+    audit.enable = false;
   };
 
   # ============================================================================
