@@ -131,6 +131,7 @@
             # Dell XPS 15 9500 with Nvidia - dedicated hardware module
             # This includes: common-cpu-intel, common-pc-laptop, common-pc-laptop-ssd,
             # and XPS 15 9500-specific Nvidia PRIME configuration
+            # NOTE: overrides many Nvidia settings, including those set in the Nvidia module
             hardware.nixosModules.dell-xps-15-9500-nvidia
           ];
         };

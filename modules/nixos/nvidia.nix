@@ -1,7 +1,5 @@
 # Nvidia GPU configuration
-# This module provides additional customization on top of nixos-hardware modules.
-# For XPS 15 9500, use with: hardware.nixosModules.dell-xps-15-9500-nvidia
-# which already configures PRIME offloading with correct bus IDs.
+# This module provides Nvidia driver setup for hybrid graphics laptops
 {
   config,
   lib,
@@ -13,9 +11,9 @@ let
 in
 {
   options.cg.nvidia = {
-    enable = lib.mkEnableOption "Nvidia GPU customisation";
+    enable = lib.mkEnableOption "Nvidia GPU configuration";
 
-    # Allow overriding bus IDs for systems not using nixos-hardware modules
+    # PRIME configuration for hybrid graphics
     prime = {
       intelBusId = lib.mkOption {
         type = lib.types.str;
@@ -36,23 +34,26 @@ in
         "beta"
         "production"
       ];
-      default = "beta";
+      default = "stable";
       description = "Which Nvidia driver package to use";
     };
   };
 
   config = lib.mkIf cfg.enable {
-    # Ensure graphics are enabled
+    # Installs and loads the Nvidia driver
+    services.xserver.videoDrivers = [ "nvidia" ];
+
+    # Enable graphics support
     hardware.graphics.enable = true;
 
+    # Nvidia driver configuration
     hardware.nvidia = {
       # Use modesetting for better Wayland support
       modesetting.enable = true;
 
-      # Power management - disabled due to issues with sleep/resume on XPS 15
-      # Enable if you want to test, but be prepared for potential issues
-      powerManagement.enable = false;
-      powerManagement.finegrained = false;
+      # Power management
+      powerManagement.enable = true;
+      powerManagement.finegrained = true;
 
       # Use proprietary driver (open source still has issues)
       open = false;
@@ -68,13 +69,26 @@ in
           config.boot.kernelPackages.nvidiaPackages.production
         else
           config.boot.kernelPackages.nvidiaPackages.stable;
+
+      # PRIME configuration for hybrid graphics (Intel + Nvidia)
+      prime = {
+        # Offload mode: Use Intel by default, Nvidia on demand
+        offload = {
+          enable = true;
+          enableOffloadCmd = true;
+        };
+
+        # Bus IDs for both GPUs
+        intelBusId = cfg.prime.intelBusId;
+        nvidiaBusId = cfg.prime.nvidiaBusId;
+      };
     };
 
     # Kernel parameters for Nvidia + Wayland
     boot.kernelParams = [
       "nvidia-drm.modeset=1"
       "nvidia-drm.fbdev=1"
-      # S0ix power management for modern standby
+      # S0ix power management for modern standby (s2idle)
       "nvidia.NVreg_EnableS0ixPowerManagement=1"
     ];
 

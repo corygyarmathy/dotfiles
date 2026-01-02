@@ -22,7 +22,10 @@
   cg = {
     hyprland.enable = true;
     gnome.enable = false;
-    nvidia.enable = true;
+    nvidia = {
+      enable = true;
+      driverPackage = "beta";
+    };
     stylix.enable = true;
     ddc.enable = true;
     ergodox.enable = true;
