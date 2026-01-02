@@ -21,7 +21,7 @@ in
 
   config = lib.mkIf cfg.enable {
     # Source the portable config file
-    xdg.configFile."hypr/hyprland.conf".source = ../../../configs/hypr/hyprland.conf;
+    xdg.configFile."hypr/custom.conf".source = ../../../configs/hypr/hyprland.conf;
 
     wayland.windowManager.hyprland = {
       enable = true;
@@ -35,14 +35,11 @@ in
         exec-once = ${startupScript}/bin/hyprland-startup
 
         # Source the main config
-        source = ~/.config/hypr/hyprland.conf
+        source = ~/.config/hypr/custom.conf
       '';
     };
 
     home.packages = with pkgs; [
-      # Wallpaper
-      swww # is this needed?
-
       # Screenshots
       grim # Screenshot utility
       slurp # Region selection
