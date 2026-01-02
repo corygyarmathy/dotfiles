@@ -8,13 +8,6 @@
 }:
 let
   cfg = config.cg.home.hyprland;
-
-  # Startup script - kept in Nix because it needs package paths
-  startupScript = pkgs.writeShellScriptBin "hyprland-startup" ''
-    # Update DBus environment for screen sharing, etc.
-    dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE
-    dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-  '';
 in
 {
   options.cg.home.hyprland.enable = lib.mkEnableOption "Hyprland home configuration";
@@ -26,15 +19,13 @@ in
     wayland.windowManager.hyprland = {
       enable = true;
       xwayland.enable = true;
-      systemd.enable = true;
+      systemd = {
+        enable = true;
+        variables = [ "--all" ]; # Import all env vars including PATH
+      };
 
-      # Minimal Nix config - just the startup that needs package paths
-      # Everything else is in the portable hyprland.conf
+      # Source the main config
       extraConfig = ''
-        # Startup script (requires Nix package paths)
-        exec-once = ${startupScript}/bin/hyprland-startup
-
-        # Source the main config
         source = ~/.config/hypr/custom.conf
       '';
     };
