@@ -6,69 +6,79 @@
  */
 
 #custom-nixos-upgrade {
-    padding: 0 10px;
-    margin: 3px 0px;
-    margin-top: 15px;
-    border: 2px solid @pine;
-    background: @base;
-    opacity: 0.9;
+  padding: 0 10px;
+  margin: 3px 0px;
+  margin-top: 15px;
+  border: 2px solid @pine;
+  background: @base;
+  opacity: 0.9;
 }
 
 /* Hidden state - no updates, system up to date */
 #custom-nixos-upgrade.hidden {
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
-    min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 
 /* Updates available - no reboot needed */
 #custom-nixos-upgrade.updates-available {
-    color: @gold;
+  color: @gold;
 }
 
 /* Build complete, ready to apply */
 #custom-nixos-upgrade.ready {
-    color: @green;
+  color: @green;
 }
 
 /* Reboot required after applying */
 #custom-nixos-upgrade.reboot-needed {
-    color: @love;
-    font-weight: bold;
+  color: @love;
+  font-weight: bold;
 }
 
 /* Checking for updates */
 #custom-nixos-upgrade.checking {
-    color: @foam;
-    animation: nixos-pulse 2s ease-in-out infinite;
+  color: @foam;
+  animation: nixos-pulse 2s ease-in-out infinite;
 }
 
 /* Building in background */
 #custom-nixos-upgrade.building {
-    color: @gold;
-    animation: nixos-pulse 2s ease-in-out infinite;
+  color: @gold;
+  animation: nixos-pulse 2s ease-in-out infinite;
 }
 
 /* Applying updates */
 #custom-nixos-upgrade.applying {
-    color: @iris;
-    animation: nixos-blink 1s linear infinite;
+  color: @iris;
+  animation: nixos-blink 1s linear infinite;
 }
 
 /* Error state */
 #custom-nixos-upgrade.error {
-    color: @love;
-    background: @highlightMed;
+  color: @love;
+  background: @highlightMed;
 }
 
-@keyframes nixos-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-}
-
-@keyframes nixos-blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-}
+/* @keyframes pulse { */
+/*   0%, */
+/*   100% { */
+/*     opacity: 1; */
+/*   } */
+/*   50% { */
+/*     opacity: 0.6; */
+/*   } */
+/* } */
+/**/
+/* @keyframes blink { */
+/*   0%, */
+/*   100% { */
+/*     opacity: 1; */
+/*   } */
+/*   50% { */
+/*     opacity: 0.3; */
+/*   } */
+/* } */

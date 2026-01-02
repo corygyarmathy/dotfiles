@@ -33,6 +33,8 @@ in
       "waybar/style.css".source = ../../../configs/waybar/style.css;
       "waybar/rose-pine.css".source = ../../../configs/waybar/rose-pine.css;
       "waybar/config".source = ../../../configs/waybar/config.jsonc;
+      # Empty stub - will be overwritten by auto-upgrade-desktop if enabled
+      "waybar/nixos-upgrade.css".text = lib.mkDefault "/* auto-upgrade-desktop module not enabled */";
     };
 
     programs.waybar = {

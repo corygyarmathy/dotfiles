@@ -39,83 +39,13 @@ in
     # Install the upgrade scripts for user access
     home.packages = [
       upgradeScripts
-      pkgs.libnotify  # For notifications
+      pkgs.libnotify # For notifications
     ];
 
-    # =========================================================================
     # Waybar CSS
-    # =========================================================================
-    xdg.configFile."waybar/nixos-upgrade.css".text = ''
-      /* NixOS Upgrade Waybar Module Styles */
-
-      #custom-nixos-upgrade {
-        padding: 0 10px;
-        margin: 3px 0px;
-        margin-top: 15px;
-        border: 2px solid @pine;
-        background: @base;
-        opacity: 0.9;
-      }
-
-      /* Hidden state - no updates */
-      #custom-nixos-upgrade.hidden {
-        background: transparent;
-        border: none;
-        padding: 0;
-        margin: 0;
-        min-width: 0;
-      }
-
-      /* Updates available - no reboot needed */
-      #custom-nixos-upgrade.updates-available {
-        color: @gold;
-      }
-
-      /* Build complete, ready to apply */
-      #custom-nixos-upgrade.ready {
-        color: @green;
-      }
-
-      /* Reboot required */
-      #custom-nixos-upgrade.reboot-needed {
-        color: @love;
-        font-weight: bold;
-      }
-
-      /* Checking for updates */
-      #custom-nixos-upgrade.checking {
-        color: @foam;
-        animation: pulse 2s ease-in-out infinite;
-      }
-
-      /* Building in background */
-      #custom-nixos-upgrade.building {
-        color: @gold;
-        animation: pulse 2s ease-in-out infinite;
-      }
-
-      /* Applying updates */
-      #custom-nixos-upgrade.applying {
-        color: @iris;
-        animation: blink 1s linear infinite;
-      }
-
-      /* Error state */
-      #custom-nixos-upgrade.error {
-        color: @love;
-        background: @highlightMed;
-      }
-
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.6; }
-      }
-
-      @keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-      }
-    '';
+    xdg.configFile."waybar/nixos-upgrade.css" = lib.mkForce {
+      source = ../../../configs/waybar/nixos-upgrade.css;
+    };
 
     # =========================================================================
     # Systemd User Services
