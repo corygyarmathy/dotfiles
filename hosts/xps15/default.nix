@@ -33,6 +33,10 @@
         "Wireless"
       ];
     };
+    wake-devices = {
+      enable = false;
+      forceS3Sleep = false;
+    };
     auto-upgrade = {
       enable = true;
       mode = "desktop"; # or "server"
