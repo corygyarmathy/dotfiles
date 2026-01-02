@@ -4,19 +4,21 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.rofi;
-in {
+in
+{
   options.cg.home.rofi.enable = lib.mkEnableOption "Rofi launcher";
 
   config = lib.mkIf cfg.enable {
-    xdg.configFile."rofi/userconfig".source = ../../../configs/rofi/config.rasi;
+    xdg.configFile."rofi/config.rasi".source = ../../../configs/rofi/config.rasi;
 
     xdg.dataFile."rofi/themes" = {
       source = ../../../configs/rofi/themes;
       recursive = true;
     };
 
-    home.packages = [pkgs.rofi];
+    home.packages = [ pkgs.rofi ];
   };
 }
