@@ -13,6 +13,3 @@ configuration{
     display-Network: " 󰤨  Network";
     sidebar-mode: true;
 }
-
-/* References ~/.local/share/rofi/themes */
-@theme "catppuccin-mocha"
