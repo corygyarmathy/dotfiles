@@ -12,6 +12,7 @@
   fwupd,
   coreutils,
   gnugrep,
+  sudo,
   systemd,
   util-linux,
   procps,
@@ -45,17 +46,50 @@ python3Packages.buildPythonApplication rec {
     makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-check \
       --set PYTHONPATH "$out/lib/python" \
       --add-flags "$out/lib/python/check_updates.py" \
-      --prefix PATH : ${lib.makeBinPath [ nix git nvd fwupd coreutils gnugrep systemd ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          nix
+          git
+          nvd
+          fwupd
+          coreutils
+          gnugrep
+          systemd
+          sudo
+        ]
+      }
 
     makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-build \
       --set PYTHONPATH "$out/lib/python" \
       --add-flags "$out/lib/python/background_build.py" \
-      --prefix PATH : ${lib.makeBinPath [ nix git coreutils systemd util-linux ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          nix
+          git
+          coreutils
+          systemd
+          util-linux
+          sudo
+        ]
+      }
 
     makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-apply \
       --set PYTHONPATH "$out/lib/python" \
       --add-flags "$out/lib/python/apply_updates.py" \
-      --prefix PATH : ${lib.makeBinPath [ nix git nvd fwupd coreutils gnugrep systemd procps libnotify ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          nix
+          git
+          nvd
+          fwupd
+          coreutils
+          gnugrep
+          systemd
+          procps
+          libnotify
+          sudo
+        ]
+      }
 
     makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-waybar \
       --set PYTHONPATH "$out/lib/python" \
@@ -64,7 +98,13 @@ python3Packages.buildPythonApplication rec {
     makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-waybar-click \
       --set PYTHONPATH "$out/lib/python" \
       --add-flags "$out/lib/python/waybar_click.py" \
-      --prefix PATH : ${lib.makeBinPath [ systemd libnotify procps ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          systemd
+          libnotify
+          procps
+        ]
+      }
 
     runHook postInstall
   '';
