@@ -266,7 +266,7 @@ def apply_firmware_updates() -> tuple[bool, str]:
 
     # Apply updates (--no-reboot since we'll handle reboot ourselves)
     result = run_command(
-        ["fwupdmgr", "update", "--no-reboot", "-y"],
+        ["fwupdmgr", "update", "-y"],
         timeout=600,  # 10 minutes for firmware
     )
 
