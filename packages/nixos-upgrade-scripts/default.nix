@@ -89,7 +89,7 @@ python3Packages.buildPythonApplication rec {
           libnotify
           sudo
         ]
-      }
+      }:/run/current-system/sw/bin
 
     makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-waybar \
       --set PYTHONPATH "$out/lib/python" \
