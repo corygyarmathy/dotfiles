@@ -83,6 +83,7 @@
     google-chrome
     protonvpn-gui
     proton-vpn-cli
+    proton-pass
 
     # Development
     gcc
