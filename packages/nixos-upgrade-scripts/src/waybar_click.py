@@ -49,17 +49,17 @@ def show_logs() -> None:
 
     # Open terminal with journalctl
     if terminal in ["ghostty", "alacritty", "kitty", "foot"]:
-        subprocess.Popen(
+        _ = subprocess.Popen(
             [terminal, "-e", "journalctl", "-u", "nixos-upgrade-*", "-f", "-n", "100"],
             start_new_session=True,
         )
     elif terminal == "gnome-terminal":
-        subprocess.Popen(
+        _ = subprocess.Popen(
             [terminal, "--", "journalctl", "-u", "nixos-upgrade-*", "-f", "-n", "100"],
             start_new_session=True,
         )
     elif terminal == "konsole":
-        subprocess.Popen(
+        _ = subprocess.Popen(
             [terminal, "-e", "journalctl", "-u", "nixos-upgrade-*", "-f", "-n", "100"],
             start_new_session=True,
         )
@@ -146,7 +146,7 @@ def trigger_reboot() -> None:
     import time
     time.sleep(10)
 
-    run_command(["systemctl", "reboot"])
+    _ = run_command(["systemctl", "reboot"])
 
 
 def cancel_build() -> None:
@@ -259,8 +259,10 @@ def main() -> int:
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Waybar click handler for NixOS upgrades")
-    parser.add_argument(
+    parser = argparse.ArgumentParser(
+        description="Waybar click handler for NixOS upgrades"
+    )
+    _ = parser.add_argument(
         "--button",
         choices=["left", "right", "middle"],
         default="left",

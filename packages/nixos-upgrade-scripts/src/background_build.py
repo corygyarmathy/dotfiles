@@ -56,14 +56,14 @@ def run_low_priority_build(
     logger.info(f"Starting low-priority build (nice={nice_level}, ionice={ionice_class})")
 
     # Configure git
-    run_command(
+    _ = run_command(
         ["git", "config", "--global", "--add", "safe.directory", str(flake_dir)],
     )
 
     # Ensure flake.lock has correct ownership
     flake_lock = flake_dir / "flake.lock"
     if flake_lock.exists():
-        run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
+        _ = run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
 
     # Update flake inputs first (as flake owner)
     logger.info("Updating flake inputs...")
@@ -123,24 +123,24 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Background build for NixOS updates")
-    parser.add_argument(
+    _ = parser.add_argument(
         "--flake-dir",
         type=Path,
         required=True,
         help="Path to the flake directory",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--hostname",
         required=True,
         help="NixOS hostname",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--nice",
         type=int,
         default=19,
         help="Nice level (0-19, default: 19)",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--ionice",
         choices=["idle", "best-effort", "realtime"],
         default="idle",

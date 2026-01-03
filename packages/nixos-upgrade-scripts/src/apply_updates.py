@@ -158,6 +158,9 @@ def apply_nix_updates(
                 logger.error(f"Build failed: {result.stderr}")
                 # Revert flake.lock
                 run_as_user(["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir)
+                _ = run_as_user(
+                    ["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir
+                )
                 restore_stash()
                 return False, f"Build failed: {result.stderr[:200]}", False
 
@@ -193,8 +196,8 @@ def apply_nix_updates(
 Generated: {now_iso()}"""
 
         # Commit the lock file
-        run_as_user(["git", "add", "flake.lock"], flake_owner, cwd=flake_dir)
-        run_as_user(
+        _ = run_as_user(["git", "add", "flake.lock"], flake_owner, cwd=flake_dir)
+        _ = run_as_user(
             ["git", "commit", "-m", commit_msg],
             flake_owner,
             cwd=flake_dir,
@@ -277,34 +280,34 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Apply NixOS updates")
-    parser.add_argument(
+    _ = parser.add_argument(
         "--flake-dir",
         type=Path,
         required=True,
         help="Path to the flake directory",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--hostname",
         required=True,
         help="NixOS hostname",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--mode",
         choices=["desktop", "server"],
         default="desktop",
         help="Operating mode (affects reboot behavior)",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--apply-firmware",
         action="store_true",
         help="Also apply firmware updates",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--auto-push",
         action="store_true",
         help="Push changes to git remote",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--auto-reboot",
         action="store_true",
         help="Automatically reboot if needed (server mode)",
@@ -380,7 +383,7 @@ def main() -> int:
             if args.mode == "server" and args.auto_reboot:
                 # Server mode: reboot automatically
                 logger.info("Rebooting system...")
-                run_command(["systemctl", "reboot"])
+                _ = run_command(["systemctl", "reboot"])
             elif args.mode == "desktop":
                 # Desktop mode: notify user
                 if is_graphical_session_active():

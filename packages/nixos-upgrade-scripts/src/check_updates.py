@@ -71,15 +71,15 @@ def check_nix_updates(
     logger.info("Checking for Nix updates...")
 
     # Configure git to allow operations on user-owned repo
-    run_command(
+    _ = run_command(
         ["git", "config", "--global", "--add", "safe.directory", str(flake_dir)],
     )
 
     # Ensure flake.lock has correct ownership and is clean
     flake_lock = flake_dir / "flake.lock"
     if flake_lock.exists():
-        run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
-        run_as_user(["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir)
+        _ = run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
+        _ = run_as_user(["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir)
 
     # Update flake inputs as the flake owner
     logger.info("Updating flake inputs...")
@@ -236,18 +236,18 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Check for NixOS updates")
-    parser.add_argument(
+    _ = parser.add_argument(
         "--flake-dir",
         type=Path,
         required=True,
         help="Path to the flake directory",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--hostname",
         required=True,
         help="NixOS hostname",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--check-firmware",
         action="store_true",
         help="Also check for firmware updates",
@@ -277,7 +277,9 @@ def main() -> int:
         finally:
             # Always restore flake.lock to its original state
             logger.info("Restoring flake.lock...")
-            run_as_user(["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir)
+            _ = run_as_user(
+                ["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir
+            )
             # Fix ownership in case it was changed
             flake_lock = flake_dir / "flake.lock"
             if flake_lock.exists():

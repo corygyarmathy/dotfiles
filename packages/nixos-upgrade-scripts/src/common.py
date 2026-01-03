@@ -344,7 +344,7 @@ def send_notification(
     args.extend([title, body])
 
     try:
-        run_command(args, check=False)
+        _ = run_command(args, check=False)
     except FileNotFoundError:
         # notify-send not available, silently ignore
         pass
