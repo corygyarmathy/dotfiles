@@ -79,7 +79,6 @@ def check_nix_updates(
     flake_lock = flake_dir / "flake.lock"
     if flake_lock.exists():
         _ = run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
-        _ = run_as_user(["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir)
 
     # Update flake inputs as the flake owner
     logger.info("Updating flake inputs...")
@@ -144,10 +143,12 @@ def check_nix_updates(
 
     diff_output = nvd_result.stdout if nvd_result.success else ""
 
-    # Parse diff output
-    upgraded = len(re.findall(r"^\[U\]", diff_output, re.MULTILINE))
-    added = len(re.findall(r"^\[A\]", diff_output, re.MULTILINE))
-    removed = len(re.findall(r"^\[R\]", diff_output, re.MULTILINE))
+    # Parse diff output - nvd uses [U.], [U*], [C.], [C*], [A.], [R.] etc.
+    upgraded = len(re.findall(r"^\[U[.*]\]", diff_output, re.MULTILINE))
+    added = len(re.findall(r"^\[A[.*]\]", diff_output, re.MULTILINE))
+    removed = len(re.findall(r"^\[R[.*]\]", diff_output, re.MULTILINE))
+    changed = len(re.findall(r"^\[C[.*]\]", diff_output, re.MULTILINE))
+    upgraded += changed  # Count changed packages as upgrades
 
     total = upgraded + added + removed
     if total == 0:
@@ -158,12 +159,12 @@ def check_nix_updates(
     notable: list[str] = []
     for pattern in NOTABLE_PACKAGE_PATTERNS:
         matches = re.findall(
-            rf"^\[U\].*{pattern}.*$", diff_output, re.MULTILINE | re.IGNORECASE
+            rf"^\[U[.*]\].*{pattern}.*$", diff_output, re.MULTILINE | re.IGNORECASE
         )
         notable.extend(matches[:3])  # Limit per pattern
 
     # Check if kernel changed (indicates reboot needed)
-    requires_reboot = bool(re.search(r"linux-\d.*->", diff_output))
+    requires_reboot = bool(re.search(r"\[U[.*]\].*linux-\d.*->", diff_output))
 
     summary = f"{upgraded} updated, {added} added, {removed} removed"
 

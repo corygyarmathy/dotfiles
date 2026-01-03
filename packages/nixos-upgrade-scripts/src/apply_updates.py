@@ -175,14 +175,16 @@ def apply_nix_updates(
         diff_output = nvd_result.stdout if nvd_result.success else ""
 
         # Parse changes
-        upgraded = len(re.findall(r"^\[U\]", diff_output, re.MULTILINE))
-        added = len(re.findall(r"^\[A\]", diff_output, re.MULTILINE))
-        removed = len(re.findall(r"^\[R\]", diff_output, re.MULTILINE))
+        upgraded = len(re.findall(r"^\[U[.*]\]", diff_output, re.MULTILINE))
+        added = len(re.findall(r"^\[A[.*]\]", diff_output, re.MULTILINE))
+        removed = len(re.findall(r"^\[R[.*]\]", diff_output, re.MULTILINE))
+        changed = len(re.findall(r"^\[C[.*]\]", diff_output, re.MULTILINE))
+        upgraded += changed
 
         summary = f"{upgraded} updated, {added} added, {removed} removed"
 
         # Check for kernel changes
-        kernel_changed = bool(re.search(r"linux-\d.*->", diff_output))
+        kernel_changed = bool(re.search(r"\[U[.*]\].*linux-\d.*->", diff_output))
         if kernel_changed:
             summary += " (kernel updated)"
 
