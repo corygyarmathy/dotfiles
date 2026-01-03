@@ -125,7 +125,9 @@ def apply_nix_updates(
             return False, "Flake update failed", False
 
         # Check if lock file changed
-        diff_result = run_command(["git", "diff", "--quiet", "flake.lock"], cwd=flake_dir)
+        diff_result = run_command(
+            ["git", "diff", "--quiet", "flake.lock"], cwd=flake_dir
+        )
         if diff_result.success:
             logger.info("No updates available")
             restore_stash()
@@ -157,7 +159,6 @@ def apply_nix_updates(
             if not result.success:
                 logger.error(f"Build failed: {result.stderr}")
                 # Revert flake.lock
-                run_as_user(["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir)
                 _ = run_as_user(
                     ["git", "checkout", "flake.lock"], flake_owner, cwd=flake_dir
                 )
@@ -357,7 +358,9 @@ def main() -> int:
 
         # Determine overall result
         success = nix_success and fw_success
-        requires_reboot = nix_reboot or (args.apply_firmware and fw_success and "applied" in fw_message.lower())
+        requires_reboot = nix_reboot or (
+            args.apply_firmware and fw_success and "applied" in fw_message.lower()
+        )
 
         # Update state
         if success:
@@ -396,7 +399,9 @@ def main() -> int:
                     )
                 else:
                     # No session, could auto-reboot
-                    logger.info("No graphical session, but desktop mode - not auto-rebooting")
+                    logger.info(
+                        "No graphical session, but desktop mode - not auto-rebooting"
+                    )
 
         if success:
             logger.info(f"Updates applied successfully: {nix_summary}")

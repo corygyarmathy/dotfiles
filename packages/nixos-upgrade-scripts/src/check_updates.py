@@ -132,9 +132,7 @@ def check_nix_updates(
     new_system_path = build_result.stdout.strip().split("\n")[-1]
     if not new_system_path.startswith("/nix/store/"):
         logger.warning(f"Could not parse new system path: {build_result.stdout}")
-        return PendingNixUpdates(
-            count=1, summary="Updates available (details pending)"
-        )
+        return PendingNixUpdates(count=1, summary="Updates available (details pending)")
 
     logger.info(f"New system: {new_system_path}")
 
@@ -199,7 +197,10 @@ def check_firmware_updates() -> PendingFirmwareUpdates | None:
 
     if not result.success:
         # fwupdmgr returns non-zero if no updates available
-        if "No updates available" in result.stderr or "no available firmware" in result.stderr.lower():
+        if (
+            "No updates available" in result.stderr
+            or "no available firmware" in result.stderr.lower()
+        ):
             logger.info("No firmware updates available")
             return None
         logger.warning(f"fwupdmgr failed: {result.stderr}")

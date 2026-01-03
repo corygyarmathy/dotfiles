@@ -144,6 +144,7 @@ def trigger_reboot() -> None:
 
     # Give user time to cancel (they can close the notification)
     import time
+
     time.sleep(10)
 
     _ = run_command(["systemctl", "reboot"])
@@ -214,7 +215,11 @@ def handle_left_click() -> None:
         # Error state: show logs
         show_logs()
 
-    elif state.status in (UpgradeStatus.BUILDING, UpgradeStatus.APPLYING, UpgradeStatus.CHECKING):
+    elif state.status in (
+        UpgradeStatus.BUILDING,
+        UpgradeStatus.APPLYING,
+        UpgradeStatus.CHECKING,
+    ):
         # In progress: show status
         show_status()
 

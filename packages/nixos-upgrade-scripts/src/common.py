@@ -149,9 +149,7 @@ class UpgradeState:
 
     def requires_reboot(self) -> bool:
         """Check if pending updates require a reboot."""
-        nix_reboot = (
-            self.pending_nix is not None and self.pending_nix.requires_reboot
-        )
+        nix_reboot = self.pending_nix is not None and self.pending_nix.requires_reboot
         fw_reboot = (
             self.pending_firmware is not None
             and self.pending_firmware.count > 0
@@ -164,7 +162,9 @@ class UpgradeState:
         parts: list[str] = []
 
         if self.pending_nix and self.pending_nix.count > 0:
-            parts.append(self.pending_nix.summary or f"{self.pending_nix.count} packages")
+            parts.append(
+                self.pending_nix.summary or f"{self.pending_nix.count} packages"
+            )
 
         if self.pending_firmware and self.pending_firmware.count > 0:
             parts.append(f"{self.pending_firmware.count} firmware")

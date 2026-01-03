@@ -53,7 +53,9 @@ def run_low_priority_build(
     Returns:
         Path to the built system, or None if build failed.
     """
-    logger.info(f"Starting low-priority build (nice={nice_level}, ionice={ionice_class})")
+    logger.info(
+        f"Starting low-priority build (nice={nice_level}, ionice={ionice_class})"
+    )
 
     # Configure git
     _ = run_command(
