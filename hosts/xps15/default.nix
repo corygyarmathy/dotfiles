@@ -21,7 +21,6 @@
   # ============================================================================
   cg = {
     hyprland.enable = true;
-    gnome.enable = false;
     nvidia = {
       enable = true;
       driverPackage = "beta";
@@ -35,10 +34,6 @@
       networks = [
         "Wireless"
       ];
-    };
-    wake-devices = {
-      enable = false;
-      forceS3Sleep = false;
     };
     auto-upgrade = {
       enable = true;
@@ -65,7 +60,6 @@
       level = "desktop";
     };
     apparmor.enable = true;
-    audit.enable = false;
   };
 
   # ============================================================================
