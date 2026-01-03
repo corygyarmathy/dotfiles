@@ -19,9 +19,22 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+
 # Constants
-STATE_DIR = Path("/var/lib/nixos-auto-upgrade")
-STATE_FILE = STATE_DIR / "state.json"
+def get_state_dir() -> Path:
+    """Get state directory, respecting environment override."""
+    return Path(
+        os.environ.get("NIXOS_UPGRADE_STATE_DIR", "/var/lib/nixos-auto-upgrade")
+    )
+
+
+def get_state_file() -> Path:
+    """Get state file path."""
+    return get_state_dir() / "state.json"
+
+
+STATE_DIR = get_state_dir()
+STATE_FILE = get_state_file()
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
