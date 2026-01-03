@@ -1,6 +1,7 @@
 # Nix
 result
 result-*
+.direnv/
 
 # Secrets (unencrypted)
 *.dec
@@ -16,3 +17,6 @@ result-*
 # OS
 .DS_Store
 Thumbs.db
+
+# Packages
+__pycache__/
