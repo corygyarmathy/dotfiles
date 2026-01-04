@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 from common import (
+    CommandResult,
     PendingNixUpdates,
     UpgradeState,
     UpgradeStatus,
@@ -80,21 +81,21 @@ def apply_nix_updates(
     logger.info("Applying Nix updates...")
 
     # Configure git
-    run_command(
+    _ = run_command(
         ["git", "config", "--global", "--add", "safe.directory", str(flake_dir)],
     )
 
     # Fix ownership of flake.lock
-    flake_lock = flake_dir / "flake.lock"
+    flake_lock: Path = flake_dir / "flake.lock"
     if flake_lock.exists():
-        run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
+        _ = run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
 
     # Stash any local changes
     stashed = False
-    diff_result = run_command(["git", "diff", "--quiet"], cwd=flake_dir)
+    diff_result: CommandResult = run_command(["git", "diff", "--quiet"], cwd=flake_dir)
     if not diff_result.success:
         logger.info("Stashing local changes...")
-        result = run_as_user(
+        result: CommandResult = run_as_user(
             ["git", "stash", "push", "-m", f"auto-upgrade-stash-{now_iso()}"],
             flake_owner,
             cwd=flake_dir,
@@ -104,7 +105,7 @@ def apply_nix_updates(
 
     def restore_stash() -> None:
         if stashed:
-            run_as_user(["git", "stash", "pop"], flake_owner, cwd=flake_dir)
+            _ = run_as_user(["git", "stash", "pop"], flake_owner, cwd=flake_dir)
 
     try:
         # Get current system for comparison

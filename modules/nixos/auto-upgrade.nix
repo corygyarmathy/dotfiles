@@ -30,7 +30,10 @@ in
     enable = lib.mkEnableOption "Automatic system upgrades";
 
     mode = lib.mkOption {
-      type = lib.types.enum [ "desktop" "server" ];
+      type = lib.types.enum [
+        "desktop"
+        "server"
+      ];
       default = "desktop";
       description = ''
         Operating mode:
@@ -73,7 +76,11 @@ in
       };
 
       ionice = lib.mkOption {
-        type = lib.types.enum [ "idle" "best-effort" "realtime" ];
+        type = lib.types.enum [
+          "idle"
+          "best-effort"
+          "realtime"
+        ];
         default = "idle";
         description = "IO scheduling class for background builds";
       };
@@ -131,7 +138,8 @@ in
       upgradeScripts
       pkgs.nvd
       pkgs.procps
-    ] ++ lib.optionals cfg.firmware.enable [
+    ]
+    ++ lib.optionals cfg.firmware.enable [
       pkgs.fwupd
     ];
 
@@ -172,7 +180,7 @@ in
 
       serviceConfig = {
         Type = "oneshot";
-        TimeoutStartSec = "4h";  # Background builds can take a while
+        TimeoutStartSec = "4h"; # Background builds can take a while
       };
 
       environment = {
@@ -228,7 +236,7 @@ in
       timerConfig = {
         OnCalendar = cfg.schedule.check;
         RandomizedDelaySec = cfg.schedule.randomizedDelay;
-        Persistent = true;  # Run if missed
+        Persistent = true; # Run if missed
         Unit = "nixos-upgrade-check.service";
       };
     };

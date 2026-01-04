@@ -20,10 +20,11 @@ import sys
 from pathlib import Path
 
 from common import (
+    CommandResult,
+    UpgradeState,
     UpgradeStatus,
     get_flake_owner,
     load_state,
-    now_iso,
     run_as_user,
     run_command,
     save_state,
@@ -63,13 +64,13 @@ def run_low_priority_build(
     )
 
     # Ensure flake.lock has correct ownership
-    flake_lock = flake_dir / "flake.lock"
+    flake_lock: Path = flake_dir / "flake.lock"
     if flake_lock.exists():
         _ = run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
 
     # Update flake inputs first (as flake owner)
     logger.info("Updating flake inputs...")
-    result = run_as_user(
+    result: CommandResult = run_as_user(
         ["nix", "flake", "update"],
         flake_owner,
         cwd=flake_dir,
@@ -82,10 +83,10 @@ def run_low_priority_build(
 
     # Build with nice and ionice for low priority
     # Map ionice class names to numbers
-    ionice_classes = {"idle": "3", "best-effort": "2", "realtime": "1"}
-    ionice_class_num = ionice_classes.get(ionice_class, "3")
+    ionice_classes: dict[str, str] = {"idle": "3", "best-effort": "2", "realtime": "1"}
+    ionice_class_num: str = ionice_classes.get(ionice_class, "3")
 
-    build_cmd = [
+    build_cmd: list[str] = [
         "nice",
         "-n",
         str(nice_level),
@@ -100,7 +101,7 @@ def run_low_priority_build(
     ]
 
     logger.info("Building system...")
-    result = run_command(
+    result: CommandResult = run_command(
         build_cmd,
         cwd=flake_dir,
         timeout=7200,  # 2 hours for background build
@@ -111,7 +112,7 @@ def run_low_priority_build(
         return None
 
     # Extract build path
-    build_path = result.stdout.strip().split("\n")[-1]
+    build_path: str = result.stdout.strip().split("\n")[-1]
     if not build_path.startswith("/nix/store/"):
         logger.error(f"Invalid build path: {build_path}")
         return None
@@ -157,7 +158,7 @@ def main() -> int:
         return 1
 
     # Load state
-    state = load_state()
+    state: UpgradeState = load_state()
 
     # Check if there are pending updates
     if not state.has_pending_updates():
@@ -178,7 +179,7 @@ def main() -> int:
     try:
         flake_owner, _ = get_flake_owner(flake_dir)
 
-        build_path = run_low_priority_build(
+        build_path: str | None = run_low_priority_build(
             flake_dir,
             args.hostname,
             flake_owner,

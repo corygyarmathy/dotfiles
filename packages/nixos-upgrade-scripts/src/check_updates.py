@@ -17,6 +17,7 @@ Exit codes:
 from __future__ import annotations
 
 import json
+from logging import Logger
 import re
 import sys
 from pathlib import Path
@@ -36,7 +37,7 @@ from common import (
     setup_logging,
 )
 
-logger = setup_logging("check_updates")
+logger: Logger = setup_logging("check_updates")
 
 # Notable packages that warrant highlighting
 NOTABLE_PACKAGE_PATTERNS = [
@@ -128,7 +129,7 @@ def check_nix_updates(
         )
 
     # Extract new system path
-    new_system_path = build_result.stdout.strip().split("\n")[-1]
+    new_system_path: str = build_result.stdout.strip().split("\n")[-1]
     if not new_system_path.startswith("/nix/store/"):
         logger.warning(f"Could not parse new system path: {build_result.stdout}")
         return PendingNixUpdates(count=1, summary="Updates available (details pending)")
@@ -136,7 +137,7 @@ def check_nix_updates(
     logger.info(f"New system: {new_system_path}")
 
     # Generate diff using nvd
-    nvd_result = run_command(
+    nvd_result: CommandResult = run_command(
         ["nvd", "diff", str(current_system), new_system_path],
         timeout=60,
     )
@@ -264,7 +265,7 @@ def main() -> int:
         return 1
 
     # Load existing state
-    state = load_state()
+    state: UpgradeState = load_state()
     state.status = UpgradeStatus.CHECKING
     state.error_message = None
     save_state(state)
