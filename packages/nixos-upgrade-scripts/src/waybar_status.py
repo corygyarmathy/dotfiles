@@ -35,12 +35,12 @@ def main() -> int:
 
     # Determine display based on state
     if state.status == UpgradeStatus.CHECKING:
-        text = "🔍"
+        text = ""
         tooltip = "Checking for updates..."
         css_class = "checking"
 
     elif state.status == UpgradeStatus.BUILDING:
-        text = "⏳"
+        text = "󰔟"
         tooltip = "Building updates in background..."
         css_class = "building"
 
@@ -76,10 +76,25 @@ def main() -> int:
                 css_class = "updates-available"
 
     else:
-        # No updates, system up to date - hide the module
-        # Output empty JSON to hide
-        print('{"text": "", "tooltip": "", "class": "hidden"}')
-        return 0
+        # No updates, system up to date - show checkmark with last check time
+        text = "✓"
+        if state.last_check:
+            # Parse and format the last check time
+            try:
+                from datetime import datetime
+
+                last_check_dt = datetime.fromisoformat(
+                    state.last_check.replace("Z", "+00:00")
+                )
+                # Format as relative or absolute time
+                tooltip = (
+                    f"Up to date (checked {last_check_dt.strftime('%Y-%m-%d %H:%M')})"
+                )
+            except (ValueError, AttributeError):
+                tooltip = "Up to date"
+        else:
+            tooltip = "Up to date (never checked)"
+        css_class = "up-to-date"
 
     # Output JSON
     output = {
