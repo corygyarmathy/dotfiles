@@ -365,17 +365,11 @@ def send_notification(
 
 def is_graphical_session_active() -> bool:
     """Check if a graphical session is currently active."""
-    # Check for common compositors
-    compositors = ["Hyprland", "gnome-shell", "kwin_wayland", "kwin_x11", "sway"]
-
-    for compositor in compositors:
-        result = run_command(["pgrep", "-x", compositor])
-        if result.success:
-            return True
-
-    # Check loginctl for graphical sessions
-    result = run_command(["loginctl", "list-sessions", "--no-legend"])
-    if result.success and ("wayland" in result.stdout or "x11" in result.stdout):
+    # Check if graphical-session.target is active for any user
+    result = run_command(
+        ["systemctl", "--user", "is-active", "graphical-session.target"],
+    )
+    if result.success and "active" in result.stdout:
         return True
 
     return False
