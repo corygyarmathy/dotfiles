@@ -58,7 +58,7 @@ def show_logs() -> None:
         return
 
     # Open terminal with journalctl
-    if terminal in ["ghostty", "alacritty", "kitty", "foot"]:
+    if terminal in ["ghostty", "alacritty", "kitty", "foot", "konsole"]:
         _ = subprocess.Popen(
             [terminal, "-e", "journalctl", "-u", "nixos-upgrade-*", "-f", "-n", "100"],
             start_new_session=True,
@@ -66,11 +66,6 @@ def show_logs() -> None:
     elif terminal == "gnome-terminal":
         _ = subprocess.Popen(
             [terminal, "--", "journalctl", "-u", "nixos-upgrade-*", "-f", "-n", "100"],
-            start_new_session=True,
-        )
-    elif terminal == "konsole":
-        _ = subprocess.Popen(
-            [terminal, "-e", "journalctl", "-u", "nixos-upgrade-*", "-f", "-n", "100"],
             start_new_session=True,
         )
 
