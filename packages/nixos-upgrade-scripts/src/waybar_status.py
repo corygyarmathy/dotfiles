@@ -81,15 +81,11 @@ def main() -> int:
         if state.last_check:
             # Parse and format the last check time
             try:
-                from datetime import datetime
-
-                last_check_dt = datetime.fromisoformat(
-                    state.last_check.replace("Z", "+00:00")
+                formatted_last_check: str = format_timestamp_for_display(
+                    iso_timestamp=state.last_check
                 )
                 # Format as relative or absolute time
-                tooltip = (
-                    f"Up to date (checked {last_check_dt.strftime('%Y-%m-%d %H:%M')})"
-                )
+                tooltip = f"Up to date (checked {formatted_last_check})"
             except (ValueError, AttributeError):
                 tooltip = "Up to date"
         else:

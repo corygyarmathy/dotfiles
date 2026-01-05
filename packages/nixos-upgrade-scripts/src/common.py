@@ -234,6 +234,13 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def format_timestamp_for_display(iso_timestamp: str) -> str:
+    """Convert UTC ISO timestamp to local time for display."""
+    dt: datetime = datetime.fromisoformat(iso_timestamp)
+    local_dt: datetime = dt.astimezone()  # converts to system local timezone
+    return local_dt.strftime("%Y-%m-%d %H:%M %Z")
+
+
 @dataclass
 class CommandResult:
     """Result of a subprocess command."""
