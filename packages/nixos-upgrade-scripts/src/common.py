@@ -33,8 +33,8 @@ def get_state_file() -> Path:
     return get_state_dir() / "state.json"
 
 
-STATE_DIR = get_state_dir()
-STATE_FILE = get_state_file()
+STATE_DIR: Path = get_state_dir()
+STATE_FILE: Path = get_state_file()
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
@@ -154,16 +154,18 @@ class UpgradeState:
 
     def has_pending_updates(self) -> bool:
         """Check if there are any pending updates."""
-        has_nix = self.pending_nix is not None and self.pending_nix.count > 0
-        has_firmware = (
+        has_nix: bool = self.pending_nix is not None and self.pending_nix.count > 0
+        has_firmware: bool = (
             self.pending_firmware is not None and self.pending_firmware.count > 0
         )
         return has_nix or has_firmware
 
     def requires_reboot(self) -> bool:
         """Check if pending updates require a reboot."""
-        nix_reboot = self.pending_nix is not None and self.pending_nix.requires_reboot
-        fw_reboot = (
+        nix_reboot: bool = (
+            self.pending_nix is not None and self.pending_nix.requires_reboot
+        )
+        fw_reboot: bool = (
             self.pending_firmware is not None
             and self.pending_firmware.count > 0
             and self.pending_firmware.requires_reboot
@@ -185,7 +187,7 @@ class UpgradeState:
         if not parts:
             return "No updates"
 
-        summary = ", ".join(parts)
+        summary: str = ", ".join(parts)
         if self.requires_reboot():
             summary += " (reboot required)"
         return summary
@@ -193,7 +195,7 @@ class UpgradeState:
 
 def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
     """Set up logging for a script."""
-    logger = logging.getLogger(name)
+    logger: logging.Logger = logging.getLogger(name)
     logger.setLevel(level)
 
     handler = logging.StreamHandler(sys.stderr)
@@ -273,11 +275,11 @@ def run_command(
         subprocess.CalledProcessError: If check=True and command fails.
         subprocess.TimeoutExpired: If timeout is exceeded.
     """
-    full_env = os.environ.copy()
+    full_env: dict[str, str] = os.environ.copy()
     if env:
         full_env.update(env)
 
-    result = subprocess.run(
+    result: subprocess.CompletedProcess[str] = subprocess.run(
         args,
         cwd=cwd,
         env=full_env,
@@ -286,7 +288,7 @@ def run_command(
         text=True,
     )
 
-    cmd_result = CommandResult(
+    cmd_result: CommandResult = CommandResult(
         returncode=result.returncode,
         stdout=result.stdout if capture_output else "",
         stderr=result.stderr if capture_output else "",
@@ -294,7 +296,10 @@ def run_command(
 
     if check and not cmd_result.success:
         raise subprocess.CalledProcessError(
-            result.returncode, args, result.stdout, result.stderr
+            returncode=result.returncode,
+            cmd=args,
+            output=result.stdout,
+            stderr=result.stderr,
         )
 
     return cmd_result
@@ -309,7 +314,7 @@ def run_as_user(
     timeout: int | None = None,
 ) -> CommandResult:
     """Run a command as a specific user using sudo."""
-    sudo_args = ["sudo", "-u", user]
+    sudo_args: list[str] = ["sudo", "-u", user]
     if env:
         for key, value in env.items():
             sudo_args.extend([f"{key}={value}"])
@@ -324,8 +329,8 @@ def get_flake_owner(flake_dir: Path) -> tuple[str, str]:
     import grp
 
     stat_info = flake_dir.stat()
-    owner = pwd.getpwuid(stat_info.st_uid).pw_name
-    group = grp.getgrgid(stat_info.st_gid).gr_name
+    owner: str = pwd.getpwuid(stat_info.st_uid).pw_name
+    group: str = grp.getgrgid(stat_info.st_gid).gr_name
     return owner, group
 
 
@@ -347,7 +352,7 @@ def send_notification(
         icon: Icon name or path.
         timeout: Timeout in milliseconds (0 for no timeout).
     """
-    args = ["notify-send", f"--urgency={urgency}"]
+    args: list[str] = ["notify-send", f"--urgency={urgency}"]
 
     if icon:
         args.extend(["--icon", icon])
@@ -366,7 +371,7 @@ def send_notification(
 def is_graphical_session_active() -> bool:
     """Check if a graphical session is currently active."""
     # Check if graphical-session.target is active for any user
-    result = run_command(
+    result: CommandResult = run_command(
         ["systemctl", "--user", "is-active", "graphical-session.target"],
     )
     if result.success and "active" in result.stdout:
@@ -382,15 +387,15 @@ def detect_reboot_required() -> bool:
     Returns:
         True if the current kernel differs from the booted kernel.
     """
-    booted_kernel = Path("/run/booted-system/kernel")
-    current_kernel = Path("/run/current-system/kernel")
+    booted_kernel: Path = Path("/run/booted-system/kernel")
+    current_kernel: Path = Path("/run/current-system/kernel")
 
     if not booted_kernel.exists() or not current_kernel.exists():
         return False
 
     try:
-        booted = booted_kernel.resolve()
-        current = current_kernel.resolve()
+        booted: Path = booted_kernel.resolve()
+        current: Path = current_kernel.resolve()
         return booted != current
     except OSError:
         return False

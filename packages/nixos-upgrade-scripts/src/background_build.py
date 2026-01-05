@@ -15,6 +15,7 @@ Exit codes:
 
 from __future__ import annotations
 
+from logging import Logger
 import os
 import sys
 from pathlib import Path
@@ -31,7 +32,7 @@ from common import (
     setup_logging,
 )
 
-logger = setup_logging("background_build")
+logger: Logger = setup_logging("background_build")
 
 
 def run_low_priority_build(
@@ -71,8 +72,8 @@ def run_low_priority_build(
     # Update flake inputs first (as flake owner)
     logger.info("Updating flake inputs...")
     result: CommandResult = run_as_user(
-        ["nix", "flake", "update"],
-        flake_owner,
+        args=["nix", "flake", "update"],
+        user=flake_owner,
         cwd=flake_dir,
         timeout=600,
     )
@@ -102,7 +103,7 @@ def run_low_priority_build(
 
     logger.info("Building system...")
     result: CommandResult = run_command(
-        build_cmd,
+        args=build_cmd,
         cwd=flake_dir,
         timeout=7200,  # 2 hours for background build
     )

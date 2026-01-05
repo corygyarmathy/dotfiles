@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import sys
 
-from common import UpgradeStatus, load_state
+from common import UpgradeState, UpgradeStatus, format_timestamp_for_display, load_state
 
 
 def escape_json_string(s: str) -> str:
@@ -27,11 +27,11 @@ def escape_json_string(s: str) -> str:
 
 def main() -> int:
     """Main entry point."""
-    state = load_state()
+    state: UpgradeState = load_state()
 
-    text = ""
-    tooltip = ""
-    css_class = ""
+    text: str = ""
+    tooltip: str = ""
+    css_class: str = ""
 
     # Determine display based on state
     if state.status == UpgradeStatus.CHECKING:
@@ -59,7 +59,7 @@ def main() -> int:
         css_class = "error"
 
     elif state.has_pending_updates():
-        summary = state.get_summary()
+        summary: str = state.get_summary()
 
         if state.requires_reboot():
             text = "🔄"
@@ -97,7 +97,7 @@ def main() -> int:
         css_class = "up-to-date"
 
     # Output JSON
-    output = {
+    output: dict[str, str] = {
         "text": text,
         "tooltip": escape_json_string(tooltip),
         "class": css_class,

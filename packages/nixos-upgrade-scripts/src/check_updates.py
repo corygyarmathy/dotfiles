@@ -40,7 +40,7 @@ from common import (
 logger: Logger = setup_logging("check_updates")
 
 # Notable packages that warrant highlighting
-NOTABLE_PACKAGE_PATTERNS = [
+NOTABLE_PACKAGE_PATTERNS: list[str] = [
     r"linux-\d",
     r"systemd",
     r"openssl",
@@ -83,7 +83,7 @@ def check_nix_updates(
 
     # Update flake inputs as the flake owner
     logger.info("Updating flake inputs...")
-    result = run_as_user(
+    result: CommandResult = run_as_user(
         ["nix", "flake", "update"],
         flake_owner,
         cwd=flake_dir,
@@ -95,7 +95,9 @@ def check_nix_updates(
         raise RuntimeError(f"Flake update failed: {result.stderr}")
 
     # Check if flake.lock changed
-    diff_result = run_command(["git", "diff", "--quiet", "flake.lock"], cwd=flake_dir)
+    diff_result: CommandResult = run_command(
+        ["git", "diff", "--quiet", "flake.lock"], cwd=flake_dir
+    )
     if diff_result.success:
         logger.info("No flake input changes detected")
         return None
@@ -107,7 +109,7 @@ def check_nix_updates(
     logger.info(f"Current system: {current_system}")
 
     # Build new system to see changes
-    build_result = run_command(
+    build_result: CommandResult = run_command(
         [
             "nix",
             "build",
@@ -142,16 +144,16 @@ def check_nix_updates(
         timeout=60,
     )
 
-    diff_output = nvd_result.stdout if nvd_result.success else ""
+    diff_output: str = nvd_result.stdout if nvd_result.success else ""
 
     # Parse diff output - nvd uses [U.], [U*], [C.], [C*], [A.], [R.] etc.
-    upgraded = len(re.findall(r"^\[U[.*]\]", diff_output, re.MULTILINE))
-    added = len(re.findall(r"^\[A[.*]\]", diff_output, re.MULTILINE))
-    removed = len(re.findall(r"^\[R[.*]\]", diff_output, re.MULTILINE))
-    changed = len(re.findall(r"^\[C[.*]\]", diff_output, re.MULTILINE))
+    upgraded: int = len(re.findall(r"^\[U[.*]\]", diff_output, re.MULTILINE))
+    added: int = len(re.findall(r"^\[A[.*]\]", diff_output, re.MULTILINE))
+    removed: int = len(re.findall(r"^\[R[.*]\]", diff_output, re.MULTILINE))
+    changed: int = len(re.findall(r"^\[C[.*]\]", diff_output, re.MULTILINE))
     upgraded += changed  # Count changed packages as upgrades
 
-    total = upgraded + added + removed
+    total: int = upgraded + added + removed
     if total == 0:
         logger.info("Flake inputs updated but no package changes")
         return None
@@ -159,7 +161,7 @@ def check_nix_updates(
     # Check for notable packages
     notable: list[str] = []
     for pattern in NOTABLE_PACKAGE_PATTERNS:
-        matches = re.findall(
+        matches: list[str] = re.findall(
             rf"^\[U[.*]\].*{pattern}.*$", diff_output, re.MULTILINE | re.IGNORECASE
         )
         notable.extend(matches[:3])  # Limit per pattern
@@ -167,7 +169,7 @@ def check_nix_updates(
     # Check if kernel changed (indicates reboot needed)
     requires_reboot = bool(re.search(r"\[U[.*]\].*linux-\d.*->", diff_output))
 
-    summary = f"{upgraded} updated, {added} added, {removed} removed"
+    summary: str = f"{upgraded} updated, {added} added, {removed} removed"
 
     logger.info(f"Found updates: {summary}")
 
@@ -192,7 +194,7 @@ def check_firmware_updates() -> PendingFirmwareUpdates | None:
     """
     logger.info("Checking for firmware updates...")
 
-    result = run_command(
+    result: CommandResult = run_command(
         ["fwupdmgr", "get-updates", "--json"],
         timeout=120,
     )
@@ -276,7 +278,9 @@ def main() -> int:
 
         # Check Nix updates
         try:
-            pending_nix = check_nix_updates(flake_dir, hostname, flake_owner)
+            pending_nix: PendingNixUpdates | None = check_nix_updates(
+                flake_dir, hostname, flake_owner
+            )
         finally:
             # Always restore flake.lock to its original state
             logger.info("Restoring flake.lock...")
@@ -289,7 +293,7 @@ def main() -> int:
                 run_command(["chown", f"{flake_owner}:{flake_owner}", str(flake_lock)])
 
         # Check firmware updates
-        pending_firmware = None
+        pending_firmware: PendingFirmwareUpdates | None = None
         if args.check_firmware:
             try:
                 pending_firmware = check_firmware_updates()

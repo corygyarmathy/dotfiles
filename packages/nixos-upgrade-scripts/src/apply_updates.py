@@ -126,7 +126,7 @@ def apply_nix_updates(
             return False, "Flake update failed", False
 
         # Check if lock file changed
-        diff_result = run_command(
+        diff_result: CommandResult = run_command(
             ["git", "diff", "--quiet", "flake.lock"], cwd=flake_dir
         )
         if diff_result.success:
@@ -138,7 +138,7 @@ def apply_nix_updates(
         logger.info("Building new system...")
 
         # Check if we have a pre-built path
-        build_path = None
+        build_path: str | None = None
         if state and state.build_complete and state.build_path:
             if Path(state.build_path).exists():
                 build_path = state.build_path
@@ -169,17 +169,17 @@ def apply_nix_updates(
             build_path = result.stdout.strip().split("\n")[-1]
 
         # Generate diff for commit message
-        nvd_result = run_command(
+        nvd_result: CommandResult = run_command(
             ["nvd", "diff", str(current_system), build_path],
             timeout=60,
         )
-        diff_output = nvd_result.stdout if nvd_result.success else ""
+        diff_output: str = nvd_result.stdout if nvd_result.success else ""
 
         # Parse changes
-        upgraded = len(re.findall(r"^\[U[.*]\]", diff_output, re.MULTILINE))
-        added = len(re.findall(r"^\[A[.*]\]", diff_output, re.MULTILINE))
-        removed = len(re.findall(r"^\[R[.*]\]", diff_output, re.MULTILINE))
-        changed = len(re.findall(r"^\[C[.*]\]", diff_output, re.MULTILINE))
+        upgraded: int = len(re.findall(r"^\[U[.*]\]", diff_output, re.MULTILINE))
+        added: int = len(re.findall(r"^\[A[.*]\]", diff_output, re.MULTILINE))
+        removed: int = len(re.findall(r"^\[R[.*]\]", diff_output, re.MULTILINE))
+        changed: int = len(re.findall(r"^\[C[.*]\]", diff_output, re.MULTILINE))
         upgraded += changed
 
         summary = f"{upgraded} updated, {added} added, {removed} removed"
@@ -191,7 +191,7 @@ def apply_nix_updates(
 
         # Create commit message
         reboot_note = " (reboot required)" if kernel_changed or use_boot else ""
-        commit_msg = f"""chore(nix): auto-upgrade{reboot_note}
+        commit_msg: str = f"""chore(nix): auto-upgrade{reboot_note}
 
 {summary}
 
@@ -231,14 +231,16 @@ Generated: {now_iso()}"""
         # Push if enabled
         if auto_push:
             logger.info("Pushing to remote...")
-            push_result = run_as_user(["git", "push"], flake_owner, cwd=flake_dir)
+            push_result: CommandResult = run_as_user(
+                ["git", "push"], flake_owner, cwd=flake_dir
+            )
             if not push_result.success:
                 logger.warning("Push failed - manual push required")
 
         restore_stash()
 
         # Check if reboot is needed
-        requires_reboot = kernel_changed or detect_reboot_required()
+        requires_reboot: bool = kernel_changed or detect_reboot_required()
 
         logger.info(f"Nix updates applied: {summary}")
         return True, summary, requires_reboot
@@ -259,14 +261,14 @@ def apply_firmware_updates() -> tuple[bool, str]:
     logger.info("Applying firmware updates...")
 
     # Check for updates first
-    check_result = run_command(["fwupdmgr", "get-updates"], timeout=120)
+    check_result: CommandResult = run_command(["fwupdmgr", "get-updates"], timeout=120)
 
     if "No updates available" in check_result.stderr or not check_result.success:
         logger.info("No firmware updates to apply")
         return True, "No firmware updates"
 
     # Apply updates (--no-reboot since we'll handle reboot ourselves)
-    result = run_command(
+    result: CommandResult = run_command(
         ["fwupdmgr", "update", "-y"],
         timeout=600,  # 10 minutes for firmware
     )

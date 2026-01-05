@@ -11,12 +11,15 @@ This script is designed to be called from waybar's on-click handlers.
 
 from __future__ import annotations
 
+from argparse import Namespace
 import os
 import subprocess
 import sys
 from pathlib import Path
 
 from common import (
+    CommandResult,
+    UpgradeState,
     UpgradeStatus,
     load_state,
     run_command,
@@ -31,12 +34,19 @@ logger = setup_logging("waybar_click")
 def show_logs() -> None:
     """Open a terminal with the upgrade service logs."""
     # Try to find a terminal emulator
-    terminals = ["ghostty", "alacritty", "kitty", "foot", "gnome-terminal", "konsole"]
+    terminals: list[str] = [
+        "ghostty",
+        "alacritty",
+        "kitty",
+        "foot",
+        "gnome-terminal",
+        "konsole",
+    ]
 
     for term in terminals:
-        result = run_command(["which", term])
+        result: CommandResult = run_command(["which", term])
         if result.success:
-            terminal = term
+            terminal: str = term
             break
     else:
         send_notification(
@@ -76,7 +86,7 @@ def trigger_check() -> None:
     )
 
     # Start the check service
-    result = run_command(
+    result: CommandResult = run_command(
         ["systemctl", "start", "nixos-upgrade-check.service"],
         timeout=30,
     )
@@ -108,7 +118,7 @@ def trigger_apply() -> None:
     )
 
     # Start the apply service
-    result = run_command(
+    result: CommandResult = run_command(
         ["systemctl", "start", "nixos-upgrade-apply.service"],
         timeout=30,
     )
@@ -152,13 +162,13 @@ def trigger_reboot() -> None:
 
 def cancel_build() -> None:
     """Cancel a running background build."""
-    result = run_command(
+    result: CommandResult = run_command(
         ["systemctl", "stop", "nixos-upgrade-build.service"],
         timeout=30,
     )
 
     if result.success:
-        state = load_state()
+        state: UpgradeState = load_state()
         state.status = UpgradeStatus.IDLE
         save_state(state)
 
@@ -209,7 +219,7 @@ def show_status() -> None:
 
 def handle_left_click() -> None:
     """Handle left-click on waybar module."""
-    state = load_state()
+    state: UpgradeState = load_state()
 
     if state.status == UpgradeStatus.ERROR:
         # Error state: show logs
@@ -238,7 +248,7 @@ def handle_left_click() -> None:
 
 def handle_right_click() -> None:
     """Handle right-click on waybar module."""
-    state = load_state()
+    state: UpgradeState = load_state()
 
     if state.status == UpgradeStatus.BUILDING:
         # Cancel build
@@ -273,7 +283,7 @@ def main() -> int:
         default="left",
         help="Which button was clicked",
     )
-    args = parser.parse_args()
+    args: Namespace = parser.parse_args()
 
     if args.button == "left":
         handle_left_click()
