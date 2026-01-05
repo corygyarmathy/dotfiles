@@ -29,6 +29,8 @@
     hyprlock.enable = true;
     hyprsunset.enable = true;
     waybar.enable = true;
+    waybar.ddc.enable = true;
+
     rofi.enable = true;
     stylix.enable = true;
     brightness.enable = true;

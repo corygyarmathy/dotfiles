@@ -20,6 +20,7 @@
     "battery",
     "pulseaudio",
     "backlight",
+    "custom/ddc-brightness",
   ],
 
   // ===========================================================================
@@ -33,6 +34,16 @@
     "on-click-right": "nixos-upgrade-waybar-click --button right",
     "on-click-middle": "nixos-upgrade-waybar-click --button middle",
     "tooltip": true,
+  },
+
+  "custom/ddc-brightness": {
+    "exec": "ddc-brightness-waybar",
+    "return-type": "json",
+    "interval": 10,
+    "format": "󰃟 {}",
+    "on-click": "ddc-brightness-ctl up 10",
+    "on-click-right": "ddc-brightness-ctl down 10",
+    "on-click-middle": "ddc-brightness-ctl override 60",
   },
 
   // ===========================================================================

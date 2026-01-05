@@ -60,6 +60,56 @@
       level = "desktop";
     };
     apparmor.enable = true;
+    ddc = {
+      location = {
+        enable = true;
+        latitude = -31.98; # Your latitude
+        longitude = 115.87; # Your longitude
+      };
+      monitors = {
+        dellUltrawide = {
+          serial = "1Y9Q5T2"; # From ddcutil detect
+          offset = 0; # Reference monitor
+          enabled = true;
+        };
+        dellSecondary = {
+          serial = "X48H66CQ0D1L";
+          offset = -5; # 5% dimmer
+          enabled = true;
+        };
+      };
+
+      periods = {
+        earlyMorning = {
+          time = "06:00"; # Fallback time
+          brightness = 30;
+          sunRelative = true;
+          sunEvent = "dawn";
+          sunOffset = 0; # At dawn
+        };
+        day = {
+          time = "09:00";
+          brightness = 75;
+          sunRelative = true;
+          sunEvent = "sunrise";
+          sunOffset = 120; # 2 hours after sunrise
+        };
+        evening = {
+          time = "18:00";
+          brightness = 50;
+          sunRelative = true;
+          sunEvent = "sunset";
+          sunOffset = -60; # 1 hour before sunset
+        };
+        night = {
+          time = "21:00";
+          brightness = 25;
+          sunRelative = true;
+          sunEvent = "dusk";
+          sunOffset = 30; # 30 min after dusk
+        };
+      };
+    };
   };
 
   # ============================================================================
