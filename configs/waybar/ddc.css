@@ -12,7 +12,6 @@
   margin: 3px 0px;
   margin-top: 15px;
   border: 2px solid @pine;
-  color: @text;
   border-radius: 8px 8px 8px 8px;
   margin-right: 10px;
 }
@@ -22,9 +21,9 @@
 }
 
 #custom-ddc-brightness.override {
-  color: @yellow;
+  color: @gold;
 }
 
 #custom-ddc-brightness.inactive {
-  color: @surface2;
+  color: @surface;
 }
