@@ -43,7 +43,7 @@
     "format": "󰃟 {}",
     "on-click": "ddc-brightness-ctl up 10",
     "on-click-right": "ddc-brightness-ctl down 10",
-    "on-click-middle": "ddc-brightness-ctl override 60",
+    "on-click-middle": "ddc-brightness-ctl resume",
   },
 
   // ===========================================================================
