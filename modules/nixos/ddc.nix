@@ -74,10 +74,12 @@ in
             time = lib.mkOption {
               type = lib.types.str;
               description = "Start time in HH:MM format (fallback if sun-relative)";
+              default = "09:00";
             };
             brightness = lib.mkOption {
               type = lib.types.int;
               description = "Target brightness for this period (0-100)";
+              default = 50;
             };
             sunRelative = lib.mkOption {
               type = lib.types.bool;
@@ -106,18 +108,26 @@ in
         earlyMorning = {
           time = "06:00";
           brightness = 30;
+          sunEvent = "dawn";
+          sunOffset = 0; # At dawn
         };
         day = {
           time = "09:00";
-          brightness = 70;
+          brightness = 75;
+          sunEvent = "sunrise";
+          sunOffset = 120; # 2 hours after sunrise
         };
         evening = {
           time = "18:00";
           brightness = 50;
+          sunEvent = "sunset";
+          sunOffset = -60; # 1 hour before sunset
         };
         night = {
           time = "21:00";
           brightness = 25;
+          sunEvent = "dusk";
+          sunOffset = 30; # 30 min after dusk
         };
       };
       description = "Brightness periods throughout the day";
