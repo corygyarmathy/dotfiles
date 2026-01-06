@@ -7,8 +7,6 @@ Provides commands for getting/setting brightness, managing auto-adjust override,
 and detecting monitors.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -17,7 +15,6 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NoReturn
 
 
 @dataclass
@@ -100,7 +97,7 @@ def detect_monitors() -> list[DetectedMonitor]:
 def get_brightness(display_num: str) -> int | None:
     """Get current brightness for a specific display."""
     try:
-        result = subprocess.run(
+        result: subprocess.CompletedProcess[str] = subprocess.run(
             ["ddcutil", "getvcp", "10", "--display", display_num, "--brief"],
             capture_output=True,
             text=True,
@@ -108,7 +105,7 @@ def get_brightness(display_num: str) -> int | None:
         )
         if result.returncode == 0:
             # Parse output like "VCP 10 C 50 100"
-            parts = result.stdout.strip().split()
+            parts: list[str] = result.stdout.strip().split()
             if len(parts) >= 4:
                 return int(parts[3])
     except Exception:
@@ -121,7 +118,7 @@ def set_brightness(display_num: str, brightness: int) -> bool:
     brightness = max(0, min(100, brightness))
 
     try:
-        result = subprocess.run(
+        result: subprocess.CompletedProcess[str] = subprocess.run(
             ["ddcutil", "setvcp", "10", str(brightness), "--display", display_num],
             capture_output=True,
             text=True,
@@ -204,13 +201,13 @@ def cmd_set(args: argparse.Namespace) -> int:
 
 def cmd_get(args: argparse.Namespace) -> int:
     """Handle the 'get' command."""
-    monitors = detect_monitors()
+    monitors: list[DetectedMonitor] = detect_monitors()
     if not monitors:
         print("No monitors detected", file=sys.stderr)
         return 1
 
     for monitor in monitors:
-        current = get_brightness(monitor.display_num)
+        current: int | None = get_brightness(monitor.display_num)
         if current is not None:
             print(f"Display {monitor.display_num}: {current}%")
         else:
@@ -274,7 +271,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         try:
             state = json.loads(state_file.read_text())
             print(f"Last update: {state.get('timestamp', 'unknown')}")
-            print(f"Base brightness: {state.get('base_brightness', '?')}%")
+            print(f"Current brightness: {state.get('current_brightness', '?')}%")
             monitors = state.get("monitors", {})
             if monitors:
                 print("Monitor states:")

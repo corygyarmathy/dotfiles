@@ -6,8 +6,6 @@ Automatically adjusts external monitor brightness based on time of day,
 with optional sunrise/sunset awareness and per-monitor offsets.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import logging
@@ -317,7 +315,7 @@ class BrightnessController:
 
     def get_target_brightness(self, now: datetime) -> tuple[int, int]:
         """Calculate the target brightness for the current time."""
-        period_times = self.get_period_times(now)
+        period_times: dict[str, datetime] = self.get_period_times(now)
 
         if not period_times:
             return self.base_brightness, self.base_brightness
@@ -327,10 +325,12 @@ class BrightnessController:
         def time_of_day(dt: datetime) -> tuple[int, int]:
             return (dt.hour, dt.minute)
 
-        sorted_periods = sorted(period_times.items(), key=lambda x: time_of_day(x[1]))
+        sorted_periods: list[tuple[str, datetime]] = sorted(
+            period_times.items(), key=lambda x: time_of_day(x[1])
+        )
 
         # Find which period we're currently in based on time of day
-        now_time = (now.hour, now.minute)
+        now_time: tuple[int, int] = (now.hour, now.minute)
 
         current_period: tuple[str, datetime] | None = None
         next_period: tuple[str, datetime] | None = None
@@ -482,7 +482,7 @@ class BrightnessController:
             json.dumps(
                 {
                     "timestamp": state.timestamp,
-                    "base_brightness": state.current_brightness,
+                    "base_brightness": state.base_brightness,
                     "monitors": state.monitors,
                 },
                 indent=2,
@@ -532,7 +532,7 @@ class BrightnessController:
             print(
                 f"  Display {m.display_num}: {m.model or 'Unknown'} ({m.serial or 'no serial'})"
             )
-            target_with_offset = target + (offset if offset is not None else 0)
+            target_with_offset = target[0] + (offset if offset is not None else 0)
             print(
                 f"    Current: {current}%, Target: {target_with_offset}%, Offset: {offset}"
             )
