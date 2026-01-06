@@ -96,6 +96,7 @@ class DaemonState:
 
     timestamp: str
     base_brightness: int
+    next_brightness: int
     monitors: dict[str, int] = field(default_factory=dict)
 
 
@@ -314,12 +315,12 @@ class BrightnessController:
 
         return period_times
 
-    def get_target_brightness(self, now: datetime) -> int:
+    def get_target_brightness(self, now: datetime) -> tuple[int, int]:
         """Calculate the target brightness for the current time."""
         period_times = self.get_period_times(now)
 
         if not period_times:
-            return self.base_brightness
+            return self.base_brightness, self.base_brightness
 
         # Convert period times to a list and sort by time-of-day (hour:minute),
         # not by absolute datetime. This gives us the daily schedule order.
@@ -376,9 +377,9 @@ class BrightnessController:
                 current_brightness
                 + (next_brightness - current_brightness) * transition_progress
             )
-            return int(round(target))
+            return int(round(target)), next_brightness
 
-        return current_brightness
+        return current_brightness, next_brightness
 
     def set_brightness(self, display_num: str, brightness: int) -> bool:
         """Set brightness for a specific display."""
@@ -448,7 +449,7 @@ class BrightnessController:
 
         monitors = self.detect_monitors()
         now = datetime.now()
-        target = self.get_target_brightness(now)
+        target, next = self.get_target_brightness(now)
 
         results: dict[str, int] = {}
         for monitor in monitors:
@@ -471,16 +472,17 @@ class BrightnessController:
                 )
 
         # Save state
-        state = DaemonState(
+        state: DaemonState = DaemonState(
             timestamp=now.isoformat(),
             base_brightness=target,
+            next_brightness=next,
             monitors=results,
         )
         _ = get_state_file().write_text(
             json.dumps(
                 {
                     "timestamp": state.timestamp,
-                    "base_brightness": state.base_brightness,
+                    "base_brightness": state.current_brightness,
                     "monitors": state.monitors,
                 },
                 indent=2,

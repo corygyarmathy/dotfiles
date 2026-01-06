@@ -95,6 +95,12 @@ def get_waybar_status() -> WaybarOutput:
         monitors = state.get("monitors", {})
         tooltip_lines = [f"Auto brightness: {brightness}%"]
 
+        if (
+            isinstance(next_brightness, int)
+            and next_brightness != 0
+            and next_brightness != brightness
+        ):
+            tooltip_lines.append(f"Next brightness: {next_brightness}%")
         if monitors:
             for display, level in monitors.items():
                 tooltip_lines.append(f"Display {display}: {level}%")
