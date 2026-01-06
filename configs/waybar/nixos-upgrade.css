@@ -12,6 +12,8 @@
   border: 2px solid @pine;
   background: @base;
   opacity: 0.9;
+  border-radius: 8px 8px 8px 8px;
+  margin-right: 10px;
 }
 
 /* Hidden state - no updates, system up to date */

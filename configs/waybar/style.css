@@ -84,6 +84,8 @@ tooltip {
 #cpu,
 #disk,
 #user,
+#idle_inhibitor,
+#privacy,
 #backlight {
   background: @base;
   opacity: 0.9;
@@ -134,6 +136,18 @@ tooltip {
 }
 
 #tray {
+  border-radius: 8px;
+  margin-left: 10px;
+  margin-right: 0px;
+}
+
+#privacy {
+  border-radius: 8px;
+  margin-left: 10px;
+  margin-right: 0px;
+}
+
+#idle_inhibitor {
   border-radius: 8px;
   margin-left: 10px;
   margin-right: 0px;
