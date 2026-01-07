@@ -225,8 +225,8 @@ def save_state(state: UpgradeState) -> None:
     with open(STATE_FILE, "w") as f:
         json.dump(state.to_dict(), f, indent=2)
 
-    # Ensure the file is readable by non-root users (for waybar)
-    os.chmod(STATE_FILE, 0o644)
+    # Ensure the file is readable by all and writable by group (for waybar click handler)
+    os.chmod(STATE_FILE, 0o664)
 
 
 def now_iso() -> str:
@@ -406,3 +406,41 @@ def detect_reboot_required() -> bool:
         return booted != current
     except OSError:
         return False
+
+
+def detect_switch_inhibitors(new_system_path: str) -> tuple[bool, list[str]]:
+    """
+    Check if switching to a new system would trigger switch inhibitors.
+
+    Args:
+        new_system_path: Path to the new system in /nix/store.
+
+    Returns:
+        Tuple of (has_inhibitors, list of inhibitor package names).
+    """
+    current_inhibitors = Path("/run/current-system/switch-inhibitors")
+    new_inhibitors = Path(new_system_path) / "switch-inhibitors"
+
+    # If neither has inhibitors, we're fine
+    if not current_inhibitors.exists() and not new_inhibitors.exists():
+        return False, []
+
+    # Read current inhibitors
+    current_set: set[str] = set()
+    if current_inhibitors.exists():
+        current_set = set(current_inhibitors.read_text().strip().split("\n"))
+        current_set.discard("")
+
+    # Read new inhibitors
+    new_set: set[str] = set()
+    if new_inhibitors.exists():
+        new_set = set(new_inhibitors.read_text().strip().split("\n"))
+        new_set.discard("")
+
+    # Check for differences - if any inhibitor package changed, we need boot
+    if current_set != new_set:
+        # Find which packages differ
+        changed = current_set.symmetric_difference(new_set)
+        return True, list(changed)
+
+    return False, []

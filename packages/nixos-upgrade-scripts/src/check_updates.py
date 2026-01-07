@@ -28,6 +28,7 @@ from common import (
     PendingNixUpdates,
     UpgradeState,
     UpgradeStatus,
+    detect_switch_inhibitors,
     get_flake_owner,
     load_state,
     now_iso,
@@ -168,6 +169,14 @@ def check_nix_updates(
 
     # Check if kernel changed (indicates reboot needed)
     requires_reboot = bool(re.search(r"\[U[.*]\].*linux-\d.*->", diff_output))
+
+    # Also check for switch inhibitors
+    inhibitor_packages: list[str] = []
+    if new_system_path:
+        has_inhibitors, inhibitor_packages = detect_switch_inhibitors(new_system_path)
+        if has_inhibitors:
+            requires_reboot = True
+            logger.info(f"Switch inhibitors detected: {inhibitor_packages}")
 
     summary: str = f"{upgraded} updated, {added} added, {removed} removed"
 

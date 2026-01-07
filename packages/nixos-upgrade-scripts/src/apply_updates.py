@@ -189,6 +189,15 @@ def apply_nix_updates(
         if kernel_changed:
             summary += " (kernel updated)"
 
+        # Check for switch inhibitors if we weren't already planning to use boot
+        if not use_boot and build_path:
+            from common import detect_switch_inhibitors
+
+            has_inhibitors, inhibitor_pkgs = detect_switch_inhibitors(build_path)
+            if has_inhibitors:
+                logger.info(f"Switch inhibitors detected, using boot: {inhibitor_pkgs}")
+                use_boot = True
+
         # Create commit message
         reboot_note = " (reboot required)" if kernel_changed or use_boot else ""
         commit_msg: str = f"""chore(nix): auto-upgrade{reboot_note}

@@ -125,12 +125,34 @@ in
         description = "Run upgrade check on boot/resume if scheduled time was missed";
       };
     };
+    upgradeGroup = lib.mkOption {
+      type = lib.types.str;
+      default = "nixos-upgrade";
+      description = "Group that can manage upgrade state";
+    };
+
+    # Add users who should be able to interact with the module
+    upgradeUsers = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Users to add to the upgrade group for state management";
+    };
   };
 
   config = lib.mkIf cfg.enable {
+    # Create the upgrade group
+    users.groups.${cfg.upgradeGroup} = { };
+
+    # Add specified users to the group
+    users.users = lib.mkMerge (
+      map (user: {
+        ${user}.extraGroups = [ cfg.upgradeGroup ];
+      }) cfg.upgradeUsers
+    );
+
     # Ensure state directory exists with proper permissions
     systemd.tmpfiles.rules = [
-      "d ${stateDir} 0755 root root -"
+      "d /var/lib/nixos-auto-upgrade 0775 root ${cfg.upgradeGroup} -"
     ];
 
     # Install the upgrade scripts

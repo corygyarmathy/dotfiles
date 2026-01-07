@@ -9,8 +9,6 @@ Handles left-click and right-click actions on the waybar module:
 This script is designed to be called from waybar's on-click handlers.
 """
 
-from __future__ import annotations
-
 from argparse import Namespace
 import os
 import subprocess

@@ -41,6 +41,7 @@
       flake = "/home/coryg/git/dotfiles";
       firmware.enable = true;
       backgroundBuild.enable = true;
+      upgradeUsers = [ "coryg" ];
     };
     firewall = {
       enable = true;
