@@ -271,7 +271,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         try:
             state = json.loads(state_file.read_text())
             print(f"Last update: {state.get('timestamp', 'unknown')}")
-            print(f"Current brightness: {state.get('current_brightness', '?')}%")
+            print(f"Current brightness: {state.get('base_brightness', '?')}%")
             monitors = state.get("monitors", {})
             if monitors:
                 print("Monitor states:")

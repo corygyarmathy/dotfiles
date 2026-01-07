@@ -63,36 +63,14 @@
     apparmor.enable = true;
     ddc = {
       location = {
-        enable = true;
         latitude = -31.98; # Your latitude
         longitude = 115.87; # Your longitude
       };
       monitors = {
-        dellUltrawide = {
-          serial = "1Y9Q5T2"; # From ddcutil detect
-          offset = 0; # Reference monitor
-          enabled = true;
-        };
+        dellUltrawide.serial = "1Y9Q5T2";
         dellSecondary = {
           serial = "X48H66CQ0D1L";
-          offset = -5; # 5% dimmer
-          enabled = true;
-        };
-      };
-
-      # TODO: set it so that if location is enabled, default to enable sunRelative
-      periods = {
-        earlyMorning = {
-          sunRelative = true;
-        };
-        day = {
-          sunRelative = true;
-        };
-        evening = {
-          sunRelative = true;
-        };
-        night = {
-          sunRelative = true;
+          offset = -5;
         };
       };
     };

@@ -431,8 +431,8 @@ class BrightnessController:
             return False
 
         try:
-            override_time = float(override_file.read_text().strip())
-            if time.time() - override_time < 3600:
+            expire_time = float(override_file.read_text().strip())
+            if time.time() < expire_time:
                 return True
             else:
                 override_file.unlink()
@@ -483,6 +483,7 @@ class BrightnessController:
                 {
                     "timestamp": state.timestamp,
                     "base_brightness": state.base_brightness,
+                    "next_brightness": state.next_brightness,
                     "monitors": state.monitors,
                 },
                 indent=2,
@@ -513,7 +514,7 @@ class BrightnessController:
         """Print current status information."""
         monitors = self.detect_monitors()
         now = datetime.now()
-        target = self.get_target_brightness(now)
+        target, next_brightness = self.get_target_brightness(now)
 
         sun_times = self.get_sun_times(now)
         if sun_times:
@@ -524,6 +525,8 @@ class BrightnessController:
 
         print(f"Current time: {now.strftime('%H:%M')}")
         print(f"Target brightness: {target}%")
+        if next_brightness != target:
+            print(f"Next brightness: {next_brightness}%")
         print(f"Detected monitors: {len(monitors)}")
 
         for m in monitors:
@@ -532,7 +535,7 @@ class BrightnessController:
             print(
                 f"  Display {m.display_num}: {m.model or 'Unknown'} ({m.serial or 'no serial'})"
             )
-            target_with_offset = target[0] + (offset if offset is not None else 0)
+            target_with_offset = target + (offset if offset is not None else 0)
             print(
                 f"    Current: {current}%, Target: {target_with_offset}%, Offset: {offset}"
             )

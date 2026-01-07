@@ -15,9 +15,6 @@
 let
   cfg = config.cg.ddc;
 
-  # Import the package (assumes it's available in your packages overlay)
-  # If not using an overlay, you can use:
-  # ddcBrightnessScripts = pkgs.callPackage ../packages/ddc-brightness-scripts { };
   ddcBrightnessScripts =
     pkgs.ddc-brightness-scripts or (pkgs.callPackage ../../packages/ddc-brightness-scripts { });
 
@@ -29,17 +26,17 @@ let
         inherit (period)
           time
           brightness
-          sunRelative
           sunEvent
           sunOffset
           ;
+        # Sun-relative if location is set AND period has a sunEvent
+        sunRelative = cfg.location != null && period.sunEvent != null;
       }) cfg.periods;
       monitors = lib.mapAttrs (name: monitor: {
         inherit (monitor) serial offset enabled;
       }) cfg.monitors;
-      location = lib.optionalAttrs cfg.location.enable {
-        latitude = cfg.location.latitude;
-        longitude = cfg.location.longitude;
+      location = lib.optionalAttrs (cfg.location != null) {
+        inherit (cfg.location) latitude longitude;
       };
     }
   );
@@ -67,34 +64,54 @@ in
       description = "How often to update brightness (in seconds)";
     };
 
+    location = lib.mkOption {
+      type = lib.types.nullOr (
+        lib.types.submodule {
+          options = {
+            latitude = lib.mkOption {
+              type = lib.types.float;
+              description = "Latitude for sun calculations";
+            };
+            longitude = lib.mkOption {
+              type = lib.types.float;
+              description = "Longitude for sun calculations";
+            };
+          };
+        }
+      );
+      default = null;
+      description = ''
+        Location for sun-relative brightness scheduling.
+        When set, periods with sunEvent defined will automatically use sun-relative timing.
+      '';
+      example = lib.literalExpression ''
+        { latitude = -31.98; longitude = 115.87; }
+      '';
+    };
+
     periods = lib.mkOption {
       type = lib.types.attrsOf (
         lib.types.submodule {
           options = {
-            time = lib.mkOption {
-              type = lib.types.str;
-              description = "Start time in HH:MM format (fallback if sun-relative)";
-              default = "09:00";
-            };
             brightness = lib.mkOption {
               type = lib.types.int;
               description = "Target brightness for this period (0-100)";
-              default = 50;
             };
-            sunRelative = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-              description = "Whether this period is relative to sunrise/sunset";
+            time = lib.mkOption {
+              type = lib.types.str;
+              description = "Start time in HH:MM format (used when location not set, or as fallback)";
             };
             sunEvent = lib.mkOption {
-              type = lib.types.enum [
-                "dawn"
-                "sunrise"
-                "sunset"
-                "dusk"
-              ];
-              default = "sunrise";
-              description = "Sun event to base timing on";
+              type = lib.types.nullOr (
+                lib.types.enum [
+                  "dawn"
+                  "sunrise"
+                  "sunset"
+                  "dusk"
+                ]
+              );
+              default = null;
+              description = "Sun event to base timing on (requires location to be set)";
             };
             sunOffset = lib.mkOption {
               type = lib.types.int;
@@ -168,24 +185,6 @@ in
           };
         }
       '';
-    };
-
-    location = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = "Enable sun-relative brightness scheduling";
-      };
-      latitude = lib.mkOption {
-        type = lib.types.nullOr lib.types.float;
-        default = null;
-        description = "Latitude for sun calculations";
-      };
-      longitude = lib.mkOption {
-        type = lib.types.nullOr lib.types.float;
-        default = null;
-        description = "Longitude for sun calculations";
-      };
     };
   };
 
