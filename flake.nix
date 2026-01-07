@@ -51,6 +51,7 @@
           hostname,
           system ? "x86_64-linux",
           extraModules ? [ ],
+          isServer ? false,
         }:
         nixpkgs.lib.nixosSystem {
           inherit system;
@@ -72,23 +73,11 @@
             ./hosts/${hostname}
 
             # Core module systems
-            home-manager.nixosModules.home-manager
-            stylix.nixosModules.stylix
             sops-nix.nixosModules.sops
 
             # Shared configuration for all hosts
             {
               networking.hostName = hostname;
-
-              # Home-manager settings
-              home-manager = {
-                useGlobalPkgs = true;
-                useUserPackages = true;
-                extraSpecialArgs = { inherit inputs self; };
-                sharedModules = [
-                  sops-nix.homeManagerModules.sops
-                ];
-              };
 
               # Nix settings
               nix = {
@@ -118,29 +107,49 @@
               nixpkgs.config.allowUnfree = true;
             }
           ]
+          # Desktop-specific modules (home-manager, stylix)
+          # Only included for non-server hosts
+          ++ nixpkgs.lib.optionals (!isServer) [
+            home-manager.nixosModules.home-manager
+            stylix.nixosModules.stylix
+            {
+              # Home-manager settings
+              home-manager = {
+                useGlobalPkgs = true;
+                useUserPackages = true;
+                extraSpecialArgs = { inherit inputs self; };
+                sharedModules = [
+                  sops-nix.homeManagerModules.sops
+                ];
+              };
+            }
+          ]
           ++ extraModules;
         };
     in
     {
       # NixOS configurations for each host
       nixosConfigurations = {
+        # Desktop: Dell XPS 15 9500
         xps15 = mkHost {
           hostname = "xps15";
           system = "x86_64-linux";
           extraModules = [
-            # Dell XPS 15 9500 with Nvidia - dedicated hardware module
-            # This includes: common-cpu-intel, common-pc-laptop, common-pc-laptop-ssd,
-            # and XPS 15 9500-specific Nvidia PRIME configuration
-            # NOTE: overrides many Nvidia settings, including those set in the Nvidia module
             hardware.nixosModules.dell-xps-15-9500-nvidia
           ];
         };
 
-        # Future hosts can be added like:
-        # server = mkHost {
-        #   hostname = "server";
-        #   system = "x86_64-linux";
-        # };
+        # Server: Dell Optiplex 5080 (Homelab)
+        homelab = mkHost {
+          hostname = "homelab01";
+          system = "x86_64-linux";
+          isServer = true; # Skips home-manager and stylix
+          extraModules = [
+            hardware.nixosModules.common-cpu-intel
+            hardware.nixosModules.common-pc
+            hardware.nixosModules.common-pc-ssd
+          ];
+        };
       };
 
       # Overlays exported by this flake
