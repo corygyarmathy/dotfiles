@@ -98,6 +98,7 @@
     go
     jdk # Java Development Kit
     python3
+    hydra-check # Nixpkgs build status
 
     # Media
     gimp
