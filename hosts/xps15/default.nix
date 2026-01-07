@@ -139,6 +139,11 @@
     configFile = ./thermald-conf.xml;
   };
 
+  # Laptop power profiles (better battery life)
+  # Just enabling the option configures sensible defaults
+  # Active profile available on DBus power profile interface
+  services.tlp.enable = true;
+
   # Thunderbolt support
   services.hardware.bolt.enable = true;
 
