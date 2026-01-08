@@ -1,5 +1,5 @@
 # *arr Stack - Media automation containers
-# Sonarr, Radarr, Prowlarr, Bazarr, Jellyseerr
+# Sonarr, Radarr, Prowlarr, Bazarr, Jellyseerr, FlareSolverr
 {
   config,
   pkgs,
@@ -11,10 +11,11 @@ let
   cfg = config.cg.service.arr-stack;
 
   # Common environment for Linuxserver.io containers
+  # These are set dynamically based on actual system IDs
   linuxserverEnv = {
-    PUID = "1000"; # Match your user's UID
-    PGID = "1011"; # Match your media group's GID (check with `getent group media`)
-    TZ = "Australia/Perth";
+    PUID = toString config.users.users.coryg.uid;
+    PGID = toString config.users.groups.media.gid;
+    TZ = config.time.timeZone;
   };
 
   # Media paths
@@ -25,32 +26,61 @@ in
   options.cg.service.arr-stack.enable = lib.mkEnableOption "arr-stack services";
 
   config = lib.mkIf cfg.enable {
+    # Ensure podman is the backend
     virtualisation.oci-containers.backend = "podman";
 
-    # Create a shared network for the arr stack
-    systemd.services.create-arr-network = {
+    # Create config directories with correct ownership
+    # The containers run as PUID:PGID, so they need write access
+    systemd.tmpfiles.rules = [
+      "d ${configPath} 0775 root media -"
+      "d ${configPath}/prowlarr 0775 coryg media -"
+      "d ${configPath}/sonarr 0775 coryg media -"
+      "d ${configPath}/radarr 0775 coryg media -"
+      "d ${configPath}/bazarr 0775 coryg media -"
+      "d ${configPath}/jellyseerr 0775 coryg media -"
+      "d ${configPath}/qbittorrent 0775 coryg media -"
+      "d ${configPath}/flaresolverr 0775 coryg media -"
+    ];
+
+    # Create the arr-network before containers start
+    systemd.services.podman-network-arr = {
       description = "Create podman network for arr stack";
       after = [ "podman.service" ];
       wantedBy = [ "multi-user.target" ];
+      before = [
+        "podman-prowlarr.service"
+        "podman-sonarr.service"
+        "podman-radarr.service"
+        "podman-bazarr.service"
+        "podman-jellyseerr.service"
+        "podman-qbittorrent.service"
+        "podman-flaresolverr.service"
+      ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = "${pkgs.podman}/bin/podman network create arr-network --ignore";
       };
     };
-    # Create config directories
-    systemd.tmpfiles.rules = [
-      "d ${configPath} 0755 root root -"
-      "d ${configPath}/prowlarr 0755 root root -"
-      "d ${configPath}/sonarr 0755 root root -"
-      "d ${configPath}/radarr 0755 root root -"
-      "d ${configPath}/bazarr 0755 root root -"
-      "d ${configPath}/jellyseerr 0755 root root -"
-      "d ${configPath}/qbittorrent 0755 root root -"
-    ];
 
     # Container definitions
     virtualisation.oci-containers.containers = {
+      # FlareSolverr - Cloudflare bypass proxy for Prowlarr
+      flaresolverr = {
+        image = "ghcr.io/flaresolverr/flaresolverr:latest";
+        environment = {
+          LOG_LEVEL = "info";
+          LOG_HTML = "false";
+          CAPTCHA_SOLVER = "none";
+          TZ = config.time.timeZone;
+        };
+        ports = [ "8191:8191" ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+        ];
+      };
+
       # Prowlarr - Indexer manager
       prowlarr = {
         image = "lscr.io/linuxserver/prowlarr:latest";
@@ -114,10 +144,11 @@ in
       };
 
       # Jellyseerr - Request management (Overseerr fork for Jellyfin)
+      # Note: Use host IP to connect to Jellyfin, not container name
       jellyseerr = {
         image = "fallenbagel/jellyseerr:latest";
         environment = {
-          TZ = "Australia/Perth";
+          TZ = config.time.timeZone;
           LOG_LEVEL = "info";
         };
         volumes = [
@@ -127,6 +158,8 @@ in
         extraOptions = [
           "--pull=newer"
           "--network=arr-network"
+          # Allow container to reach host services (like Jellyfin)
+          "--add-host=host.containers.internal:host-gateway"
         ];
       };
 
@@ -163,6 +196,7 @@ in
         5055 # Jellyseerr
         8080 # qBittorrent
         6881 # BitTorrent
+        8191 # FlareSolverr
       ];
       allowedUDPPorts = [
         6881 # BitTorrent
