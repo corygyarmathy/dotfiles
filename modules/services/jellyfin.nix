@@ -20,18 +20,19 @@ in
     };
 
     # Grant Jellyfin access to media files
-    users.users.jellyfin.extraGroups = [ "media" ];
+    users.users.jellyfin.extraGroups = [ "media" "render" "video" ];
 
     # Create media directories
-    # These will be owned by root:media with group write permissions
+    # Owned by coryg:media so both user and services can write
+    # The 2775 sets the setgid bit so new files inherit the media group
     systemd.tmpfiles.rules = [
-      "d /srv/media 0775 root media -"
-      "d /srv/media/movies 0775 root media -"
-      "d /srv/media/tv 0775 root media -"
-      "d /srv/media/music 0775 root media -"
-      "d /srv/media/downloads 0775 root media -"
-      "d /srv/media/downloads/complete 0775 root media -"
-      "d /srv/media/downloads/incomplete 0775 root media -"
+      "d /srv/media 2775 coryg media -"
+      "d /srv/media/movies 2775 coryg media -"
+      "d /srv/media/tv 2775 coryg media -"
+      "d /srv/media/music 2775 coryg media -"
+      "d /srv/media/downloads 2775 coryg media -"
+      "d /srv/media/downloads/complete 2775 coryg media -"
+      "d /srv/media/downloads/incomplete 2775 coryg media -"
     ];
 
     # Hardware transcoding support
