@@ -82,7 +82,7 @@
   # ============================================================================
   networking = {
     # IP reserved by DHCP server
-    useDHCP = true;
+    useDHCP = lib.mkForce true;
     hostName = "homelab01";
     networkmanager.enable = true;
   };
