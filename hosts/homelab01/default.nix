@@ -61,7 +61,7 @@
     immich.enable = false;
     jellyfin.enable = false;
     arr-stack.enable = false;
-    reverse-proxiy.enable = false;
+    reverse-proxy.enable = false;
     home-assistant.enable = false;
   };
 
