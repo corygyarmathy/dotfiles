@@ -60,7 +60,10 @@
     backup.enable = false;
     immich.enable = false;
     jellyfin.enable = true;
-    arr-stack.enable = true;
+    arr-stack = {
+      enable = true;
+      vpn.enable = true;
+    };
     reverse-proxy.enable = false;
     home-assistant.enable = false;
   };

@@ -1,5 +1,6 @@
 # *arr Stack - Media automation containers
 # Sonarr, Radarr, Prowlarr, Bazarr, Jellyseerr, FlareSolverr
+# qBittorrent runs through Gluetun VPN (ProtonVPN)
 {
   config,
   pkgs,
@@ -23,11 +24,29 @@ let
   configPath = "/srv/arr";
 in
 {
-  options.cg.service.arr-stack.enable = lib.mkEnableOption "arr-stack services";
+  options.cg.service.arr-stack = {
+    enable = lib.mkEnableOption "arr-stack services";
+
+    vpn = {
+      enable = lib.mkEnableOption "VPN for torrent traffic via Gluetun";
+
+      # Server country for ProtonVPN
+      serverCountry = lib.mkOption {
+        type = lib.types.str;
+        default = "Australia";
+        description = "ProtonVPN server country";
+      };
+    };
+  };
 
   config = lib.mkIf cfg.enable {
     # Ensure podman is the backend
     virtualisation.oci-containers.backend = "podman";
+
+    # Sops secret for WireGuard private key
+    sops.secrets."vpn/wireguard-private-key" = lib.mkIf cfg.vpn.enable {
+      # This will be available at config.sops.secrets."vpn/wireguard-private-key".path
+    };
 
     # Create config directories with correct ownership
     # The containers run as PUID:PGID, so they need write access
@@ -40,6 +59,7 @@ in
       "d ${configPath}/jellyseerr 0775 coryg media -"
       "d ${configPath}/qbittorrent 0775 coryg media -"
       "d ${configPath}/flaresolverr 0775 coryg media -"
+      "d ${configPath}/gluetun 0775 coryg media -"
     ];
 
     # Create the arr-network before containers start
@@ -53,8 +73,13 @@ in
         "podman-radarr.service"
         "podman-bazarr.service"
         "podman-jellyseerr.service"
-        "podman-qbittorrent.service"
         "podman-flaresolverr.service"
+      ]
+      ++ lib.optionals cfg.vpn.enable [
+        "podman-gluetun.service"
+      ]
+      ++ lib.optionals (!cfg.vpn.enable) [
+        "podman-qbittorrent.service"
       ];
       serviceConfig = {
         Type = "oneshot";
@@ -163,9 +188,68 @@ in
         ];
       };
 
-      # qBittorrent - Download client
-      # Note: Configure the download paths in qBittorrent to match the volume mounts
-      qbittorrent = {
+      # ========================================================================
+      # VPN-protected containers (when vpn.enable = true)
+      # ========================================================================
+
+      # Gluetun - VPN container that qBittorrent routes through
+      gluetun = lib.mkIf cfg.vpn.enable {
+        image = "qmcgaw/gluetun:latest";
+        environment = {
+          VPN_SERVICE_PROVIDER = "protonvpn";
+          VPN_TYPE = "wireguard";
+          # Private key is passed via environmentFiles below
+          SERVER_COUNTRIES = cfg.vpn.serverCountry;
+          # Enable port forwarding for better torrent connectivity
+          VPN_PORT_FORWARDING = "on";
+          # Firewall settings
+          FIREWALL_OUTBOUND_SUBNETS = "10.89.0.0/24"; # Allow arr-network access
+          TZ = config.time.timeZone;
+        };
+        # Load the WireGuard private key from sops secret
+        environmentFiles = [
+          config.sops.secrets."vpn/wireguard-private-key".path
+        ];
+        volumes = [
+          "${configPath}/gluetun:/gluetun"
+        ];
+        # Ports are exposed on gluetun since qbittorrent uses its network
+        ports = [
+          "8080:8080" # qBittorrent Web UI
+          # BitTorrent ports are handled by VPN port forwarding
+        ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+          "--cap-add=NET_ADMIN"
+          "--device=/dev/net/tun:/dev/net/tun"
+        ];
+      };
+
+      # qBittorrent - Download client (VPN mode - routes through Gluetun)
+      qbittorrent = lib.mkIf cfg.vpn.enable {
+        image = "lscr.io/linuxserver/qbittorrent:latest";
+        environment = linuxserverEnv // {
+          WEBUI_PORT = "8080";
+        };
+        volumes = [
+          "${configPath}/qbittorrent:/config"
+          "${mediaPath}/downloads:/downloads"
+        ];
+        # No ports - they're exposed via gluetun
+        dependsOn = [ "gluetun" ];
+        extraOptions = [
+          "--pull=newer"
+          # Use gluetun's network stack instead of arr-network
+          "--network=container:gluetun"
+        ];
+      };
+
+      # ========================================================================
+      # Non-VPN qBittorrent (when vpn.enable = false)
+      # ========================================================================
+
+      qbittorrent-direct = lib.mkIf (!cfg.vpn.enable) {
         image = "lscr.io/linuxserver/qbittorrent:latest";
         environment = linuxserverEnv // {
           WEBUI_PORT = "8080";
@@ -194,12 +278,14 @@ in
         7878 # Radarr
         6767 # Bazarr
         5055 # Jellyseerr
-        8080 # qBittorrent
-        6881 # BitTorrent
+        8080 # qBittorrent (via gluetun or direct)
         8191 # FlareSolverr
+      ]
+      ++ lib.optionals (!cfg.vpn.enable) [
+        6881 # BitTorrent (only when not using VPN)
       ];
-      allowedUDPPorts = [
-        6881 # BitTorrent
+      allowedUDPPorts = lib.optionals (!cfg.vpn.enable) [
+        6881 # BitTorrent (only when not using VPN)
       ];
     };
   };
