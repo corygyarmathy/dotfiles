@@ -13,7 +13,7 @@ let
   # Common environment for Linuxserver.io containers
   linuxserverEnv = {
     PUID = "1000"; # Match your user's UID
-    PGID = "994"; # Match your media group's GID (check with `getent group media`)
+    PGID = "1011"; # Match your media group's GID (check with `getent group media`)
     TZ = "Australia/Perth";
   };
 

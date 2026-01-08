@@ -228,7 +228,7 @@
 
     # Media group for shared file access between services
     groups.media = { };
-    groups.media.gid = 994;
+    groups.media.gid = 1011;
 
     mutableUsers = false;
   };
