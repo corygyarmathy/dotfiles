@@ -107,9 +107,9 @@
   };
 
   # Disable root login entirely
-  # users.users.root = {
-  #   hashedPassword = "!"; # locks the account
-  # };
+  users.users.root = {
+    hashedPassword = "!"; # locks the account
+  };
 
   # ============================================================================
   # Hardware
