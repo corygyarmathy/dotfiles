@@ -171,16 +171,6 @@
   # ============================================================================
   # System Packages
   # ============================================================================
-  # Keep the store optimised
-  nix.settings.auto-optimise-store = true;
-
-  # Automatic garbage collection
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 30d";
-  };
-
   # Basic packages for server administration
   environment.systemPackages = with pkgs; [
     # System utilities
