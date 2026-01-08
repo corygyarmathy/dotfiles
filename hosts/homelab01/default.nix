@@ -54,6 +54,18 @@
   };
 
   # ============================================================================
+  # Service Toggles
+  # ============================================================================
+  cg.service = {
+    backup.enable = false;
+    immich.enable = false;
+    jellyfin.enable = false;
+    arr-stack.enable = false;
+    reverse-proxiy.enable = false;
+    home-assistant.enable = false;
+  };
+
+  # ============================================================================
   # Boot Configuration
   # ============================================================================
   boot = {

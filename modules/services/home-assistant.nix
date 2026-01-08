@@ -7,7 +7,7 @@
 }:
 
 let
-  cfg = config.cg.home-assistant;
+  cfg = config.cg.service.home-assistant;
 in
 {
   options.cg.home-assistant.enable = lib.mkEnableOption "home-assistant service";

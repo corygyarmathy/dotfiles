@@ -8,7 +8,7 @@
 }:
 
 let
-  cfg = config.cg.immich;
+  cfg = config.cg.service.immich;
   immichRoot = "/srv/immich";
   # Pin to a specific version for stability
   # Check https://github.com/immich-app/immich/releases for latest

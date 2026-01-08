@@ -7,7 +7,7 @@
   ...
 }:
 let
-  cfg = config.cg.reverse-proxy;
+  cfg = config.cg.service.reverse-proxy;
 in
 {
   options.cg.reverse-proxy.enable = lib.mkEnableOption "Reverse proxy service (using caddy)";

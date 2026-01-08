@@ -8,7 +8,7 @@
 }:
 
 let
-  cfg = config.cg.backup;
+  cfg = config.cg.service.backup;
 
   backupScript = pkgs.writeShellScriptBin "backup-homelab" ''
     set -euo pipefail

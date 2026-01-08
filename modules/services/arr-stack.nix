@@ -8,7 +8,7 @@
 }:
 
 let
-  cfg = config.cg.arr-stack;
+  cfg = config.cg.service.arr-stack;
 
   # Common environment for Linuxserver.io containers
   linuxserverEnv = {
