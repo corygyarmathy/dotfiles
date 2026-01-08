@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.ssh;
-in {
+in
+{
   options.cg.home.ssh.enable = lib.mkEnableOption "SSH configuration";
 
   config = lib.mkIf cfg.enable {
@@ -20,7 +22,11 @@ in {
           user = "git";
           forwardAgent = true;
           identitiesOnly = true;
-          identityFile = ["~/.ssh/id_github"];
+          identityFile = [ "~/.ssh/id_github" ];
+        };
+
+        "*" = {
+          identityFile = [ "~/.ssh/id_ed25519_personal" ];
         };
       };
 

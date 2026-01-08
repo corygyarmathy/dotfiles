@@ -29,7 +29,7 @@
       enable = true;
       authorizedKeys = [
         # Allow access from your XPS 15
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDbTFXsV7R/dfJmkYO6vaEktuOp8FczetkR29d2DmQy3 coryg@xps15"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGN2/Vvyb3abKAxdCYt9pxGgOho5uqtNzhpXVxGVw1gq coryg@xps15"
       ];
     };
     kernel-hardening = {
