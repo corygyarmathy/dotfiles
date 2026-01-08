@@ -140,7 +140,7 @@
         };
 
         # Server: Dell Optiplex 5080 (Homelab)
-        homelab = mkHost {
+        homelab01 = mkHost {
           hostname = "homelab01";
           system = "x86_64-linux";
           isServer = true; # Skips home-manager and stylix
