@@ -134,6 +134,8 @@
   environment.sessionVariables = {
     GIT_EDITOR = "nvim";
     EDITOR = "nvim";
+    # Help applications find VA-API drivers
+    LIBVA_DRIVER_NAME = "iHD";
   };
 
   # ============================================================================
@@ -201,6 +203,7 @@
     # Hardware monitoring
     lm_sensors
     intel-gpu-tools # For monitoring Quick Sync usage
+    libva-utils # Provides vainfo for checking VA-API
 
     # Container management
     podman-compose
@@ -221,13 +224,15 @@
         "wheel"
         "podman" # Container management
         "media" # Access to media files
+        "render" # GPU access
+        "video" # Video device access
       ];
       hashedPasswordFile = config.sops.secrets."users/coryg".path;
       uid = 1000;
     };
 
     # Media group for shared file access between services
-    groups.media = { };
+    # Explicit GID for container compatibility
     groups.media.gid = 1011;
 
     mutableUsers = false;
