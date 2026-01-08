@@ -22,7 +22,7 @@ let
   configPath = "/srv/arr";
 in
 {
-  options.cg.arr-stack.enable = lib.mkEnableOption "arr-stack services";
+  options.cg.service.arr-stack.enable = lib.mkEnableOption "arr-stack services";
 
   config = lib.mkIf cfg.enable {
     # Create config directories

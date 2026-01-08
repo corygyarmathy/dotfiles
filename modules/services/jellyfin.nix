@@ -9,7 +9,7 @@ let
   cfg = config.cg.service.jellyfin;
 in
 {
-  options.cg.jellyfin.enable = lib.mkEnableOption "Jellyfin service";
+  options.cg.service.jellyfin.enable = lib.mkEnableOption "Jellyfin service";
 
   config = lib.mkIf cfg.enable {
 

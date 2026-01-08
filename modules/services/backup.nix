@@ -79,7 +79,7 @@ let
   '';
 in
 {
-  options.cg.backup.enable = lib.mkEnableOption "Backup service";
+  options.cg.service.backup.enable = lib.mkEnableOption "Backup service";
 
   config = lib.mkIf cfg.enable {
     # Make backup script available system-wide

@@ -15,7 +15,7 @@ let
   immichVersion = "v1.120.0";
 in
 {
-  options.cg.immich.enable = lib.mkEnableOption "Immich service";
+  options.cg.service.immich.enable = lib.mkEnableOption "Immich service";
 
   config = lib.mkIf cfg.enable {
     # Immich requires docker-compose due to its multi-container architecture
