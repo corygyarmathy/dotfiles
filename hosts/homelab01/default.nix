@@ -59,8 +59,8 @@
   cg.service = {
     backup.enable = false;
     immich.enable = false;
-    jellyfin.enable = false;
-    arr-stack.enable = false;
+    jellyfin.enable = true;
+    arr-stack.enable = true;
     reverse-proxy.enable = false;
     home-assistant.enable = false;
   };
