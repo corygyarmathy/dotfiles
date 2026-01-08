@@ -227,6 +227,8 @@
   # Media group for shared file access between services
   users.groups.media = { };
 
+  users.mutableUsers = false;
+
   # No home-manager for server - keep it simple
   # If you later want user-specific config, add:
   # home-manager.users.coryg = import ./home.nix;
