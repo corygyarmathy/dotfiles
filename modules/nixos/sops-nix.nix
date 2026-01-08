@@ -25,6 +25,7 @@
   config,
   lib,
   pkgs,
+  self,
   ...
 }:
 let
@@ -36,7 +37,7 @@ in
 
     defaultSecretsFile = lib.mkOption {
       type = lib.types.path;
-      default = ../../secrets/secrets.yaml;
+      default = "${self}/secrets/secrets.yaml";
       description = "Default sops secrets file";
     };
   };
