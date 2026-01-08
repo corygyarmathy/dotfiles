@@ -10,6 +10,17 @@
 # 2. Add host public key to secrets/.sops.yaml
 # 3. Create/edit secrets: sops secrets/secrets.yaml
 # 4. Enable this module and define secrets
+#
+# After Reinstall
+#
+# 1. Copy your user age key to ~/.config/sops/age/keys.txt
+# 2. Get new host's age public key: sudo cat /etc/ssh/ssh_host_ed25519_key.pub | nix-shell -p ssh-to-age --run ssh-to-age
+# 3. Update .sops.yaml with the new host key
+# 4. Re-encrypt secrets with the new host key:
+# ```bash
+# sops updatekeys secrets/secrets.yaml
+# ```
+# 5. Commit and rebuild
 {
   config,
   lib,
