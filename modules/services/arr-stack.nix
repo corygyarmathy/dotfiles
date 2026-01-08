@@ -25,6 +25,19 @@ in
   options.cg.service.arr-stack.enable = lib.mkEnableOption "arr-stack services";
 
   config = lib.mkIf cfg.enable {
+    virtualisation.oci-containers.backend = "podman";
+
+    # Create a shared network for the arr stack
+    systemd.services.create-arr-network = {
+      description = "Create podman network for arr stack";
+      after = [ "podman.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${pkgs.podman}/bin/podman network create arr-network --ignore";
+      };
+    };
     # Create config directories
     systemd.tmpfiles.rules = [
       "d ${configPath} 0755 root root -"
@@ -46,7 +59,10 @@ in
           "${configPath}/prowlarr:/config"
         ];
         ports = [ "9696:9696" ];
-        extraOptions = [ "--pull=newer" ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+        ];
       };
 
       # Sonarr - TV show management
@@ -59,7 +75,10 @@ in
           "${mediaPath}/downloads:/downloads"
         ];
         ports = [ "8989:8989" ];
-        extraOptions = [ "--pull=newer" ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+        ];
       };
 
       # Radarr - Movie management
@@ -72,7 +91,10 @@ in
           "${mediaPath}/downloads:/downloads"
         ];
         ports = [ "7878:7878" ];
-        extraOptions = [ "--pull=newer" ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+        ];
       };
 
       # Bazarr - Subtitle management
@@ -85,7 +107,10 @@ in
           "${mediaPath}/tv:/tv"
         ];
         ports = [ "6767:6767" ];
-        extraOptions = [ "--pull=newer" ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+        ];
       };
 
       # Jellyseerr - Request management (Overseerr fork for Jellyfin)
@@ -99,7 +124,10 @@ in
           "${configPath}/jellyseerr:/app/config"
         ];
         ports = [ "5055:5055" ];
-        extraOptions = [ "--pull=newer" ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+        ];
       };
 
       # qBittorrent - Download client
@@ -118,7 +146,10 @@ in
           "6881:6881" # BitTorrent TCP
           "6881:6881/udp" # BitTorrent UDP
         ];
-        extraOptions = [ "--pull=newer" ];
+        extraOptions = [
+          "--pull=newer"
+          "--network=arr-network"
+        ];
       };
     };
 
