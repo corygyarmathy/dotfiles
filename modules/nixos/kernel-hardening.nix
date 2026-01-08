@@ -12,6 +12,7 @@ in
   options.cg.kernel-hardening = {
     enable = lib.mkEnableOption "Kernel security hardening";
 
+    # TODO: make server option (replace 'paranoid'?)
     level = lib.mkOption {
       type = lib.types.enum [
         "desktop"
