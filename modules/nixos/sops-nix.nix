@@ -70,6 +70,9 @@ in
         #   mode = "0400";
         #   owner = "root";
         # };
+        "users/coryg" = {
+          neededForUsers = true;
+        };
       };
     };
 
