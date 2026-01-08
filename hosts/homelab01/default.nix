@@ -74,7 +74,7 @@
       efi.canTouchEfiVariables = true;
     };
     # Use latest LTS kernel for stability on server
-    kernelPackages = pkgs.linuxPackages_6_12;
+    # kernelPackages = pkgs.linuxPackages_6_12;
   };
 
   # ============================================================================
@@ -83,6 +83,8 @@
   networking = {
     # IP reserved by DHCP server
     useDHCP = true;
+    hostName = "homelab01";
+    networkmanager.enable = true;
   };
 
   # ============================================================================
@@ -104,6 +106,11 @@
     };
   };
 
+  # Disable root login entirely
+  # users.users.root = {
+  #   hashedPassword = "!"; # locks the account
+  # };
+
   # ============================================================================
   # Hardware
   # ============================================================================
@@ -118,8 +125,8 @@
     ];
   };
 
-  # CPU microcode updates
-  hardware.cpu.intel.updateMicrocode = true;
+  # Require password for sudo (default), or if you want passwordless sudo for wheel:
+  # security.sudo.wheelNeedsPassword = false;
 
   # ============================================================================
   # Services
@@ -164,6 +171,17 @@
   # ============================================================================
   # System Packages
   # ============================================================================
+  # Keep the store optimised
+  nix.settings.auto-optimise-store = true;
+
+  # Automatic garbage collection
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 30d";
+  };
+
+  # Basic packages for server administration
   environment.systemPackages = with pkgs; [
     # System utilities
     vim
@@ -205,6 +223,7 @@
       "podman" # Container management
       "media" # Access to media files
     ];
+    hashedPasswordFile = config.sops.secrets."users/coryg".path;
   };
 
   # Media group for shared file access between services
