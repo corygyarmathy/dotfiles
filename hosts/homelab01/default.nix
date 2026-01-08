@@ -213,21 +213,25 @@
   # ============================================================================
   # Users
   # ============================================================================
-  users.users.coryg = {
-    description = "Cory Gyarmathy";
-    isNormalUser = true;
-    extraGroups = [
-      "wheel"
-      "podman" # Container management
-      "media" # Access to media files
-    ];
-    hashedPasswordFile = config.sops.secrets."users/coryg".path;
+  users = {
+    users.coryg = {
+      description = "Cory Gyarmathy";
+      isNormalUser = true;
+      extraGroups = [
+        "wheel"
+        "podman" # Container management
+        "media" # Access to media files
+      ];
+      hashedPasswordFile = config.sops.secrets."users/coryg".path;
+      uid = 1000;
+    };
+
+    # Media group for shared file access between services
+    groups.media = { };
+    groups.media.gid = 994;
+
+    mutableUsers = false;
   };
-
-  # Media group for shared file access between services
-  users.groups.media = { };
-
-  users.mutableUsers = false;
 
   # No home-manager for server - keep it simple
   # If you later want user-specific config, add:
