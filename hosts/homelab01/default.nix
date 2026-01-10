@@ -67,7 +67,7 @@
     huntarr.enable = true;
     cleanuparr.enable = true;
     wizarr.enable = true;
-    reverse-proxy.enable = true;
+    reverse-proxy.enable = false;
     jellyfin.enable = true;
     arr-stack = {
       enable = true;
