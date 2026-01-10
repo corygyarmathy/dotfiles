@@ -18,8 +18,8 @@ in
     ];
 
     # Sops secrets for API keys
-    sops.secrets."arr/sonarr-api-key" = { };
-    sops.secrets."arr/radarr-api-key" = { };
+    # sops.secrets."arr/sonarr-api-key" = { };
+    # sops.secrets."arr/radarr-api-key" = { };
 
     virtualisation.oci-containers.containers.huntarr = {
       image = "huntarr/huntarr:latest";
