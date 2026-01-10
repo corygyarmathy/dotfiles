@@ -221,6 +221,7 @@ in
         # Ports are exposed on gluetun since qbittorrent uses its network
         ports = [
           "8080:8080" # qBittorrent Web UI
+          "8000:8000" # Gluetun control server (for port forwarding info)
           # BitTorrent ports are handled by VPN port forwarding
         ];
         extraOptions = [
