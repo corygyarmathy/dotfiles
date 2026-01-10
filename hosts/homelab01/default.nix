@@ -59,13 +59,21 @@
   cg.service = {
     backup.enable = false;
     immich.enable = false;
+    home-assistant.enable = false;
+    monitoring.enable = true;
+
+    # arr
+    recyclarr.enable = true;
+    huntarr.enable = true;
+    cleanuparr.enable = true;
+    wizarr.enable = true;
+    reverse-proxy.enable = true;
     jellyfin.enable = true;
     arr-stack = {
       enable = true;
       vpn.enable = true;
     };
-    reverse-proxy.enable = false;
-    home-assistant.enable = false;
+
   };
 
   # ============================================================================
