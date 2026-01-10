@@ -43,9 +43,14 @@ in
     # Ensure podman is the backend
     virtualisation.oci-containers.backend = "podman";
 
-    # Sops secret for WireGuard private key
-    sops.secrets."vpn/wireguard-private-key" = lib.mkIf cfg.vpn.enable {
-      # This will be available at config.sops.secrets."vpn/wireguard-private-key".path
+    sops.secrets = {
+      # Sops secret for WireGuard private key
+      "vpn/wireguard-private-key" = lib.mkIf cfg.vpn.enable {
+        # This will be available at config.sops.secrets."vpn/wireguard-private-key".path
+      };
+      # Sops secrets for qBittorrent
+      "arr/qbittorrent/username" = lib.mkIf cfg.vpn.enable { };
+      "arr/qbittorrent/password" = lib.mkIf cfg.vpn.enable { };
     };
 
     # Create config directories with correct ownership
@@ -268,6 +273,73 @@ in
           "--network=arr-network"
         ];
       };
+    };
+
+
+    # VPN port forwarding sync service
+    systemd.services.vpn-port-sync = lib.mkIf cfg.vpn.enable {
+      description = "Sync VPN forwarded port to qBittorrent";
+      after = [
+        "podman-gluetun.service"
+        "podman-qbittorrent.service"
+      ];
+      requires = [ "podman-gluetun.service" ];
+      wantedBy = [ "multi-user.target" ];
+
+      path = [
+        pkgs.curl
+        pkgs.jq
+      ];
+
+      serviceConfig = {
+        Type = "simple";
+        Restart = "always";
+        RestartSec = "60";
+        # Load credentials from sops
+        LoadCredential = [
+          "qbt-user:${config.sops.secrets."arr/qbittorrent/username".path}"
+          "qbt-pass:${config.sops.secrets."arr/qbittorrent/password".path}"
+        ];
+      };
+
+      script = ''
+        # Wait for services to be ready
+        sleep 30
+
+        # Read credentials from systemd credentials
+        QB_USER=$(cat "$CREDENTIALS_DIRECTORY/qbt-user")
+        QB_PASS=$(cat "$CREDENTIALS_DIRECTORY/qbt-pass")
+
+        LAST_PORT=""
+
+        while true; do
+          # Get current forwarded port from Gluetun
+          PORT=$(curl -sf "http://localhost:8000/v1/openvpn/portforwarded" 2>/dev/null | jq -r '.port // empty')
+          
+          if [ -n "$PORT" ] && [ "$PORT" != "0" ] && [ "$PORT" != "$LAST_PORT" ]; then
+            echo "Port changed: $LAST_PORT -> $PORT"
+            
+            # Get qBittorrent session cookie
+            COOKIE=$(curl -sf -c - "http://localhost:8080/api/v2/auth/login" \
+              --data-urlencode "username=$QB_USER" \
+              --data-urlencode "password=$QB_PASS" 2>/dev/null | grep -oP 'SID\s+\K\S+')
+            
+            if [ -n "$COOKIE" ]; then
+              # Update qBittorrent listen port
+              curl -sf "http://localhost:8080/api/v2/app/setPreferences" \
+                --cookie "SID=$COOKIE" \
+                --data-urlencode "json={\"listen_port\": $PORT}"
+              
+              echo "Updated qBittorrent to port $PORT"
+              LAST_PORT="$PORT"
+            else
+              echo "Failed to authenticate with qBittorrent"
+            fi
+          fi
+          
+          sleep 300  # Check every 5 minutes
+        done
+      '';
     };
 
     # Firewall rules for arr stack
