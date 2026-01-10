@@ -323,8 +323,8 @@ in
         LAST_PORT=""
 
         while true; do
-          # Get current forwarded port from Gluetun
-          PORT=$(curl -sf "http://localhost:8000/v1/openvpn/portforwarded" 2>/dev/null | jq -r '.port // empty')
+          # Updated endpoint for newer Gluetun versions
+          PORT=$(curl -sf "http://localhost:8000/v1/portforward" 2>/dev/null | jq -r '.port // empty')
           
           if [ -n "$PORT" ] && [ "$PORT" != "0" ] && [ "$PORT" != "$LAST_PORT" ]; then
             echo "Port changed: $LAST_PORT -> $PORT"
