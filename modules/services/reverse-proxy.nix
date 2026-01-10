@@ -54,7 +54,7 @@ in
 
         # Management tools
         "huntarr.${domain}" = mkProxy 9705;
-        "cleanuparr.${domain}" = mkProxy 5000;
+        "cleanuparr.${domain}" = mkProxy 11011;
         "grafana.${domain}" = mkProxy 3000;
       };
     };

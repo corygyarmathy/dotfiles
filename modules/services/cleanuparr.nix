@@ -24,8 +24,11 @@ in
       ];
       environment = {
         TZ = config.time.timeZone;
+        PORT = "11011";
+        PUID = toString config.users.users.coryg.uid;
+        PGID = toString config.users.groups.media.gid;
       };
-      ports = [ "5000:5000" ];
+      ports = [ "11011:11011" ];
       extraOptions = [
         "--pull=newer"
         "--network=arr-network"
@@ -37,6 +40,6 @@ in
       requires = [ "podman-network-arr.service" ];
     };
 
-    networking.firewall.allowedTCPPorts = [ 5000 ];
+    networking.firewall.allowedTCPPorts = [ 11011 ];
   };
 }
