@@ -8,6 +8,7 @@
 let
   cfg = config.cg.service.cleanuparr;
   configPath = "/srv/arr/cleanuparr";
+  mediaPath = "/srv/media";
 in
 {
   options.cg.service.cleanuparr.enable = lib.mkEnableOption "Cleanuparr stalled download cleanup";
@@ -21,6 +22,8 @@ in
       image = "ghcr.io/cleanuparr/cleanuparr:latest";
       volumes = [
         "${configPath}:/config"
+        "${mediaPath}/downloads:/downloads"
+
       ];
       environment = {
         TZ = config.time.timeZone;
