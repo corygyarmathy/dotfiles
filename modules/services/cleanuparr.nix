@@ -18,7 +18,7 @@ in
     ];
 
     virtualisation.oci-containers.containers.cleanuparr = {
-      image = "ghcr.io/flmedicern/cleanuparr:latest";
+      image = "ghcr.io/cleanuparr/cleanuparr:latest";
       volumes = [
         "${configPath}:/config"
       ];
