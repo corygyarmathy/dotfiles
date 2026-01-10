@@ -1,5 +1,4 @@
-# Reverse Proxy - Caddy
-# Provides nice URLs for all services (e.g., jellyfin.home.local)
+# Reverse Proxy - Caddy with proper TLS
 {
   config,
   pkgs,
@@ -8,79 +7,58 @@
 }:
 let
   cfg = config.cg.service.reverse-proxy;
+  domain = "gyarmathy.co";
+
+  # Helper to reduce repetition
+  mkProxy = port: {
+    extraConfig = ''
+      reverse_proxy localhost:${toString port}
+    '';
+  };
 in
 {
-  options.cg.service.reverse-proxy.enable = lib.mkEnableOption "Reverse proxy service (using caddy)";
+  options.cg.service.reverse-proxy = {
+    enable = lib.mkEnableOption "Reverse proxy service (using caddy)";
+
+    # You'd put your Cloudflare API token in sops
+    # for DNS-01 challenge
+  };
 
   config = lib.mkIf cfg.enable {
-
     services.caddy = {
       enable = true;
 
-      # Virtual hosts for each service
-      # These use .home.local domain - you'll need to add DNS entries
-      # to DNS Server (DNS Rewrites) pointing *.home.local to this server's IP
+      # For DNS-01 challenge with Cloudflare
+      # package = pkgs.caddy.withPlugins {
+      #   plugins = [ "github.com/caddy-dns/cloudflare" ];
+      #   hash = "...";  # Get this by building once
+      # };
+
+      globalConfig = ''
+        # If using DNS challenge:
+        # acme_dns cloudflare {env.CF_API_TOKEN}
+      '';
+
       virtualHosts = {
-        # Media
-        "jellyfin.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:8096
-          '';
-        };
+        # Media - Client facing
+        "jellyfin.${domain}" = mkProxy 8096;
+        "requests.${domain}" = mkProxy 5055;
+        "invite.${domain}" = mkProxy 5690; # Wizarr
 
-        "requests.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:5055
-          '';
-        };
+        # Arr stack - Admin
+        "sonarr.${domain}" = mkProxy 8989;
+        "radarr.${domain}" = mkProxy 7878;
+        "prowlarr.${domain}" = mkProxy 9696;
+        "bazarr.${domain}" = mkProxy 6767;
+        "downloads.${domain}" = mkProxy 8080;
 
-        # Arr stack
-        "sonarr.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:8989
-          '';
-        };
-
-        "radarr.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:7878
-          '';
-        };
-
-        "prowlarr.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:9696
-          '';
-        };
-
-        "bazarr.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:6767
-          '';
-        };
-
-        "downloads.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:8080
-          '';
-        };
-
-        # Smart home & photos
-        "hass.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:8123
-          '';
-        };
-
-        "photos.home.local" = {
-          extraConfig = ''
-            reverse_proxy localhost:2283
-          '';
-        };
+        # Management tools
+        "huntarr.${domain}" = mkProxy 9705;
+        "cleanuparr.${domain}" = mkProxy 5000;
+        "grafana.${domain}" = mkProxy 3000;
       };
     };
 
-    # Open firewall for HTTP/HTTPS
     networking.firewall.allowedTCPPorts = [
       80
       443
