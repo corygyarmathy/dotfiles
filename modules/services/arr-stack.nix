@@ -275,6 +275,15 @@ in
       };
     };
 
+    # Prioritise Jellyfin service
+    systemd.services.podman-jellyfin = {
+      serviceConfig = {
+        CPUWeight = 200; # Higher = more CPU priority (default 100)
+        MemoryHigh = "8G";
+        MemoryMax = "10G";
+        IOWeight = 200;
+      };
+    };
 
     # VPN port forwarding sync service
     systemd.services.vpn-port-sync = lib.mkIf cfg.vpn.enable {
