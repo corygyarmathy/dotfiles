@@ -14,10 +14,10 @@ let
   # Templates automatically include quality definitions, profiles, and custom formats
   # See: https://recyclarr.dev/wiki/yaml/config-reference/
   recyclarrConfigYaml = pkgs.writeText "recyclarr.yml" ''
-      # yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
+    # yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
 
     sonarr:
-      main:
+      shows:
         base_url: http://sonarr:8989
         api_key: !env_var SONARR_API_KEY
         delete_old_custom_formats: true
@@ -40,7 +40,7 @@ let
           - template: sonarr-v4-custom-formats-anime
 
     radarr:
-      main:
+      movies:
         base_url: http://radarr:7878
         api_key: !env_var RADARR_API_KEY
         delete_old_custom_formats: true
