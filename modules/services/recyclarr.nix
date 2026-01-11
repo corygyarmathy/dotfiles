@@ -73,8 +73,6 @@ in
 
     systemd.tmpfiles.rules = [
       "d ${configPath} 0775 coryg media -"
-      # Symlink the config file from nix store
-      "L+ ${configPath}/recyclarr.yml - - - - ${recyclarrConfigYaml}"
     ];
 
     virtualisation.oci-containers.containers.recyclarr = {
@@ -82,6 +80,7 @@ in
       user = "${toString config.users.users.coryg.uid}:${toString config.users.groups.media.gid}";
       volumes = [
         "${configPath}:/config"
+        "${recyclarrConfigYaml}:/config/recyclarr.yml:ro" # Mount directly from nix store
       ];
       environment = {
         TZ = config.time.timeZone;
