@@ -91,6 +91,7 @@
       # Your private tracker indexer IDs from Prowlarr
       # Find at: Prowlarr -> Indexers -> click tracker -> ID in URL
       torznabIndexerIds = [ 8 ]; # IPT
+      matchMode = "partial";
     };
   };
 
