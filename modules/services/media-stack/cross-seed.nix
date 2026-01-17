@@ -148,7 +148,7 @@ let
       // ========================================================================
       // OUTPUT DIRECTORIES
       // ========================================================================
-      outputDir: "/config/output",
+      outputDir: null,
       torrentDir: null,
       maxDataDepth: ${toString cfg.maxDataDepth},
       snatchTimeout: "${cfg.snatchTimeout}",
