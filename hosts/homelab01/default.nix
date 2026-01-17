@@ -94,6 +94,7 @@
       matchMode = "partial";
       includeSingleEpisodes = true;
     };
+    unpackerr.enable = true;
   };
 
   # ============================================================================
