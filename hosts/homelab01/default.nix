@@ -62,18 +62,31 @@
     home-assistant.enable = false;
     monitoring.enable = true;
 
-    # arr
-    recyclarr.enable = true;
-    huntarr.enable = true;
-    cleanuparr.enable = true;
-    wizarr.enable = true;
-    reverse-proxy.enable = false;
+    # Media-stack
+    # Shared infrastructure (REQUIRED)
+    media-stack.enable = true;
+
+    # Individual services
     jellyfin.enable = true;
-    arr-stack = {
+    jellyseerr.enable = true;
+
+    sonarr.enable = true;
+    radarr.enable = true;
+    prowlarr.enable = true;
+    bazarr.enable = true;
+
+    qbittorrent = {
       enable = true;
       vpn.enable = true;
     };
 
+    flaresolverr.enable = true;
+
+    recyclarr.enable = true;
+    huntarr.enable = true;
+    cleanuparr.enable = true;
+    wizarr.enable = true;
+    cross-seed.enable = false; # Enable when system stable
   };
 
   # ============================================================================
