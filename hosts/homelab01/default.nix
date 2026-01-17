@@ -86,7 +86,12 @@
     huntarr.enable = true;
     cleanuparr.enable = true;
     wizarr.enable = true;
-    cross-seed.enable = false; # Enable when system stable
+    cross-seed = {
+      enable = true;
+      # Your private tracker indexer IDs from Prowlarr
+      # Find at: Prowlarr -> Indexers -> click tracker -> ID in URL
+      torznabIndexerIds = [ 8 ]; # IPT
+    };
   };
 
   # ============================================================================
