@@ -135,22 +135,22 @@ in
     };
 
     # Create directory structure with correct permissions
-    # When using NFS, these are created on the NFS server instead
-    systemd.tmpfiles.rules =
-      lib.mkIf (cfg.storage.type == "local") [
-        # Data directories (setgid for group inheritance)
-        "d ${cfg.dataPath} 2775 ${cfg.user} ${cfg.group} -"
-        "d ${cfg.dataPath}/downloads 2775 ${cfg.user} ${cfg.group} -"
-        "d ${cfg.dataPath}/downloads/complete 2775 ${cfg.user} ${cfg.group} -"
-        "d ${cfg.dataPath}/downloads/incomplete 2775 ${cfg.user} ${cfg.group} -"
-        "d ${cfg.dataPath}/movies 2775 ${cfg.user} ${cfg.group} -"
-        "d ${cfg.dataPath}/tv 2775 ${cfg.user} ${cfg.group} -"
-        "d ${cfg.dataPath}/music 2775 ${cfg.user} ${cfg.group} -"
-      ]
-      ++ [
-        # Config directory (always local, even with NFS storage)
-        "d ${cfg.configPath} 0775 root ${cfg.group} -"
-      ];
+    # Config directory is always local; data directories only when storage is local
+    systemd.tmpfiles.rules = [
+      # Config directory (always local, even with NFS storage)
+      "d ${cfg.configPath} 0775 root ${cfg.group} -"
+    ]
+    ++ lib.optionals (cfg.storage.type == "local") [
+      # Data directories (only when using local storage)
+      # setgid (2xxx) for group inheritance
+      "d ${cfg.dataPath} 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/downloads 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/downloads/complete 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/downloads/incomplete 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/movies 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/tv 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/music 2775 ${cfg.user} ${cfg.group} -"
+    ];
 
     # Create the arr-network before any containers start
     systemd.services.podman-network-arr = {
