@@ -46,7 +46,7 @@
     auto-upgrade = {
       enable = true;
       mode = "server";
-      flake = "/etc/nixos"; # Or wherever you clone your dotfiles on the server
+      flake = "github:corygyarmathy/dotfiles";
       firmware.enable = true;
       backgroundBuild.enable = true;
       upgradeUsers = [ "coryg" ];
