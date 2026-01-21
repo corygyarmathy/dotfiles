@@ -23,6 +23,10 @@
     # Secrets management
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Declarative disk partitioning
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -35,6 +39,7 @@
       hardware,
       stylix,
       sops-nix,
+      disko,
       ...
     }@inputs:
     let
@@ -74,6 +79,7 @@
 
             # Core module systems
             sops-nix.nixosModules.sops
+            disko.nixosModules.disko
 
             # Shared configuration for all hosts
             {
@@ -139,11 +145,23 @@
           ];
         };
 
-        # Server: Dell Optiplex 5080 (Homelab)
+        # Server: Dell Optiplex 5080 (Homelab - *arr stack)
         homelab01 = mkHost {
           hostname = "homelab01";
           system = "x86_64-linux";
-          isServer = true; # Skips home-manager and stylix
+          isServer = true;
+          extraModules = [
+            hardware.nixosModules.common-cpu-intel
+            hardware.nixosModules.common-pc
+            hardware.nixosModules.common-pc-ssd
+          ];
+        };
+
+        # Server: HP Elitedesk 800 G6 SFF (Homelab - NAS + services)
+        homelab02 = mkHost {
+          hostname = "homelab02";
+          system = "x86_64-linux";
+          isServer = true;
           extraModules = [
             hardware.nixosModules.common-cpu-intel
             hardware.nixosModules.common-pc
@@ -166,6 +184,7 @@
             nixfmt-rfc-style
             sops
             age
+            ssh-to-age
             (callPackage ./packages/nixos-remote-install { })
           ];
         };
