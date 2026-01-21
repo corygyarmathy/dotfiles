@@ -109,6 +109,19 @@ class NixOSInstaller:
                 "Run this command from your dotfiles directory"
             )
 
+        # Check disko configuration exists
+        if not self.config.disko_config.exists():
+            raise InstallationError(
+                f"disko.nix not found at {self.config.disko_config}\n"
+                "nixos-anywhere requires declarative disk configuration"
+            )
+
+        # Skip flake evaluation in dry-run mode (commands return empty output)
+        if self.config.dry_run:
+            self.logger.info("[DRY RUN] Skipping flake evaluation")
+            self.logger.success(f"Configuration valid for '{self.config.hostname}'")
+            return
+
         # Check host exists in flake
         result = self.runner.run(
             ["nix", "flake", "show", str(self.config.flake_dir), "--json"],
@@ -126,13 +139,6 @@ class NixOSInstaller:
                     f"Host '{self.config.hostname}' not found in flake.nix\n"
                     f"Available configurations are listed in 'nix flake show'"
                 )
-
-        # Check disko configuration exists
-        if not self.config.disko_config.exists():
-            raise InstallationError(
-                f"disko.nix not found at {self.config.disko_config}\n"
-                "nixos-anywhere requires declarative disk configuration"
-            )
 
         self.logger.success(f"Configuration valid for '{self.config.hostname}'")
 
@@ -174,9 +180,7 @@ class NixOSInstaller:
         print(f"    sudo passwd {self.config.ssh_user}")
         print()
         self.logger.info("Then add your SSH key:")
-        print(
-            f"    ssh-copy-id -p {self.config.ssh_port} {self.config.ssh_target}"
-        )
+        print(f"    ssh-copy-id -p {self.config.ssh_port} {self.config.ssh_target}")
         print()
 
     def _select_disk(self) -> None:
@@ -213,13 +217,9 @@ class NixOSInstaller:
             print()
 
         if self.config.auto_confirm:
-            raise InstallationError(
-                "No disk specified. Use --disk flag with --yes"
-            )
+            raise InstallationError("No disk specified. Use --disk flag with --yes")
 
-        disk = self.logger.prompt(
-            "Enter target disk (e.g., /dev/nvme0n1 or /dev/sda)"
-        )
+        disk = self.logger.prompt("Enter target disk (e.g., /dev/nvme0n1 or /dev/sda)")
 
         if not disk:
             raise InstallationError("No disk specified")
@@ -276,16 +276,15 @@ class NixOSInstaller:
 
         # Set correct permissions
         os.chmod(dest_private, stat.S_IRUSR | stat.S_IWUSR)  # 600
-        os.chmod(dest_public, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)  # 644
+        os.chmod(
+            dest_public, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH
+        )  # 644
 
         self.logger.success("Extra files prepared")
 
     def _run_nixos_anywhere(self) -> None:
         """Execute nixos-anywhere to perform the installation."""
         self.logger.step("Preparing nixos-anywhere installation")
-
-        if not self.config.disk:
-            raise InstallationError("No disk selected")
 
         # Build command
         cmd = [
@@ -295,9 +294,6 @@ class NixOSInstaller:
             "--",
             "--flake",
             f"{self.config.flake_dir}#{self.config.hostname}",
-            "--disk",
-            "main",
-            self.config.disk,
         ]
 
         # Add extra-files if we have them
@@ -305,15 +301,17 @@ class NixOSInstaller:
             cmd.extend(["--extra-files", str(self.config.extra_files_dir)])
 
         # Add hardware config generation
-        cmd.extend([
-            "--generate-hardware-config",
-            "nixos-generate-config",
-            str(self.config.hardware_config),
-        ])
+        cmd.extend(
+            [
+                "--generate-hardware-config",
+                "nixos-generate-config",
+                str(self.config.hardware_config),
+            ]
+        )
 
         # Add SSH port if non-standard
         if self.config.ssh_port != 22:
-            cmd.extend(["--ssh-port", str(self.config.ssh_port)])
+            cmd.extend(["-p", str(self.config.ssh_port)])
 
         # Add target
         cmd.append(self.config.ssh_target)
