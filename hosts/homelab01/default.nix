@@ -185,7 +185,7 @@
     AllowHybridSleep=no
   '';
 
-  # Enable wake-on-LAN (for future use)
+  # Enable wake-on-LAN
   # You may need to also enable this in BIOS
   systemd.services.enable-wol = {
     description = "Enable Wake-on-LAN";
@@ -193,7 +193,7 @@
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.ethtool}/bin/ethtool -s enp1s0 wol g";
+      ExecStart = "${pkgs.ethtool}/bin/ethtool -s eno1 wol g";
     };
   };
 
