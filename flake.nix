@@ -166,6 +166,7 @@
             nixfmt-rfc-style
             sops
             age
+            (callPackage ./packages/nixos-remote-install { })
           ];
         };
       });

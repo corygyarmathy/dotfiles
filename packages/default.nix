@@ -7,6 +7,9 @@ pkgs: {
   # External monitor brightness scripts
   ddc-brightness-scripts = pkgs.callPackage ./ddc-brightness-scripts { };
 
+  # Remote install (w/ nixos-anywhere)
+  nixos-remote-install = pkgs.callPackage ./nixos-remote-install { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }
