@@ -18,7 +18,7 @@
         type = "disk";
         # Device is set via --disk flag during installation
         # e.g., --disk main /dev/nvme0n1 or --disk main /dev/sda
-        device = "/dev/disk/by-id/PLACEHOLDER"; # Will be overridden
+        device = "/dev/nvme0n1";
         content = {
           type = "gpt";
           partitions = {
