@@ -66,6 +66,11 @@
       enable = true;
       role = "primary";
     };
+    reverse-proxy = {
+      enable = true;
+      email = "cory@gyarmathy.co";
+      cloudflareTokenFile = config.sops.secrets."cloudflare/api-token".path;
+    };
 
     # Media-stack
     # Shared infrastructure (REQUIRED)
