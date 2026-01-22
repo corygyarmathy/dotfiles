@@ -264,14 +264,14 @@ in
 
           # How long to cache filtered results
           filters_update_interval = 24; # hours
+
+          # DNS rewrites for local services
+          # This is where the magic happens for local resolution
+          rewrites = dnsRewrites;
         };
 
         # Filter lists
         filters = filterLists;
-
-        # DNS rewrites for local services
-        # This is where the magic happens for local resolution
-        rewrites = dnsRewrites;
 
         # Query log settings
         querylog = {
