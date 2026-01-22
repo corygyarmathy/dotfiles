@@ -171,7 +171,7 @@ in
 
       # Allow changes via web UI to persist
       # Set to false for fully declarative (Nix-only) config
-      mutableSettings = true;
+      mutableSettings = false;
 
       # Open firewall for DNS
       openFirewall = cfg.openFirewall;
