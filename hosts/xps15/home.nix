@@ -86,6 +86,7 @@
     protonvpn-gui
     proton-vpn-cli
     proton-pass
+    protonmail-desktop
 
     # Development
     gcc
