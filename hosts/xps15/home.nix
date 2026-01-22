@@ -131,6 +131,7 @@
     jq # JSON processor
     httpie
     htop
+    dig # domain information groper
 
     # Entertainment
     discord
