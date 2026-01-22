@@ -162,7 +162,7 @@ in
   config = lib.mkIf cfg.enable {
     # Configure secrets
     sops.secrets."adguard/admin-password" = {
-      sopsFile = ../../../secrets/homelab.yaml;
+      sopsFile = ../../secrets/homelab.yaml;
       mode = "0400";
     };
 
