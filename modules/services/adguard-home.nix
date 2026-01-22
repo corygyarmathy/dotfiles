@@ -297,9 +297,7 @@ in
         users = [
           {
             name = "admin";
-            # This is a placeholder - CHANGE THIS on first login!
-            # Default: admin/admin (you'll be prompted to change it)
-            password = "$2y$10$hWqpOAVLrSrVBqXKQYGfE.yLWvSYZoL6rSfVBqXKQYGfE.yLWvSY";
+            password = "$2a$12$u9jRNDNshymgD15iI7tJF.vzzb56MuvWArpucehC46vzgqnQQftJe";
           }
         ];
 
