@@ -215,7 +215,6 @@ in
           ratelimit = 100; # queries per second per client
           ratelimit_whitelist = [
             "127.0.0.1"
-            "10.20.2.0/24" # Your local network
           ];
 
           # Local PTR resolvers for reverse DNS
