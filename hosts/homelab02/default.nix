@@ -65,6 +65,10 @@
     immich.enable = false;
     home-assistant.enable = false;
     monitoring.enable = true;
+    adguard-home = {
+      enable = true;
+      role = "secondary";
+    };
 
     # Media-stack
     media-stack.enable = false; # Shared infrastructure (REQUIRED)

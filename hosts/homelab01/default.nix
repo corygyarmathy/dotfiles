@@ -62,6 +62,11 @@
     home-assistant.enable = false;
     monitoring.enable = true;
 
+    adguard-home = {
+      enable = true;
+      role = "primary";
+    };
+
     # Media-stack
     # Shared infrastructure (REQUIRED)
     media-stack.enable = true;
