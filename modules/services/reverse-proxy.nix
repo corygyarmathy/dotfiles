@@ -58,7 +58,7 @@ let
     plugins = [ "github.com/caddy-dns/cloudflare@v0.2.2" ];
     # ⚠️  IMPORTANT: If build fails with hash mismatch, update this value
     # Leave empty ("") on first build to get the correct hash from error output
-    hash = "";
+    hash = "sha256-dnhEjopeA0UiI+XVYHYpsjcEI6Y1Hacbi28hVKYQURg=";
   };
 
   # Helper to create a reverse proxy virtual host with TLS
