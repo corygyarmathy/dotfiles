@@ -69,7 +69,7 @@
     reverse-proxy = {
       enable = true;
       email = "cory@gyarmathy.co";
-      cloudflareTokenFile = config.sops.secrets."cloudflare/api-token".path;
+      cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
     };
 
     # Media-stack
