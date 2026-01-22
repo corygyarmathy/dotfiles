@@ -248,7 +248,7 @@ in
         email ${cfg.email}
 
         # Use Let's Encrypt production (comment out for testing)
-        # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+        acme_ca https://acme-v02.api.letsencrypt.org/directory
 
         # Global DNS challenge config using environment variable
         # The token is loaded via systemd EnvironmentFile
