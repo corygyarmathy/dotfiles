@@ -56,7 +56,7 @@ let
   #
   caddyWithCloudflare = pkgs.caddy.withPlugins {
     plugins = [ "github.com/caddy-dns/cloudflare@v0.2.2" ];
-    # ⚠️  IMPORTANT: If build fails with hash mismatch, update this value
+    # NOTE: If build fails with hash mismatch, update this value
     # Leave empty ("") on first build to get the correct hash from error output
     hash = "sha256-dnhEjopeA0UiI+XVYHYpsjcEI6Y1Hacbi28hVKYQURg=";
   };
@@ -96,8 +96,8 @@ let
   # Service definitions - add new services here
   # Format: { subdomain, port, localOnly (optional), extraConfig (optional) }
   #
-  # Note: Services marked localOnly = true will only be accessible from
-  # your local network, even if exposed via Cloudflare tunnel later
+  # NOTE: Services marked localOnly = true will only be accessible from
+  # the local network, even if exposed via Cloudflare tunnel later
   services = {
     # ── Media - User Facing ─────────────────────────────────────────────
     jellyfin = {

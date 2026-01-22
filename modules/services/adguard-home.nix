@@ -290,10 +290,9 @@ in
         };
 
         # User authentication for web interface
-        # NOTE: This is a placeholder - you should set this via the web UI
-        # on first run, or use sops-nix to inject credentials
         # The password hash can be generated with:
         #   htpasswd -B -n -b "" "yourpassword" | cut -d: -f2
+        #   TODO: inject credentials through sops instead (not a major issue as it's only the hash)
         users = [
           {
             name = "admin";
