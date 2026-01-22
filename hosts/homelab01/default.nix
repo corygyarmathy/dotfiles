@@ -65,6 +65,11 @@
     adguard-home = {
       enable = true;
       role = "primary";
+      webPort = 3080;
+      bindAddresses = [
+        "127.0.0.1"
+        "10.20.2.85"
+      ];
     };
     reverse-proxy = {
       enable = true;

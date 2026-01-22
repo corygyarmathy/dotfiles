@@ -68,6 +68,11 @@
     adguard-home = {
       enable = true;
       role = "secondary";
+      webPort = 3080;
+      bindAddresses = [
+        "127.0.0.1"
+        "10.20.2.130"
+      ];
     };
 
     # Media-stack

@@ -140,6 +140,19 @@ in
       '';
     };
 
+    bindAddresses = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "127.0.0.1" ];
+      example = [
+        "127.0.0.1"
+        "10.20.2.85"
+      ];
+      description = ''
+        IP addresses for the DNS server to listen on.
+        Avoid 0.0.0.0 if Podman is running (conflicts with aardvark-dns).
+      '';
+    };
+
     webPort = lib.mkOption {
       type = lib.types.port;
       default = 3080;
@@ -189,8 +202,8 @@ in
 
         # DNS server settings
         dns = {
-          # Bind to all interfaces on port 53
-          bind_hosts = [ "0.0.0.0" ];
+          # Bind to all defined interfaced on port 53
+          bind_hosts = cfg.bindAddresses;
           port = cfg.dnsPort;
 
           # Upstream DNS servers (encrypted)
