@@ -175,7 +175,7 @@ let
     # ── Infrastructure ───────────────────────────────────────────────────
     adguard = {
       subdomain = "adguard";
-      port = 3000; # AdGuard Home web UI (same port, but accessed via subdomain)
+      port = 3080; # AdGuard Home web UI (same port, but accessed via subdomain)
       localOnly = true;
     };
 

@@ -142,7 +142,7 @@ in
 
     webPort = lib.mkOption {
       type = lib.types.port;
-      default = 3000;
+      default = 3080;
       description = "Port for the AdGuard Home web interface";
     };
 
