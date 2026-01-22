@@ -200,6 +200,13 @@ in
           address = "0.0.0.0:${toString cfg.webPort}";
         };
 
+        # Custom filtering rules
+        user_rules = [
+          # Whitelist SponsorBlock
+          "@@||sponsor.ajay.app^"
+          "@@||sponsorblock.inf.re^"
+        ];
+
         # DNS server settings
         dns = {
           # Bind to all defined interfaced on port 53
