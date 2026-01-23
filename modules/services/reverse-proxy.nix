@@ -110,88 +110,33 @@ let
   #
   # NOTE: Services marked localOnly = true will only be accessible from
   # the local network, even if exposed via Cloudflare tunnel later
-  services = {
-    # ── Media - User Facing ─────────────────────────────────────────────
-    jellyfin = {
-      subdomain = "jellyfin";
-      port = 8096;
-      localOnly = false; # Users need external access
-    };
-    requests = {
-      subdomain = "requests";
-      port = 5055; # Jellyseerr
-      localOnly = false; # Users can request externally
-    };
-    invite = {
-      subdomain = "invite";
-      port = 5690; # Wizarr
-      localOnly = false; # Invite links need to work externally
-    };
-
-    # ── Media - Admin ────────────────────────────────────────────────────
-    sonarr = {
-      subdomain = "sonarr";
-      port = 8989;
-      localOnly = true; # Admin only
-    };
-    radarr = {
-      subdomain = "radarr";
-      port = 7878;
-      localOnly = true;
-    };
-    prowlarr = {
-      subdomain = "prowlarr";
-      port = 9696;
-      localOnly = true;
-    };
-    bazarr = {
-      subdomain = "bazarr";
-      port = 6767;
-      localOnly = true;
-    };
-    downloads = {
-      subdomain = "downloads";
-      port = 8080; # qBittorrent
-      localOnly = true;
-    };
-
-    # ── Management Tools ─────────────────────────────────────────────────
-    huntarr = {
-      subdomain = "huntarr";
-      port = 9705;
-      localOnly = true;
-    };
-    cleanuparr = {
-      subdomain = "cleanuparr";
-      port = 11011;
-      localOnly = true;
-    };
-    recyclarr = {
-      subdomain = "recyclarr";
-      port = 7700; # If recyclarr has a web UI
-      localOnly = true;
-    };
-
-    # ── Monitoring ───────────────────────────────────────────────────────
-    grafana = {
-      subdomain = "grafana";
-      port = 3000;
-      localOnly = true;
-    };
-    prometheus = {
-      subdomain = "prometheus";
-      port = 9090;
-      localOnly = true;
-    };
-
-    # ── Infrastructure ───────────────────────────────────────────────────
-    adguard = {
-      subdomain = "adguard";
-      port = 3080; # AdGuard Home web UI (same port, but accessed via subdomain)
-      localOnly = true;
-    };
-
-    # Add more services as needed...
+  services = lib.mkOption {
+    type = lib.types.attrsOf (
+      lib.types.submodule {
+        options = {
+          subdomain = lib.mkOption {
+            type = lib.types.str;
+            description = "Subdomain for this service";
+          };
+          port = lib.mkOption {
+            type = lib.types.port;
+            description = "Local port the service listens on";
+          };
+          localOnly = lib.mkOption {
+            type = lib.types.bool;
+            default = true;
+            description = "Restrict access to local network";
+          };
+          extraConfig = lib.mkOption {
+            type = lib.types.lines;
+            default = "";
+            description = "Additional Caddy configuration";
+          };
+        };
+      }
+    );
+    default = { };
+    description = "Services to proxy on this host";
   };
 
   # Convert services attrset to virtualHosts format
