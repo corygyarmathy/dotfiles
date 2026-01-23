@@ -40,8 +40,17 @@ let
   # These map subdomains to the reverse proxy server
   # Add new services here as you deploy them
   dnsRewrites = [
-    # Wildcard for all subdomains - simplest approach
-    # This means ANY subdomain resolves to the primary server
+    # Server hostnames - resolve to their actual IPs
+    {
+      domain = "homelab01.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "homelab02.${domain}";
+      answer = servers.homelab02;
+    }
+    # Wildcard for all OTHER subdomains - routes to reverse proxy
+    # This means service subdomains resolve to the primary server
     # Caddy will handle returning 404 for undefined services
     {
       domain = "*.${domain}";
