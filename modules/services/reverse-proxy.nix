@@ -75,6 +75,17 @@ let
     {
       "${subdomain}.${domain}" = {
         extraConfig = ''
+          ${lib.optionalString (!localOnly) ''
+            header {
+              X-Frame-Options "SAMEORIGIN" # Prevent clickjacking
+              X-Content-Type-Options "nosniff" # Prevent MIME sniffing
+              X-XSS-Protection "1; mode=block" # Enable XSS filter
+              Referrer-Policy "strict-origin-when-cross-origin" # Referrer policy
+              # HSTS (uncomment when ready - be careful, this is sticky. Requires TLS to be working.)
+              # Strict-Transport-Security "max-age=31536000; includeSubDomains"
+            }
+          ''}
+
           ${lib.optionalString localOnly ''
             # Restrict to local network only
             @denied not remote_ip 10.20.2.0/24 192.168.0.0/16 127.0.0.1
@@ -83,6 +94,7 @@ let
 
           reverse_proxy localhost:${toString port} {
             # Recommended headers for proxied services
+            header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-For {remote_host}
             header_up X-Forwarded-Proto {scheme}
