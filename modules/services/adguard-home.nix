@@ -244,6 +244,8 @@ in
           ratelimit = 100; # queries per second per client
           ratelimit_whitelist = [
             "127.0.0.1"
+            "${servers.homelab01}"
+            "${servers.homelab02}"
           ];
 
           # Local PTR resolvers for reverse DNS
