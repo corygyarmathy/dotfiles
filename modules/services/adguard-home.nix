@@ -206,7 +206,7 @@ in
       settings = {
         # HTTP server settings (web interface)
         http = {
-          address = "0.0.0.0:${toString cfg.webPort}";
+          address = "127.0.0.1:${toString cfg.webPort}";
         };
 
         # Custom filtering rules
