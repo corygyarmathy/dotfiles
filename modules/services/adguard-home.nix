@@ -214,6 +214,25 @@ in
           # Whitelist SponsorBlock
           "@@||sponsor.ajay.app^"
           "@@||sponsorblock.inf.re^"
+
+          # Whitelist TMDB (The Movie Database) - used by Jellyseerr for metadata
+          "@@||api.themoviedb.org^"
+          "@@||themoviedb.org^"
+          "@@||tmdb.org^"
+          "@@||image.tmdb.org^"
+
+          # Whitelist TVDB - used for TV show metadata
+          "@@||thetvdb.com^"
+          "@@||api.thetvdb.com^"
+          "@@||artworks.thetvdb.com^"
+
+          # Whitelist Fanart.tv - additional artwork
+          "@@||fanart.tv^"
+          "@@||assets.fanart.tv^"
+
+          # Whitelist for poster/image CDNs commonly used
+          "@@||image.tmdb.org^"
+          "@@||artworks.thetvdb.com^"
         ];
 
         # DNS server settings
