@@ -89,7 +89,7 @@ let
 
           ${lib.optionalString localOnly ''
             # Restrict to local network only
-            @denied not remote_ip 10.20.2.0/24 192.168.0.0/16 127.0.0.1
+            @denied not remote_ip 10.20.2.0/24 10.89.0.0/24 192.168.0.0/16 127.0.0.1
             respond @denied "Access denied" 403
           ''}
 
