@@ -49,14 +49,14 @@ let
       domain = "homelab02.${domain}";
       answer = servers.homelab02;
     }
-    # Wildcard for all OTHER subdomains - routes to reverse proxy
-    # This means service subdomains resolve to the primary server
-    # Caddy will handle returning 404 for undefined services
+  ]
+  ++ cfg.extraRewrites # add supplied rewrites
+  ++ [
+    # Wildcard fallback - routes undefined subdomains to primary
     {
       domain = "*.${domain}";
       answer = primaryServer;
     }
-    # Base domain (if you want gyarmathy.co itself to resolve locally)
     {
       domain = domain;
       answer = primaryServer;
@@ -178,6 +178,24 @@ in
       type = lib.types.bool;
       default = true;
       description = "Whether to open firewall ports for DNS and web interface";
+    };
+    extraRewrites = lib.mkOption {
+      type = lib.types.listOf (
+        lib.types.submodule {
+          options = {
+            domain = lib.mkOption {
+              type = lib.types.str;
+              description = "Domain or subdomain to rewrite";
+            };
+            answer = lib.mkOption {
+              type = lib.types.str;
+              description = "IP address to resolve to";
+            };
+          };
+        }
+      );
+      default = [ ];
+      description = "Additional DNS rewrites beyond the defaults";
     };
   };
 
