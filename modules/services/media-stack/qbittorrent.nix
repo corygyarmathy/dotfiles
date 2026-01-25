@@ -76,14 +76,16 @@ in
     sops.secrets = {
       "media-stack/qbittorrent/username" = { };
       "media-stack/qbittorrent/password" = { };
-    } // lib.optionalAttrs cfg.vpn.enable {
+    }
+    // lib.optionalAttrs cfg.vpn.enable {
       "media-stack/vpn/wireguard-private-key" = { };
     };
 
     # Create config directories
     systemd.tmpfiles.rules = [
       "d ${stack.configPath}/qbittorrent 0775 ${stack.user} ${stack.group} -"
-    ] ++ lib.optionals cfg.vpn.enable [
+    ]
+    ++ lib.optionals cfg.vpn.enable [
       "d ${stack.configPath}/gluetun 0775 ${stack.user} ${stack.group} -"
     ];
 
@@ -109,7 +111,8 @@ in
         ports = [
           "${toString cfg.port}:8080"
           "8000:8000"
-        ] ++ lib.optionals config.cg.service.cross-seed.enable [
+        ]
+        ++ lib.optionals config.cg.service.cross-seed.enable [
           "${toString config.cg.service.cross-seed.port}:2468"
         ];
         extraOptions = [
@@ -240,8 +243,7 @@ in
 
     # Firewall
     networking.firewall = {
-      allowedTCPPorts = [ cfg.port ]
-        ++ lib.optionals (!cfg.vpn.enable) [ 6881 ];
+      allowedTCPPorts = [ cfg.port ] ++ lib.optionals (!cfg.vpn.enable) [ 6881 ];
       allowedUDPPorts = lib.optionals (!cfg.vpn.enable) [ 6881 ];
     };
   };
