@@ -71,6 +71,7 @@ let
       localOnly ? false,
       # Optional: extra Caddy config
       extraConfig ? "",
+      proxyExtraConfig ? "",
     }:
     {
       "${subdomain}.${domain}" = {
@@ -93,11 +94,11 @@ let
           ''}
 
           reverse_proxy localhost:${toString port} {
-            # Recommended headers for proxied services
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-For {remote_host}
             header_up X-Forwarded-Proto {scheme}
+            ${proxyExtraConfig}
           }
 
           ${extraConfig}
@@ -147,6 +148,11 @@ in
               type = lib.types.lines;
               default = "";
               description = "Additional Caddy configuration";
+            };
+            proxyExtraConfig = lib.mkOption {
+              type = lib.types.lines;
+              default = "";
+              description = "Additional Caddy config inside the reverse_proxy block";
             };
           };
         }

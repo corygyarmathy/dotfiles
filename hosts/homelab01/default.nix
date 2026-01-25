@@ -142,6 +142,15 @@
           subdomain = "downloads";
           port = 8080; # qBittorrent
           localOnly = true;
+          proxyExtraConfig = ''
+            # qBittorrent auth fix - strip headers that trigger CSRF protection
+            header_up -Origin
+            header_up -Referer
+            # Increase timeouts for large torrent lists
+            transport http {
+              response_header_timeout 30s
+            }
+          '';
         };
       };
     };
