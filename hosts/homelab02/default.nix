@@ -65,6 +65,31 @@
     immich.enable = false;
     home-assistant.enable = false;
     monitoring.enable = true;
+    reverse-proxy = {
+      enable = true;
+      email = "cory@gyarmathy.co";
+      cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
+
+      services = {
+        # # Download services (moved from homelab01)
+        # downloads = {
+        #   subdomain = "downloads";
+        #   port = 8080; # qBittorrent
+        #   localOnly = true;
+        # };
+
+        # homelab02's AdGuard instance
+        adguard2 = {
+          subdomain = "adguard2";
+          port = 3080;
+          localOnly = true;
+        };
+
+        # Future NAS-related services would go here
+        # e.g., syncthing, nextcloud, etc.
+      };
+    };
+
     adguard-home = {
       enable = true;
       role = "secondary";
@@ -72,6 +97,17 @@
       bindAddresses = [
         "127.0.0.1"
         "10.20.2.130"
+      ];
+      # Route homelab02's services to homelab02
+      extraRewrites = [
+        # {
+        #   domain = "downloads.gyarmathy.co";
+        #   answer = "10.20.2.130";
+        # }
+        {
+          domain = "adguard2.gyarmathy.co";
+          answer = "10.20.2.130";
+        }
       ];
     };
 

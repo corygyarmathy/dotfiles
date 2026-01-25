@@ -62,6 +62,90 @@
     home-assistant.enable = false;
     monitoring.enable = true;
 
+    reverse-proxy = {
+      enable = true;
+      email = "cory@gyarmathy.co";
+      cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
+
+      services = {
+        # Media - User Facing
+        jellyfin = {
+          subdomain = "jellyfin";
+          port = 8096;
+          localOnly = false;
+        };
+        requests = {
+          subdomain = "requests";
+          port = 5055;
+          localOnly = false;
+        };
+        invite = {
+          subdomain = "invite";
+          port = 5690;
+          localOnly = false;
+        };
+
+        # Media - Admin
+        sonarr = {
+          subdomain = "sonarr";
+          port = 8989;
+          localOnly = true;
+        };
+        radarr = {
+          subdomain = "radarr";
+          port = 7878;
+          localOnly = true;
+        };
+        prowlarr = {
+          subdomain = "prowlarr";
+          port = 9696;
+          localOnly = true;
+        };
+        bazarr = {
+          subdomain = "bazarr";
+          port = 6767;
+          localOnly = true;
+        };
+
+        # Management
+        huntarr = {
+          subdomain = "huntarr";
+          port = 9705;
+          localOnly = true;
+        };
+        cleanuparr = {
+          subdomain = "cleanuparr";
+          port = 11011;
+          localOnly = true;
+        };
+
+        # Monitoring
+        grafana = {
+          subdomain = "grafana";
+          port = 3000;
+          localOnly = true;
+        };
+        prometheus = {
+          subdomain = "prometheus";
+          port = 9090;
+          localOnly = true;
+        };
+
+        # Infrastructure (homelab01's AdGuard)
+        adguard = {
+          subdomain = "adguard";
+          port = 3080;
+          localOnly = true;
+        };
+
+        downloads = {
+          subdomain = "downloads";
+          port = 8080; # qBittorrent
+          localOnly = true;
+        };
+      };
+    };
+
     adguard-home = {
       enable = true;
       role = "primary";
@@ -70,11 +154,17 @@
         "127.0.0.1"
         "10.20.2.85"
       ];
-    };
-    reverse-proxy = {
-      enable = true;
-      email = "cory@gyarmathy.co";
-      cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
+      # Route homelab02's services to homelab02
+      extraRewrites = [
+        # {
+        #   domain = "downloads.gyarmathy.co";
+        #   answer = "10.20.2.130";
+        # }
+        {
+          domain = "adguard2.gyarmathy.co";
+          answer = "10.20.2.130";
+        }
+      ];
     };
 
     # Media-stack

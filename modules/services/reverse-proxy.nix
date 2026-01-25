@@ -104,44 +104,6 @@ let
         '';
       };
     };
-
-  # Service definitions - add new services here
-  # Format: { subdomain, port, localOnly (optional), extraConfig (optional) }
-  #
-  # NOTE: Services marked localOnly = true will only be accessible from
-  # the local network, even if exposed via Cloudflare tunnel later
-  services = lib.mkOption {
-    type = lib.types.attrsOf (
-      lib.types.submodule {
-        options = {
-          subdomain = lib.mkOption {
-            type = lib.types.str;
-            description = "Subdomain for this service";
-          };
-          port = lib.mkOption {
-            type = lib.types.port;
-            description = "Local port the service listens on";
-          };
-          localOnly = lib.mkOption {
-            type = lib.types.bool;
-            default = true;
-            description = "Restrict access to local network";
-          };
-          extraConfig = lib.mkOption {
-            type = lib.types.lines;
-            default = "";
-            description = "Additional Caddy configuration";
-          };
-        };
-      }
-    );
-    default = { };
-    description = "Services to proxy on this host";
-  };
-
-  # Convert services attrset to virtualHosts format
-  allVirtualHosts = lib.foldl' (acc: svc: acc // (mkProxyHost svc)) { } (lib.attrValues services);
-
 in
 {
   options.cg.service.reverse-proxy = {
@@ -157,6 +119,40 @@ in
       type = lib.types.path;
       description = "Path to file containing Cloudflare API token";
       example = "/run/secrets/cloudflare-api-token";
+    };
+
+    # Service definitions - add new services here
+    # Format: { subdomain, port, localOnly (optional), extraConfig (optional) }
+    #
+    # NOTE: Services marked localOnly = true will only be accessible from
+    # the local network, even if exposed via Cloudflare tunnel later
+    services = lib.mkOption {
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            subdomain = lib.mkOption {
+              type = lib.types.str;
+              description = "Subdomain for this service";
+            };
+            port = lib.mkOption {
+              type = lib.types.port;
+              description = "Local port the service listens on";
+            };
+            localOnly = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+              description = "Restrict access to local network";
+            };
+            extraConfig = lib.mkOption {
+              type = lib.types.lines;
+              default = "";
+              description = "Additional Caddy configuration";
+            };
+          };
+        }
+      );
+      default = { };
+      description = "Services to proxy on this host";
     };
 
     openFirewall = lib.mkOption {
@@ -212,8 +208,8 @@ in
         acme_dns cloudflare {env.CF_API_TOKEN}
       '';
 
-      # All virtual hosts with TLS
-      virtualHosts = allVirtualHosts;
+      # Convert services attrset to virtualHosts format
+      virtualHosts = lib.foldl' (acc: svc: acc // (mkProxyHost svc)) { } (lib.attrValues cfg.services);
     };
 
     # Firewall
