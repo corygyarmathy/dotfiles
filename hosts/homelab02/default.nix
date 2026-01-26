@@ -2,14 +2,16 @@
 # NAS / secondary server for self-hosted services
 #
 # ROLE: Storage + Download
-# - MergerFS pool of 2x4TB HDDs
+# - MergerFS pool of 2x4TB HDDs (disks managed by disko)
 # - NFS export for homelab01
 # - qBittorrent + VPN (downloads happen locally on storage)
 # - cross-seed (needs access to torrents + media)
 # - unpackerr (extracts downloads)
 #
-# The media-stack module here runs in "server" mode - it hosts the
-# storage and download services, exporting via NFS.
+# INSTALLATION:
+#   nix run github:nix-community/nixos-anywhere -- \
+#     --flake .#homelab02 \
+#     root@10.20.2.130
 {
   inputs,
   config,
@@ -19,7 +21,7 @@
 }:
 {
   imports = [
-    # Declarative disk partitioning
+    # Declarative disk partitioning (manages OS + data disks)
     ./disko.nix
 
     # Hardware configuration (generate with nixos-generate-config)
@@ -79,21 +81,14 @@
     # -------------------------------------------------------------------------
     # NAS Storage (MergerFS + NFS)
     # -------------------------------------------------------------------------
+    # Note: The underlying disk mounts are handled by disko.
+    # This module only sets up the MergerFS pool and NFS export.
     nas-storage = {
       enable = true;
-
-      # Explicit disk configuration - note the -part1 suffix!
-      dataDisks = [
-        {
-          device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ES3V-part1";
-          mountPoint = "/mnt/data/disk1";
-        }
-        {
-          device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ETEH-part1";
-          mountPoint = "/mnt/data/disk2";
-        }
+      diskMountPoints = [
+        "/mnt/data/disk1"
+        "/mnt/data/disk2"
       ];
-
       poolPath = "/srv/media";
       nfs = {
         enable = true;
@@ -368,6 +363,7 @@
     ethtool
     iperf3
     nfs-utils # NFS tools
+    parted
   ];
 
   # ============================================================================

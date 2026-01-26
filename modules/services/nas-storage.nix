@@ -1,20 +1,12 @@
 # NAS Storage Module - MergerFS Pool + NFS Export
 #
 # This module configures homelab02 as a NAS server:
-# - Mounts individual data disks to /mnt/data/disk{1,2,...}
+# - Assumes data disks are already mounted by disko at /mnt/data/disk{1,2,...}
 # - Pools them via MergerFS into /srv/media
 # - Exports /srv/media via NFS for homelab01 to mount
 #
-# IMPORTANT: This module does NOT partition or format disks.
-# You must manually partition and format the disks first:
-#
-#   # For each disk:
-#   sudo parted /dev/disk/by-id/ata-XXXXX mklabel gpt
-#   sudo parted /dev/disk/by-id/ata-XXXXX mkpart primary ext4 0% 100%
-#   sudo mkfs.ext4 -L data1 /dev/disk/by-id/ata-XXXXX-part1
-#
-# The module uses `nofail` so the system will boot even if disks
-# are missing - services that depend on storage will fail gracefully.
+# IMPORTANT: This module does NOT mount the data disks - that's handled by disko.
+# It only sets up MergerFS pooling and NFS export.
 {
   config,
   lib,
@@ -29,28 +21,14 @@ in
   options.cg.service.nas-storage = {
     enable = lib.mkEnableOption "NAS storage with MergerFS and NFS";
 
-    # Define each data disk explicitly
-    dataDisks = lib.mkOption {
-      type = lib.types.listOf (lib.types.submodule {
-        options = {
-          device = lib.mkOption {
-            type = lib.types.str;
-            description = "Device path (use /dev/disk/by-id/... for reliability)";
-            example = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ES3V-part1";
-          };
-          mountPoint = lib.mkOption {
-            type = lib.types.path;
-            description = "Where to mount this disk";
-            example = "/mnt/data/disk1";
-          };
-        };
-      });
-      default = [];
-      example = [
-        { device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ES3V-part1"; mountPoint = "/mnt/data/disk1"; }
-        { device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ETEH-part1"; mountPoint = "/mnt/data/disk2"; }
+    # Paths where disko mounts the data disks
+    diskMountPoints = lib.mkOption {
+      type = lib.types.listOf lib.types.path;
+      default = [
+        "/mnt/data/disk1"
+        "/mnt/data/disk2"
       ];
-      description = "List of data disks to mount and pool";
+      description = "Mount points of data disks (managed by disko)";
     };
 
     # MergerFS pool mount point
@@ -102,43 +80,15 @@ in
     environment.systemPackages = with pkgs; [
       mergerfs
       mergerfs-tools
-      nfs-utils
     ];
 
     # ========================================================================
-    # Create mount point directories
+    # MergerFS Pool Mount
     # ========================================================================
-    systemd.tmpfiles.rules = [
-      "d ${cfg.poolPath} 2775 ${cfg.user} ${cfg.group} -"
-    ] ++ (map (disk: "d ${disk.mountPoint} 0755 root root -") cfg.dataDisks);
-
-    # ========================================================================
-    # Mount individual data disks
-    # ========================================================================
-    # Using nofail so system boots even if disks are missing
-    fileSystems = lib.listToAttrs (map (disk: {
-      name = disk.mountPoint;
-      value = {
-        device = disk.device;
-        fsType = "ext4";
-        options = [
-          "defaults"
-          "noatime"
-          "nofail"  # Don't fail boot if disk is missing
-          "x-systemd.device-timeout=5s"  # Don't wait forever
-        ];
-      };
-    }) cfg.dataDisks);
-
-    # ========================================================================
-    # MergerFS Pool
-    # ========================================================================
-    # Only mount if we have data disks configured
-    systemd.mounts = lib.mkIf (cfg.dataDisks != []) [{
-      what = lib.concatMapStringsSep ":" (d: d.mountPoint) cfg.dataDisks;
-      where = cfg.poolPath;
-      type = "fuse.mergerfs";
-      options = lib.concatStringsSep "," [
+    fileSystems.${cfg.poolPath} = {
+      device = lib.concatStringsSep ":" cfg.diskMountPoints;
+      fsType = "fuse.mergerfs";
+      options = [
         # Policies
         "category.create=epmfs"  # existing path, most free space (enables hardlinks)
         "func.search=ff"         # first found (fast)
@@ -156,24 +106,21 @@ in
         "ignorepponrename=true"
         "allow_other"
         "defaults"
-        "nofail"  # Don't fail boot if pool can't mount
-        "x-systemd.requires=${lib.concatMapStringsSep " " (d: "${lib.replaceStrings ["/"] ["-"] (lib.removePrefix "/" d.mountPoint)}.mount") cfg.dataDisks}"
+        "nofail"
+        "x-systemd.after=mnt-data-disk1.mount"
+        "x-systemd.after=mnt-data-disk2.mount"
       ];
-      wantedBy = [ "multi-user.target" ];
-      after = map (d: "${lib.replaceStrings ["/"] ["-"] (lib.removePrefix "/" d.mountPoint)}.mount") cfg.dataDisks;
-    }];
+    };
 
     # ========================================================================
     # Directory Structure Setup
     # ========================================================================
-    # Create directory structure on each disk after they're mounted
     systemd.services.nas-directory-setup = {
       description = "Create NAS directory structure on data disks";
       after = [ "srv-media.mount" ];
       wants = [ "srv-media.mount" ];
       wantedBy = [ "multi-user.target" ];
 
-      # Only run if the pool is actually mounted
       unitConfig = {
         ConditionPathIsMountPoint = cfg.poolPath;
       };
@@ -195,11 +142,9 @@ in
           "tv"
           "music"
         ];
-        diskPaths = map (d: d.mountPoint) cfg.dataDisks;
       in ''
         # Create directory structure on each underlying disk
-        # This ensures MergerFS can place files on any disk
-        for disk in ${lib.concatStringsSep " " diskPaths}; do
+        for disk in ${lib.concatStringsSep " " cfg.diskMountPoints}; do
           if mountpoint -q "$disk"; then
             for dir in ${lib.concatStringsSep " " dirs}; do
               mkdir -p "$disk/$dir"

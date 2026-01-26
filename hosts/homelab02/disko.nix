@@ -1,22 +1,18 @@
 # Disko configuration for homelab02
 # HP Elitedesk 800 G6 SFF - NAS + services
 #
-# Disk Layout:
+# This manages ALL disks declaratively:
 #   - NVMe: OS (boot + root)
 #   - 2x 4TB HDD: Data storage (individual ext4, pooled via MergerFS)
 #
-# Usage with nixos-anywhere:
+# Fresh install with nixos-anywhere:
 #   nix run github:nix-community/nixos-anywhere -- \
 #     --flake .#homelab02 \
-#     --disk main /dev/nvme0n1 \
-#     --disk data1 /dev/disk/by-id/ata-ST4000VN006-XXXXXXXX \
-#     --disk data2 /dev/disk/by-id/ata-ST4000VN006-YYYYYYYY \
-#     root@<IP>
+#     root@10.20.2.130
 #
 # NOTE: Find disk serial numbers with: ls -la /dev/disk/by-id/ | grep ST4000VN006
-# WARNING: if updating after system is built, manual partitioning is needed first!
-# If not performed the system will crash and fail to boot. Will need to be booted
-# to the previous generation.
+# Disko will automatically find and partition the disks based on the
+# device paths specified below.
 {
   disko.devices = {
     disk = {
@@ -66,8 +62,6 @@
       # ========================================================================
       # Data Disk 1 (4TB HDD)
       # ========================================================================
-      # Get actual disk ID from:
-      # ls -la /dev/disk/by-id/ | grep ST4000VN006
       data1 = {
         type = "disk";
         # Use disk-by-id for reliable identification across reboots
@@ -84,10 +78,7 @@
                 mountOptions = [
                   "defaults"
                   "noatime"
-                  # Optimize for large sequential writes (media files)
-                  "data=writeback"
-                  "barrier=0"
-                  "nobh"
+                  "nofail"
                 ];
               };
             };
@@ -113,9 +104,7 @@
                 mountOptions = [
                   "defaults"
                   "noatime"
-                  "data=writeback"
-                  "barrier=0"
-                  "nobh"
+                  "nofail"
                 ];
               };
             };
