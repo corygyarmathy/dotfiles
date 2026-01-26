@@ -85,28 +85,34 @@ in
     # ========================================================================
     # MergerFS Pool Mount
     # ========================================================================
+    # Options from: https://trapexit.github.io/mergerfs/latest/config/options/
     fileSystems.${cfg.poolPath} = {
       device = lib.concatStringsSep ":" cfg.diskMountPoints;
       fsType = "fuse.mergerfs";
       options = [
-        # Policies
-        "category.create=epmfs"  # existing path, most free space (enables hardlinks)
-        "func.search=ff"         # first found (fast)
-        "func.rename=all"        # allows cross-branch moves
-
-        # Performance
-        "cache.files=partial"
-        "cache.entry=3"
-        "cache.negative_entry=1"
-        "cache.attr=3"
-        "async_read=true"
-        "inodecalc=path-hash"
-
-        # Behavior
-        "ignorepponrename=true"
+        # Create policy: existing path, most free space (enables hardlinks)
+        # pfrd = path first, rand (default). epmfs = existing path, most free space
+        "category.create=epmfs"
+        
+        # Search policy: first found (fast)
+        "category.search=ff"
+        
+        # Minimum free space before considering a branch full
+        "minfreespace=20G"
+        
+        # Move file to another branch if write fails with ENOSPC
+        "moveonenospc=true"
+        
+        # Cache settings
+        "cache.files=off"
+        
+        # Allow non-root users to access
         "allow_other"
-        "defaults"
+        
+        # Don't fail boot if pool can't mount
         "nofail"
+        
+        # Systemd ordering
         "x-systemd.after=mnt-data-disk1.mount"
         "x-systemd.after=mnt-data-disk2.mount"
       ];
