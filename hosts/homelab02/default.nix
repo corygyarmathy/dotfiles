@@ -81,11 +81,19 @@
     # -------------------------------------------------------------------------
     nas-storage = {
       enable = true;
-      # Disk paths are set by disko
-      diskPaths = [
-        "/mnt/data/disk1"
-        "/mnt/data/disk2"
+
+      # Explicit disk configuration - note the -part1 suffix!
+      dataDisks = [
+        {
+          device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ES3V-part1";
+          mountPoint = "/mnt/data/disk1";
+        }
+        {
+          device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ETEH-part1";
+          mountPoint = "/mnt/data/disk2";
+        }
       ];
+
       poolPath = "/srv/media";
       nfs = {
         enable = true;
