@@ -98,6 +98,7 @@ in
           VPN_SERVICE_PROVIDER = cfg.vpn.provider;
           VPN_TYPE = "wireguard";
           SERVER_COUNTRIES = cfg.vpn.serverCountry;
+          SERVER_ENDPOINT_IP = "103.108.231.162";
           VPN_PORT_FORWARDING = "on";
           FIREWALL_OUTBOUND_SUBNETS = "10.89.0.0/24,10.20.2.0/24";
           TZ = config.time.timeZone;
