@@ -39,6 +39,15 @@
 # 2. Manually URL-encode special characters in your sops secret
 #    (e.g., @ becomes %40, : becomes %3A)
 #
+# NETWORK ARCHITECTURE:
+# - When VPN enabled: cross-seed uses --network=container:gluetun, sharing gluetun's
+#   network namespace. This means it accesses qBittorrent via localhost:8080 since
+#   qBittorrent also shares gluetun's network.
+# - When VPN disabled: cross-seed uses arr-network and accesses qBittorrent via
+#   its container hostname.
+# - Prowlarr is always accessed via the reverse proxy (prowlarr.gyarmathy.co)
+#   since it's on the arr-network and cross-seed needs a stable route to it.
+#
 # MIGRATION NOTES (homelab02 NAS):
 # Cross-seed will MOVE to homelab02 alongside qBittorrent.
 # - Needs access to qBittorrent's torrent files and media library
@@ -58,10 +67,18 @@ let
   boolToJs = b: if b then "true" else "false";
   nullableToJs = v: if v == null then "null" else toString v;
 
+  # Determine the correct qBittorrent host based on VPN mode
+  # When VPN enabled: cross-seed shares gluetun's network namespace with qBittorrent,
+  #                   so they communicate via localhost
+  # When VPN disabled: cross-seed is on arr-network, uses container hostname
+  effectiveQbtHost = if qbt.vpn.enable then "localhost" else cfg.qbittorrentHost;
+
   # Build Torznab URL list for config
+  # Always use the reverse proxy URL for Prowlarr since it's accessible from
+  # both VPN and non-VPN network configurations
   torznabUrlList = lib.concatMapStringsSep ",\n    " (
     id:
-    ''"http://prowlarr:9696/${toString id}/api?apikey=${
+    ''"https://prowlarr.gyarmathy.co/${toString id}/api?apikey=${
       config.sops.placeholder."media-stack/prowlarr/api"
     }"''
   ) cfg.torznabIndexerIds;
@@ -86,10 +103,12 @@ let
       // ========================================================================
       // TORRENT CLIENT CONNECTION
       // ========================================================================
+      // Host is ${effectiveQbtHost} because:
+      // ${if qbt.vpn.enable then "VPN mode: cross-seed shares gluetun's network namespace with qBittorrent" else "Direct mode: cross-seed uses arr-network container hostname"}
       torrentClients: [
         "qbittorrent:http://${config.sops.placeholder."media-stack/qbittorrent/username"}:${
           config.sops.placeholder."media-stack/qbittorrent/password"
-        }@${cfg.qbittorrentHost}:8080",
+        }@${effectiveQbtHost}:8080",
       ],
 
       // Use torrents from client for matching (recommended)
@@ -189,8 +208,9 @@ in
       type = lib.types.str;
       default = "qbittorrent";
       description = ''
-        Hostname for qBittorrent connection.
-        Use "qbittorrent" for arr-network access, or "gluetun" if VPN enabled.
+        Hostname for qBittorrent connection when VPN is DISABLED.
+        When VPN is enabled, this is automatically set to "localhost" since
+        cross-seed shares the gluetun network namespace with qBittorrent.
       '';
     };
 
