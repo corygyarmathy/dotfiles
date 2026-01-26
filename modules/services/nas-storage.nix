@@ -170,8 +170,10 @@ in
     # ========================================================================
     services.nfs.server = lib.mkIf cfg.nfs.enable {
       enable = true;
+      # fsid=1 is required for FUSE filesystems like MergerFS
+      # Using non-zero allows clients to mount with the full path
       exports = ''
-        ${cfg.nfs.exportPath} ${cfg.nfs.allowedNetwork}(rw,sync,no_subtree_check,no_root_squash,crossmnt)
+        ${cfg.nfs.exportPath} ${cfg.nfs.allowedNetwork}(rw,sync,no_subtree_check,no_root_squash,fsid=1)
       '';
       extraNfsdConfig = ''
         vers3=n
