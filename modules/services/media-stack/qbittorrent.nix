@@ -99,7 +99,7 @@ in
           VPN_TYPE = "wireguard";
           SERVER_COUNTRIES = cfg.vpn.serverCountry;
           VPN_PORT_FORWARDING = "on";
-          FIREWALL_OUTBOUND_SUBNETS = "10.89.0.0/24";
+          FIREWALL_OUTBOUND_SUBNETS = "10.89.0.0/24,10.20.2.0/24";
           TZ = config.time.timeZone;
         };
         environmentFiles = [
@@ -181,6 +181,10 @@ in
       };
 
       # VPN port forwarding sync service
+      # NOTE: This script runs on the HOST, not inside a container.
+      # It communicates with Gluetun and qBittorrent via their host-mapped ports.
+      # Since Gluetun exposes both services to localhost (8000 for Gluetun API,
+      # cfg.port for qBittorrent WebUI), localhost is the correct address here.
       vpn-port-sync = lib.mkIf cfg.vpn.enable {
         description = "Sync VPN forwarded port to qBittorrent";
         after = [
