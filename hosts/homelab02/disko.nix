@@ -13,8 +13,10 @@
 #     --disk data2 /dev/disk/by-id/ata-ST4000VN006-YYYYYYYY \
 #     root@<IP>
 #
-# IMPORTANT: Replace XXXXXXXX and YYYYYYYY with actual disk serial numbers
-# Find them with: ls -la /dev/disk/by-id/ | grep ST4000VN006
+# NOTE: Find disk serial numbers with: ls -la /dev/disk/by-id/ | grep ST4000VN006
+# WARNING: if updating after system is built, manual partitioning is needed first!
+# If not performed the system will crash and fail to boot. Will need to be booted
+# to the previous generation.
 {
   disko.devices = {
     disk = {
