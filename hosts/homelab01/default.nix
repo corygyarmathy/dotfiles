@@ -1,5 +1,13 @@
 # Homelab Server - Optiplex 5080
 # Primary server for self-hosted services
+#
+# ROLE: Compute + Streaming
+# - Intel Quick Sync for Jellyfin transcoding
+# - Media management (Sonarr, Radarr, Prowlarr, etc.)
+# - NFS client to homelab02's storage
+#
+# The media-stack module here runs in "client" mode - it mounts
+# storage from homelab02 via NFS.
 {
   inputs,
   config,
@@ -62,6 +70,9 @@
     home-assistant.enable = false;
     monitoring.enable = true;
 
+    # -------------------------------------------------------------------------
+    # Reverse Proxy (Caddy)
+    # -------------------------------------------------------------------------
     reverse-proxy = {
       enable = true;
       email = "cory@gyarmathy.co";
@@ -152,9 +163,14 @@
             }
           '';
         };
+        # NOTE: downloads subdomain now routes to homelab02 via DNS
+        # (see adguard-home.extraRewrites below)
       };
     };
 
+    # -------------------------------------------------------------------------
+    # DNS (AdGuard Home)
+    # -------------------------------------------------------------------------
     adguard-home = {
       enable = true;
       role = "primary";
@@ -176,14 +192,52 @@
       ];
     };
 
-    # Media-stack
-    # Shared infrastructure (REQUIRED)
-    media-stack.enable = true;
+    # -------------------------------------------------------------------------
+    # Media Stack (NFS Client Mode)
+    # -------------------------------------------------------------------------
+    # On homelab01, media-stack mounts storage from homelab02 via NFS.
+    # This allows Sonarr/Radarr to manage files that live on the NAS.
+    media-stack = {
+      enable = true;
+      dataPath = "/srv/media";
+      configPath = "/srv/arr";
+      user = "coryg";
+      group = "media";
 
-    # Individual services
+      # Mount from homelab02
+      storage = {
+        type = "nfs";
+        nfsServer = "10.20.2.130";  # homelab02
+        nfsExportPath = "/srv/media";
+        nfsMountOptions = [
+          "nfsvers=4.2"
+          "soft"
+          "timeo=150"
+          "retrans=3"
+          # Performance tuning for media files
+          "rsize=1048576"
+          "wsize=1048576"
+          # Caching settings
+          "ac"
+          "actimeo=5"
+        ];
+      };
+    };
+
+    # -------------------------------------------------------------------------
+    # Streaming Services (Run Locally)
+    # -------------------------------------------------------------------------
+    # These benefit from Quick Sync or need low-latency access
+
     jellyfin.enable = true;
-    jellyseerr.enable = true;
 
+    # -------------------------------------------------------------------------
+    # Media Management (Run Locally)
+    # -------------------------------------------------------------------------
+    # These are metadata-heavy and CPU-bound, not I/O-bound.
+    # They access media via NFS but don't do heavy writes.
+
+    jellyseerr.enable = true;
     sonarr.enable = true;
     radarr.enable = true;
     prowlarr.enable = true;
@@ -200,6 +254,11 @@
     huntarr.enable = true;
     cleanuparr.enable = true;
     wizarr.enable = true;
+
+    # -------------------------------------------------------------------------
+    # Download Services (NOW ON HOMELAB02)
+    # -------------------------------------------------------------------------
+
     cross-seed = {
       enable = true;
       # Your private tracker indexer IDs from Prowlarr
@@ -357,6 +416,7 @@
     # Network utilities
     ethtool
     iperf3
+    nfs-utils  # NFS client tools
   ];
 
   # ============================================================================
@@ -378,7 +438,7 @@
     };
 
     # Media group for shared file access between services
-    # Explicit GID for container compatibility
+    # Explicit GID for container compatibility AND NFS consistency
     groups.media.gid = 1011;
 
     mutableUsers = false;
