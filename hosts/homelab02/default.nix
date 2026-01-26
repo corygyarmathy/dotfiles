@@ -1,5 +1,15 @@
 # Homelab Server - HP Elitedesk 800 G6 SFF
 # NAS / secondary server for self-hosted services
+#
+# ROLE: Storage + Download
+# - MergerFS pool of 2x4TB HDDs
+# - NFS export for homelab01
+# - qBittorrent + VPN (downloads happen locally on storage)
+# - cross-seed (needs access to torrents + media)
+# - unpackerr (extracts downloads)
+#
+# The media-stack module here runs in "server" mode - it hosts the
+# storage and download services, exporting via NFS.
 {
   inputs,
   config,
@@ -65,18 +75,51 @@
     immich.enable = false;
     home-assistant.enable = false;
     monitoring.enable = true;
+
+    # -------------------------------------------------------------------------
+    # NAS Storage (MergerFS + NFS)
+    # -------------------------------------------------------------------------
+    nas-storage = {
+      enable = true;
+      # Disk paths are set by disko
+      diskPaths = [
+        "/mnt/data/disk1"
+        "/mnt/data/disk2"
+      ];
+      poolPath = "/srv/media";
+      nfs = {
+        enable = true;
+        allowedNetwork = "10.20.2.0/24";
+        exportPath = "/srv/media";
+      };
+      user = "coryg";
+      group = "media";
+    };
+
+    # -------------------------------------------------------------------------
+    # Reverse Proxy (Caddy)
+    # -------------------------------------------------------------------------
     reverse-proxy = {
       enable = true;
       email = "cory@gyarmathy.co";
       cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
 
       services = {
-        # # Download services (moved from homelab01)
-        # downloads = {
-        #   subdomain = "downloads";
-        #   port = 8080; # qBittorrent
-        #   localOnly = true;
-        # };
+        # Download client
+        downloads = {
+          subdomain = "downloads";
+          port = 8080; # qBittorrent
+          localOnly = true;
+          proxyExtraConfig = ''
+            # qBittorrent auth fix - strip headers that trigger CSRF protection
+            header_up -Origin
+            header_up -Referer
+            # Increase timeouts for large torrent lists
+            transport http {
+              response_header_timeout 30s
+            }
+          '';
+        };
 
         # homelab02's AdGuard instance
         adguard2 = {
@@ -90,6 +133,9 @@
       };
     };
 
+    # -------------------------------------------------------------------------
+    # DNS (AdGuard Home)
+    # -------------------------------------------------------------------------
     adguard-home = {
       enable = true;
       role = "secondary";
@@ -100,10 +146,11 @@
       ];
       # Route homelab02's services to homelab02
       extraRewrites = [
-        # {
-        #   domain = "downloads.gyarmathy.co";
-        #   answer = "10.20.2.130";
-        # }
+        # Route downloads subdomain to this host
+        {
+          domain = "downloads.gyarmathy.co";
+          answer = "10.20.2.130";
+        }
         {
           domain = "adguard2.gyarmathy.co";
           answer = "10.20.2.130";
@@ -111,29 +158,32 @@
       ];
     };
 
-    # Media-stack
-    media-stack.enable = false; # Shared infrastructure (REQUIRED)
+    # -------------------------------------------------------------------------
+    # Media Stack (Storage Server Mode)
+    # -------------------------------------------------------------------------
+    # On homelab02, media-stack provides local storage infrastructure
+    # for the download services. The storage is exported via NFS.
+    media-stack = {
+      enable = true;
+      dataPath = "/srv/media"; # MergerFS pool
+      configPath = "/srv/arr"; # Local config (not shared)
+      user = "coryg";
+      group = "media";
+      # Storage is local (MergerFS), not NFS
+      storage.type = "local";
+    };
 
-    # Individual services
-    jellyfin.enable = false;
-    jellyseerr.enable = false;
-
-    sonarr.enable = false;
-    radarr.enable = false;
-    prowlarr.enable = false;
-    bazarr.enable = false;
+    # -------------------------------------------------------------------------
+    # Download Services (Run on NAS)
+    # -------------------------------------------------------------------------
+    # These services download files directly to local storage,
+    # avoiding NFS write overhead.
 
     qbittorrent = {
       enable = false;
       vpn.enable = true;
     };
 
-    flaresolverr.enable = false;
-
-    recyclarr.enable = false;
-    huntarr.enable = false;
-    cleanuparr.enable = false;
-    wizarr.enable = false;
     cross-seed = {
       enable = false;
       # Your private tracker indexer IDs from Prowlarr
@@ -142,7 +192,23 @@
       matchMode = "partial";
       includeSingleEpisodes = true;
     };
+
     unpackerr.enable = false;
+
+    # -------------------------------------------------------------------------
+    # Services that stay on homelab01
+    # -------------------------------------------------------------------------
+    jellyfin.enable = false;
+    jellyseerr.enable = false;
+    sonarr.enable = false;
+    radarr.enable = false;
+    prowlarr.enable = false;
+    bazarr.enable = false;
+    flaresolverr.enable = false;
+    recyclarr.enable = false;
+    huntarr.enable = false;
+    cleanuparr.enable = false;
+    wizarr.enable = false;
   };
 
   # ============================================================================
@@ -163,6 +229,7 @@
   networking = {
     # IP reserved by DHCP server
     useDHCP = lib.mkForce true;
+    hostName = "homelab02";
     networkmanager.enable = true;
   };
 
@@ -278,6 +345,8 @@
     ncdu
     iotop
     smartmontools
+    mergerfs # For manual pool inspection
+    mergerfs-tools # Useful utilities for MergerFS
 
     # Hardware monitoring
     lm_sensors
@@ -290,6 +359,7 @@
     # Network utilities
     ethtool
     iperf3
+    nfs-utils # NFS tools
   ];
 
   # ============================================================================
@@ -311,7 +381,7 @@
     };
 
     # Media group for shared file access between services
-    # Explicit GID for container compatibility
+    # Explicit GID for container compatibility AND NFS consistency
     groups.media.gid = 1011;
 
     mutableUsers = false;
