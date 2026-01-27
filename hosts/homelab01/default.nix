@@ -149,20 +149,6 @@
           localOnly = true;
         };
 
-        downloads = {
-          subdomain = "downloads";
-          port = 8080; # qBittorrent
-          localOnly = true;
-          proxyExtraConfig = ''
-            # qBittorrent auth fix - strip headers that trigger CSRF protection
-            header_up -Origin
-            header_up -Referer
-            # Increase timeouts for large torrent lists
-            transport http {
-              response_header_timeout 30s
-            }
-          '';
-        };
         # NOTE: downloads subdomain now routes to homelab02 via DNS
         # (see adguard-home.extraRewrites below)
       };
@@ -181,10 +167,11 @@
       ];
       # Route homelab02's services to homelab02
       extraRewrites = [
-        # {
-        #   domain = "downloads.gyarmathy.co";
-        #   answer = "10.20.2.130";
-        # }
+        # Download client is now on homelab02
+        {
+          domain = "downloads.gyarmathy.co";
+          answer = "10.20.2.130";
+        }
         {
           domain = "adguard2.gyarmathy.co";
           answer = "10.20.2.130";
@@ -207,7 +194,7 @@
       # Mount from homelab02
       storage = {
         type = "nfs";
-        nfsServer = "10.20.2.130";  # homelab02
+        nfsServer = "10.20.2.130"; # homelab02
         nfsExportPath = "/srv/media";
         nfsMountOptions = [
           "nfsvers=4.2"
@@ -242,14 +229,7 @@
     radarr.enable = true;
     prowlarr.enable = true;
     bazarr.enable = true;
-
-    qbittorrent = {
-      enable = true;
-      vpn.enable = true;
-    };
-
     flaresolverr.enable = true;
-
     recyclarr.enable = true;
     huntarr.enable = true;
     cleanuparr.enable = true;
@@ -258,16 +238,19 @@
     # -------------------------------------------------------------------------
     # Download Services (NOW ON HOMELAB02)
     # -------------------------------------------------------------------------
+    qbittorrent = {
+      enable = false; # Moved to homelab02
+      vpn.enable = true;
+    };
 
     cross-seed = {
-      enable = true;
-      # Your private tracker indexer IDs from Prowlarr
-      # Find at: Prowlarr -> Indexers -> click tracker -> ID in URL
-      torznabIndexerIds = [ 8 ]; # IPT
+      enable = false; # Moved to homelab02
+      torznabIndexerIds = [ 8 ];
       matchMode = "partial";
       includeSingleEpisodes = true;
     };
-    unpackerr.enable = true;
+
+    unpackerr.enable = false; # Moved to homelab02
   };
 
   # ============================================================================
@@ -416,7 +399,7 @@
     # Network utilities
     ethtool
     iperf3
-    nfs-utils  # NFS client tools
+    nfs-utils # NFS client tools
   ];
 
   # ============================================================================
