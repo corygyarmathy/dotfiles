@@ -40,13 +40,73 @@ let
   # These map subdomains to the reverse proxy server
   # Add new services here as you deploy them
   dnsRewrites = [
-    # Server hostnames - resolve to their actual IPs
+    # Server hostnames
     {
       domain = "homelab01.${domain}";
       answer = servers.homelab01;
     }
     {
       domain = "homelab02.${domain}";
+      answer = servers.homelab02;
+    }
+
+    # Services on homelab01
+    {
+      domain = "jellyfin.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "requests.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "invite.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "sonarr.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "radarr.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "prowlarr.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "bazarr.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "huntarr.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "cleanuparr.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "grafana.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "prometheus.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "adguard.${domain}";
+      answer = servers.homelab01;
+    }
+
+    # Services on homelab02
+    {
+      domain = "downloads.${domain}";
+      answer = servers.homelab02;
+    }
+    {
+      domain = "adguard2.${domain}";
       answer = servers.homelab02;
     }
   ]

@@ -148,18 +148,6 @@
         "127.0.0.1"
         "10.20.2.130"
       ];
-      # Route homelab02's services to homelab02
-      extraRewrites = [
-        # Route downloads subdomain to this host
-        {
-          domain = "downloads.gyarmathy.co";
-          answer = "10.20.2.130";
-        }
-        {
-          domain = "adguard2.gyarmathy.co";
-          answer = "10.20.2.130";
-        }
-      ];
     };
 
     # -------------------------------------------------------------------------
