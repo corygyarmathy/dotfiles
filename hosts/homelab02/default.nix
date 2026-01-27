@@ -184,12 +184,12 @@
     # avoiding NFS write overhead.
 
     qbittorrent = {
-      enable = false;
+      enable = true;
       vpn.enable = true;
     };
 
     cross-seed = {
-      enable = false;
+      enable = true;
       # Your private tracker indexer IDs from Prowlarr
       # Find at: Prowlarr -> Indexers -> click tracker -> ID in URL
       torznabIndexerIds = [ 8 ]; # IPT
@@ -197,7 +197,7 @@
       includeSingleEpisodes = true;
     };
 
-    unpackerr.enable = false;
+    unpackerr.enable = true;
 
     # -------------------------------------------------------------------------
     # Services that stay on homelab01
