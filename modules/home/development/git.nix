@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.git;
-in {
+in
+{
   options.cg.home.git.enable = lib.mkEnableOption "Git configuration";
 
   config = lib.mkIf cfg.enable {
@@ -20,7 +22,7 @@ in {
       git
       gh # GitHub CLI
       git-credential-manager
-      dotnetCorePackages.sdk_8_0_3xx
+      dotnetCorePackages.dotnet_10.sdk
       gnupg
       pinentry-all
       pass-wayland
