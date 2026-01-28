@@ -51,6 +51,7 @@ nix flake update
 1. Create `hosts/hostname/` directory
 2. Copy and modify `default.nix`, `hardware.nix`, `home.nix` from an existing host
 3. Add to `flake.nix`:
+
    ```nix
    nixosConfigurations.hostname = mkHost {
      hostname = "hostname";
@@ -63,6 +64,7 @@ nix flake update
 ### Enabling modules
 
 In `hosts/hostname/default.nix` (NixOS modules):
+
 ```nix
 cg = {
   hyprland.enable = true;
@@ -72,6 +74,7 @@ cg = {
 ```
 
 In `hosts/hostname/home.nix` (Home-manager modules):
+
 ```nix
 cg.home = {
   nvim.enable = true;
@@ -112,7 +115,49 @@ to your `~/.config/`.
 This configuration uses [sops-nix](https://github.com/Mic92/sops-nix) for secrets management.
 
 Setup:
+
 1. Generate an age key: `age-keygen -o ~/.config/sops/age/keys.txt`
 2. Add the public key to `secrets/.sops.yaml`
 3. Encrypt secrets: `sops secrets/secrets.yaml`
 4. Enable sops in your host configuration
+
+## Homelab Infrastructure
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        homelab02 (NAS)                          │
+│  HP Elitedesk 800 G6 • i7 10th Gen • 2×4TB HDDs                 │
+├─────────────────────────────────────────────────────────────────┤
+│  Primary Role: Storage + Download                               │
+│                                                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │ qBittorrent │  │ cross-seed  │  │  unpackerr  │              │
+│  │  + gluetun  │  │             │  │             │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+│                                                                 │
+│  Storage: /srv/media (primary) ──── NFS export ────────────▶    │
+│           - downloads/                                          │
+│           - movies/                                             │
+│           - tv/                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                         NFS mount
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       homelab01 (Compute)                       │
+│  Dell Optiplex 5080 • i5 • Quick Sync                           │
+├─────────────────────────────────────────────────────────────────┤
+│  Primary Role: Media Management + Streaming                     │
+│                                                                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │ Jellyfin │ │  Sonarr  │ │  Radarr  │ │ Prowlarr │            │
+│  │(transcode│ │          │ │          │ │          │            │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │  Bazarr  │ │Jellyseerr│ │ Recyclarr│ │  Wizarr  │            │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
+│                                                                 │
+│  Storage: /srv/media (NFS mount from homelab02)                 │
+└─────────────────────────────────────────────────────────────────┘
+```
