@@ -45,6 +45,15 @@ let
         delete_old_custom_formats: true
         replace_existing_custom_formats: true
 
+        media_naming:
+          series: jellyfin-tvdb
+          season: default
+          episodes:
+            rename: true
+            standard: default
+            daily: default
+            anime: default
+
         include:
           # Quality definitions
           - template: sonarr-quality-definition-series
@@ -69,6 +78,13 @@ let
         api_key: !env_var RADARR_API_KEY
         delete_old_custom_formats: true
         replace_existing_custom_formats: true
+
+        media_naming:
+          folder: jellyfin-tmdb
+          movie:
+            rename: true
+            standard: jellyfin-tmdb
+
 
         include:
           # Quality definitions
