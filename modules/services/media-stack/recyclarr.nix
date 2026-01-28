@@ -11,8 +11,11 @@
 # 4. Check logs: journalctl -u podman-recyclarr
 #
 # The default config includes:
-# - Sonarr: WEB-1080p, WEB-2160p, and Anime profiles
+# - Sonarr: WEB-1080p (alternative), WEB-2160p (alternative), and Anime profiles
 # - Radarr: HD Bluray+WEB, UHD Bluray+WEB, and Anime profiles
+#
+# NOTE: Alternative profiles include lower quality fallbacks (720p, HDTV, etc.)
+# so media that isn't available in the preferred quality will still be grabbed.
 #
 # CUSTOMIZATION:
 # Override recyclarrConfig to customize profiles and formats.
@@ -46,12 +49,14 @@ let
           # Quality definitions
           - template: sonarr-quality-definition-series
 
-          # WEB-1080p for most TV shows
-          - template: sonarr-v4-quality-profile-web-1080p
+          # WEB-1080p Alternative - includes lower quality fallbacks (720p, HDTV)
+          # for older shows or less available content
+          - template: sonarr-v4-quality-profile-web-1080p-alternative
           - template: sonarr-v4-custom-formats-web-1080p
 
-          # WEB-2160p for 4K TV shows
-          - template: sonarr-v4-quality-profile-web-2160p
+          # WEB-2160p Alternative - includes lower quality fallbacks
+          # Will grab 4K when available, but falls back to 1080p/720p if not
+          - template: sonarr-v4-quality-profile-web-2160p-alternative
           - template: sonarr-v4-custom-formats-web-2160p
 
           # Anime profile
@@ -128,7 +133,9 @@ in
     # Container definition
     virtualisation.oci-containers.containers.recyclarr = {
       image = "ghcr.io/recyclarr/recyclarr:latest";
-      user = "${toString config.users.users.${stack.user}.uid}:${toString config.users.groups.${stack.group}.gid}";
+      user = "${toString config.users.users.${stack.user}.uid}:${
+        toString config.users.groups.${stack.group}.gid
+      }";
       volumes = [
         "${stack.configPath}/recyclarr:/config"
         "${pkgs.writeText "recyclarr.yml" cfg.recyclarrConfig}:/config/recyclarr.yml:ro"
