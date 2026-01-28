@@ -40,7 +40,7 @@ let
 
     sonarr:
       shows:
-        base_url: http://sonarr:8989
+        base_url: https://sonarr.gyarmathy.co
         api_key: !env_var SONARR_API_KEY
         delete_old_custom_formats: true
         replace_existing_custom_formats: true
@@ -74,7 +74,7 @@ let
 
     radarr:
       movies:
-        base_url: http://radarr:7878
+        base_url: https://radarr.gyarmathy.co
         api_key: !env_var RADARR_API_KEY
         delete_old_custom_formats: true
         replace_existing_custom_formats: true
