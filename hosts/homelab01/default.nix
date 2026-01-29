@@ -68,7 +68,6 @@
     backup.enable = false;
     immich.enable = false;
     home-assistant.enable = false;
-    monitoring.enable = true;
 
     # -------------------------------------------------------------------------
     # Reverse Proxy (Caddy)
@@ -130,18 +129,6 @@
           localOnly = true;
         };
 
-        # Monitoring
-        grafana = {
-          subdomain = "grafana";
-          port = 3000;
-          localOnly = true;
-        };
-        prometheus = {
-          subdomain = "prometheus";
-          port = 9090;
-          localOnly = true;
-        };
-
         # Infrastructure (homelab01's AdGuard)
         adguard = {
           subdomain = "adguard";
@@ -151,6 +138,67 @@
 
         # NOTE: downloads subdomain now routes to homelab02 via DNS
         # (see adguard-home.extraRewrites below)
+
+      };
+
+    };
+
+    monitoring = {
+      enable = true;
+      role = "hub";
+
+      scrapeTargets = [
+        "homelab01:9100"
+        "homelab02:9100"
+      ];
+
+      smartctlTargets = [
+        "homelab01:9633"
+        "homelab02:9633"
+      ];
+
+      httpProbes = [
+        {
+          name = "jellyfin";
+          url = "https://jellyfin.gyarmathy.co";
+        }
+        {
+          name = "requests";
+          url = "https://requests.gyarmathy.co";
+        }
+        {
+          name = "sonarr";
+          url = "https://sonarr.gyarmathy.co";
+        }
+        {
+          name = "radarr";
+          url = "https://radarr.gyarmathy.co";
+        }
+        {
+          name = "prowlarr";
+          url = "https://prowlarr.gyarmathy.co";
+        }
+        {
+          name = "downloads";
+          url = "https://downloads.gyarmathy.co";
+        }
+        {
+          name = "grafana";
+          url = "https://grafana.gyarmathy.co";
+        }
+        {
+          name = "adguard-01";
+          url = "https://adguard.gyarmathy.co";
+        }
+        {
+          name = "adguard-02";
+          url = "https://adguard2.gyarmathy.co";
+        }
+
+      ];
+
+      alerting = {
+        enable = true;
       };
     };
 

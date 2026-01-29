@@ -77,7 +77,10 @@
     backup.enable = false;
     immich.enable = false;
     home-assistant.enable = false;
-    monitoring.enable = true;
+    monitoring = {
+      enable = true;
+      role = "agent";
+    };
 
     # -------------------------------------------------------------------------
     # NAS Storage (MergerFS + NFS)

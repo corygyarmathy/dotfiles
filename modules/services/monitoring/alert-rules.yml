@@ -1,0 +1,95 @@
+groups:
+  - name: node
+    rules:
+      # Disk space alerts
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: 'Filesystem {{ $labels.mountpoint }} has {{ printf "%.1f" $value }}% free space'
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: 'Filesystem {{ $labels.mountpoint }} has {{ printf "%.1f" $value }}% free space'
+
+      # SMART disk health
+      - alert: DiskSmartUnhealthy
+        expr: smartctl_device_smart_healthy != 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SMART health check failed"
+          description: "Disk {{ $labels.device }} on {{ $labels.instance }} is reporting unhealthy"
+
+      # Systemd unit failures (catches NFS mount failures too)
+      - alert: SystemdUnitFailed
+        expr: node_systemd_unit_state{state="failed"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Systemd unit failed on {{ $labels.instance }}"
+          description: "Unit {{ $labels.name }} has been in failed state for 5+ minutes"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: 'Memory usage is {{ printf "%.1f" $value }}%'
+
+  - name: services
+    rules:
+      # HTTP probe failures
+      - alert: ServiceDown
+        expr: probe_success == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service unreachable"
+          description: "{{ $labels.instance }} has been down for 5+ minutes"
+
+      # Slow service response
+      - alert: ServiceSlow
+        expr: probe_duration_seconds > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service responding slowly"
+          description: '{{ $labels.instance }} is taking {{ printf "%.1f" $value }}s to respond'
+
+  - name: infrastructure
+    rules:
+      # Auto-upgrade failures
+      - alert: NixosUpgradeFailed
+        expr: node_systemd_unit_state{name="nixos-upgrade.service", state="failed"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NixOS upgrade failed on {{ $labels.instance }}"
+          description: "The nixos-upgrade service has failed - check logs with: journalctl -u nixos-upgrade"
+
+      # Unexpected reboot detection
+      - alert: UnexpectedReboot
+        expr: (time() - node_boot_time_seconds) < 600 and changes(node_boot_time_seconds[1h]) > 0
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $labels.instance }} rebooted"
+          description: 'System booted {{ printf "%.0f" $value }} seconds ago'
