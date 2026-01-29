@@ -262,10 +262,23 @@ in
       # Hub only - Grafana
       # ========================================================================
       (lib.mkIf (cfg.role == "hub") {
+        sops.secrets."monitoring/grafana/username" = {
+          owner = "grafana";
+          group = "grafana";
+        };
+        sops.secrets."monitoring/grafana/password" = {
+          owner = "grafana";
+          group = "grafana";
+        };
+
         services.grafana = {
           enable = true;
 
           settings = {
+            security = {
+              admin_user = "$__file{${config.sops.secrets."monitoring/grafana/username".path}}";
+              admin_password = "$__file{${config.sops.secrets."monitoring/grafana/password".path}}";
+            };
             server = {
               http_port = 3000;
               http_addr = "127.0.0.1";
