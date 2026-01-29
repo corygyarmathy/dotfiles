@@ -135,6 +135,11 @@
           port = 3080;
           localOnly = true;
         };
+        grafana = {
+          subdomain = "grafana";
+          port = 3000;
+          localOnly = true;
+        };
 
         # NOTE: downloads subdomain now routes to homelab02 via DNS
         # (see adguard-home.extraRewrites below)
