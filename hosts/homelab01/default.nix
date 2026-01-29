@@ -199,6 +199,12 @@
 
       alerting = {
         enable = true;
+        email = {
+          to = "cory@gyarmathy.co";
+          from = "alerts@gyarmathy.co";
+          authUsername = "alerts@gyarmathy.co";
+          # smarthost uses the default (smtp.protonmail.ch:587)
+        };
       };
     };
 

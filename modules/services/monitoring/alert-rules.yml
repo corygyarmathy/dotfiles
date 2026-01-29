@@ -62,16 +62,6 @@ groups:
           summary: "Service unreachable"
           description: "{{ $labels.instance }} has been down for 5+ minutes"
 
-      # Slow service response
-      - alert: ServiceSlow
-        expr: probe_duration_seconds > 10
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Service responding slowly"
-          description: '{{ $labels.instance }} is taking {{ printf "%.1f" $value }}s to respond'
-
   - name: infrastructure
     rules:
       # Auto-upgrade failures

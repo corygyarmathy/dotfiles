@@ -69,13 +69,30 @@ in
 
     # Alerting configuration
     alerting = {
-      enable = lib.mkEnableOption "Alerting via Apprise";
+      enable = lib.mkEnableOption "Email alerting via Alertmanager";
 
-      apprise = {
-        port = lib.mkOption {
-          type = lib.types.port;
-          default = 8000;
-          description = "Port for Apprise API to listen on";
+      email = {
+        to = lib.mkOption {
+          type = lib.types.str;
+          example = "admin@example.com";
+          description = "Email address to send alerts to";
+        };
+
+        from = lib.mkOption {
+          type = lib.types.str;
+          example = "alerts@example.com";
+          description = "Email address to send alerts from";
+        };
+
+        smarthost = lib.mkOption {
+          type = lib.types.str;
+          default = "smtp.protonmail.ch:587";
+          description = "SMTP server and port";
+        };
+
+        authUsername = lib.mkOption {
+          type = lib.types.str;
+          description = "SMTP authentication username";
         };
       };
     };
@@ -202,12 +219,14 @@ in
       # Hub + alerting - Alertmanager
       # ========================================================================
       (lib.mkIf (cfg.role == "hub" && cfg.alerting.enable) {
+        sops.secrets."monitoring/proton_smtp_token" = { };
+
         services.prometheus.alertmanager = {
           enable = true;
 
           configuration = {
             route = {
-              receiver = "apprise";
+              receiver = "email";
               group_by = [
                 "alertname"
                 "instance"
@@ -219,43 +238,20 @@ in
 
             receivers = [
               {
-                name = "apprise";
-                webhook_configs = [
+                name = "email";
+                email_configs = [
                   {
-                    url = "http://localhost:${toString cfg.alerting.apprise.port}/notify/apprise";
+                    to = cfg.alerting.email.to;
+                    from = cfg.alerting.email.from;
+                    smarthost = cfg.alerting.email.smarthost;
+                    auth_username = cfg.alerting.email.authUsername;
+                    auth_password_file = config.sops.secrets."monitoring/proton_smtp_token".path;
                     send_resolved = true;
                   }
                 ];
               }
             ];
           };
-        };
-      })
-
-      # ========================================================================
-      # Hub + alerting - Sops secrets and Apprise container
-      # ========================================================================
-      (lib.mkIf (cfg.role == "hub" && cfg.alerting.enable) {
-        sops.secrets."monitoring/proton_smtp_token" = { };
-
-        sops.templates."apprise-config" = {
-          content = ''
-            urls:
-              - "mailtos://alerts@gyarmathy.co:${
-                config.sops.placeholder."monitoring/proton_smtp_token"
-              }@smtp.protonmail.ch:587/?from=alerts@gyarmathy.co&to=cory@gyarmathy.co&name=Homelab%20Alerts"
-          '';
-          owner = "root";
-          mode = "0400";
-        };
-
-        virtualisation.oci-containers.containers.apprise-api = {
-          image = "caronc/apprise:latest";
-          ports = [ "127.0.0.1:${toString cfg.alerting.apprise.port}:8000" ];
-          volumes = [
-            "${config.sops.templates."apprise-config".path}:/config/apprise.yml:ro"
-          ];
-          extraOptions = [ "--pull=newer" ];
         };
       })
 
