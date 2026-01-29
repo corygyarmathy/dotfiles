@@ -219,7 +219,10 @@ in
       # Hub + alerting - Alertmanager
       # ========================================================================
       (lib.mkIf (cfg.role == "hub" && cfg.alerting.enable) {
-        sops.secrets."monitoring/proton_smtp_token" = { };
+        sops.secrets."monitoring/proton_smtp_token" = {
+          owner = "alertmanager";
+          group = "alertmanager";
+        };
 
         services.prometheus.alertmanager = {
           enable = true;
