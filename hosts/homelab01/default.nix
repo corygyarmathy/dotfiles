@@ -66,7 +66,8 @@
   # ============================================================================
   cg.service = {
     backup = {
-      enable = true;
+      # NOTE: currently not working, refer to: https://github.com/rclone/rclone/issues/8873
+      enable = false;
       paths = [
         # Media management services (from /srv/arr)
         "/srv/arr/sonarr"

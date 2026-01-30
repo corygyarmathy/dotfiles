@@ -75,7 +75,8 @@
 
   cg.service = {
     backup = {
-      enable = true;
+      # NOTE: currently not working, refer to: https://github.com/rclone/rclone/issues/8873
+      enable = false;
       paths = [
         # Download services (from /srv/arr)
         "/srv/arr/qbittorrent"
