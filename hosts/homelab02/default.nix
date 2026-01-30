@@ -74,7 +74,24 @@
   # ============================================================================
 
   cg.service = {
-    backup.enable = false;
+    backup = {
+      enable = true;
+      paths = [
+        # Download services (from /srv/arr)
+        "/srv/arr/qbittorrent"
+        "/srv/arr/cross-seed"
+        "/srv/arr/unpackerr"
+        "/srv/arr/gluetun"
+
+        # AdGuard Home (secondary)
+        "/var/lib/private/AdGuardHome"
+      ];
+
+      extraExclude = [
+        # cross-seed logs are 978MB - exclude them!
+        "/srv/arr/cross-seed/logs/**"
+      ];
+    };
     immich.enable = false;
     home-assistant.enable = false;
     monitoring = {

@@ -1,113 +1,166 @@
-# Backup Configuration
-# Automated backups of critical service data
+# modules/services/backup/default.nix
+#
+# Restic backup to Proton Drive via rclone
+#
+# Each host specifies which paths to back up. Restic handles:
+# - Encryption (using password from sops)
+# - Deduplication (only changed blocks uploaded)
+# - Versioning (configurable retention policy)
+#
+# Rclone handles transport to Proton Drive.
 {
   config,
-  pkgs,
   lib,
+  pkgs,
   ...
 }:
-
 let
   cfg = config.cg.service.backup;
-
-  backupScript = pkgs.writeShellScriptBin "backup-homelab" ''
-    set -euo pipefail
-
-    BACKUP_DEST="''${1:-/mnt/backup}"
-    DATE=$(date +%Y-%m-%d_%H-%M)
-    BACKUP_DIR="$BACKUP_DEST/homelab-$DATE"
-
-    # Colors for output
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    NC='\033[0m' # No Color
-
-    log() { echo -e "''${GREEN}[BACKUP]''${NC} $1"; }
-    err() { echo -e "''${RED}[ERROR]''${NC} $1" >&2; }
-
-    # Check if backup destination exists
-    if [[ ! -d "$BACKUP_DEST" ]]; then
-      err "Backup destination $BACKUP_DEST does not exist"
-      err "Mount your backup drive first: sudo mount /dev/sdX1 /mnt/backup"
-      exit 1
-    fi
-
-    log "Starting backup to $BACKUP_DIR"
-    mkdir -p "$BACKUP_DIR"
-
-    # Directories to backup (configs and irreplaceable data)
-    # Media files are NOT backed up here - they're large and replaceable
-    BACKUP_SOURCES=(
-      "/srv/immich/upload"          # Photos - irreplaceable!
-      "/srv/arr"                    # Arr stack configs
-      "/var/lib/hass"               # Home Assistant config and database
-      "/var/lib/jellyfin"           # Jellyfin config (not media)
-      "/etc/nixos"                  # NixOS configuration
-    )
-
-    for src in "''${BACKUP_SOURCES[@]}"; do
-      if [[ -d "$src" ]]; then
-        log "Backing up $src..."
-        dest_name=$(echo "$src" | tr '/' '_' | sed 's/^_//')
-        ${pkgs.rsync}/bin/rsync -av --delete "$src/" "$BACKUP_DIR/$dest_name/"
-      else
-        err "Source directory $src does not exist, skipping"
-      fi
-    done
-
-    # Create a manifest of what was backed up
-    log "Creating backup manifest..."
-    cat > "$BACKUP_DIR/MANIFEST.txt" << EOF
-    Homelab Backup
-    Date: $(date)
-    Hostname: $(hostname)
-
-    Backed up directories:
-    $(for src in "''${BACKUP_SOURCES[@]}"; do echo "  - $src"; done)
-
-    Disk usage:
-    $(du -sh "$BACKUP_DIR"/* 2>/dev/null || echo "  Unable to calculate")
-    EOF
-
-    # Prune old backups (keep last 7)
-    log "Pruning old backups (keeping last 7)..."
-    cd "$BACKUP_DEST" && ls -dt homelab-* 2>/dev/null | tail -n +8 | xargs -r rm -rf
-
-    log "Backup complete!"
-    log "Location: $BACKUP_DIR"
-    log "Size: $(du -sh "$BACKUP_DIR" | cut -f1)"
-  '';
+  inherit (lib)
+    mkIf
+    mkEnableOption
+    mkOption
+    types
+    ;
 in
 {
-  options.cg.service.backup.enable = lib.mkEnableOption "Backup service";
+  options.cg.service.backup = {
+    enable = mkEnableOption "Restic backup to Proton Drive";
 
-  config = lib.mkIf cfg.enable {
-    # Make backup script available system-wide
-    environment.systemPackages = [ backupScript ];
+    paths = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Paths to back up on this host";
+      example = [
+        "/srv/arr/sonarr"
+        "/var/lib/jellyfin"
+      ];
+    };
 
-    # Optional: Systemd timer for automated backups
-    # Uncomment when you have a permanent backup location
-    #
-    # systemd.services.homelab-backup = {
-    #   description = "Homelab Backup";
-    #   serviceConfig = {
-    #     Type = "oneshot";
-    #     ExecStart = "${backupScript}/bin/backup-homelab /mnt/backup";
-    #   };
-    # };
-    #
-    # systemd.timers.homelab-backup = {
-    #   description = "Weekly Homelab Backup";
-    #   wantedBy = [ "timers.target" ];
-    #   timerConfig = {
-    #     OnCalendar = "Sun 02:00";  # Every Sunday at 2 AM
-    #     Persistent = true;         # Run if missed (e.g., system was off)
-    #   };
-    # };
+    exclude = mkOption {
+      type = types.listOf types.str;
+      default = [
+        # Logs - can be regenerated, often large
+        "*.log"
+        "**/logs/**"
+        "**/log/**"
 
-    # Mount point for backup drive (create the directory)
-    systemd.tmpfiles.rules = [
-      "d /mnt/backup 0755 root root -"
+        # Caches - can be regenerated
+        "**/cache/**"
+        "**/Cache/**"
+        "**/.cache/**"
+
+        # Temporary files
+        "*.tmp"
+        "*.temp"
+        "**/tmp/**"
+
+        # Lock files
+        "*.lock"
+        "**/*.lock"
+      ];
+      description = "Patterns to exclude from backup";
+    };
+
+    extraExclude = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Additional exclude patterns (added to defaults)";
+    };
+
+    schedule = mkOption {
+      type = types.str;
+      default = "03:00";
+      description = "Time to run daily backup (24h format)";
+    };
+
+    rcloneRemote = mkOption {
+      type = types.str;
+      default = "proton";
+      description = "Name of the rclone remote";
+    };
+
+    remotePath = mkOption {
+      type = types.str;
+      default = "backups/homelab/${config.networking.hostName}";
+      description = "Path within the rclone remote for this host's backups";
+    };
+
+    retention = {
+      daily = mkOption {
+        type = types.int;
+        default = 7;
+        description = "Number of daily backups to keep";
+      };
+      weekly = mkOption {
+        type = types.int;
+        default = 4;
+        description = "Number of weekly backups to keep";
+      };
+      monthly = mkOption {
+        type = types.int;
+        default = 3;
+        description = "Number of monthly backups to keep";
+      };
+    };
+  };
+
+  config = mkIf cfg.enable {
+    # Ensure rclone is available system-wide (for manual operations)
+    environment.systemPackages = with pkgs; [
+      rclone
+      restic
     ];
+
+    # Sops secrets
+    sops.secrets."backups/restic/password" = {
+      # Restic needs to read this
+    };
+
+    sops.secrets."backups/rclone-config" = {
+      # Place rclone config where restic's systemd service can find it
+      # The service runs as root, so /root/.config/rclone/ works
+      path = "/root/.config/rclone/rclone.conf";
+      mode = "0600";
+    };
+
+    # Restic backup job
+    services.restic.backups.homelab = {
+      # Create the repository if it doesn't exist
+      initialize = true;
+
+      # Repository location: rclone:<remote>:<path>
+      repository = "rclone:${cfg.rcloneRemote}:${cfg.remotePath}";
+
+      # Encryption password from sops
+      passwordFile = config.sops.secrets."backups/restic/password".path;
+
+      # What to back up
+      paths = cfg.paths;
+      exclude = cfg.exclude ++ cfg.extraExclude;
+
+      # Schedule: daily at configured time
+      timerConfig = {
+        OnCalendar = cfg.schedule;
+        Persistent = true; # Run if missed (e.g., server was off)
+        RandomizedDelaySec = "5m"; # Stagger backups slightly
+      };
+
+      # Retention policy: prune old snapshots after backup
+      pruneOpts = [
+        "--keep-daily ${toString cfg.retention.daily}"
+        "--keep-weekly ${toString cfg.retention.weekly}"
+        "--keep-monthly ${toString cfg.retention.monthly}"
+      ];
+
+      # Verify backup integrity periodically
+      checkOpts = [ "--with-cache" ];
+
+      # Backup options
+      extraBackupArgs = [
+        "--verbose"
+        "--exclude-caches" # Exclude directories with CACHEDIR.TAG
+      ];
+    };
   };
 }

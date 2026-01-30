@@ -65,7 +65,32 @@
   # Service Toggles
   # ============================================================================
   cg.service = {
-    backup.enable = false;
+    backup = {
+      enable = true;
+      paths = [
+        # Media management services (from /srv/arr)
+        "/srv/arr/sonarr"
+        "/srv/arr/radarr"
+        "/srv/arr/prowlarr"
+        "/srv/arr/bazarr"
+        "/srv/arr/jellyseerr"
+        "/srv/arr/recyclarr"
+        "/srv/arr/huntarr"
+        "/srv/arr/cleanuparr"
+        "/srv/arr/wizarr"
+
+        # Jellyfin (separate location)
+        "/var/lib/jellyfin"
+
+        # AdGuard Home (primary)
+        "/var/lib/private/AdGuardHome"
+      ];
+
+      extraExclude = [
+        # Jellyfin transcodes and cache (large, regenerable)
+        "**/transcodes/**"
+      ];
+    };
     immich.enable = false;
     home-assistant.enable = false;
 
