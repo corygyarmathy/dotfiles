@@ -20,6 +20,8 @@ jobs:
       # Provides free build caching between CI runs without needing a Cachix account.
       # It uploads your build artifacts to their cache and restores them on subsequent runs.
       - uses: DeterminateSystems/magic-nix-cache-action@main
+        with:
+          use-flakehub: false
 
       - name: Check flake
         run: nix flake check
