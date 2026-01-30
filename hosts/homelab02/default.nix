@@ -303,11 +303,33 @@
   };
 
   # ============================================================================
+  # Firmware Updates (automated via fwupd)
+  # ============================================================================
+  services.fwupd.enable = true;
+
+  # Run firmware updates BEFORE nixos-upgrade so any pending firmware
+  # gets applied during the reboot that nixos-upgrade may trigger
+  systemd.services.fwupd-auto-update = {
+    description = "Automatic firmware updates";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    before = [ "nixos-upgrade.service" ];
+    wantedBy = [ "nixos-upgrade.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.fwupd}/bin/fwupdmgr update -y --no-reboot";
+      # Exit codes: 0=success, 1=no updates, 2=no devices
+      SuccessExitStatus = [
+        0
+        1
+        2
+      ];
+    };
+  };
+
+  # ============================================================================
   # Services
   # ============================================================================
-
-  # Firmware updates
-  services.fwupd.enable = true;
 
   # Disable sleep/suspend - this is a server
   systemd.sleep.extraConfig = ''
