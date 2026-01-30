@@ -35,6 +35,21 @@
   ];
 
   # ============================================================================
+  # Auto-Upgrade
+  # ============================================================================
+  system.autoUpgrade = {
+    enable = true;
+    flake = "github:corygyarmathy/dotfiles#homelab02";
+    dates = "04:15"; # Offset from homelab01
+    allowReboot = true;
+    rebootWindow = {
+      lower = "04:00";
+      upper = "05:00";
+    };
+    randomizedDelaySec = "10min";
+  };
+
+  # ============================================================================
   # Module Toggles
   # ============================================================================
   cg = {
@@ -56,16 +71,6 @@
     firewall = {
       # Service ports are opened by individual service modules
       enable = true;
-    };
-
-    # Auto-upgrade for server
-    auto-upgrade = {
-      enable = true;
-      mode = "server";
-      flake = "github:corygyarmathy/dotfiles";
-      firmware.enable = true;
-      backgroundBuild.enable = true;
-      upgradeUsers = [ "coryg" ];
     };
   };
 
