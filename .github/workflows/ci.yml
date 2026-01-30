@@ -1,0 +1,30 @@
+name: NixOS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # Clones your repo into the runner
+      - uses: actions/checkout@v4
+
+      # Installs Nix with flakes enabled (faster than the official installer and designed for CI)
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      # Provides free build caching between CI runs without needing a Cachix account.
+      # It uploads your build artifacts to their cache and restores them on subsequent runs.
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Check flake
+        run: nix flake check
+
+      - name: Build homelab01
+        run: nix build .#nixosConfigurations.homelab01.config.system.build.toplevel
+
+      - name: Build homelab02
+        run: nix build .#nixosConfigurations.homelab02.config.system.build.toplevel
