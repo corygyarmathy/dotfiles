@@ -219,6 +219,13 @@ in
       # Hub + alerting - Alertmanager
       # ========================================================================
       (lib.mkIf (cfg.role == "hub" && cfg.alerting.enable) {
+        # Ensure alertmanager user exists before sops-nix runs
+        users.users.alertmanager = {
+          isSystemUser = true;
+          group = "alertmanager";
+        };
+
+        users.groups.alertmanager = { };
         sops.secrets."monitoring/proton_smtp_token" = {
           owner = "alertmanager";
           group = "alertmanager";
@@ -262,6 +269,13 @@ in
       # Hub only - Grafana
       # ========================================================================
       (lib.mkIf (cfg.role == "hub") {
+        # Ensure grafana user exists before sops-nix runs
+        users.users.grafana = {
+          isSystemUser = true;
+          group = "grafana";
+        };
+        users.groups.grafana = { };
+
         sops.secrets."monitoring/grafana/username" = {
           owner = "grafana";
           group = "grafana";
