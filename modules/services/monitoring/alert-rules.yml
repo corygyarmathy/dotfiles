@@ -76,10 +76,13 @@ groups:
 
       # Unexpected reboot detection
       - alert: UnexpectedReboot
-        expr: (time() - node_boot_time_seconds) < 600 and changes(node_boot_time_seconds[1h]) > 0
+        expr: |
+          (time() - node_boot_time_seconds) < 600 
+          and changes(node_boot_time_seconds[1h]) > 0
+          and (hour() < 20 or hour() >= 21)
         for: 1m
         labels:
           severity: info
         annotations:
-          summary: "{{ $labels.instance }} rebooted"
-          description: 'System booted {{ printf "%.0f" $value }} seconds ago'
+          summary: "{{ $labels.instance }} rebooted unexpectedly"
+          description: 'System booted {{ printf "%.0f" $value }} seconds ago (outside maintenance window)'
