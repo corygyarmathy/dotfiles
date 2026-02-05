@@ -2,7 +2,7 @@
 # NAS / secondary server for self-hosted services
 #
 # ROLE: Storage + Download
-# - MergerFS pool of 2x4TB HDDs (disks managed by disko)
+# - ZFS pool of 2x4TB HDDs
 # - NFS export for homelab01
 # - qBittorrent + VPN (downloads happen locally on storage)
 # - cross-seed (needs access to torrents + media)
@@ -106,16 +106,12 @@
     };
 
     # -------------------------------------------------------------------------
-    # NAS Storage (MergerFS + NFS)
+    # NAS Storage (ZFS + NFS)
     # -------------------------------------------------------------------------
-    # Note: The underlying disk mounts are handled by disko.
-    # This module only sets up the MergerFS pool and NFS export.
+    # Note: The underlying disk mounts are handled by ZFS.
+    # This module only sets up the ZFS pool and NFS export.
     nas-storage = {
       enable = true;
-      diskMountPoints = [
-        "/mnt/data/disk1"
-        "/mnt/data/disk2"
-      ];
       poolPath = "/srv/media";
       nfs = {
         enable = true;
@@ -183,11 +179,11 @@
     # for the download services. The storage is exported via NFS.
     media-stack = {
       enable = true;
-      dataPath = "/srv/media"; # MergerFS pool
+      dataPath = "/srv/media"; # ZFS pool
       configPath = "/srv/arr"; # Local config (not shared)
       user = "coryg";
       group = "media";
-      # Storage is local (MergerFS), not NFS
+      # Storage is local (ZFS), not NFS
       storage.type = "local";
     };
 
@@ -232,9 +228,23 @@
   # ============================================================================
   # ZFS Support
   # ============================================================================
+  # The ZFS pool is NOT managed declaratively - it must be created manually:
+  #
+  #   sudo zpool create -f \
+  #     -o ashift=12 \
+  #     -O compression=lz4 \
+  #     -O atime=off \
+  #     -O xattr=sa \
+  #     -O acltype=posixacl \
+  #     -O mountpoint=/srv/media \
+  #     tank /dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ES3V
+  #
+  #   sudo zpool add tank /dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ETEH
+  #
+  # The pool persists across OS reinstalls. extraPools imports it at boot.
   boot.supportedFilesystems = [ "zfs" ];
   boot.zfs.forceImportRoot = false;
-
+  boot.zfs.extraPools = [ "tank" ];
   # Required for ZFS - must be unique per machine
   # Generate with: head -c 8 /etc/machine-id
   networking.hostId = "a7377c6b";
@@ -395,8 +405,6 @@
     ncdu
     iotop
     smartmontools
-    mergerfs # For manual pool inspection
-    mergerfs-tools # Useful utilities for MergerFS
 
     # Hardware monitoring
     lm_sensors

@@ -1,12 +1,12 @@
-# NAS Storage Module - MergerFS Pool + NFS Export
+# NAS Storage Module - ZFS Pool + NFS Export
 #
 # This module configures homelab02 as a NAS server:
-# - Assumes data disks are already mounted by disko at /mnt/data/disk{1,2,...}
-# - Pools them via MergerFS into /srv/media
-# - Exports /srv/media via NFS for homelab01 to mount
+# - Assumes ZFS pool is already created and mounted at poolPath
+# - Exports poolPath via NFS for homelab01 to mount
 #
-# IMPORTANT: This module does NOT mount the data disks - that's handled by disko.
-# It only sets up MergerFS pooling and NFS export.
+# IMPORTANT: This module does NOT manage the ZFS pool - that's handled by
+# boot.zfs.extraPools in the host configuration.
+# It only sets up directory structure and NFS export.
 {
   config,
   lib,
@@ -19,23 +19,13 @@ let
 in
 {
   options.cg.service.nas-storage = {
-    enable = lib.mkEnableOption "NAS storage with MergerFS and NFS";
+    enable = lib.mkEnableOption "NAS storage with ZFS and NFS";
 
-    # Paths where disko mounts the data disks
-    diskMountPoints = lib.mkOption {
-      type = lib.types.listOf lib.types.path;
-      default = [
-        "/mnt/data/disk1"
-        "/mnt/data/disk2"
-      ];
-      description = "Mount points of data disks (managed by disko)";
-    };
-
-    # MergerFS pool mount point
+    # ZFS pool mount point (managed by ZFS, not this module)
     poolPath = lib.mkOption {
       type = lib.types.path;
       default = "/srv/media";
-      description = "Path where MergerFS pool is mounted";
+      description = "Path where ZFS pool is mounted";
     };
 
     # NFS configuration
@@ -75,56 +65,12 @@ in
 
   config = lib.mkIf cfg.enable {
     # ========================================================================
-    # Required packages
-    # ========================================================================
-    environment.systemPackages = with pkgs; [
-      mergerfs
-      mergerfs-tools
-    ];
-
-    # ========================================================================
-    # MergerFS Pool Mount
-    # ========================================================================
-    # Options from: https://trapexit.github.io/mergerfs/latest/config/options/
-    fileSystems.${cfg.poolPath} = {
-      device = lib.concatStringsSep ":" cfg.diskMountPoints;
-      fsType = "fuse.mergerfs";
-      options = [
-        # Create policy: existing path, most free space (enables hardlinks)
-        # pfrd = path first, rand (default). epmfs = existing path, most free space
-        "category.create=epmfs"
-        
-        # Search policy: first found (fast)
-        "category.search=ff"
-        
-        # Minimum free space before considering a branch full
-        "minfreespace=20G"
-        
-        # Move file to another branch if write fails with ENOSPC
-        "moveonenospc=true"
-        
-        # Cache settings
-        "cache.files=off"
-        
-        # Allow non-root users to access
-        "allow_other"
-        
-        # Don't fail boot if pool can't mount
-        "nofail"
-        
-        # Systemd ordering
-        "x-systemd.after=mnt-data-disk1.mount"
-        "x-systemd.after=mnt-data-disk2.mount"
-      ];
-    };
-
-    # ========================================================================
     # Directory Structure Setup
     # ========================================================================
     systemd.services.nas-directory-setup = {
-      description = "Create NAS directory structure on data disks";
-      after = [ "srv-media.mount" ];
-      wants = [ "srv-media.mount" ];
+      description = "Create NAS directory structure on ZFS pool";
+      after = [ "zfs-mount.target" ];
+      wants = [ "zfs-mount.target" ];
       wantedBy = [ "multi-user.target" ];
 
       unitConfig = {
@@ -136,33 +82,28 @@ in
         RemainAfterExit = true;
       };
 
-      script = let
-        uid = toString config.users.users.${cfg.user}.uid;
-        gid = toString config.users.groups.${cfg.group}.gid;
-        dirs = [
-          "downloads"
-          "downloads/complete"
-          "downloads/incomplete"
-          "downloads/cross-seed"
-          "movies"
-          "tv"
-          "music"
-        ];
-      in ''
-        # Create directory structure on each underlying disk
-        for disk in ${lib.concatStringsSep " " cfg.diskMountPoints}; do
-          if mountpoint -q "$disk"; then
-            for dir in ${lib.concatStringsSep " " dirs}; do
-              mkdir -p "$disk/$dir"
-              chown ${uid}:${gid} "$disk/$dir"
-              chmod 2775 "$disk/$dir"
-            done
-            echo "Created directories on $disk"
-          else
-            echo "Skipping $disk - not mounted"
-          fi
-        done
-      '';
+      script =
+        let
+          uid = toString config.users.users.${cfg.user}.uid;
+          gid = toString config.users.groups.${cfg.group}.gid;
+          dirs = [
+            "downloads"
+            "downloads/complete"
+            "downloads/incomplete"
+            "downloads/cross-seed"
+            "movies"
+            "tv"
+            "music"
+          ];
+        in
+        ''
+          for dir in ${lib.concatStringsSep " " dirs}; do
+            mkdir -p "${cfg.poolPath}/$dir"
+            chown ${uid}:${gid} "${cfg.poolPath}/$dir"
+            chmod 2775 "${cfg.poolPath}/$dir"
+          done
+          echo "Created directory structure on ${cfg.poolPath}"
+        '';
     };
 
     # ========================================================================
@@ -187,8 +128,14 @@ in
     # Firewall
     # ========================================================================
     networking.firewall = lib.mkIf cfg.nfs.enable {
-      allowedTCPPorts = [ 2049 111 ];
-      allowedUDPPorts = [ 2049 111 ];
+      allowedTCPPorts = [
+        2049
+        111
+      ];
+      allowedUDPPorts = [
+        2049
+        111
+      ];
     };
 
     # ========================================================================

@@ -3,7 +3,7 @@
 #
 # This manages ALL disks declaratively:
 #   - NVMe: OS (boot + root)
-#   - 2x 4TB HDD: Data storage (individual ext4, pooled via MergerFS)
+#   - 2x 4TB HDD: Data storage (individual ext4, pooled via ZFS)
 #
 # Fresh install with nixos-anywhere:
 #   nix run github:nix-community/nixos-anywhere -- \
@@ -52,59 +52,6 @@
                 mountOptions = [
                   "defaults"
                   "noatime" # Reduces disk writes
-                ];
-              };
-            };
-          };
-        };
-      };
-
-      # ========================================================================
-      # Data Disk 1 (4TB HDD)
-      # ========================================================================
-      data1 = {
-        type = "disk";
-        # Use disk-by-id for reliable identification across reboots
-        device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ES3V";
-        content = {
-          type = "gpt";
-          partitions = {
-            data = {
-              size = "100%";
-              content = {
-                type = "filesystem";
-                format = "ext4";
-                mountpoint = "/mnt/data/disk1";
-                mountOptions = [
-                  "defaults"
-                  "noatime"
-                  "nofail"
-                ];
-              };
-            };
-          };
-        };
-      };
-
-      # ========================================================================
-      # Data Disk 2 (4TB HDD)
-      # ========================================================================
-      data2 = {
-        type = "disk";
-        device = "/dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ETEH";
-        content = {
-          type = "gpt";
-          partitions = {
-            data = {
-              size = "100%";
-              content = {
-                type = "filesystem";
-                format = "ext4";
-                mountpoint = "/mnt/data/disk2";
-                mountOptions = [
-                  "defaults"
-                  "noatime"
-                  "nofail"
                 ];
               };
             };
