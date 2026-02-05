@@ -69,6 +69,7 @@ in
         type = lib.types.enum [
           "local"
           "nfs"
+          "zfs"
         ];
         default = "local";
         description = ''
