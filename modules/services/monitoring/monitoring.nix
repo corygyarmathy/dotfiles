@@ -8,6 +8,130 @@
 
 let
   cfg = config.cg.service.monitoring;
+
+  # ZFS health metrics script for textfile collector
+  # Outputs Prometheus metrics for ZFS pool health
+  zfsHealthScript = pkgs.writeShellScript "zfs-health-exporter" ''
+    set -euo pipefail
+    
+    OUTPUT_DIR="/var/lib/prometheus-node-exporter"
+    OUTPUT_FILE="$OUTPUT_DIR/zfs.prom"
+    TEMP_FILE="$OUTPUT_DIR/zfs.prom.tmp"
+    
+    # Ensure output directory exists
+    mkdir -p "$OUTPUT_DIR"
+    
+    # Start fresh
+    > "$TEMP_FILE"
+    
+    # Check if zpool command exists
+    if ! command -v zpool &> /dev/null; then
+      echo "# No ZFS pools found" >> "$TEMP_FILE"
+      mv "$TEMP_FILE" "$OUTPUT_FILE"
+      exit 0
+    fi
+    
+    # Get list of pools
+    pools=$(${pkgs.zfs}/bin/zpool list -H -o name 2>/dev/null || true)
+    
+    if [ -z "$pools" ]; then
+      echo "# No ZFS pools found" >> "$TEMP_FILE"
+      mv "$TEMP_FILE" "$OUTPUT_FILE"
+      exit 0
+    fi
+    
+    # Pool health metric (1 = healthy, 0 = unhealthy)
+    echo "# HELP zfs_pool_health ZFS pool health status (1 = ONLINE, 0 = degraded/faulted)" >> "$TEMP_FILE"
+    echo "# TYPE zfs_pool_health gauge" >> "$TEMP_FILE"
+    
+    # Pool state metric (for detailed state info)
+    echo "# HELP zfs_pool_state ZFS pool state (label contains actual state)" >> "$TEMP_FILE"
+    echo "# TYPE zfs_pool_state gauge" >> "$TEMP_FILE"
+    
+    # Error counters
+    echo "# HELP zfs_pool_read_errors Total read errors on pool" >> "$TEMP_FILE"
+    echo "# TYPE zfs_pool_read_errors gauge" >> "$TEMP_FILE"
+    echo "# HELP zfs_pool_write_errors Total write errors on pool" >> "$TEMP_FILE"
+    echo "# TYPE zfs_pool_write_errors gauge" >> "$TEMP_FILE"
+    echo "# HELP zfs_pool_checksum_errors Total checksum errors on pool" >> "$TEMP_FILE"
+    echo "# TYPE zfs_pool_checksum_errors gauge" >> "$TEMP_FILE"
+    
+    # Scrub metrics
+    echo "# HELP zfs_pool_scrub_errors Errors found during last scrub" >> "$TEMP_FILE"
+    echo "# TYPE zfs_pool_scrub_errors gauge" >> "$TEMP_FILE"
+    echo "# HELP zfs_pool_scrub_age_seconds Seconds since last completed scrub" >> "$TEMP_FILE"
+    echo "# TYPE zfs_pool_scrub_age_seconds gauge" >> "$TEMP_FILE"
+    
+    for pool in $pools; do
+      # Get pool health state
+      state=$(${pkgs.zfs}/bin/zpool list -H -o health "$pool" 2>/dev/null || echo "UNKNOWN")
+      
+      # Convert state to binary health metric
+      if [ "$state" = "ONLINE" ]; then
+        health=1
+      else
+        health=0
+      fi
+      
+      echo "zfs_pool_health{pool=\"$pool\",state=\"$state\"} $health" >> "$TEMP_FILE"
+      
+      # State breakdown (useful for alerting on specific states)
+      for s in ONLINE DEGRADED FAULTED OFFLINE REMOVED UNAVAIL SUSPENDED; do
+        if [ "$state" = "$s" ]; then
+          echo "zfs_pool_state{pool=\"$pool\",state=\"$s\"} 1" >> "$TEMP_FILE"
+        else
+          echo "zfs_pool_state{pool=\"$pool\",state=\"$s\"} 0" >> "$TEMP_FILE"
+        fi
+      done
+      
+      # Get error counts from zpool status
+      # Parse the pool line for read/write/checksum errors
+      status_output=$(${pkgs.zfs}/bin/zpool status -p "$pool" 2>/dev/null || true)
+      
+      # Extract errors from the pool line (the line right after NAME STATE READ WRITE CKSUM)
+      # Using awk to find the pool name line and extract error counts
+      read_errors=$(echo "$status_output" | awk -v pool="$pool" '$1 == pool {print $3}' | head -1)
+      write_errors=$(echo "$status_output" | awk -v pool="$pool" '$1 == pool {print $4}' | head -1)
+      cksum_errors=$(echo "$status_output" | awk -v pool="$pool" '$1 == pool {print $5}' | head -1)
+      
+      # Default to 0 if parsing failed
+      read_errors=''${read_errors:-0}
+      write_errors=''${write_errors:-0}
+      cksum_errors=''${cksum_errors:-0}
+      
+      echo "zfs_pool_read_errors{pool=\"$pool\"} $read_errors" >> "$TEMP_FILE"
+      echo "zfs_pool_write_errors{pool=\"$pool\"} $write_errors" >> "$TEMP_FILE"
+      echo "zfs_pool_checksum_errors{pool=\"$pool\"} $cksum_errors" >> "$TEMP_FILE"
+      
+      # Scrub information
+      # Look for "scrub repaired X in HH:MM:SS with Y errors on <date>"
+      scrub_line=$(echo "$status_output" | grep -E "scrub repaired|scrub in progress" || true)
+      
+      if echo "$scrub_line" | grep -q "scrub repaired"; then
+        # Extract errors from completed scrub
+        scrub_errors=$(echo "$scrub_line" | grep -oP 'with \K[0-9]+(?= errors)' || echo "0")
+        echo "zfs_pool_scrub_errors{pool=\"$pool\"} $scrub_errors" >> "$TEMP_FILE"
+        
+        # Extract scrub completion date and calculate age
+        # Format: "scrub repaired 0B in 01:23:45 with 0 errors on Sun Jan  5 02:00:01 2025"
+        scrub_date=$(echo "$scrub_line" | grep -oP 'on \K.*$' || true)
+        if [ -n "$scrub_date" ]; then
+          scrub_timestamp=$(date -d "$scrub_date" +%s 2>/dev/null || echo "0")
+          if [ "$scrub_timestamp" != "0" ]; then
+            now=$(date +%s)
+            scrub_age=$((now - scrub_timestamp))
+            echo "zfs_pool_scrub_age_seconds{pool=\"$pool\"} $scrub_age" >> "$TEMP_FILE"
+          fi
+        fi
+      elif echo "$scrub_line" | grep -q "scrub in progress"; then
+        # Scrub is running, report 0 errors (will update when done)
+        echo "zfs_pool_scrub_errors{pool=\"$pool\"} 0" >> "$TEMP_FILE"
+      fi
+    done
+    
+    # Atomic move to prevent partial reads
+    mv "$TEMP_FILE" "$OUTPUT_FILE"
+  '';
 in
 {
   options.cg.service.monitoring = {
@@ -24,6 +148,11 @@ in
         - hub: Runs Prometheus, Alertmanager, Grafana, and exporters
         - agent: Runs only exporters (node_exporter, smartctl_exporter)
       '';
+    };
+
+    # ZFS monitoring
+    zfs = {
+      enable = lib.mkEnableOption "ZFS pool health monitoring";
     };
 
     # Targets for Prometheus to scrape (hub only)
@@ -110,9 +239,14 @@ in
             enabledCollectors = [
               "systemd"
               "processes"
+            ] ++ lib.optionals cfg.zfs.enable [
+              "textfile"
             ];
             listenAddress = "0.0.0.0";
             port = 9100;
+            extraFlags = lib.optionals cfg.zfs.enable [
+              "--collector.textfile.directory=/var/lib/prometheus-node-exporter"
+            ];
           };
 
           smartctl = {
@@ -127,6 +261,39 @@ in
           9633
         ];
       }
+
+      # ========================================================================
+      # ZFS monitoring (agent or hub with ZFS)
+      # ========================================================================
+      (lib.mkIf cfg.zfs.enable {
+        # Systemd service to periodically export ZFS metrics
+        systemd.services.zfs-health-exporter = {
+          description = "Export ZFS pool health metrics for Prometheus";
+          after = [ "zfs.target" ];
+          wants = [ "zfs.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = zfsHealthScript;
+            User = "root"; # Need root to run zpool commands
+          };
+        };
+
+        # Timer to run the exporter every minute
+        systemd.timers.zfs-health-exporter = {
+          description = "Timer for ZFS health metrics exporter";
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "1min";
+            OnUnitActiveSec = "1min";
+            Unit = "zfs-health-exporter.service";
+          };
+        };
+
+        # Ensure the textfile directory exists
+        systemd.tmpfiles.rules = [
+          "d /var/lib/prometheus-node-exporter 0755 root root -"
+        ];
+      })
 
       # ========================================================================
       # Hub only - blackbox exporter

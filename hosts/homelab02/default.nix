@@ -103,6 +103,7 @@
     monitoring = {
       enable = true;
       role = "agent";
+      zfs.enable = true;
     };
 
     # -------------------------------------------------------------------------
@@ -248,6 +249,10 @@
   # Required for ZFS - must be unique per machine
   # Generate with: head -c 8 /etc/machine-id
   networking.hostId = "a7377c6b";
+  services.zfs.autoScrub = {
+    enable = true;
+    interval = "weekly";
+  };
 
   # ============================================================================
   # Boot Configuration

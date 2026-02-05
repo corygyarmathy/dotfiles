@@ -86,3 +86,75 @@ groups:
         annotations:
           summary: "{{ $labels.instance }} rebooted unexpectedly"
           description: 'System booted {{ printf "%.0f" $value }} seconds ago (outside maintenance window)'
+
+  - name: zfs
+    rules:
+      # ZFS pool health - fires if pool is not ONLINE
+      - alert: ZfsPoolUnhealthy
+        expr: zfs_pool_health == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} is unhealthy on {{ $labels.instance }}"
+          description: "Pool {{ $labels.pool }} is in {{ $labels.state }} state - investigate immediately"
+
+      # ZFS pool degraded (specific state)
+      - alert: ZfsPoolDegraded
+        expr: zfs_pool_state{state="DEGRADED"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} is DEGRADED on {{ $labels.instance }}"
+          description: "Pool {{ $labels.pool }} is degraded - one or more devices have failed. Check 'zpool status {{ $labels.pool }}' for details."
+
+      # ZFS pool faulted (data loss possible)
+      - alert: ZfsPoolFaulted
+        expr: zfs_pool_state{state="FAULTED"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ZFS pool {{ $labels.pool }} is FAULTED on {{ $labels.instance }}"
+          description: "Pool {{ $labels.pool }} is faulted - DATA LOSS MAY HAVE OCCURRED. Immediate action required!"
+
+      # ZFS checksum errors (data corruption indicator)
+      - alert: ZfsChecksumErrors
+        expr: zfs_pool_checksum_errors > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ZFS checksum errors on pool {{ $labels.pool }}"
+          description: 'Pool {{ $labels.pool }} on {{ $labels.instance }} has {{ $value }} checksum errors - run "zpool scrub {{ $labels.pool }}" and check disk health'
+
+      # ZFS read/write errors
+      - alert: ZfsIOErrors
+        expr: zfs_pool_read_errors > 0 or zfs_pool_write_errors > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ZFS I/O errors on pool {{ $labels.pool }}"
+          description: "Pool {{ $labels.pool }} on {{ $labels.instance }} has I/O errors (read: {{ $value }}) - check disk health"
+
+      # ZFS scrub errors (corruption found during scrub)
+      - alert: ZfsScrubErrors
+        expr: zfs_pool_scrub_errors > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ZFS scrub found errors on pool {{ $labels.pool }}"
+          description: 'Last scrub of {{ $labels.pool }} on {{ $labels.instance }} found {{ $value }} errors - check "zpool status {{ $labels.pool }}" for details'
+
+      # ZFS scrub overdue (more than 14 days since last scrub)
+      - alert: ZfsScrubOverdue
+        expr: zfs_pool_scrub_age_seconds > (14 * 24 * 60 * 60)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "ZFS scrub overdue on pool {{ $labels.pool }}"
+          description: 'Pool {{ $labels.pool }} on {{ $labels.instance }} has not been scrubbed in {{ printf "%.0f" (div $value 86400) }} days - run "zpool scrub {{ $labels.pool }}"'
