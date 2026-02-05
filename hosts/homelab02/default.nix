@@ -185,7 +185,7 @@
       user = "coryg";
       group = "media";
       # Storage is ZFS, not NFS
-      storage.type = "ZFS";
+      storage.type = "zfs";
     };
 
     # -------------------------------------------------------------------------
