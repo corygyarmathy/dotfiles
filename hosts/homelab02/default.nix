@@ -230,6 +230,16 @@
   };
 
   # ============================================================================
+  # ZFS Support
+  # ============================================================================
+  boot.supportedFilesystems = [ "zfs" ];
+  boot.zfs.forceImportRoot = false;
+
+  # Required for ZFS - must be unique per machine
+  # Generate with: head -c 8 /etc/machine-id
+  networking.hostId = "a7377c6b";
+
+  # ============================================================================
   # Boot Configuration
   # ============================================================================
   boot = {
