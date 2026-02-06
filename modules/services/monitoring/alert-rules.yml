@@ -157,4 +157,4 @@ groups:
           severity: warning
         annotations:
           summary: "ZFS scrub overdue on pool {{ $labels.pool }}"
-          description: 'Pool {{ $labels.pool }} on {{ $labels.instance }} has not been scrubbed in {{ printf "%.0f" (div $value 86400) }} days - run "zpool scrub {{ $labels.pool }}"'
+          description: 'Pool {{ $labels.pool }} on {{ $labels.instance }} has not been scrubbed in {{ $value | humanizeDuration }} - run "zpool scrub {{ $labels.pool }}"'
