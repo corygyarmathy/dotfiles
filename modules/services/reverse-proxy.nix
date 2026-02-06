@@ -61,7 +61,7 @@ let
     ];
     # NOTE: If build fails with hash mismatch, update this value
     # Leave empty ("") on first build to get the correct hash from error output
-    hash = ""; # You'll need to rebuild to get the new hash
+    hash = "sha256-bK1967g9KQfW4QcMnlAt+ZjKdOvpaUtTFwvlas7CjSA=";
   };
 
   # Helper to create a reverse proxy virtual host with TLS
