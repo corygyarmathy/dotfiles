@@ -69,7 +69,6 @@ in
         type = lib.types.enum [
           "local"
           "nfs"
-          "zfs"
         ];
         default = "local";
         description = ''
@@ -111,7 +110,7 @@ in
     # Assertions for NFS configuration
     assertions = [
       {
-        assertion = cfg.storage.type == "local" || cfg.storage.nfsServer != "";
+        assertion = cfg.storage.type != "nfs" || cfg.storage.nfsServer != "";
         message = "media-stack: storage.nfsServer must be set when storage.type = nfs";
       }
     ];
@@ -141,8 +140,8 @@ in
       # Config directory (always local, even with NFS storage)
       "d ${cfg.configPath} 0775 root ${cfg.group} -"
     ]
-    ++ lib.optionals (cfg.storage.type == "local") [
-      # Data directories (only when using local storage)
+    ++ lib.optionals (cfg.storage.type == "local" && !config.cg.service.nas-storage.enable) [
+      # Data directories (only when using local storage AND nas-storage isn't managing them)
       # setgid (2xxx) for group inheritance
       "d ${cfg.dataPath} 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/downloads 2775 ${cfg.user} ${cfg.group} -"

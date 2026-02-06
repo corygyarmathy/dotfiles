@@ -184,8 +184,7 @@
       configPath = "/srv/arr"; # Local config (not shared)
       user = "coryg";
       group = "media";
-      # Storage is ZFS, not NFS
-      storage.type = "zfs";
+      storage.type = "local";
     };
 
     # -------------------------------------------------------------------------
