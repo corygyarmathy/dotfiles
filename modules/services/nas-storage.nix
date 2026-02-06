@@ -94,6 +94,7 @@ in
             "movies"
             "tv"
             "music"
+            "livetv"
           ];
         in
         ''
