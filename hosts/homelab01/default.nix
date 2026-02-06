@@ -329,6 +329,18 @@
     };
 
     unpackerr.enable = false; # Moved to homelab02
+
+    # -------------------------------------------------------------------------
+    # Cloudflare Tunnel
+    # -------------------------------------------------------------------------
+    cloudflare-tunnel = {
+      enable = true;
+      domain = "gyarmathy.co";
+
+      # Re-use the same service definitions from reverse-proxy
+      # This ensures consistency
+      services = config.cg.service.reverse-proxy.services;
+    };
   };
 
   # ============================================================================

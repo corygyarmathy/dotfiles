@@ -54,11 +54,14 @@ let
   #   go get github.com/caddy-dns/cloudflare
   #   grep 'caddy-dns/cloudflare' go.mod
   #
-  caddyWithCloudflare = pkgs.caddy.withPlugins {
-    plugins = [ "github.com/caddy-dns/cloudflare@v0.2.2" ];
+  caddyWithPlugins = pkgs.caddy.withPlugins {
+    plugins = [
+      "github.com/caddy-dns/cloudflare@v0.2.2"
+      "github.com/mholt/caddy-ratelimit@v1.4.3"
+    ];
     # NOTE: If build fails with hash mismatch, update this value
     # Leave empty ("") on first build to get the correct hash from error output
-    hash = "sha256-dnhEjopeA0UiI+XVYHYpsjcEI6Y1Hacbi28hVKYQURg=";
+    hash = ""; # You'll need to rebuild to get the new hash
   };
 
   # Helper to create a reverse proxy virtual host with TLS
@@ -77,13 +80,24 @@ let
       "${subdomain}.${domain}" = {
         extraConfig = ''
           ${lib.optionalString (!localOnly) ''
+            # Security headers
             header {
               X-Frame-Options "SAMEORIGIN" # Prevent clickjacking
               X-Content-Type-Options "nosniff" # Prevent MIME sniffing
               X-XSS-Protection "1; mode=block" # Enable XSS filter
               Referrer-Policy "strict-origin-when-cross-origin" # Referrer policy
-              # HSTS (uncomment when ready - be careful, this is sticky. Requires TLS to be working.)
-              # Strict-Transport-Security "max-age=31536000; includeSubDomains"
+              # HSTS - enables after TLS is confirmed working
+              Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+            }
+
+            # Rate limiting - prevents abuse
+            # Allows burst of 20 requests, then 10 requests per second
+            rate_limit {
+              zone dynamic_zone {
+                key {remote_host}
+                events 20
+                window 2s
+              }
             }
           ''}
 
@@ -96,6 +110,8 @@ let
           reverse_proxy localhost:${toString port} {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
             ${proxyExtraConfig}
           }
 
@@ -197,7 +213,7 @@ in
     # Use Caddy with Cloudflare DNS plugin
     services.caddy = {
       enable = true;
-      package = caddyWithCloudflare;
+      package = caddyWithPlugins;
 
       # Global Caddy configuration
       globalConfig = ''
