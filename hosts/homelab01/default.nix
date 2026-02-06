@@ -500,6 +500,9 @@
     ethtool
     iperf3
     nfs-utils # NFS client tools
+
+    # Cloudflare Tunnel
+    cloudflared
   ];
 
   # ============================================================================
