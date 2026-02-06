@@ -90,13 +90,24 @@ let
               Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
             }
 
-            # Rate limiting - prevents abuse
-            # Allows burst of 20 requests, then 10 requests per second
+            # General rate limiting
             rate_limit {
-              zone dynamic_zone {
+              zone general {
                 key {remote_host}
-                events 20
-                window 2s
+                events 300
+                window 10m
+              }
+            }
+
+            # Stricter rate limiting for API endpoints
+            @api_paths {
+              path /api/* /rest/*
+            }
+            rate_limit @api_paths {
+              zone api {
+                key {remote_host}
+                events 100
+                window 1m
               }
             }
           ''}
