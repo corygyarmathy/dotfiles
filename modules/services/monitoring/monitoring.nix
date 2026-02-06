@@ -13,41 +13,41 @@ let
   # Outputs Prometheus metrics for ZFS pool health
   zfsHealthScript = pkgs.writeShellScript "zfs-health-exporter" ''
     set -euo pipefail
-    
+
     OUTPUT_DIR="/var/lib/prometheus-node-exporter"
     OUTPUT_FILE="$OUTPUT_DIR/zfs.prom"
     TEMP_FILE="$OUTPUT_DIR/zfs.prom.tmp"
-    
+
     # Ensure output directory exists
     mkdir -p "$OUTPUT_DIR"
-    
+
     # Start fresh
     > "$TEMP_FILE"
-    
+
     # Check if zpool command exists
     if ! command -v zpool &> /dev/null; then
       echo "# No ZFS pools found" >> "$TEMP_FILE"
       mv "$TEMP_FILE" "$OUTPUT_FILE"
       exit 0
     fi
-    
+
     # Get list of pools
     pools=$(${pkgs.zfs}/bin/zpool list -H -o name 2>/dev/null || true)
-    
+
     if [ -z "$pools" ]; then
       echo "# No ZFS pools found" >> "$TEMP_FILE"
       mv "$TEMP_FILE" "$OUTPUT_FILE"
       exit 0
     fi
-    
+
     # Pool health metric (1 = healthy, 0 = unhealthy)
     echo "# HELP zfs_pool_health ZFS pool health status (1 = ONLINE, 0 = degraded/faulted)" >> "$TEMP_FILE"
     echo "# TYPE zfs_pool_health gauge" >> "$TEMP_FILE"
-    
+
     # Pool state metric (for detailed state info)
     echo "# HELP zfs_pool_state ZFS pool state (label contains actual state)" >> "$TEMP_FILE"
     echo "# TYPE zfs_pool_state gauge" >> "$TEMP_FILE"
-    
+
     # Error counters
     echo "# HELP zfs_pool_read_errors Total read errors on pool" >> "$TEMP_FILE"
     echo "# TYPE zfs_pool_read_errors gauge" >> "$TEMP_FILE"
@@ -55,13 +55,13 @@ let
     echo "# TYPE zfs_pool_write_errors gauge" >> "$TEMP_FILE"
     echo "# HELP zfs_pool_checksum_errors Total checksum errors on pool" >> "$TEMP_FILE"
     echo "# TYPE zfs_pool_checksum_errors gauge" >> "$TEMP_FILE"
-    
+
     # Scrub metrics
     echo "# HELP zfs_pool_scrub_errors Errors found during last scrub" >> "$TEMP_FILE"
     echo "# TYPE zfs_pool_scrub_errors gauge" >> "$TEMP_FILE"
     echo "# HELP zfs_pool_scrub_age_seconds Seconds since last completed scrub" >> "$TEMP_FILE"
     echo "# TYPE zfs_pool_scrub_age_seconds gauge" >> "$TEMP_FILE"
-    
+
     for pool in $pools; do
       # Get pool health state
       state=$(${pkgs.zfs}/bin/zpool list -H -o health "$pool" 2>/dev/null || echo "UNKNOWN")
@@ -128,7 +128,7 @@ let
         echo "zfs_pool_scrub_errors{pool=\"$pool\"} 0" >> "$TEMP_FILE"
       fi
     done
-    
+
     # Atomic move to prevent partial reads
     mv "$TEMP_FILE" "$OUTPUT_FILE"
   '';
@@ -239,7 +239,8 @@ in
             enabledCollectors = [
               "systemd"
               "processes"
-            ] ++ lib.optionals cfg.zfs.enable [
+            ]
+            ++ lib.optionals cfg.zfs.enable [
               "textfile"
             ];
             listenAddress = "0.0.0.0";
