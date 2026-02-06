@@ -337,9 +337,13 @@
       enable = true;
       domain = "gyarmathy.co";
 
-      # Re-use the same service definitions from reverse-proxy
-      # This ensures consistency
-      services = config.cg.service.reverse-proxy.services;
+      # Map reverse-proxy services to cloudflare-tunnel format
+      # Only pass the fields that cloudflare-tunnel understands
+      services = lib.mapAttrs (name: svc: {
+        subdomain = svc.subdomain;
+        port = svc.port;
+        localOnly = svc.localOnly;
+      }) config.cg.service.reverse-proxy.services;
     };
   };
 
