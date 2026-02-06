@@ -57,7 +57,7 @@ let
   caddyWithPlugins = pkgs.caddy.withPlugins {
     plugins = [
       "github.com/caddy-dns/cloudflare@v0.2.2"
-      "github.com/mholt/caddy-ratelimit@v1.4.3"
+      "github.com/mholt/caddy-ratelimit@v0.1.0"
     ];
     # NOTE: If build fails with hash mismatch, update this value
     # Leave empty ("") on first build to get the correct hash from error output
