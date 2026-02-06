@@ -342,6 +342,17 @@ in
               ];
             }
             {
+              job_name = "cloudflared";
+              static_configs = [
+                {
+                  targets = [ "localhost:20241" ];
+                  labels = {
+                    instance = "homelab01";
+                  };
+                }
+              ];
+            }
+            {
               job_name = "blackbox-http";
               metrics_path = "/probe";
               params = {

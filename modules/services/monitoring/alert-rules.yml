@@ -158,3 +158,65 @@ groups:
         annotations:
           summary: "ZFS scrub overdue on pool {{ $labels.pool }}"
           description: 'Pool {{ $labels.pool }} on {{ $labels.instance }} has not been scrubbed in {{ $value | humanizeDuration }} - run "zpool scrub {{ $labels.pool }}"'
+  - name: cloudflare_tunnel
+    rules:
+      # Tunnel service down
+      - alert: CloudflareTunnelDown
+        expr: up{job="cloudflared"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cloudflare Tunnel is down on {{ $labels.instance }}"
+          description: "The cloudflared service is not responding - public services are unreachable"
+
+      # No active connections
+      - alert: CloudflareTunnelNoConnections
+        expr: cloudflared_tunnel_ha_connections < 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cloudflare Tunnel has no active connections"
+          description: "Tunnel has {{ $value }} connections (expected 4) - public services may be unreachable"
+
+      # Low connection count (degraded but not down)
+      - alert: CloudflareTunnelDegraded
+        expr: cloudflared_tunnel_ha_connections < 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cloudflare Tunnel connection count low"
+          description: "Tunnel has only {{ $value }} connections out of 4 - performance may be degraded"
+
+      # High error rate through tunnel
+      - alert: CloudflareTunnelHighErrorRate
+        expr: |
+          rate(cloudflared_tunnel_request_errors[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate through Cloudflare Tunnel"
+          description: "Tunnel is seeing {{ $value | humanizePercentage }} errors - check service health and logs"
+
+      # Systemd service failure
+      - alert: CloudflareTunnelServiceFailed
+        expr: node_systemd_unit_state{name="cloudflared-tunnel.service", state="failed"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "cloudflared-tunnel.service has failed"
+          description: "The systemd service is in failed state - check logs with: journalctl -u cloudflared-tunnel"
+
+      # Service restarting frequently (crash loop)
+      - alert: CloudflareTunnelCrashLoop
+        expr: rate(cloudflared_tunnel_server_restarts[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cloudflare Tunnel is restarting frequently"
+          description: "The tunnel has restarted {{ $value }} times in the last 15 minutes - check for stability issues"
