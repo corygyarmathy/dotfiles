@@ -81,6 +81,11 @@
             sops-nix.nixosModules.sops
             disko.nixosModules.disko
 
+            # Apply custom overlays
+            {
+              nixpkgs.overlays = builtins.attrValues self.overlays;
+            }
+
             # Shared configuration for all hosts
             {
               networking.hostName = hostname;
