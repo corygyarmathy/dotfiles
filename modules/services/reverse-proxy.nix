@@ -64,6 +64,57 @@ let
     hash = "sha256-bK1967g9KQfW4QcMnlAt+ZjKdOvpaUtTFwvlas7CjSA=";
   };
 
+  # Rate limiting profiles for different service types
+  rateLimitProfiles = {
+    # Media services - users click around frequently, load many thumbnails
+    media = ''
+      rate_limit {
+        zone media_general {
+          key {remote_host}
+          events 1000    # 1000 requests per 10 min = ~100/min
+          window 10m
+        }
+      }
+
+      # API endpoints still need some protection but higher limits
+      @api_paths {
+        path /api/* /rest/*
+      }
+      rate_limit @api_paths {
+        zone media_api {
+          key {remote_host}
+          events 500     # 500 requests per minute
+          window 1m
+        }
+      }
+    '';
+
+    # Admin services - less traffic, stricter limits
+    admin = ''
+      rate_limit {
+        zone admin_general {
+          key {remote_host}
+          events 300
+          window 10m
+        }
+      }
+
+      @api_paths {
+        path /api/* /rest/*
+      }
+      rate_limit @api_paths {
+        zone admin_api {
+          key {remote_host}
+          events 100
+          window 1m
+        }
+      }
+    '';
+
+    # No rate limiting (for trusted or low-risk services)
+    none = "";
+  };
+
   # Helper to create a reverse proxy virtual host with TLS
   # Each service gets its own cert via DNS-01 challenge
   mkProxyHost =
@@ -72,6 +123,8 @@ let
       port,
       # Optional: restrict to local network only
       localOnly ? false,
+      # Optional: rate limiting profile ("media", "admin", "none")
+      rateLimitProfile ? "admin",
       # Optional: extra Caddy config
       extraConfig ? "",
       proxyExtraConfig ? "",
@@ -90,26 +143,8 @@ let
               Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
             }
 
-            # General rate limiting
-            rate_limit {
-              zone general {
-                key {remote_host}
-                events 300
-                window 10m
-              }
-            }
-
-            # Stricter rate limiting for API endpoints
-            @api_paths {
-              path /api/* /rest/*
-            }
-            rate_limit @api_paths {
-              zone api {
-                key {remote_host}
-                events 100
-                window 1m
-              }
-            }
+            # Apply rate limiting based on profile
+            ${rateLimitProfiles.${rateLimitProfile}}
           ''}
 
           ${lib.optionalString localOnly ''
@@ -168,6 +203,15 @@ in
               type = lib.types.bool;
               default = true;
               description = "Restrict access to local network";
+            };
+            rateLimitProfile = lib.mkOption {
+              type = lib.types.enum [
+                "media"
+                "admin"
+                "none"
+              ];
+              default = "admin";
+              description = "Rate limiting profile to apply";
             };
             extraConfig = lib.mkOption {
               type = lib.types.lines;

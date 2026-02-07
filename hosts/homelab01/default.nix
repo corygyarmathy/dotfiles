@@ -114,11 +114,13 @@
           subdomain = "jellyfin";
           port = 8096;
           localOnly = false;
+          rateLimitProfile = "media"; # Higher limits for media streaming
         };
         requests = {
           subdomain = "requests";
           port = 5055;
           localOnly = false;
+          rateLimitProfile = "media"; # Users browse content frequently
         };
         invite = {
           subdomain = "invite";
