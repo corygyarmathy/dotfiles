@@ -31,6 +31,9 @@ stdenv.mkDerivation rec {
     SDL2
   ];
 
+  # Allow warnings - using old dependencies
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
+
   # Comskip uses autotools
   configureFlags = [
     "--bindir=${placeholder "out"}/bin"
