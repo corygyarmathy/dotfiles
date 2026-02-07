@@ -9,8 +9,7 @@
 let
   cfg = config.cg.service.comskip;
 
-  # Post-processing script that Jellyfin will call
-  # Jellyfin passes the recording path as the first argument
+  # Helper script that Jellyfin will call
   postProcessScript = pkgs.writeShellScript "jellyfin-comskip" ''
     set -euo pipefail
 
@@ -26,7 +25,7 @@ let
     VIDEO_BASE=$(basename "$VIDEO_FILE" .ts)
     EDL_FILE="$VIDEO_DIR/$VIDEO_BASE.edl"
 
-    # Skip if EDL already exists (shouldn't happen, but be defensive)
+    # Skip if EDL already exists
     if [ -f "$EDL_FILE" ]; then
       echo "EDL already exists for $VIDEO_FILE, skipping"
       exit 0
@@ -65,7 +64,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Install comskip package
+    # Install comskip package (now using your custom one)
     environment.systemPackages = [ pkgs.comskip ];
 
     # Generate comskip.ini configuration
@@ -80,27 +79,7 @@ in
       }
     );
 
-    # Create a systemd service that can be used for manual processing if needed
-    systemd.services.comskip-manual = {
-      description = "Manual Comskip processing";
-      serviceConfig = {
-        Type = "oneshot";
-        # Use the jellyfin user since it owns the recordings
-        User = "jellyfin";
-        Group = "jellyfin";
-      };
-      # This service is not started automatically - it's just for manual use
-      script = ''
-        if [ -z "''${VIDEO_FILE:-}" ]; then
-          echo "Usage: systemctl start comskip-manual VIDEO_FILE=/path/to/recording.ts"
-          exit 1
-        fi
-        ${postProcessScript} "$VIDEO_FILE"
-      '';
-    };
-
     # Make the post-processing script available at a well-known location
-    # Jellyfin needs to reference this in its DVR settings
     environment.etc."jellyfin/comskip-post-process".source = postProcessScript;
   };
 }

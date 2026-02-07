@@ -1,0 +1,47 @@
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  autoreconfHook,
+  pkg-config,
+  argtable,
+  ffmpeg,
+  SDL2,
+}:
+
+stdenv.mkDerivation rec {
+  pname = "comskip";
+  version = "0.82.011";
+
+  src = fetchFromGitHub {
+    owner = "erikkaashoek";
+    repo = "Comskip";
+    rev = version;
+    hash = "sha256-HfZ5Hv7bL4WCaCRxYtVJxdSYk/FJPCAObQiZ4ue6oSk=";
+  };
+
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
+
+  buildInputs = [
+    argtable
+    ffmpeg
+    SDL2
+  ];
+
+  # Comskip uses autotools
+  configureFlags = [
+    "--bindir=${placeholder "out"}/bin"
+  ];
+
+  meta = with lib; {
+    description = "Free commercial detector";
+    homepage = "https://github.com/erikkaashoek/Comskip";
+    license = licenses.lgpl21Plus;
+    maintainers = [ ]; # Add your info if you want
+    platforms = platforms.linux;
+    mainProgram = "comskip";
+  };
+}

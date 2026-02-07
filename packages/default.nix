@@ -10,6 +10,9 @@ pkgs: {
   # Remote install (w/ nixos-anywhere)
   nixos-remote-install = pkgs.callPackage ./nixos-remote-install { };
 
+  # Commercial skip
+  comskip = pkgs.callPackage ./comskip { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }
