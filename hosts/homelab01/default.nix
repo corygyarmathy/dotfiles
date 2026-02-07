@@ -393,8 +393,6 @@
       systemd-boot.enable = true;
       efi.canTouchEfiVariables = true;
     };
-    # Use latest LTS kernel for stability on server
-    # kernelPackages = pkgs.linuxPackages_6_12;
   };
 
   # ============================================================================
