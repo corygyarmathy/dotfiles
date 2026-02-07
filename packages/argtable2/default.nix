@@ -13,7 +13,7 @@ stdenv.mkDerivation rec {
     owner = "jonathanmarvens";
     repo = "argtable2";
     rev = "v${version}";
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # We'll get this from the error
+    hash = "sha256-K6++QVvpcPR+BYxbDRZ24sY0+PgIaQ3t1ktt3zZGh6Q=";
   };
 
   nativeBuildInputs = [
