@@ -17,7 +17,7 @@ stdenv.mkDerivation rec {
     owner = "erikkaashoek";
     repo = "Comskip";
     rev = "V${version}";
-    hash = "";
+    hash = "sha256-3bgwS+9agi0BkhOF+Hr593k0BRRCFiCGltgxoRqjT18=";
   };
 
   nativeBuildInputs = [
