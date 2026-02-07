@@ -68,6 +68,12 @@ in
         MemoryHigh = "8G";
         MemoryMax = "10G";
         IOWeight = 200;
+        # Override upstream default UMask of 0077 (owner-only) to allow
+        # media group read/write access. Required because Jellyfin writes
+        # recordings and trickplay data to NFS-mounted media directories
+        # that other services (Sonarr, Radarr) also need to access via
+        # the shared 'media' group.
+        UMask = lib.mkForce "0002";
       };
     };
   };
