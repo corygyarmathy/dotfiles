@@ -31,10 +31,14 @@ stdenv.mkDerivation rec {
     SDL2
   ];
 
-  # Fix function prototype mismatch
+  # Fix compatibility issues with modern compilers and FFmpeg
   postPatch = ''
     # Fix OutputFrame declaration to match definition
     sed -i '981s/OutputFrame();/OutputFrame(int frame_number);/' comskip.c
+
+    # Remove ticks_per_frame usage (deprecated in FFmpeg 5.0+)
+    # Replace with constant 1, which is correct for most codecs
+    sed -i 's/is->dec_ctx->ticks_per_frame/1/g' mpeg2dec.c
   '';
 
   # Allow warnings - using old dependencies
