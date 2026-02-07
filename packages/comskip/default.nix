@@ -11,13 +11,13 @@
 
 stdenv.mkDerivation rec {
   pname = "comskip";
-  version = "0.82.011";
+  version = "0.83";
 
   src = fetchFromGitHub {
     owner = "erikkaashoek";
     repo = "Comskip";
     rev = version;
-    hash = "sha256-HfZ5Hv7bL4WCaCRxYtVJxdSYk/FJPCAObQiZ4ue6oSk=";
+    hash = "";
   };
 
   nativeBuildInputs = [
