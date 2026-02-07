@@ -31,6 +31,12 @@ stdenv.mkDerivation rec {
     SDL2
   ];
 
+  # Fix function prototype mismatch
+  postPatch = ''
+    # Fix OutputFrame declaration to match definition
+    sed -i '981s/OutputFrame();/OutputFrame(int frame_number);/' comskip.c
+  '';
+
   # Allow warnings - using old dependencies
   env.NIX_CFLAGS_COMPILE = "-Wno-error";
 
