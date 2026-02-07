@@ -20,6 +20,12 @@ stdenv.mkDerivation rec {
     autoreconfHook
   ];
 
+  # Fix missing ctype.h include for modern GCC
+  postPatch = ''
+    sed -i '1i#include <ctype.h>' src/arg_int.c
+    sed -i '1i#include <ctype.h>' src/arg_dbl.c
+  '';
+
   meta = with lib; {
     description = "ANSI C library for parsing GNU-style command-line options";
     homepage = "https://github.com/jonathanmarvens/argtable2";
