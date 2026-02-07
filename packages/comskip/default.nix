@@ -33,12 +33,17 @@ stdenv.mkDerivation rec {
 
   # Fix compatibility issues with modern compilers and FFmpeg
   postPatch = ''
-    # Fix OutputFrame declaration to match definition
+    # Fix OutputFrame declaration to match definition (line 981)
     sed -i '981s/OutputFrame();/OutputFrame(int frame_number);/' comskip.c
 
     # Remove ticks_per_frame usage (deprecated in FFmpeg 5.0+)
     # Replace with constant 1, which is correct for most codecs
-    sed -i 's/is->dec_ctx->ticks_per_frame/1/g' mpeg2dec.c
+    # Only replace when it's being read (right side), not when assigned (left side)
+    sed -i 's/\* is->dec_ctx->ticks_per_frame/* 1/g' mpeg2dec.c
+    sed -i 's/\/ is->dec_ctx->ticks_per_frame/\/ 1/g' mpeg2dec.c
+
+    # Comment out the assignment line since we're using constant 1
+    sed -i 's/^\( *\)is->dec_ctx->ticks_per_frame = 1;/\1\/\/ is->dec_ctx->ticks_per_frame = 1; \/\/ Not needed - using constant/' mpeg2dec.c
   '';
 
   # Allow warnings - using old dependencies
