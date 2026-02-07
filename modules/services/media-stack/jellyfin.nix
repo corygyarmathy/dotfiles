@@ -55,12 +55,12 @@ in
 
     # Grant Jellyfin access to media files and hardware acceleration
     users.users.jellyfin.extraGroups = [
-      stack.group  # Media file access
-      "render"     # GPU access for transcoding
-      "video"      # Video device access
+      stack.group # Media file access
+      "render" # GPU access for transcoding
+      "video" # Video device access
     ];
 
-    # Prioritize Jellyfin for system resources
+    # Prioritise Jellyfin for system resources
     # This is a media server - transcoding should be responsive
     systemd.services.jellyfin = {
       serviceConfig = {
