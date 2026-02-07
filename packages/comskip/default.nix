@@ -4,7 +4,7 @@
   fetchFromGitHub,
   autoreconfHook,
   pkg-config,
-  argtable,
+  argtable2,
   ffmpeg,
   SDL2,
 }:
@@ -26,7 +26,7 @@ stdenv.mkDerivation rec {
   ];
 
   buildInputs = [
-    argtable
+    argtable2
     ffmpeg
     SDL2
   ];

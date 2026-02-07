@@ -13,6 +13,9 @@ pkgs: {
   # Commercial skip
   comskip = pkgs.callPackage ./comskip { };
 
+  # Argtable2 (dependency for comskip)
+  argtable2 = pkgs.callPackage ./argtable2 { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }
