@@ -12,7 +12,7 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "jonathanmarvens";
     repo = "argtable2";
-    rev = "argtable-${version}";
+    rev = "v${version}";
     hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # We'll get this from the error
   };
 
