@@ -53,6 +53,31 @@ in
       openFirewall = true; # Opens port 8096
     };
 
+    # Open firewall for DLNA/uPnP and service discovery
+    # Required for Google Cast and other network streaming devices
+    networking.firewall = {
+      allowedTCPPorts = [
+        1900 # UPnP discovery
+        7359 # Jellyfin client discovery
+      ];
+      allowedUDPPorts = [
+        1900 # UPnP discovery
+        5353 # mDNS (Bonjour/Avahi)
+        7359 # Jellyfin client discovery
+      ];
+
+      # Allow multicast for service discovery
+      # This is required for Cast devices to find Jellyfin
+      extraCommands = ''
+        iptables -A INPUT -p udp -d 224.0.0.0/4 -j ACCEPT
+        iptables -A INPUT -p udp -d 239.255.255.250 -j ACCEPT
+      '';
+      extraStopCommands = ''
+        iptables -D INPUT -p udp -d 224.0.0.0/4 -j ACCEPT || true
+        iptables -D INPUT -p udp -d 239.255.255.250 -j ACCEPT || true
+      '';
+    };
+
     # Grant Jellyfin access to media files and hardware acceleration
     users.users.jellyfin.extraGroups = [
       stack.group # Media file access
