@@ -345,6 +345,44 @@
         localOnly = svc.localOnly;
       }) config.cg.service.reverse-proxy.services;
     };
+
+    # -------------------------------------------------------------------------
+    # Commercial Detection (Comskip)
+    # -------------------------------------------------------------------------
+    comskip = {
+      enable = true;
+
+      settings = {
+        # Output settings
+        output_edl = 1;
+        delete_logo_file = 1;
+
+        # Detection tuning - 111 uses all detection methods
+        # Bitmask: 1(uniformity) + 2(logo) + 4(scene) + 8(resolution) + 16(CC) + 32(aspect) + 64(silence)
+        detect_method = 111;
+        verbose = 10; # Logging verbosity (0-10, higher = more verbose)
+
+        # Commercial break constraints (in seconds)
+        max_commercialbreak = 600; # Max length of entire commercial break
+        min_commercialbreak = 60; # Min length of entire commercial break
+        max_commercial_size = 300; # Max length of single commercial
+        min_commercial_size = 15; # Min length of single commercial
+
+        # Show segment constraints
+        min_show_segment_length = 100; # Minimum show content between breaks
+
+        # Detection sensitivity
+        non_uniformity = 500; # Allows variation in commercial lengths (higher = more lenient)
+        max_avg_brightness = 60; # For black frame detection
+
+        # Logo detection parameters
+        logo_present_modifier = 1; # Weight of logo presence in detection
+        logo_filter = 2; # Logo filter strength
+
+        # Performance
+        threads = 4; # Parallel processing threads
+      };
+    };
   };
 
   # ============================================================================
