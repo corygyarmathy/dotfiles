@@ -58,6 +58,7 @@ in
         PUID = toString config.users.users.${stack.user}.uid;
         PGID = toString config.users.groups.${stack.group}.gid;
         TZ = config.time.timeZone;
+        UMASK = "002"; # produces 775 dirs / 664 files
       };
       volumes = [
         "${stack.configPath}/sonarr:/config"
