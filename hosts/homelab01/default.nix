@@ -298,7 +298,6 @@
 
     jellyfin = {
       enable = true;
-      postProcessingMode = "cut"; # or "chapters" }
     };
 
     # -------------------------------------------------------------------------
@@ -388,7 +387,6 @@
         threads = 4; # Parallel processing threads
       };
     };
-    comskip-chapters.enable = true; # Enable processing into chapters in Jellyfin
   };
 
   # ============================================================================
