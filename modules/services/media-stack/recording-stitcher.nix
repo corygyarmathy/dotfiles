@@ -110,7 +110,7 @@ let
       log "  Created concat file with $SEGMENT_COUNT segments"
       
       # Stitch segments
-      TEMP_OUTPUT="''${OUTPUT_FILE}.tmp"
+      TEMP_OUTPUT="''${BASE_PATH}_stitched.tmp.ts"
       
       log "  Stitching segments..."
       if ! ${pkgs.ffmpeg}/bin/ffmpeg \
