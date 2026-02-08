@@ -21,11 +21,16 @@ EDL_FILE="${RECORDING_PATH%.ts}.edl"
 METADATA_FILE="${RECORDING_PATH%.ts}.ffmetadata"
 TEMP_OUTPUT="${RECORDING_PATH%.ts}.tmp.ts"
 
-# Run comskip to generate EDL file
-log "Running comskip..."
-if ! comskip "$RECORDING_PATH" >>"$LOG_FILE" 2>&1; then
-  log "ERROR: comskip failed for $RECORDING_PATH"
-  exit 0
+# Check if EDL already exists
+if [[ -f "$EDL_FILE" ]]; then
+  log "EDL file already exists, skipping comskip"
+else
+  # Run comskip to generate EDL file
+  log "Running comskip..."
+  if ! comskip "$RECORDING_PATH" >>"$LOG_FILE" 2>&1; then
+    log "ERROR: comskip failed for $RECORDING_PATH"
+    exit 0
+  fi
 fi
 
 # Check if EDL was created (no commercials = no EDL)
@@ -34,7 +39,7 @@ if [[ ! -f "$EDL_FILE" ]]; then
   exit 0
 fi
 
-log "comskip completed, EDL file created"
+log "EDL file found, processing chapters"
 
 # Generate ffmpeg metadata from EDL
 log "Generating chapter metadata..."
