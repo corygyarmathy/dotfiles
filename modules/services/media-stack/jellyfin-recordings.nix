@@ -214,12 +214,29 @@ let
 
     log "Scanning for stitched recordings to process"
 
+    # Find stitched files AND standalone .ts files without a matching .mkv
     while IFS= read -r -d $'\0' file; do
-      # Skip if corresponding .mkv already exists
-      BASE_PATH="''${file%_stitched.ts}"
-      MKV_FILE="''${BASE_PATH}_stitched.mkv"
+      # Determine the expected MKV output path
+      if [[ "$file" == *"_stitched.ts" ]]; then
+        MKV_FILE="''${file%_stitched.ts}_stitched.mkv"
+      else
+        MKV_FILE="''${file%.ts}.mkv"
+      fi
 
+      # Skip if already processed
       if [[ -f "$MKV_FILE" ]]; then
+        continue
+      fi
+
+      # Skip files that look like unstitched segments (have " - N" suffix)
+      if [[ "$(basename "$file")" =~ \ -\ [0-9]+\.ts$ ]]; then
+        continue
+      fi
+
+      # Skip files still being written to
+      MODIFIED=$(stat -c %Y "$file")
+      AGE=$((CURRENT_TIME - MODIFIED))
+      if [[ $AGE -lt 1200 ]]; then
         continue
       fi
 
@@ -231,7 +248,7 @@ let
         log "  ERROR: Post-processing failed (exit code: $?)"
       fi
 
-    done < <(find "$RECORDINGS_PATH" -name "*_stitched.ts" -print0)
+    done < <(find "$RECORDINGS_PATH" -name "*.ts" ! -name "*.tmp.ts" -print0)
 
     log "Processing scan completed"
   '';
