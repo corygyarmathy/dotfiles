@@ -35,7 +35,7 @@ let
       fi
       
       # Extract base name (remove -N suffix)
-      BASE_NAME=$(echo "$file" | sed -E 's/-[0-9]+\.ts$/.ts/')
+      BASE_NAME=$(echo "$file" | sed -E 's/ - [0-9]+( - [0-9]+)?\.ts$/.ts/')
       BASE_PATH="''${BASE_NAME%.ts}"
       
       # Skip if we've already processed this base
