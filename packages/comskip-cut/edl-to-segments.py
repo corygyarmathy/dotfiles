@@ -67,32 +67,6 @@ def calculate_content_segments(
     return segments
 
 
-def generate_concat_script(
-    video_path: Path, segments: list[tuple[float, float]]
-) -> str:
-    """Generate ffmpeg filter_complex script for cutting."""
-    filters = []
-
-    for i, (start, end) in enumerate(segments):
-        # Each segment: trim, then set presentation timestamp
-        duration = end - start
-        filters.append(
-            f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[v{i}];"
-            + f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[a{i}]"
-        )
-
-    # Concatenate all segments
-    v_streams = "".join(f"[v{i}]" for i in range(len(segments)))
-    a_streams = "".join(f"[a{i}]" for i in range(len(segments)))
-
-    filters.append(
-        f"{v_streams}concat=n={len(segments)}:v=1:a=0[outv];"
-        + f"{a_streams}concat=n={len(segments)}:v=0:a=1[outa]"
-    )
-
-    return ";".join(filters)
-
-
 def main():
     if len(sys.argv) != 3:
         print(f"Usage: {sys.argv[0]} <video_file> <edl_file>", file=sys.stderr)
@@ -110,27 +84,21 @@ def main():
         sys.exit(1)
 
     try:
-        # Parse commercial breaks from EDL
         commercials = parse_edl(edl_path)
 
         if not commercials:
             print("No commercials found in EDL file", file=sys.stderr)
             sys.exit(1)
 
-        # Get video duration
         duration = get_video_duration(video_path)
-
-        # Calculate content segments
         segments = calculate_content_segments(commercials, duration)
-
-        # Output: filter_complex script and expected duration
-        filter_script = generate_concat_script(video_path, segments)
         content_duration = sum(end - start for start, end in segments)
 
-        # Print filter script for ffmpeg
-        print(filter_script)
+        # Output: one segment per line as "start end"
+        for start, end in segments:
+            print(f"{start} {end}")
 
-        # Print expected duration to stderr for validation
+        # Expected duration on stderr for validation
         print(f"EXPECTED_DURATION:{content_duration}", file=sys.stderr)
 
     except Exception as e:

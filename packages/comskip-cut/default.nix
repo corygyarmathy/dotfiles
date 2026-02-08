@@ -45,6 +45,7 @@ stdenv.mkDerivation {
         lib.makeBinPath [
           comskip
           ffmpeg
+          python3
         ]
       } \
       --prefix PATH : $out/bin
