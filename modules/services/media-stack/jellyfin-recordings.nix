@@ -207,6 +207,8 @@ let
     RECORDINGS_PATH="${cfg.recordingsPath}"
     LOG_FILE="/var/log/jellyfin/recording-processor.log"
     POST_PROCESS="${pkgs.comskip-cut}/bin/post-process"
+    CURRENT_TIME=$(date +%s)
+
 
     log() {
       echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
