@@ -6,7 +6,7 @@
 }:
 
 let
-  cfg = config.services.jellyfin-recording-stitcher;
+  cfg = config.cg.service.jellyfin-recording-stitcher;
 
   stitcherScript = pkgs.writeShellScript "recording-stitcher" ''
     set -euo pipefail
@@ -185,7 +185,7 @@ let
 
 in
 {
-  options.services.jellyfin-recording-stitcher = {
+  options.cg.service.jellyfin-recording-stitcher = {
     enable = lib.mkEnableOption "Jellyfin recording segment stitcher";
 
     recordingsPath = lib.mkOption {

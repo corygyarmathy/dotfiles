@@ -6,7 +6,7 @@
 }:
 
 let
-  cfg = config.services.jellyfin-recording-cleanup;
+  cfg = config.cg.service.jellyfin-recording-cleanup;
 
   cleanupScript = pkgs.writeShellScript "recording-cleanup" ''
     set -euo pipefail
@@ -63,7 +63,7 @@ let
 
 in
 {
-  options.services.jellyfin-recording-cleanup = {
+  options.cg.service.jellyfin-recording-cleanup = {
     enable = lib.mkEnableOption "Jellyfin recording retention cleanup";
 
     recordingsPath = lib.mkOption {

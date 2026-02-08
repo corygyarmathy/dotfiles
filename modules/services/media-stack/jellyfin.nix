@@ -117,33 +117,35 @@ in
       JELLYFIN_PublishedServerUrl = "https://jellyfin.gyarmathy.co";
     };
 
-    # Enable recording stitcher
-    services.jellyfin-recording-stitcher = {
-      enable = true;
-      recordingsPath = "/srv/media/livetv";
-      stabilityDelay = 600; # 10 minutes
-      graceDelay = 600; # 10 minutes
-    };
+    cg.service = {
+      # Enable recording stitcher
+      jellyfin-recording-stitcher = {
+        enable = true;
+        recordingsPath = "/srv/media/livetv";
+        stabilityDelay = 600; # 10 minutes
+        graceDelay = 600; # 10 minutes
+      };
 
-    # Enable recording cleanup
-    services.jellyfin-recording-cleanup = {
-      enable = true;
-      recordingsPath = "/srv/media/livetv";
-      retentionDays = 14;
-      schedule = "03:00"; # 3 AM daily
-      cleanIntermediateFiles = true;
-    };
+      # Enable recording cleanup
+      jellyfin-recording-cleanup = {
+        enable = true;
+        recordingsPath = "/srv/media/livetv";
+        retentionDays = 14;
+        schedule = "03:00"; # 3 AM daily
+        cleanIntermediateFiles = true;
+      };
 
-    # Enable recording post-processor
-    services.jellyfin-recording-post-processor = {
-      enable = true;
-      recordingsPath = "/srv/media/livetv";
-      postProcessScript =
-        if cfg.postProcessingMode == "cut" then
-          "${pkgs.comskip-cut}/bin/post-process"
-        else
-          "${pkgs.comskip-chapters}/bin/post-process";
-      schedule = "*:0/15"; # Every 15 minutes
+      # Enable recording post-processor
+      jellyfin-recording-post-processor = {
+        enable = true;
+        recordingsPath = "/srv/media/livetv";
+        postProcessScript =
+          if cfg.postProcessingMode == "cut" then
+            "${pkgs.comskip-cut}/bin/post-process"
+          else
+            "${pkgs.comskip-chapters}/bin/post-process";
+        schedule = "*:0/15";
+      };
     };
   };
 }
