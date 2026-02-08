@@ -289,6 +289,7 @@ let
         rm -f "''${BASE_PATH}.vdr"
         rm -f "''${BASE_PATH}.concat"
         rm -f "''${BASE_PATH}.ffmetadata"
+        rm -f "''${BASE_PATH}.logo.txt"
         # Remove any leftover segment files
         rm -f "''${BASE_PATH}".seg*.ts
       ''}
