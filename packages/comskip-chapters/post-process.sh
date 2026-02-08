@@ -19,7 +19,7 @@ fi
 # Define paths
 EDL_FILE="${RECORDING_PATH%.ts}.edl"
 METADATA_FILE="${RECORDING_PATH%.ts}.ffmetadata"
-TEMP_OUTPUT="${RECORDING_PATH}.tmp"
+TEMP_OUTPUT="${RECORDING_PATH%.ts}.tmp.ts"
 
 # Run comskip to generate EDL file
 log "Running comskip..."
