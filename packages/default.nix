@@ -19,6 +19,9 @@ pkgs: {
   # Custom script to take comskip output and make chapters in media
   comskip-chapters = pkgs.callPackage ./comskip-chapters { };
 
+  # Custom script to take comskip output and cut commercials from media
+  comskip-cut = pkgs.callPackage ./comskip-cut { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }

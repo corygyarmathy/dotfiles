@@ -101,5 +101,11 @@ in
         UMask = lib.mkForce "0002";
       };
     };
+    # Choose post-processing mode
+    # For chapters:
+    # services.jellyfin.postProcessingScript = "${pkgs.comskip-chapters}/bin/post-process";
+
+    # For cutting:
+    services.jellyfin.postProcessingScript = "${pkgs.comskip-cut}/bin/post-process";
   };
 }
