@@ -149,7 +149,7 @@ let
       DURATION_DIFF=$(${pkgs.python3}/bin/python3 -c "print(abs($ACTUAL_DURATION - $EXPECTED_DURATION))")
       TOLERANCE=$(${pkgs.python3}/bin/python3 -c "print($EXPECTED_DURATION * 0.02)")
       
-      if (( $(${pkgs.python3}/bin/python3 -c "print($DURATION_DIFF > $TOLERANCE)") )); then
+      if (( $(${pkgs.python3}/bin/python3 -c "print(1 if $DURATION_DIFF > $TOLERANCE else 0)") )); then
         log "  ERROR: Duration mismatch exceeds tolerance"
         log "  Keeping original segments for safety"
         rm -f "$TEMP_OUTPUT" "$CONCAT_FILE"
