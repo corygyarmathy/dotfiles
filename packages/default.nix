@@ -16,6 +16,9 @@ pkgs: {
   # Argtable2 (dependency for comskip)
   argtable2 = pkgs.callPackage ./argtable2 { };
 
+  # Custom script to take comskip output and make chapters in media
+  comskip-chapters = pkgs.callPackage ./comskip-chapters { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }
