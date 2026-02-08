@@ -1,7 +1,8 @@
 # Overlays for custom package modifications
-{inputs, ...}: {
+{ inputs, ... }:
+{
   # Custom packages from the packages/ directory
-  additions = final: _prev: import ../packages final.pkgs;
+  additions = final: _prev: import ../packages final;
 
   # Modifications to existing packages
   modifications = final: prev: {

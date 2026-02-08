@@ -179,7 +179,16 @@
       overlays = import ./overlays { inherit inputs; };
 
       # Custom packages
-      packages = forAllSystems (system: import ./packages nixpkgs.legacyPackages.${system});
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = builtins.attrValues self.overlays;
+          };
+        in
+        import ./packages pkgs
+      );
 
       # Development shell for working on this config
       devShells = forAllSystems (system: {
