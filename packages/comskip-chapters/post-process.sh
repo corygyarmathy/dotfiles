@@ -52,11 +52,15 @@ ORIGINAL_SIZE=$(stat -c%s "$RECORDING_PATH")
 # Remux with chapters using ffmpeg
 log "Embedding chapters into video file..."
 if ! ffmpeg \
+  -fflags +genpts+igndts \
+  -err_detect ignore_err \
   -i "$RECORDING_PATH" \
   -i "$METADATA_FILE" \
   -map_metadata 1 \
   -map_chapters 1 \
   -codec copy \
+  -max_interleave_delta 0 \
+  -avoid_negative_ts make_zero \
   -y \
   "$TEMP_OUTPUT" >>"$LOG_FILE" 2>&1; then
   log "ERROR: ffmpeg remux failed"
