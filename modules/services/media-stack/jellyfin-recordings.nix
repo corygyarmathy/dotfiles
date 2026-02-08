@@ -230,16 +230,26 @@ let
         continue
       fi
 
-      # Skip files that look like unstitched segments (have " - N" suffix)
+      # Skip files that are segments of a multi-part recording (stitcher handles these)
       if [[ "$(basename "$file")" =~ \ -\ [0-9]+\.ts$ ]]; then
         continue
       fi
 
-      # Skip files still being written to
+      # Skip _stitched files still being written (just finished stitching)
       MODIFIED=$(stat -c %Y "$file")
       AGE=$((CURRENT_TIME - MODIFIED))
       if [[ $AGE -lt 1200 ]]; then
         continue
+      fi
+
+      # For non-stitched standalone files, also check that no related segments exist
+      # (recording may still be in progress with Jellyfin writing new segments)
+      if [[ "$file" != *"_stitched.ts" ]]; then
+        BASE_PATH="''${file%.ts}"
+        RELATED_SEGMENTS=$(find "$(dirname "$file")" -maxdepth 1 -name "$(basename "$BASE_PATH") - *.ts" 2>/dev/null | head -1)
+        if [[ -n "$RELATED_SEGMENTS" ]]; then
+          continue
+        fi
       fi
 
       log "Processing: $(basename "$file")"
