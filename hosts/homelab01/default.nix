@@ -296,7 +296,10 @@
     # -------------------------------------------------------------------------
     # These benefit from Quick Sync or need low-latency access
 
-    jellyfin.enable = true;
+    jellyfin = {
+      enable = true;
+      postProcessingMode = "cut"; # or "chapters" }
+    };
 
     # -------------------------------------------------------------------------
     # Media Management (Run Locally)
@@ -386,7 +389,6 @@
       };
     };
     comskip-chapters.enable = true; # Enable processing into chapters in Jellyfin
-
   };
 
   # ============================================================================

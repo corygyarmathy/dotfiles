@@ -26,6 +26,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
@@ -36,6 +37,15 @@ in
 {
   options.cg.service.jellyfin = {
     enable = lib.mkEnableOption "Jellyfin media server";
+
+    postProcessingMode = lib.mkOption {
+      type = lib.types.enum [
+        "chapters"
+        "cut"
+      ];
+      default = "chapters";
+      description = "Post-processing mode: chapters (mark commercials) or cut (remove commercials)";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -101,11 +111,32 @@ in
         UMask = lib.mkForce "0002";
       };
     };
-    # Choose post-processing mode
-    # For chapters:
-    # services.jellyfin.postProcessingScript = "${pkgs.comskip-chapters}/bin/post-process";
 
-    # For cutting:
-    services.jellyfin.postProcessingScript = "${pkgs.comskip-cut}/bin/post-process";
+    # Set post-processing script based on mode
+    systemd.services.jellyfin.environment = {
+      JELLYFIN_PublishedServerUrl = "https://jellyfin.gyarmathy.co";
+      JELLYFIN_PostProcessingScript =
+        if cfg.postProcessingMode == "cut" then
+          "${pkgs.comskip-cut}/bin/post-process"
+        else
+          "${pkgs.comskip-chapters}/bin/post-process";
+    };
+
+    # Enable recording stitcher
+    services.jellyfin-recording-stitcher = {
+      enable = true;
+      recordingsPath = "/srv/media/livetv";
+      stabilityDelay = 600; # 10 minutes
+      graceDelay = 600; # 10 minutes
+    };
+
+    # Enable recording cleanup
+    services.jellyfin-recording-cleanup = {
+      enable = true;
+      recordingsPath = "/srv/media/livetv";
+      retentionDays = 14;
+      schedule = "03:00"; # 3 AM daily
+      cleanIntermediateFiles = true;
+    };
   };
 }
