@@ -178,7 +178,7 @@ let
       # Clean up concat file
       rm -f "$CONCAT_FILE"
       
-      done < <(find "$RECORDINGS_PATH" -maxdepth 1 -name "$(basename "$BASE_PATH")*.ts" ! -name "*_stitched.ts" ! -name "*.tmp.ts" -print0 | sort -z)
+    done < <(find "$RECORDINGS_PATH" -maxdepth 1 -name "*.ts" ! -name "*_stitched.ts" ! -name "*.tmp.ts" -print0)
 
     log "Scan completed"
   '';
