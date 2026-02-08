@@ -114,10 +114,9 @@ chown jellyfin:media "$FINAL_OUTPUT" 2>>"$LOG_FILE" || log "WARNING: Could not s
 
 log "MKV conversion completed successfully"
 
-# Optionally remove original TS file after successful conversion
-# Uncomment the following lines if you want to automatically delete the .ts file:
-# log "Removing original TS file..."
-# rm -f "$RECORDING_PATH"
-# log "Original TS file removed"
+# Pemove original TS file after successful conversion
+log "Removing original TS file..."
+rm -f "$RECORDING_PATH"
+log "Original TS file removed"
 
 log "Post-processing completed successfully for: $RECORDING_PATH"
