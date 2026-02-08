@@ -115,11 +115,6 @@ in
     # Set post-processing script based on mode
     systemd.services.jellyfin.environment = {
       JELLYFIN_PublishedServerUrl = "https://jellyfin.gyarmathy.co";
-      JELLYFIN_PostProcessingScript =
-        if cfg.postProcessingMode == "cut" then
-          "${pkgs.comskip-cut}/bin/post-process"
-        else
-          "${pkgs.comskip-chapters}/bin/post-process";
     };
 
     # Enable recording stitcher
@@ -137,6 +132,18 @@ in
       retentionDays = 14;
       schedule = "03:00"; # 3 AM daily
       cleanIntermediateFiles = true;
+    };
+
+    # Enable recording post-processor
+    services.jellyfin-recording-post-processor = {
+      enable = true;
+      recordingsPath = "/srv/media/livetv";
+      postProcessScript =
+        if cfg.postProcessingMode == "cut" then
+          "${pkgs.comskip-cut}/bin/post-process"
+        else
+          "${pkgs.comskip-chapters}/bin/post-process";
+      schedule = "*:0/15"; # Every 15 minutes
     };
   };
 }
