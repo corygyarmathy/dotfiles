@@ -78,7 +78,7 @@ while IFS=' ' read -r START END; do
   if ! ffmpeg -i "$RECORDING_PATH" \
     -ss "$START" -to "$END" \
     -c copy -y \
-    "$SEGMENT_FILE" >>"$LOG_FILE" 2>&1; then
+    "$SEGMENT_FILE" >>"$LOG_FILE" 2>&1 </dev/null; then
     log "ERROR: Failed to extract segment $SEGMENT_INDEX"
     # Clean up any segments we created
     for f in "${SEGMENT_FILES[@]}"; do rm -f "$f"; done
