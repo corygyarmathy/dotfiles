@@ -219,14 +219,12 @@ in
       };
     };
 
-    # Path unit triggers the scanning service when recordings directory changes
-    systemd.paths.jellyfin-recording-stitcher = {
-      wantedBy = [ "multi-user.target" ];
-      pathConfig = {
-        PathModified = cfg.recordingsPath;
-        # Coalesce multiple changes to avoid triggering too frequently
-        TriggerLimitIntervalSec = "60s";
-        TriggerLimitBurst = 5;
+    # Timer triggers the service every 15 minutes
+    systemd.timers.jellyfin-recording-stitcher = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "*:0/15"; # Every 15 minutes
+        Persistent = true;
       };
     };
 
