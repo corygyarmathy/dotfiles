@@ -37,8 +37,8 @@ else
   fi
 fi
 
-# No commercials detected = no EDL file created
-if [[ ! -f "$EDL_FILE" ]]; then
+# No commercials detected = no EDL file, or empty EDL file
+if [[ ! -f "$EDL_FILE" ]] || [[ ! -s "$EDL_FILE" ]]; then
   log "No commercials detected, converting to MKV without cutting"
   if ! ffmpeg -i "$RECORDING_PATH" -c copy -y "$FINAL_OUTPUT" >>"$LOG_FILE" 2>&1; then
     log "ERROR: Failed to convert to MKV"
