@@ -130,6 +130,9 @@ in
       options = cfg.storage.nfsMountOptions ++ [
         "x-systemd.automount"
         "x-systemd.idle-timeout=600"
+        "x-systemd.requires=network-online.target"
+        "x-systemd.after=network-online.target"
+        "x-systemd.mount-timeout=30"
         "_netdev"
       ];
     };
