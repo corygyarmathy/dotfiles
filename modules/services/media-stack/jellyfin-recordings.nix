@@ -78,8 +78,27 @@ let
 
       SEGMENT_COUNT=''${#SEGMENTS[@]}
 
-      # Nothing to do for 0 or 1 segments
+      # Single segment — no stitching needed, just rename to mark as ready for processor
       if [[ $SEGMENT_COUNT -le 1 ]]; then
+        SINGLE_FILE="''${SEGMENTS[0]:-$file}"
+        OUTPUT_FILE="''${SINGLE_FILE%.ts}_stitched.ts"
+
+        # Skip if already renamed
+        if [[ -f "$OUTPUT_FILE" ]]; then
+          continue
+        fi
+
+        # Wait for stability before renaming
+        MODIFIED=$(stat -c %Y "$SINGLE_FILE")
+        AGE=$((CURRENT_TIME - MODIFIED))
+        if [[ $AGE -lt $((STABILITY_SECONDS + GRACE_SECONDS)) ]]; then
+          continue
+        fi
+
+        mv "$SINGLE_FILE" "$OUTPUT_FILE"
+        chown jellyfin:media "$OUTPUT_FILE" 2>> "$LOG_FILE" || log "  WARNING: Could not set ownership"
+
+        log "Single recording ready: $(basename "$OUTPUT_FILE")"
         continue
       fi
 
@@ -230,28 +249,6 @@ let
         continue
       fi
 
-      # Skip files that are segments of a multi-part recording (stitcher handles these)
-      if [[ "$(basename "$file")" =~ \ -\ [0-9]+\.ts$ ]]; then
-        continue
-      fi
-
-      # Skip _stitched files still being written (just finished stitching)
-      MODIFIED=$(stat -c %Y "$file")
-      AGE=$((CURRENT_TIME - MODIFIED))
-      if [[ $AGE -lt 1200 ]]; then
-        continue
-      fi
-
-      # For non-stitched standalone files, also check that no related segments exist
-      # (recording may still be in progress with Jellyfin writing new segments)
-      if [[ "$file" != *"_stitched.ts" ]]; then
-        BASE_PATH="''${file%.ts}"
-        RELATED_SEGMENTS=$(find "$(dirname "$file")" -maxdepth 1 -name "$(basename "$BASE_PATH") - *.ts" 2>/dev/null | head -1)
-        if [[ -n "$RELATED_SEGMENTS" ]]; then
-          continue
-        fi
-      fi
-
       log "Processing: $(basename "$file")"
 
       if "$POST_PROCESS" "$file" >> "$LOG_FILE" 2>&1; then
@@ -260,7 +257,7 @@ let
         log "  ERROR: Post-processing failed (exit code: $?)"
       fi
 
-    done < <(find "$RECORDINGS_PATH" -name "*.ts" ! -name "*.tmp.ts" -print0)
+    done < <(find "$RECORDINGS_PATH" -name "*_stitched.ts" ! -name "*.tmp.ts" -print0)
 
     log "Processing scan completed"
   '';
