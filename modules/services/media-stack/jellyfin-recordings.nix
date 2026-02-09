@@ -396,6 +396,7 @@ in
     # --- Stage 1: Stitcher ---
     systemd.services.jellyfin-recording-stitcher = {
       description = "Stitch Jellyfin recording segments";
+      conflicts = [ "nixos-upgrade.service" ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = stitcherScript;
@@ -415,6 +416,7 @@ in
     # --- Stage 2: Commercial removal ---
     systemd.services.jellyfin-recording-processor = lib.mkIf cfg.commercials.enable {
       description = "Remove commercials from stitched Jellyfin recordings";
+      conflicts = [ "nixos-upgrade.service" ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = processorScript;
