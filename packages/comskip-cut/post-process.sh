@@ -40,7 +40,7 @@ fi
 # No commercials detected = no EDL file, or empty EDL file
 if [[ ! -f "$EDL_FILE" ]] || [[ ! -s "$EDL_FILE" ]]; then
   log "No commercials detected, converting to MKV without cutting"
-  if ! ffmpeg -i "$RECORDING_PATH" -c copy -y "$FINAL_OUTPUT" >>"$LOG_FILE" 2>&1; then
+  if ! ffmpeg -i "$RECORDING_PATH" -c copy -y "$FINAL_OUTPUT" >>"$LOG_FILE" 2>&1 </dev/null; then
     log "ERROR: Failed to convert to MKV"
     exit 1
   fi
@@ -104,7 +104,7 @@ TEMP_OUTPUT="${BASE_PATH}.tmp.mkv"
 if ! ffmpeg -f concat -safe 0 \
   -i "$CONCAT_FILE" \
   -c copy -y \
-  "$TEMP_OUTPUT" >>"$LOG_FILE" 2>&1; then
+  "$TEMP_OUTPUT" >>"$LOG_FILE" 2>&1 </dev/null; then
   log "ERROR: Concatenation failed"
   rm -f "$TEMP_OUTPUT" "$CONCAT_FILE"
   for f in "${SEGMENT_FILES[@]}"; do rm -f "$f"; done
