@@ -408,6 +408,7 @@ in
     systemd.services.jellyfin-recording-stitcher = {
       description = "Stitch Jellyfin recording segments";
       conflicts = [ "nixos-upgrade.service" ];
+      restartIfChanged = false; # Timer-triggered; don't start on rebuild
       serviceConfig = {
         Type = "oneshot";
         ExecStart = stitcherScript;
@@ -429,6 +430,7 @@ in
     systemd.services.jellyfin-recording-processor = lib.mkIf cfg.commercials.enable {
       description = "Remove commercials from stitched Jellyfin recordings";
       conflicts = [ "nixos-upgrade.service" ];
+      restartIfChanged = false; # Timer-triggered; don't start on rebuild
       serviceConfig = {
         Type = "oneshot";
         ExecStart = processorScript;
