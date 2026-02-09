@@ -278,7 +278,8 @@
         nfsExportPath = "/srv/media";
         nfsMountOptions = [
           "nfsvers=4.2"
-          "soft"
+          "hard" # prevents silent data loss on NFS timeouts
+          "intr" # allow interrupting hung NFS operations with signals
           "timeo=150"
           "retrans=3"
           # Performance tuning for media files
