@@ -95,7 +95,7 @@ in
         type = lib.types.listOf lib.types.str;
         default = [
           "nfsvers=4.2"
-          "soft"
+          "hard"
           "timeo=150"
           "retrans=3"
           "rsize=1048576"
