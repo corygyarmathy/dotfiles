@@ -161,7 +161,7 @@ let
         -f concat -safe 0 \
         -i "$CONCAT_FILE" \
         -c copy -y \
-        "$TEMP_OUTPUT" >> "$LOG_FILE" 2>&1; then
+        "$TEMP_OUTPUT" >> "$LOG_FILE" 2>&1 </dev/null; then
         log "  ERROR: ffmpeg stitching failed"
         rm -f "$TEMP_OUTPUT" "$CONCAT_FILE"
         continue
