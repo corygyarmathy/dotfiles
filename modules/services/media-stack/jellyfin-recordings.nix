@@ -98,6 +98,13 @@ let
         mv "$SINGLE_FILE" "$OUTPUT_FILE"
         chown jellyfin:media "$OUTPUT_FILE" 2>> "$LOG_FILE" || log "  WARNING: Could not set ownership"
 
+        # Copy NFO to match stitched filename
+        SINGLE_NFO="''${SINGLE_FILE%.ts}.nfo"
+        STITCHED_NFO="''${OUTPUT_FILE%.ts}.nfo"
+        if [[ -f "$SINGLE_NFO" ]] && [[ ! -f "$STITCHED_NFO" ]]; then
+          cp "$SINGLE_NFO" "$STITCHED_NFO"
+        fi
+
         log "Single recording ready: $(basename "$OUTPUT_FILE")"
         continue
       fi
@@ -194,6 +201,13 @@ let
 
       mv "$TEMP_OUTPUT" "$OUTPUT_FILE"
       chown jellyfin:media "$OUTPUT_FILE" 2>> "$LOG_FILE" || log "  WARNING: Could not set ownership"
+
+      # Copy NFO to match stitched filename
+      BASE_NFO="''${BASE_PATH}.nfo"
+      STITCHED_NFO="''${BASE_PATH}_stitched.nfo"
+      if [[ -f "$BASE_NFO" ]] && [[ ! -f "$STITCHED_NFO" ]]; then
+        cp "$BASE_NFO" "$STITCHED_NFO"
+      fi
 
       log "  Stitching completed: $(basename "$OUTPUT_FILE")"
 
