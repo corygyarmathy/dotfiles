@@ -112,7 +112,7 @@ in
 
     # Recording post-processing pipeline
     cg.service.jellyfin-recordings = {
-      enable = true;
+      enable = false;
       recordingsPath = "/srv/media/livetv";
     };
   };
