@@ -402,6 +402,7 @@ in
         ExecStart = stitcherScript;
         User = "jellyfin";
         Group = "media";
+        TimeoutStartSec = "2h"; # Allow time for large file concatenation
       };
     };
 
@@ -422,6 +423,7 @@ in
         ExecStart = processorScript;
         User = "jellyfin";
         Group = "media";
+        TimeoutStartSec = "2h"; # Allow time for large file processing
       };
     };
 
