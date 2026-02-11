@@ -101,6 +101,12 @@
 
         # Recyclarr cache (283MB) - TRaSH guide repo clone, regenerated on run
         "/srv/arr/recyclarr/cache/**"
+
+        # Jellyfin - regenerable from library scan
+        "/var/lib/jellyfin/metadata/**"
+        "/var/lib/jellyfin/data/trickplay/**"
+        "/var/lib/jellyfin/data/attachments/**"
+        "/var/lib/jellyfin/data/subtitles/**"
       ];
 
       repositories = {
