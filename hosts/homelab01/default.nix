@@ -88,11 +88,19 @@
       ];
 
       extraExclude = [
-        # Jellyfin transcodes and cache (large, regenerable)
+        # Jellyfin transcodes (large, regenerable)
         "**/transcodes/**"
 
         # Flaresolverr has no persistent state worth backing up
         "/srv/arr/flaresolverr/**"
+
+        # Huntarr logs (109MB) and backups of arr configs (32MB, redundant
+        # since we're already backing up the arr configs directly)
+        "/srv/arr/huntarr/logs/**"
+        "/srv/arr/huntarr/backups/**"
+
+        # Recyclarr cache (283MB) - TRaSH guide repo clone, regenerated on run
+        "/srv/arr/recyclarr/cache/**"
       ];
 
       repositories = {
