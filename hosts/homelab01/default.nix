@@ -51,8 +51,8 @@
     ssh-hardening = {
       enable = true;
       authorizedKeys = [
-        # Allow access from your XPS 15
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGN2/Vvyb3abKAxdCYt9pxGgOho5uqtNzhpXVxGVw1gq coryg@xps15"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGN2/Vvyb3abKAxdCYt9pxGgOho5uqtNzhpXVxGVw1gq coryg@xps15" # Allow access from your XPS 15
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPWfMUll4YosHtfkgs/68GAaszVU/VM94IrQzz4xZuPN restic-backup"
       ];
     };
     kernel-hardening = {
@@ -71,31 +71,42 @@
   # ============================================================================
   cg.service = {
     backup = {
-      # NOTE: currently not working, refer to: https://github.com/rclone/rclone/issues/8873
-      enable = false;
+      enable = true;
+
+      # homelab01 receives homelab02's cross-server backups here
+      incomingPath = "/srv/backups/homelab02";
+
       paths = [
-        # Media management services (from /srv/arr)
-        "/srv/arr/sonarr"
-        "/srv/arr/radarr"
-        "/srv/arr/prowlarr"
-        "/srv/arr/bazarr"
-        "/srv/arr/jellyseerr"
-        "/srv/arr/recyclarr"
-        "/srv/arr/huntarr"
-        "/srv/arr/cleanuparr"
-        "/srv/arr/wizarr"
+        # All arr service configs — backs up the whole directory so
+        # new services are captured automatically
+        "/srv/arr"
 
-        # Jellyfin (separate location)
+        # Services with state outside /srv/arr
         "/var/lib/jellyfin"
-
-        # AdGuard Home (primary)
+        "/var/lib/grafana"
         "/var/lib/private/AdGuardHome"
       ];
 
       extraExclude = [
         # Jellyfin transcodes and cache (large, regenerable)
         "**/transcodes/**"
+
+        # Flaresolverr has no persistent state worth backing up
+        "/srv/arr/flaresolverr/**"
       ];
+
+      repositories = {
+        # Cross-server: back up to homelab02's ZFS pool
+        cross-server = {
+          repository = "sftp:coryg@10.20.2.130:/srv/backups/homelab01";
+          schedule = "02:30";
+        };
+        # Offsite: Google Drive via rclone
+        gdrive = {
+          repository = "rclone:gdrive:backups/homelab/homelab01";
+          schedule = "03:00";
+        };
+      };
     };
     immich.enable = false;
     home-assistant.enable = false;

@@ -1,13 +1,15 @@
-# modules/services/backup/default.nix
+# modules/services/backup.nix
 #
-# Restic backup to Proton Drive via rclone
+# Restic backup with multiple repository targets
 #
-# Each host specifies which paths to back up. Restic handles:
+# Each host specifies which paths to back up. The module creates a
+# separate restic backup job for each configured repository, enabling
+# 3-2-1 backup strategies (local cross-server + offsite cloud).
+#
+# Restic handles:
 # - Encryption (using password from sops)
 # - Deduplication (only changed blocks uploaded)
 # - Versioning (configurable retention policy)
-#
-# Rclone handles transport to Proton Drive.
 {
   config,
   lib,
@@ -21,18 +23,73 @@ let
     mkEnableOption
     mkOption
     types
+    mapAttrs
+    mapAttrsToList
+    any
+    hasPrefix
+    filterAttrs
     ;
+
+  # Check if any configured repository uses rclone
+  hasRcloneRepo = any (repo: hasPrefix "rclone:" repo.repository) (
+    mapAttrsToList (_: v: v) cfg.repositories
+  );
+
+  hasSftpRepo = any (repo: hasPrefix "sftp:" repo.repository) (
+    mapAttrsToList (_: v: v) cfg.repositories
+  );
+
+  # Submodule type for individual repository targets
+  repositoryModule = types.submodule {
+    options = {
+      repository = mkOption {
+        type = types.str;
+        description = ''
+          Restic repository URL. Supports any restic backend:
+          - sftp:user@host:/path (cross-server via SSH)
+          - rclone:remote:path (cloud via rclone)
+          - /local/path (local directory)
+          - rest:http://host:port/ (restic REST server)
+        '';
+        example = "sftp:coryg@10.20.2.130:/srv/backups/homelab01";
+      };
+
+      schedule = mkOption {
+        type = types.str;
+        default = cfg.schedule;
+        description = "Time to run daily backup for this repo (24h format). Defaults to the global schedule.";
+      };
+
+      retention = {
+        daily = mkOption {
+          type = types.int;
+          default = cfg.retention.daily;
+          description = "Number of daily backups to keep. Defaults to global retention.";
+        };
+        weekly = mkOption {
+          type = types.int;
+          default = cfg.retention.weekly;
+          description = "Number of weekly backups to keep. Defaults to global retention.";
+        };
+        monthly = mkOption {
+          type = types.int;
+          default = cfg.retention.monthly;
+          description = "Number of monthly backups to keep. Defaults to global retention.";
+        };
+      };
+    };
+  };
 in
 {
   options.cg.service.backup = {
-    enable = mkEnableOption "Restic backup to Proton Drive";
+    enable = mkEnableOption "Restic backup to defined repositories";
 
     paths = mkOption {
       type = types.listOf types.str;
       default = [ ];
-      description = "Paths to back up on this host";
+      description = "Paths to back up on this host (shared across all repositories)";
       example = [
-        "/srv/arr/sonarr"
+        "/srv/arr"
         "/var/lib/jellyfin"
       ];
     };
@@ -65,25 +122,13 @@ in
     extraExclude = mkOption {
       type = types.listOf types.str;
       default = [ ];
-      description = "Additional exclude patterns (added to defaults)";
+      description = "Additional exclude patterns (added to default excluded)";
     };
 
     schedule = mkOption {
       type = types.str;
       default = "03:00";
-      description = "Time to run daily backup (24h format)";
-    };
-
-    rcloneRemote = mkOption {
-      type = types.str;
-      default = "proton";
-      description = "Name of the rclone remote";
-    };
-
-    remotePath = mkOption {
-      type = types.str;
-      default = "backups/homelab/${config.networking.hostName}";
-      description = "Path within the rclone remote for this host's backups";
+      description = "Time to run daily backups (24h format)";
     };
 
     retention = {
@@ -103,54 +148,92 @@ in
         description = "Number of monthly backups to keep";
       };
     };
+
+    repositories = mkOption {
+      type = types.attrsOf repositoryModule;
+      default = { };
+      description = ''
+        Named backup repositories. Each entry creates a separate restic
+        backup job targeting that repository. All jobs back up the same
+        paths with the same excludes.
+      '';
+      example = {
+        cross-server = {
+          repository = "sftp:coryg@10.20.2.130:/srv/backups/homelab01";
+          schedule = "02:30";
+        };
+        gdrive = {
+          repository = "rclone:gdrive:backups/homelab/homelab01";
+          schedule = "03:00";
+        };
+      };
+    };
+
+    incomingPath = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Local path where this host receives backups from other hosts.
+        The module creates this directory with correct permissions.
+        Set to null if this host doesn't receive cross-server backups.
+      '';
+      example = "/srv/backups/homelab02";
+    };
   };
 
   config = mkIf cfg.enable {
-    # Ensure rclone is available system-wide (for manual operations)
-    environment.systemPackages = with pkgs; [
-      rclone
-      restic
+    environment.systemPackages = with pkgs; [ restic ] ++ lib.optional hasRcloneRepo rclone;
+
+    assertions = lib.optionals hasSftpRepo [
+      {
+        assertion = config.cg.ssh-hardening.enable;
+        message = "SFTP backup repositories require SSH hardening module to be enabled (for SSH access)";
+      }
     ];
 
-    # Sops secrets
-    sops.secrets."backups/restic/password" = {
-      # Restic needs to read this
-    };
+    # Restic encryption password (shared across all repos)
+    sops.secrets."backups/restic/password" = { };
 
-    sops.secrets."backups/rclone-config" = {
-      # Place rclone config where restic's systemd service can find it
-      # The service runs as root, so /root/.config/rclone/ works
+    # Rclone config - only provisioned if any repo uses rclone
+    sops.secrets."backups/rclone-config" = mkIf hasRcloneRepo {
       path = "/root/.config/rclone/rclone.conf";
       mode = "0600";
     };
 
-    # Restic backup job
-    services.restic.backups.homelab = {
-      # Create the repository if it doesn't exist
+    # SSH key for SFTP-based backups (restic runs as root)
+    sops.secrets."backups/ssh/private-key" = mkIf hasSftpRepo {
+      path = "/root/.ssh/id_backup";
+      mode = "0600";
+    };
+
+    # Configure root's SSH to use the backup key and accept host keys
+    # for known homelab hosts
+    programs.ssh.extraConfig = mkIf hasSftpRepo ''
+      Host 10.20.2.*
+        IdentityFile /root/.ssh/id_backup
+        StrictHostKeyChecking accept-new
+    '';
+
+    # Generate a restic backup job for each configured repository
+    services.restic.backups = mapAttrs (name: repo: {
       initialize = true;
-
-      # Repository location: rclone:<remote>:<path>
-      repository = "rclone:${cfg.rcloneRemote}:${cfg.remotePath}";
-
-      # Encryption password from sops
+      repository = repo.repository;
       passwordFile = config.sops.secrets."backups/restic/password".path;
 
       # What to back up
       paths = cfg.paths;
       exclude = cfg.exclude ++ cfg.extraExclude;
 
-      # Schedule: daily at configured time
       timerConfig = {
-        OnCalendar = cfg.schedule;
         Persistent = true; # Run if missed (e.g., server was off)
         RandomizedDelaySec = "5m"; # Stagger backups slightly
+        OnCalendar = repo.schedule;
       };
 
-      # Retention policy: prune old snapshots after backup
       pruneOpts = [
-        "--keep-daily ${toString cfg.retention.daily}"
-        "--keep-weekly ${toString cfg.retention.weekly}"
-        "--keep-monthly ${toString cfg.retention.monthly}"
+        "--keep-daily ${toString repo.retention.daily}"
+        "--keep-weekly ${toString repo.retention.weekly}"
+        "--keep-monthly ${toString repo.retention.monthly}"
       ];
 
       # Verify backup integrity periodically
@@ -161,6 +244,11 @@ in
         "--verbose"
         "--exclude-caches" # Exclude directories with CACHEDIR.TAG
       ];
-    };
+    }) cfg.repositories;
+
+    systemd.tmpfiles.rules = lib.optionals (cfg.incomingPath != null) [
+      "d ${builtins.dirOf cfg.incomingPath} 0755 root root -"
+      "d ${cfg.incomingPath} 0700 coryg users -"
+    ];
   };
 }

@@ -58,9 +58,9 @@
     ssh-hardening = {
       enable = true;
       authorizedKeys = [
-        # Allow access from your XPS 15
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGN2/Vvyb3abKAxdCYt9pxGgOho5uqtNzhpXVxGVw1gq coryg@xps15"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGN2/Vvyb3abKAxdCYt9pxGgOho5uqtNzhpXVxGVw1gq coryg@xps15" # Allow access from your XPS 15
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDuSTywA1OKdG6SxdhkzaGvUFmWpvm592XJHKt0zNEsU coryg@homelab01"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPWfMUll4YosHtfkgs/68GAaszVU/VM94IrQzz4xZuPN restic-backup"
       ];
     };
     kernel-hardening = {
@@ -80,23 +80,36 @@
 
   cg.service = {
     backup = {
-      # NOTE: currently not working, refer to: https://github.com/rclone/rclone/issues/8873
-      enable = false;
-      paths = [
-        # Download services (from /srv/arr)
-        "/srv/arr/qbittorrent"
-        "/srv/arr/cross-seed"
-        "/srv/arr/unpackerr"
-        "/srv/arr/gluetun"
+      enable = true;
 
-        # AdGuard Home (secondary)
+      # homelab02 receives homelab01's cross-server backups here
+      incomingPath = "/srv/backups/homelab01";
+
+      paths = [
+        # All arr service configs
+        "/srv/arr"
+
+        # Services with state outside /srv/arr
         "/var/lib/private/AdGuardHome"
       ];
 
       extraExclude = [
-        # cross-seed logs are 978MB - exclude them!
+        # cross-seed logs are ~1GB
         "/srv/arr/cross-seed/logs/**"
       ];
+
+      repositories = {
+        # Cross-server: back up to homelab01
+        cross-server = {
+          repository = "sftp:coryg@10.20.2.85:/srv/backups/homelab02";
+          schedule = "02:30";
+        };
+        # Offsite: Google Drive via rclone
+        gdrive = {
+          repository = "rclone:gdrive:backups/homelab/homelab02";
+          schedule = "03:00";
+        };
+      };
     };
     immich.enable = false;
     home-assistant.enable = false;
