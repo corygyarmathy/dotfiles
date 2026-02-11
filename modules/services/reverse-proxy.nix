@@ -280,7 +280,11 @@ in
 
         # Global DNS challenge config using environment variable
         # The token is loaded via systemd EnvironmentFile
-        acme_dns cloudflare {env.CF_API_TOKEN}
+        # Sets resolvers to cloudflare dns to avoid split-horizon dns issues
+        cert_issuer acme {
+          dns cloudflare {env.CF_API_TOKEN}
+          resolvers 1.1.1.1
+        }
       '';
 
       # Convert services attrset to virtualHosts format
