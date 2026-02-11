@@ -85,6 +85,7 @@
         "/var/lib/jellyfin"
         "/var/lib/grafana"
         "/var/lib/private/AdGuardHome"
+        "/var/lib/autobrr"
       ];
 
       extraExclude = [
@@ -174,6 +175,11 @@
           port = 6767;
           localOnly = true;
         };
+        autobrr = {
+          subdomain = "autobrr";
+          port = 7474;
+          localOnly = true;
+        };
 
         # Management
         huntarr = {
@@ -198,10 +204,6 @@
           port = 3000;
           localOnly = true;
         };
-
-        # NOTE: downloads subdomain now routes to homelab02 via DNS
-        # (see adguard-home.extraRewrites below)
-
       };
 
     };
@@ -256,6 +258,10 @@
         {
           name = "adguard-02";
           url = "https://adguard2.gyarmathy.co";
+        }
+        {
+          name = "autobrr";
+          url = "https://autobrr.gyarmathy.co";
         }
 
       ];
@@ -342,6 +348,7 @@
     huntarr.enable = true;
     cleanuparr.enable = true;
     wizarr.enable = true;
+    autobrr.enable = true;
 
     # -------------------------------------------------------------------------
     # Download Services (NOW ON HOMELAB02)

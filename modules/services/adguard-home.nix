@@ -72,6 +72,11 @@ let
       answer = servers.homelab01;
     }
     {
+      domain = "autobrr.${domain}";
+      answer = servers.homelab01;
+    }
+
+    {
       domain = "prowlarr.${domain}";
       answer = servers.homelab01;
     }
