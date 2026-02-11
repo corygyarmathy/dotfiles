@@ -79,6 +79,31 @@ let
       };
     };
   };
+
+  # Script that writes backup metrics for Prometheus node_exporter textfile collector
+  backupMetricsScript =
+    name:
+    pkgs.writeShellScript "restic-backup-metrics-${name}" ''
+        METRICS_DIR="/var/lib/prometheus-node-exporter"
+        METRICS_FILE="$METRICS_DIR/restic_backup_${name}.prom"
+        mkdir -p "$METRICS_DIR"
+
+        # SERVICE_RESULT is set by systemd for ExecStopPost commands
+        if [ "$SERVICE_RESULT" = "success" ]; then
+          SUCCESS=1
+        else
+          SUCCESS=0
+        fi
+
+        cat > "$METRICS_FILE" <<EOF
+      # HELP restic_backup_last_run_timestamp_seconds Unix timestamp of last backup completion
+      # TYPE restic_backup_last_run_timestamp_seconds gauge
+      restic_backup_last_run_timestamp_seconds{job="${name}",host="${config.networking.hostName}"} $(date +%s)
+      # HELP restic_backup_last_run_success Whether the last backup succeeded (1=success, 0=failure)
+      # TYPE restic_backup_last_run_success gauge
+      restic_backup_last_run_success{job="${name}",host="${config.networking.hostName}"} $SUCCESS
+      EOF
+    '';
 in
 {
   options.cg.service.backup = {
@@ -244,6 +269,10 @@ in
         "--verbose"
         "--exclude-caches" # Exclude directories with CACHEDIR.TAG
       ];
+
+      # Write metrics on completion
+      backupCleanupCommand = "${backupMetricsScript name}";
+
     }) cfg.repositories;
 
     systemd.tmpfiles.rules = lib.optionals (cfg.incomingPath != null) [
