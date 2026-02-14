@@ -83,6 +83,7 @@
     obsidian
     libreoffice
     google-chrome
+    firefox
     protonvpn-gui
     proton-vpn-cli
     proton-pass
