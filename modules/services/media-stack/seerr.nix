@@ -61,6 +61,7 @@ in
       ];
       ports = [ "${toString cfg.port}:5055" ];
       extraOptions = [
+        "--init"
         "--pull=newer"
         "--network=arr-network"
         # Allow container to reach host services (like Jellyfin)
