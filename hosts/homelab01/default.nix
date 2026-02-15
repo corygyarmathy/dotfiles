@@ -338,7 +338,7 @@
     # These are metadata-heavy and CPU-bound, not I/O-bound.
     # They access media via NFS but don't do heavy writes.
 
-    jellyseerr.enable = true;
+    seerr.enable = true;
     sonarr.enable = true;
     radarr.enable = true;
     prowlarr.enable = true;

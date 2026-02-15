@@ -226,7 +226,7 @@
     # Services that stay on homelab01
     # -------------------------------------------------------------------------
     jellyfin.enable = false;
-    jellyseerr.enable = false;
+    seerr.enable = false;
     sonarr.enable = false;
     radarr.enable = false;
     prowlarr.enable = false;
