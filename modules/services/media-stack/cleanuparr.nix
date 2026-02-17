@@ -130,7 +130,8 @@ in
       volumes = [
         "${stack.configPath}/cleanuparr:/config"
         # Mount downloads for hardlink detection (Download Cleaner feature)
-        "${stack.dataPath}/downloads:/downloads"
+        # Mount downloads at same path as qBittorrent so paths reported via API resolve correctly
+        "${stack.dataPath}/downloads:/data/downloads"
       ];
       ports = [ "${toString cfg.port}:${toString cfg.port}" ];
       extraOptions = [
