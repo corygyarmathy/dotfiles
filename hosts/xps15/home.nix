@@ -35,6 +35,7 @@
     stylix.enable = true;
     brightness.enable = true;
     playerctl.enable = true;
+    yazi.enable = true;
 
     # Desktop Services
     dunst.enable = true; # Notification daemon (extracted from hyprland)
