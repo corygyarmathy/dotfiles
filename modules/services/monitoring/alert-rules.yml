@@ -50,6 +50,42 @@ groups:
           summary: "High memory usage on {{ $labels.instance }}"
           description: 'Memory usage is {{ printf "%.1f" $value }}%'
 
+      - alert: HighCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: 'CPU usage is {{ printf "%.1f" $value }}%'
+
+      - alert: HighDriveTemperature
+        expr: smartctl_device_temperature > 55
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drive {{ $labels.device }} running hot on {{ $labels.instance }}"
+          description: 'Temperature is {{ printf "%.0f" $value }}°C (threshold: 55°C)'
+
+      - alert: HighSystemTemperature
+        expr: node_hwmon_temp_celsius > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High system temperature on {{ $labels.instance }}"
+          description: 'Sensor {{ $labels.sensor }} reading {{ printf "%.0f" $value }}°C'
+
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Scrape target {{ $labels.job }}/{{ $labels.instance }} is down"
+          description: "Prometheus cannot reach {{ $labels.instance }} for job {{ $labels.job }}"
+
   - name: services
     rules:
       # HTTP probe failures
