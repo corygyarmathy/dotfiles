@@ -229,6 +229,9 @@
     ];
   };
 
+  # kdeconnect - also opens firewall ports
+  programs.kdeconnect.enable = true;
+
   # Gaming
   programs.steam = {
     enable = true;
