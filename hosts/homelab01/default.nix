@@ -210,17 +210,29 @@
 
     monitoring = {
       enable = true;
-      role = "hub";
+      prometheus.enable = true;
+      alertmanager = {
+        enable = true;
+        clusterPeers = [ ];
+        email = {
+          to = "cory@gyarmathy.co";
+          from = "alerts@gyarmathy.co";
+          authUsername = "alerts@gyarmathy.co";
+          # smarthost uses the default (smtp.protonmail.ch:587)
+        };
+      };
 
+      grafana.enable = true;
+      zfs.enable = false;
       scrapeTargets = [
         "homelab01:9100"
         "homelab02:9100"
       ];
-
       smartctlTargets = [
         "homelab01:9633"
         "homelab02:9633"
       ];
+      cloudflaredTarget = "homelab01:20241";
 
       httpProbes = [
         {
@@ -263,18 +275,7 @@
           name = "autobrr";
           url = "https://autobrr.gyarmathy.co";
         }
-
       ];
-
-      alerting = {
-        enable = true;
-        email = {
-          to = "cory@gyarmathy.co";
-          from = "alerts@gyarmathy.co";
-          authUsername = "alerts@gyarmathy.co";
-          # smarthost uses the default (smtp.protonmail.ch:587)
-        };
-      };
     };
 
     # -------------------------------------------------------------------------
