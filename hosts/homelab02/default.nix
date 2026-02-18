@@ -118,7 +118,7 @@
       prometheus.enable = true;
       alertmanager = {
         enable = true;
-        clusterPeers = [ "homelab01:9094" ];
+        clusterPeers = [ "homelab01" ];
         email = {
           to = "cory@gyarmathy.co";
           from = "alerts@gyarmathy.co";
