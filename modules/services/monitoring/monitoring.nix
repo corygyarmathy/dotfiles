@@ -137,17 +137,44 @@ in
   options.cg.service.monitoring = {
     enable = lib.mkEnableOption "Monitoring stack";
 
-    role = lib.mkOption {
-      type = lib.types.enum [
-        "hub"
-        "agent"
-      ];
-      default = "agent";
-      description = ''
-        Role of this host in the monitoring architecture:
-        - hub: Runs Prometheus, Alertmanager, Grafana, and exporters
-        - agent: Runs only exporters (node_exporter, smartctl_exporter)
-      '';
+    prometheus.enable = lib.mkEnableOption "Prometheus server";
+    grafana.enable = lib.mkEnableOption "Grafana dashboard";
+
+    alertmanager = {
+      enable = lib.mkEnableOption "Alertmanager";
+      clusterPeers = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [ "homelab01:9094" ];
+        description = "Alertmanager cluster peers for HA deduplication";
+      };
+
+      # Email alerting configuration
+      email = {
+        to = lib.mkOption {
+          type = lib.types.str;
+          example = "admin@example.com";
+          description = "Email address to send alerts to";
+        };
+
+        from = lib.mkOption {
+          type = lib.types.str;
+          example = "alerts@example.com";
+          description = "Email address to send alerts from";
+        };
+
+        smarthost = lib.mkOption {
+          type = lib.types.str;
+          default = "smtp.protonmail.ch:587";
+          description = "SMTP server and port";
+        };
+
+        authUsername = lib.mkOption {
+          type = lib.types.str;
+          description = "SMTP authentication username";
+        };
+      };
+
     };
 
     # ZFS monitoring
@@ -155,7 +182,7 @@ in
       enable = lib.mkEnableOption "ZFS pool health monitoring";
     };
 
-    # Targets for Prometheus to scrape (hub only)
+    # Targets for Prometheus to scrape
     scrapeTargets = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -196,42 +223,19 @@ in
       description = "HTTP endpoints to probe with blackbox_exporter";
     };
 
-    # Alerting configuration
-    alerting = {
-      enable = lib.mkEnableOption "Email alerting via Alertmanager";
-
-      email = {
-        to = lib.mkOption {
-          type = lib.types.str;
-          example = "admin@example.com";
-          description = "Email address to send alerts to";
-        };
-
-        from = lib.mkOption {
-          type = lib.types.str;
-          example = "alerts@example.com";
-          description = "Email address to send alerts from";
-        };
-
-        smarthost = lib.mkOption {
-          type = lib.types.str;
-          default = "smtp.protonmail.ch:587";
-          description = "SMTP server and port";
-        };
-
-        authUsername = lib.mkOption {
-          type = lib.types.str;
-          description = "SMTP authentication username";
-        };
-      };
+    cloudflaredTarget = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "homelab01:20241";
+      description = "Cloudflared metrics endpoint to scrape (null to disable)";
     };
   };
 
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
-      # ========================================================================
-      # Always applied (both hub and agent)
-      # ========================================================================
+      # ============================================================
+      # Always: exporters (node, smartctl, firewall)
+      # ============================================================
       {
         services.prometheus.exporters = {
           node = {
@@ -263,9 +267,9 @@ in
         ];
       }
 
-      # ========================================================================
-      # ZFS monitoring (agent or hub with ZFS)
-      # ========================================================================
+      # ============================================================
+      # ZFS monitoring
+      # ============================================================
       (lib.mkIf cfg.zfs.enable {
         # Systemd service to periodically export ZFS metrics
         systemd.services.zfs-health-exporter = {
@@ -296,10 +300,10 @@ in
         ];
       })
 
-      # ========================================================================
-      # Hub only - blackbox exporter
-      # ========================================================================
-      (lib.mkIf (cfg.role == "hub") {
+      # ============================================================
+      # Prometheus server + blackbox exporter
+      # ============================================================
+      (lib.mkIf cfg.prometheus.enable {
         services.prometheus.exporters.blackbox = {
           enable = true;
           configFile = pkgs.writeText "blackbox.yml" ''
@@ -315,15 +319,9 @@ in
                   preferred_ip_protocol: "ip4"
           '';
         };
-      })
 
-      # ========================================================================
-      # Hub only - Prometheus server
-      # ========================================================================
-      (lib.mkIf (cfg.role == "hub") {
         services.prometheus = {
           enable = true;
-
           scrapeConfigs = [
             {
               job_name = "node";
@@ -345,7 +343,7 @@ in
               job_name = "cloudflared";
               static_configs = [
                 {
-                  targets = [ "localhost:20241" ];
+                  targets = [ cfg.cloudflaredTarget ];
                   labels = {
                     instance = "homelab01";
                   };
@@ -381,23 +379,20 @@ in
           ];
 
           ruleFiles = [ ./alert-rules.yml ];
-
-          alertmanagers = lib.mkIf cfg.alerting.enable [
+          alertmanagers = lib.mkIf cfg.alertmanager.enable [
             {
               static_configs = [
-                {
-                  targets = [ "localhost:9093" ];
-                }
+                { targets = [ "localhost:9093" ]; }
               ];
             }
           ];
         };
       })
 
-      # ========================================================================
-      # Hub + alerting - Alertmanager
-      # ========================================================================
-      (lib.mkIf (cfg.role == "hub" && cfg.alerting.enable) {
+      # ============================================================
+      # Alertmanager
+      # ============================================================
+      (lib.mkIf cfg.alertmanager.enable {
         # Ensure alertmanager user exists before sops-nix runs
         users.users.alertmanager = {
           isSystemUser = true;
@@ -413,6 +408,7 @@ in
         services.prometheus.alertmanager = {
           enable = true;
 
+          clusterPeers = cfg.alertmanager.clusterPeers;
           configuration = {
             route = {
               receiver = "email";
@@ -430,10 +426,10 @@ in
                 name = "email";
                 email_configs = [
                   {
-                    to = cfg.alerting.email.to;
-                    from = cfg.alerting.email.from;
-                    smarthost = cfg.alerting.email.smarthost;
-                    auth_username = cfg.alerting.email.authUsername;
+                    to = cfg.alertmanager.email.to;
+                    from = cfg.alertmanager.email.from;
+                    smarthost = cfg.alertmanager.email.smarthost;
+                    auth_username = cfg.alertmanager.email.authUsername;
                     auth_password_file = config.sops.secrets."monitoring/proton_smtp_token".path;
                     send_resolved = true;
                   }
@@ -442,12 +438,13 @@ in
             ];
           };
         };
+        networking.firewall.allowedTCPPorts = [ 9094 ]; # gossip
       })
 
-      # ========================================================================
-      # Hub only - Grafana
-      # ========================================================================
-      (lib.mkIf (cfg.role == "hub") {
+      # ============================================================
+      # Grafana
+      # ============================================================
+      (lib.mkIf cfg.grafana.enable {
         # Ensure grafana user exists before sops-nix runs
         users.users.grafana = {
           isSystemUser = true;
