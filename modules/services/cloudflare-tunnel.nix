@@ -132,7 +132,7 @@ in
         Type = "simple";
         User = "cloudflared";
         Group = "cloudflared";
-        ExecStart = "${pkgs.cloudflared}/bin/cloudflared tunnel --config ${
+        ExecStart = "${pkgs.cloudflared}/bin/cloudflared tunnel --metrics 0.0.0.0:20241 --config ${
           config.sops.templates."cloudflared-config.yml".path
         } run";
         Restart = "on-failure";
@@ -145,5 +145,7 @@ in
         ProtectHome = true;
       };
     };
+    # Expose metrics for monitoring
+    networking.firewall.allowedTCPPorts = [ 20241 ];
   };
 }
