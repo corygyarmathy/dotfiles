@@ -115,8 +115,71 @@
     home-assistant.enable = false;
     monitoring = {
       enable = true;
-      role = "agent";
+      prometheus.enable = true;
+      alertmanager = {
+        enable = true;
+        clusterPeers = [ "homelab01:9094" ];
+        email = {
+          to = "cory@gyarmathy.co";
+          from = "alerts@gyarmathy.co";
+          authUsername = "alerts@gyarmathy.co";
+          # smarthost uses the default (smtp.protonmail.ch:587)
+        };
+      };
+      grafana.enable = false;
       zfs.enable = true;
+      scrapeTargets = [
+        "homelab01:9100"
+        "homelab02:9100"
+      ];
+      smartctlTargets = [
+        "homelab01:9633"
+        "homelab02:9633"
+      ];
+      cloudflaredTarget = "homelab01:20241";
+
+      httpProbes = [
+        {
+          name = "jellyfin";
+          url = "https://jellyfin.gyarmathy.co";
+        }
+        {
+          name = "requests";
+          url = "https://requests.gyarmathy.co";
+        }
+        {
+          name = "sonarr";
+          url = "https://sonarr.gyarmathy.co";
+        }
+        {
+          name = "radarr";
+          url = "https://radarr.gyarmathy.co";
+        }
+        {
+          name = "prowlarr";
+          url = "https://prowlarr.gyarmathy.co";
+        }
+        {
+          name = "downloads";
+          url = "https://downloads.gyarmathy.co";
+        }
+        {
+          name = "grafana";
+          url = "https://grafana.gyarmathy.co";
+        }
+        {
+          name = "adguard-01";
+          url = "https://adguard.gyarmathy.co";
+        }
+        {
+          name = "adguard-02";
+          url = "https://adguard2.gyarmathy.co";
+        }
+        {
+          name = "autobrr";
+          url = "https://autobrr.gyarmathy.co";
+        }
+      ];
     };
 
     # -------------------------------------------------------------------------
