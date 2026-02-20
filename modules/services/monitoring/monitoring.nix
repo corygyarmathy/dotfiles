@@ -452,13 +452,19 @@ in
         };
         users.groups.grafana = { };
 
-        sops.secrets."monitoring/grafana/username" = {
-          owner = "grafana";
-          group = "grafana";
-        };
-        sops.secrets."monitoring/grafana/password" = {
-          owner = "grafana";
-          group = "grafana";
+        sops.secrets = {
+          "monitoring/grafana/username" = {
+            owner = "grafana";
+            group = "grafana";
+          };
+          "monitoring/grafana/password" = {
+            owner = "grafana";
+            group = "grafana";
+          };
+          "monitoring/grafana/secret_key" = {
+            owner = "grafana";
+            group = "grafana";
+          };
         };
 
         services.grafana = {
@@ -468,6 +474,7 @@ in
             security = {
               admin_user = "$__file{${config.sops.secrets."monitoring/grafana/username".path}}";
               admin_password = "$__file{${config.sops.secrets."monitoring/grafana/password".path}}";
+              secret_key = "$__file{${config.sops.secrets."monitoring/grafana/secret_key".path}}";
             };
             server = {
               http_port = 3000;
