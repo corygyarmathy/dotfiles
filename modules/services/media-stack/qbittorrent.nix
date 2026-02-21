@@ -184,13 +184,8 @@ in
         preStart = ''
           mkdir -p ${stack.configPath}/gluetun/auth
           API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key" | sed 's/^HTTP_CONTROL_SERVER_API_KEY=//')
-          cat > ${stack.configPath}/gluetun/auth/config.toml << EOF
-          [[roles]]
-          name = "admin"
-          auth = "apikey"
-          apikey = "$API_KEY"
-          routes = ["GET /*", "POST /*", "PUT /*"]
-          EOF
+          printf '[[roles]]\nname = "vpn-port-sync"\nauth = "apikey"\napikey = "%s"\nroutes = ["GET /v1/portforward", "GET /v1/vpn/status"]\n' "$API_KEY" \
+            > ${stack.configPath}/gluetun/auth/config.toml
           chmod 600 ${stack.configPath}/gluetun/auth/config.toml
         '';
       };
