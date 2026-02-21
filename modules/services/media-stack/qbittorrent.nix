@@ -76,6 +76,7 @@ in
     sops.secrets = {
       "media-stack/qbittorrent/username" = { };
       "media-stack/qbittorrent/password" = { };
+      "media-stack/vpn/http-api-key" = { };
     }
     // lib.optionalAttrs cfg.vpn.enable {
       "media-stack/vpn/wireguard-private-key" = { };
@@ -105,6 +106,7 @@ in
         };
         environmentFiles = [
           config.sops.secrets."media-stack/vpn/wireguard-private-key".path
+          config.sops.secrets."media-stack/vpn/http-api-key".path
         ];
         volumes = [
           "${stack.configPath}/gluetun:/gluetun"
@@ -207,6 +209,7 @@ in
           LoadCredential = [
             "qbt-user:${config.sops.secrets."media-stack/qbittorrent/username".path}"
             "qbt-pass:${config.sops.secrets."media-stack/qbittorrent/password".path}"
+            "gluetun-api-key:${config.sops.secrets."media-stack/vpn/http-api-key".path}"
           ];
         };
 
@@ -215,11 +218,12 @@ in
 
           QB_USER=$(cat "$CREDENTIALS_DIRECTORY/qbt-user")
           QB_PASS=$(cat "$CREDENTIALS_DIRECTORY/qbt-pass")
+          API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key")
 
           LAST_PORT=""
 
           while true; do
-            PORT=$(curl -sf "http://localhost:8000/v1/portforward" 2>/dev/null | jq -r '.port // empty')
+            PORT=$(curl -sf -H "X-API-Key: $API_KEY" "http://localhost:8000/v1/portforward" 2>/dev/null | jq -r '.port // empty')
             
             if [ -n "$PORT" ] && [ "$PORT" != "0" ] && [ "$PORT" != "$LAST_PORT" ]; then
               echo "Port changed: $LAST_PORT -> $PORT"
