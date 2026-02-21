@@ -176,6 +176,23 @@ in
       podman-gluetun = lib.mkIf cfg.vpn.enable {
         after = [ "podman-network-arr.service" ];
         requires = [ "podman-network-arr.service" ];
+        serviceConfig = {
+          LoadCredential = [
+            "gluetun-api-key:${config.sops.secrets."media-stack/vpn/http-api-key".path}"
+          ];
+        };
+        preStart = ''
+          mkdir -p ${stack.configPath}/gluetun/auth
+          API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key" | sed 's/^HTTP_CONTROL_SERVER_API_KEY=//')
+          cat > ${stack.configPath}/gluetun/auth/config.toml << EOF
+          [[roles]]
+          name = "admin"
+          auth = "apikey"
+          apikey = "$API_KEY"
+          routes = ["GET /*", "POST /*", "PUT /*"]
+          EOF
+          chmod 600 ${stack.configPath}/gluetun/auth/config.toml
+        '';
       };
 
       podman-qbittorrent-direct = lib.mkIf (!cfg.vpn.enable) {
