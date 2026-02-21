@@ -143,7 +143,8 @@ let
     mkdir -p "$OUTPUT_DIR"
     > "$TEMP_FILE"
 
-    API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key")
+    RAW_KEY=$(cat "/run/secrets/media-stack/vpn/http-api-key")
+    API_KEY=$(echo "$RAW_KEY" | sed 's/^HTTP_CONTROL_SERVER_API_KEY=//')
     PORT=${toString cfg.vpn.gluetunPort}
 
     echo "# HELP gluetun_vpn_connected Whether Gluetun has an active VPN connection (1=yes, 0=no)" >> "$TEMP_FILE"
@@ -569,9 +570,6 @@ in
             Type = "oneshot";
             ExecStart = gluetunHealthScript;
             User = "root";
-            LoadCredential = [
-              "gluetun-api-key:${config.sops.secrets.${cfg.vpn.gluetunApiKeySecret}.path}"
-            ];
           };
         };
 
