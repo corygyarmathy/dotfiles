@@ -181,6 +181,10 @@
           name = "autobrr";
           url = "https://autobrr.gyarmathy.co";
         }
+        {
+          name = "miniflux";
+          url = "https://rss.gyarmathy.co";
+        }
       ];
     };
 

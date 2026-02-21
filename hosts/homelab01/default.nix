@@ -86,6 +86,7 @@
         "/var/lib/grafana"
         "/var/lib/private/AdGuardHome"
         "/var/lib/autobrr"
+        "/var/lib/postgresql"
       ];
 
       extraExclude = [
@@ -125,6 +126,7 @@
     };
     immich.enable = false;
     home-assistant.enable = false;
+    miniflux.enable = true;
 
     # -------------------------------------------------------------------------
     # Reverse Proxy (Caddy)
@@ -204,8 +206,14 @@
           port = 3000;
           localOnly = true;
         };
-      };
 
+        # RSS
+        rss = {
+          subdomain = "rss";
+          port = 8082;
+          localOnly = false;
+        };
+      };
     };
 
     monitoring = {
@@ -274,6 +282,10 @@
         {
           name = "autobrr";
           url = "https://autobrr.gyarmathy.co";
+        }
+        {
+          name = "miniflux";
+          url = "https://rss.gyarmathy.co";
         }
       ];
     };

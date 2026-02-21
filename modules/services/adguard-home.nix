@@ -104,6 +104,10 @@ let
       domain = "adguard.${domain}";
       answer = servers.homelab01;
     }
+    {
+      domain = "rss.${domain}";
+      answer = servers.homelab01;
+    }
 
     # Services on homelab02
     {
