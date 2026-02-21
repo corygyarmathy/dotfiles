@@ -138,6 +138,8 @@
       ];
       cloudflaredTarget = "homelab01:20241";
 
+      vpn.enable = true;
+
       httpProbes = [
         {
           name = "jellyfin";

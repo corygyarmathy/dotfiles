@@ -132,6 +132,45 @@ let
     # Atomic move to prevent partial reads
     mv "$TEMP_FILE" "$OUTPUT_FILE"
   '';
+
+  gluetunHealthScript = pkgs.writeShellScript "gluetun-health-exporter" ''
+    set -euo pipefail
+
+    OUTPUT_DIR="/var/lib/prometheus-node-exporter"
+    OUTPUT_FILE="$OUTPUT_DIR/gluetun.prom"
+    TEMP_FILE="$OUTPUT_DIR/gluetun.prom.tmp"
+
+    mkdir -p "$OUTPUT_DIR"
+    > "$TEMP_FILE"
+
+    API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key")
+    PORT=${toString cfg.vpn.gluetunPort}
+
+    echo "# HELP gluetun_vpn_connected Whether Gluetun has an active VPN connection (1=yes, 0=no)" >> "$TEMP_FILE"
+    echo "# TYPE gluetun_vpn_connected gauge" >> "$TEMP_FILE"
+    echo "# HELP gluetun_port_forwarded Currently forwarded port (0 if none)" >> "$TEMP_FILE"
+    echo "# TYPE gluetun_port_forwarded gauge" >> "$TEMP_FILE"
+
+    STATUS=$(${pkgs.curl}/bin/curl -sf --max-time 5 \
+      -H "X-API-Key: $API_KEY" \
+      "http://localhost:$PORT/v1/vpn/status" 2>/dev/null \
+      | ${pkgs.jq}/bin/jq -r '.status // empty' 2>/dev/null || echo "")
+
+    if [ "$STATUS" = "running" ]; then
+      echo "gluetun_vpn_connected 1" >> "$TEMP_FILE"
+    else
+      echo "gluetun_vpn_connected 0" >> "$TEMP_FILE"
+    fi
+
+    FORWARDED=$(${pkgs.curl}/bin/curl -sf --max-time 5 \
+      -H "X-API-Key: $API_KEY" \
+      "http://localhost:$PORT/v1/portforward" 2>/dev/null \
+      | ${pkgs.jq}/bin/jq -r '.port // 0' 2>/dev/null || echo "0")
+
+    echo "gluetun_port_forwarded $FORWARDED" >> "$TEMP_FILE"
+
+    mv "$TEMP_FILE" "$OUTPUT_FILE"
+  '';
 in
 {
   options.cg.service.monitoring = {
@@ -228,6 +267,23 @@ in
       default = null;
       example = "homelab01:20241";
       description = "Cloudflared metrics endpoint to scrape (null to disable)";
+    };
+
+    vpn = {
+      enable = lib.mkEnableOption "VPN (Gluetun) health monitoring";
+
+      gluetunApiKeySecret = lib.mkOption {
+        type = lib.types.str;
+        description = "Sops secret path for Gluetun HTTP control server API key";
+        example = "media-stack/vpn/http-api-key";
+        default = "media-stack/vpn/http-api-key";
+      };
+
+      gluetunPort = lib.mkOption {
+        type = lib.types.port;
+        default = 8000;
+        description = "Gluetun HTTP control server port";
+      };
     };
   };
 
@@ -497,6 +553,35 @@ in
                 isDefault = true;
               }
             ];
+          };
+        };
+      })
+
+      # ============================================================
+      # VPN
+      # ============================================================
+      (lib.mkIf cfg.vpn.enable {
+        sops.secrets.${cfg.vpn.gluetunApiKeySecret} = { };
+
+        systemd.services.gluetun-health-exporter = {
+          description = "Export Gluetun VPN health metrics for Prometheus";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = gluetunHealthScript;
+            User = "root";
+            LoadCredential = [
+              "gluetun-api-key:${config.sops.secrets.${cfg.vpn.gluetunApiKeySecret}.path}"
+            ];
+          };
+        };
+
+        systemd.timers.gluetun-health-exporter = {
+          description = "Timer for Gluetun health metrics exporter";
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "1min";
+            OnUnitActiveSec = "1min";
+            Unit = "gluetun-health-exporter.service";
           };
         };
       })

@@ -272,3 +272,22 @@ groups:
           severity: warning
         annotations:
           summary: "Restic backup {{ $labels.job }} on {{ $labels.host }} hasn't run in over 26 hours"
+  - name: vpn
+    rules:
+      - alert: GluetunVpnDisconnected
+        expr: gluetun_vpn_connected == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gluetun VPN is disconnected on {{ $labels.instance }}"
+          description: "WireGuard tunnel is down — qBittorrent has no internet access"
+
+      - alert: GluetunPortNotForwarded
+        expr: gluetun_vpn_connected == 1 and gluetun_port_forwarded == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gluetun has no forwarded port on {{ $labels.instance }}"
+          description: "VPN is connected but port forwarding returned 0 — qBittorrent will show as firewalled"
