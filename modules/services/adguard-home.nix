@@ -108,6 +108,10 @@ let
       domain = "rss.${domain}";
       answer = servers.homelab01;
     }
+    {
+      domain = "read.${domain}";
+      answer = servers.homelab01;
+    }
 
     # Services on homelab02
     {

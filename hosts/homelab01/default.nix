@@ -127,6 +127,7 @@
     immich.enable = false;
     home-assistant.enable = false;
     miniflux.enable = true;
+    wallabag.enable = true;
 
     # -------------------------------------------------------------------------
     # Reverse Proxy (Caddy)
@@ -213,6 +214,11 @@
           port = 8082;
           localOnly = false;
         };
+        read = {
+          subdomain = "read";
+          port = 8083;
+          localOnly = false;
+        };
       };
     };
 
@@ -286,6 +292,10 @@
         {
           name = "miniflux";
           url = "https://rss.gyarmathy.co";
+        }
+        {
+          name = "wallabag";
+          url = "https://read.gyarmathy.co";
         }
       ];
     };

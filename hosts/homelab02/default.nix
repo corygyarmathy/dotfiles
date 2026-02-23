@@ -185,6 +185,10 @@
           name = "miniflux";
           url = "https://rss.gyarmathy.co";
         }
+        {
+          name = "wallabag";
+          url = "https://read.gyarmathy.co";
+        }
       ];
     };
 
