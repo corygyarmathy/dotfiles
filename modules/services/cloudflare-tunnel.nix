@@ -7,13 +7,13 @@
 #
 # Architecture:
 # - cloudflared daemon runs on homelab01
+# - Registers DNS routes in Cloudflare
 # - Creates outbound tunnel to Cloudflare
 # - Cloudflare routes traffic based on hostname to local services
 # - Works through CGNAT and dynamic IPs
 #
 # Prerequisites:
 # - Cloudflare account with domain
-# - Tunnel created via: cloudflared tunnel create <name>
 # - Credentials stored in sops
 #
 {
@@ -25,6 +25,20 @@
 let
   cfg = config.cg.service.cloudflare-tunnel;
 
+  # Build the list of public hostnames at eval time
+  publicHostnames = map (svc: "${svc.subdomain}.${cfg.domain}") (
+    lib.attrValues (lib.filterAttrs (_: svc: !svc.localOnly) cfg.services)
+  );
+
+  routeScript = pkgs.writeShellScript "cloudflared-route-dns" ''
+    TUNNEL_ID=$(cat ${config.sops.secrets."cloudflare/tunnel-id".path})
+    ${lib.concatMapStrings (hostname: ''
+      echo "Registering DNS route for ${hostname}..."
+      ${pkgs.cloudflared}/bin/cloudflared tunnel \
+        --origincert ${config.sops.secrets."cloudflare/origin-cert".path} \
+        route dns "$TUNNEL_ID" ${hostname} || true
+    '') publicHostnames}
+  '';
 in
 {
   options.cg.service.cloudflare-tunnel = {
@@ -64,20 +78,28 @@ in
   config = lib.mkIf cfg.enable {
     # Cloudflare tunnel credentials and ID
     sops = {
-      secrets."cloudflare/tunnel-credentials" = {
-        sopsFile = ../../secrets/homelab.yaml;
-        owner = "cloudflared";
-        group = "cloudflared";
-        mode = "0400";
-        restartUnits = [ "cloudflared-tunnel.service" ];
-      };
+      secrets = {
+        "cloudflare/tunnel-credentials" = {
+          sopsFile = ../../secrets/homelab.yaml;
+          owner = "cloudflared";
+          group = "cloudflared";
+          mode = "0400";
+          restartUnits = [ "cloudflared-tunnel.service" ];
+        };
 
-      secrets."cloudflare/tunnel-id" = {
-        sopsFile = ../../secrets/homelab.yaml;
-        owner = "cloudflared";
-        group = "cloudflared";
-        mode = "0400";
-        restartUnits = [ "cloudflared-tunnel.service" ];
+        "cloudflare/tunnel-id" = {
+          sopsFile = ../../secrets/homelab.yaml;
+          owner = "cloudflared";
+          group = "cloudflared";
+          mode = "0400";
+          restartUnits = [ "cloudflared-tunnel.service" ];
+        };
+        "cloudflare/origin-cert" = {
+          sopsFile = ../../secrets/homelab.yaml;
+          owner = "cloudflared";
+          group = "cloudflared";
+          mode = "0400";
+        };
       };
 
       # Generate cloudflared config using sops template
@@ -106,6 +128,7 @@ in
               }
             ];
         };
+        restartUnits = [ "cloudflared-tunnel.service" ];
         owner = "cloudflared";
         group = "cloudflared";
         mode = "0400";
@@ -120,6 +143,25 @@ in
     };
 
     users.groups.cloudflared = { };
+
+    # Register cloudflare DNS routes
+    systemd.services.cloudflared-route-dns = {
+      description = "Register Cloudflare Tunnel DNS routes";
+      after = [
+        "network-online.target"
+        "cloudflared-tunnel.service"
+      ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "multi-user.target" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = "cloudflared";
+        Group = "cloudflared";
+        ExecStart = routeScript;
+      };
+    };
 
     # Cloudflared tunnel service
     systemd.services.cloudflared-tunnel = {
