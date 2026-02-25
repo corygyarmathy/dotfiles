@@ -189,8 +189,14 @@ in
     # Ensure podman0 bridge created before PostgreSQL starts
     systemd.services.podman-bridge-init = {
       description = "Ensure Podman default bridge (podman0) exists";
-      before = [ "postgresql.service" ];
-      wantedBy = [ "postgresql.service" ];
+      before = [
+        "postgresql.service"
+        "podman-wallabag.service"
+      ];
+      wantedBy = [
+        "postgresql.service"
+        "podman-wallabag.service"
+      ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -200,6 +206,8 @@ in
             ${pkgs.iproute2}/bin/ip addr add 10.88.0.1/16 dev podman0
             ${pkgs.iproute2}/bin/ip link set podman0 up
           fi
+          # Required for Podman's localhost port forwarding (127.0.0.1 binds) to work
+          ${pkgs.procps}/bin/sysctl net.ipv4.conf.podman0.route_localnet=1
         '';
       };
     };
