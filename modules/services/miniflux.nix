@@ -141,9 +141,15 @@ in
     # Inject DATABASE_URL (with password) and admin credentials via EnvironmentFile.
     # The upstream module sets its own EnvironmentFile for admin credentials, but
     # we override here to also include the rendered DATABASE_URL template.
-    systemd.services.miniflux.serviceConfig.EnvironmentFile = [
-      config.sops.secrets."miniflux/admin-credentials".path
-      config.sops.templates."miniflux-env".path
-    ];
+    # Tell the miniflux service to not use sd_notify at all, by changing the startup
+    # type from notify to simple.
+    systemd.services.miniflux.serviceConfig = {
+      Type = lib.mkForce "simple";
+      NotifyAccess = lib.mkForce "none";
+      EnvironmentFile = lib.mkForce [
+        config.sops.secrets."miniflux/admin-credentials".path
+        config.sops.templates."miniflux-env".path
+      ];
+    };
   };
 }
