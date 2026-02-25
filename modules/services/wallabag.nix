@@ -184,7 +184,24 @@ in
         "wallabag-images:/var/www/wallabag/web/assets/images"
         "wallabag-data:/var/www/wallabag/var/data"
       ];
+    };
 
+    # Ensure podman0 bridge created before PostgreSQL starts
+    systemd.services.podman-bridge-init = {
+      description = "Ensure Podman default bridge (podman0) exists";
+      before = [ "postgresql.service" ];
+      wantedBy = [ "postgresql.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "podman-bridge-init" ''
+          if ! ${pkgs.iproute2}/bin/ip link show podman0 > /dev/null 2>&1; then
+            ${pkgs.iproute2}/bin/ip link add podman0 type bridge
+            ${pkgs.iproute2}/bin/ip addr add 10.88.0.1/16 dev podman0
+            ${pkgs.iproute2}/bin/ip link set podman0 up
+          fi
+        '';
+      };
     };
   };
 }
