@@ -139,7 +139,7 @@
     discord
     zotero
     texstudio # Req. for zotero?
-    calibre
+    stable.calibre # Not building as of 2026-02-25
     gargoyle
 
     # Drivers
