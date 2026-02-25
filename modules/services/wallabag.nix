@@ -179,9 +179,10 @@ in
       # Secrets injected via --env-file (read by Podman runtime, not container)
       environmentFiles = [ config.sops.templates."wallabag-env".path ];
 
-      # Persist uploaded images and article assets across container restarts
+      # Persist uploaded images, and container data across container restarts
       volumes = [
         "wallabag-images:/var/www/wallabag/web/assets/images"
+        "wallabag-data:/var/www/wallabag/var/data"
       ];
 
     };
