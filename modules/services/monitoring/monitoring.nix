@@ -286,6 +286,10 @@ in
         description = "Gluetun HTTP control server port";
       };
     };
+
+    textfileCollector = {
+      enable = lib.mkEnableOption "textfile collector for node_exporter";
+    };
   };
 
   config = lib.mkIf cfg.enable (
@@ -294,6 +298,8 @@ in
       # Always: exporters (node, smartctl, firewall)
       # ============================================================
       {
+        cg.service.monitoring.textfileCollector.enable = lib.mkDefault (cfg.zfs.enable || cfg.vpn.enable);
+
         services.prometheus.exporters = {
           node = {
             enable = true;
@@ -301,12 +307,12 @@ in
               "systemd"
               "processes"
             ]
-            ++ lib.optionals cfg.zfs.enable [
+            ++ lib.optionals cfg.textfileCollector.enable [
               "textfile"
             ];
             listenAddress = "0.0.0.0";
             port = 9100;
-            extraFlags = lib.optionals cfg.zfs.enable [
+            extraFlags = lib.optionals cfg.textfileCollector.enable [
               "--collector.textfile.directory=/var/lib/prometheus-node-exporter"
             ];
           };
