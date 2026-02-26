@@ -207,7 +207,6 @@ in
           "podman-qbittorrent.service"
         ];
         requires = [ "podman-gluetun.service" ];
-        wantedBy = [ "multi-user.target" ];
 
         path = [
           pkgs.curl
@@ -215,9 +214,7 @@ in
         ];
 
         serviceConfig = {
-          Type = "simple";
-          Restart = "always";
-          RestartSec = "60";
+          Type = "oneshot";
           LoadCredential = [
             "qbt-user:${config.sops.secrets."media-stack/qbittorrent/username".path}"
             "qbt-pass:${config.sops.secrets."media-stack/qbittorrent/password".path}"
@@ -226,42 +223,58 @@ in
         };
 
         script = ''
-          sleep 30
-
           QB_USER=$(cat "$CREDENTIALS_DIRECTORY/qbt-user")
           QB_PASS=$(cat "$CREDENTIALS_DIRECTORY/qbt-pass")
           API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key" | sed 's/^HTTP_CONTROL_SERVER_API_KEY=//')
 
-          LAST_PORT=""
+          FORWARDED_PORT=$(curl -sf -H "X-API-Key: $API_KEY" \
+            "http://localhost:8000/v1/portforward" 2>/dev/null \
+            | jq -r '.port // empty')
 
-          while true; do
-            PORT=$(curl -sf -H "X-API-Key: $API_KEY" "http://localhost:8000/v1/portforward" 2>/dev/null | jq -r '.port // empty')
+          if [ -z "$FORWARDED_PORT" ] || [ "$FORWARDED_PORT" = "0" ]; then
+            echo "Could not get forwarded port from Gluetun (got: ''${FORWARDED_PORT:-empty})"
+            exit 1
+          fi
 
-            if [ -z "$PORT" ] || [ "$PORT" = "0" ]; then
-              echo "$(date): Could not get forwarded port from Gluetun (got: ''${PORT:-empty})"
-            elif [ "$PORT" = "$LAST_PORT" ]; then
-              echo "$(date): Port unchanged at $PORT"
-            else
-              echo "$(date): Port changed: $LAST_PORT -> $PORT"
+          COOKIE=$(curl -sf -c - "http://localhost:${toString cfg.port}/api/v2/auth/login" \
+            --data-urlencode "username=$QB_USER" \
+            --data-urlencode "password=$QB_PASS" 2>/dev/null \
+            | grep -oP 'SID\s+\K\S+')
 
-              COOKIE=$(curl -sf -c - "http://localhost:${toString cfg.port}/api/v2/auth/login" \
-                --data-urlencode "username=$QB_USER" \
-                --data-urlencode "password=$QB_PASS" 2>/dev/null | grep -oP 'SID\s+\K\S+')
+          if [ -z "$COOKIE" ]; then
+            echo "Failed to authenticate with qBittorrent"
+            exit 1
+          fi
 
-              if [ -n "$COOKIE" ]; then
-                RESULT=$(curl -sf "http://localhost:${toString cfg.port}/api/v2/app/setPreferences" \
-                  --cookie "SID=$COOKIE" \
-                  --data-urlencode "json={\"listen_port\": $PORT}")
-                echo "$(date): Updated qBittorrent to port $PORT (result: ''${RESULT:-ok})"
-                LAST_PORT="$PORT"
-              else
-                echo "$(date): Failed to authenticate with qBittorrent"
-              fi
-            fi
+          CURRENT_PORT=$(curl -sf "http://localhost:${toString cfg.port}/api/v2/app/preferences" \
+            --cookie "SID=$COOKIE" 2>/dev/null \
+            | jq -r '.listen_port // empty')
 
-            sleep 300
-          done
+          if [ "$CURRENT_PORT" = "$FORWARDED_PORT" ]; then
+            echo "Port already correct ($FORWARDED_PORT), nothing to do"
+            exit 0
+          fi
+
+          echo "Updating qBittorrent listen port: $CURRENT_PORT -> $FORWARDED_PORT"
+          curl -sf "http://localhost:${toString cfg.port}/api/v2/app/setPreferences" \
+            --cookie "SID=$COOKIE" \
+            --data-urlencode "json={\"listen_port\": $FORWARDED_PORT}"
+
+          echo "Done"
         '';
+      };
+    };
+
+    # Timers for established services
+    systemd.timers = {
+      vpn-port-sync = lib.mkIf cfg.vpn.enable {
+        description = "Timer for VPN port sync";
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "1min";
+          OnUnitActiveSec = "5min";
+          Unit = "vpn-port-sync.service";
+        };
       };
     };
 
