@@ -230,32 +230,35 @@ in
 
           QB_USER=$(cat "$CREDENTIALS_DIRECTORY/qbt-user")
           QB_PASS=$(cat "$CREDENTIALS_DIRECTORY/qbt-pass")
-          API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key")
+          API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key" | sed 's/^HTTP_CONTROL_SERVER_API_KEY=//')
 
           LAST_PORT=""
 
           while true; do
             PORT=$(curl -sf -H "X-API-Key: $API_KEY" "http://localhost:8000/v1/portforward" 2>/dev/null | jq -r '.port // empty')
-            
-            if [ -n "$PORT" ] && [ "$PORT" != "0" ] && [ "$PORT" != "$LAST_PORT" ]; then
-              echo "Port changed: $LAST_PORT -> $PORT"
-              
+
+            if [ -z "$PORT" ] || [ "$PORT" = "0" ]; then
+              echo "$(date): Could not get forwarded port from Gluetun (got: ''${PORT:-empty})"
+            elif [ "$PORT" = "$LAST_PORT" ]; then
+              echo "$(date): Port unchanged at $PORT"
+            else
+              echo "$(date): Port changed: $LAST_PORT -> $PORT"
+
               COOKIE=$(curl -sf -c - "http://localhost:${toString cfg.port}/api/v2/auth/login" \
                 --data-urlencode "username=$QB_USER" \
                 --data-urlencode "password=$QB_PASS" 2>/dev/null | grep -oP 'SID\s+\K\S+')
-              
+
               if [ -n "$COOKIE" ]; then
-                curl -sf "http://localhost:${toString cfg.port}/api/v2/app/setPreferences" \
+                RESULT=$(curl -sf "http://localhost:${toString cfg.port}/api/v2/app/setPreferences" \
                   --cookie "SID=$COOKIE" \
-                  --data-urlencode "json={\"listen_port\": $PORT}"
-                
-                echo "Updated qBittorrent to port $PORT"
+                  --data-urlencode "json={\"listen_port\": $PORT}")
+                echo "$(date): Updated qBittorrent to port $PORT (result: ''${RESULT:-ok})"
                 LAST_PORT="$PORT"
               else
-                echo "Failed to authenticate with qBittorrent"
+                echo "$(date): Failed to authenticate with qBittorrent"
               fi
             fi
-            
+
             sleep 300
           done
         '';
