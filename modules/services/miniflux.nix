@@ -135,6 +135,8 @@ in
 
         CLEANUP_FREQUENCY_HOURS = 24;
         CLEANUP_KEEP_SESSION_DAYS = 90;
+
+        FETCH_YOUTUBE_WATCH_TIME = 1;
       };
     };
 
