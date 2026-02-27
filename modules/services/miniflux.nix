@@ -143,9 +143,16 @@ in
     # we override here to also include the rendered DATABASE_URL template.
     # Tell the miniflux service to not use sd_notify at all, by changing the startup
     # type from notify to simple.
+    # Type=simple + WatchdogSec=0: the upstream unit uses Type=notify with a 60s
+    # watchdog. AppArmor confinement prevents sd_notify from reaching the systemd
+    # socket — the service runs in a mount namespace where AppArmor reports
+    # "disconnected path" on /run/systemd/notify, and no path-based rule can match
+    # it. Rather than disable AppArmor confinement (which provides real value for
+    # file access mediation), we disable the watchdog instead. The service is
+    # stable and healthy without it.
     systemd.services.miniflux.serviceConfig = {
       Type = lib.mkForce "simple";
-      NotifyAccess = lib.mkForce "none";
+      WatchdogSec = lib.mkForce 0;
       EnvironmentFile = lib.mkForce [
         config.sops.secrets."miniflux/admin-credentials".path
         config.sops.templates."miniflux-env".path
