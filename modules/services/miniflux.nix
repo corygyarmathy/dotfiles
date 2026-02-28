@@ -61,22 +61,29 @@ in
 
   config = lib.mkIf cfg.enable {
     sops = {
-      # Admin credentials EnvironmentFile: ADMIN_USERNAME and ADMIN_PASSWORD
-      # Owned by root — systemd reads EnvironmentFile as root before dropping
-      # privileges, so the miniflux user doesn't need direct access.
-      secrets."miniflux/admin-credentials" = {
-        sopsFile = ../../secrets/homelab.yaml;
-        mode = "0400";
-        restartUnits = [ "miniflux.service" ];
-      };
+      secrets = {
+        # Admin credentials EnvironmentFile: ADMIN_USERNAME and ADMIN_PASSWORD
+        # Owned by root — systemd reads EnvironmentFile as root before dropping
+        # privileges, so the miniflux user doesn't need direct access.
+        "miniflux/admin-credentials" = {
+          sopsFile = ../../secrets/homelab.yaml;
+          mode = "0400";
+          restartUnits = [ "miniflux.service" ];
+        };
 
-      # Database password — group-owned by postgres so miniflux-db-setup can
-      # read it while running as the postgres OS user (required for peer auth).
-      secrets."miniflux/db-password" = {
-        sopsFile = ../../secrets/homelab.yaml;
-        owner = "root";
-        group = "postgres";
-        mode = "0440";
+        # Database password — group-owned by postgres so miniflux-db-setup can
+        # read it while running as the postgres OS user (required for peer auth).
+        "miniflux/db-password" = {
+          sopsFile = ../../secrets/homelab.yaml;
+          owner = "root";
+          group = "postgres";
+          mode = "0440";
+        };
+
+        "miniflux/media-proxy-key" = {
+          sopsFile = ../../secrets/homelab.yaml;
+          mode = "0400";
+        };
       };
 
       # Rendered env file with DATABASE_URL interpolated at activation time.
@@ -86,6 +93,7 @@ in
           DATABASE_URL=postgresql://miniflux:${
             config.sops.placeholder."miniflux/db-password"
           }@127.0.0.1/miniflux?sslmode=disable
+          MEDIA_PROXY_PRIVATE_KEY=${config.sops.placeholder."miniflux/media-proxy-key"}
         '';
         mode = "0400";
         restartUnits = [ "miniflux.service" ];
