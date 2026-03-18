@@ -63,5 +63,21 @@ in
         checkForUpdates = false;
       };
     };
+    # Rollback Dasel to v2 pending merge of PR: https://github.com/NixOS/nixpkgs/pull/481541
+    nixpkgs.overlays = [
+      (_final: prev: {
+        dasel = prev.dasel.overrideAttrs (_: rec {
+          version = "2.8.1";
+          src = prev.fetchFromGitHub {
+            owner = "TomWright";
+            repo = "dasel";
+            rev = "v${version}";
+            hash = "sha256-vq4lRCsqD2hmQw0yH84Wji5LeJ/aiMGJJIyCDvATA+I=";
+          };
+          vendorHash = "sha256-edyFs5oURklkqsTF7JA1in3XteSBx/6YEVu4MjIcGN4=";
+          doInstallCheck = false;
+        });
+      })
+    ];
   };
 }
