@@ -61,7 +61,7 @@ let
     ];
     # NOTE: If build fails with hash mismatch, update this value
     # Leave empty ("") on first build to get the correct hash from error output
-    hash = "sha256-wh+cKj0rVl9va3tGBpiLaVK1e9Te0Do9/NEifCQZCfo=";
+    hash = "sha256-uqSPsKNOmU24eQHPln3aTc+k+xy/uFSsiew5Zbdu9iQ=";
   };
 
   # Rate limiting profiles for different service types
