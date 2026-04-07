@@ -92,6 +92,12 @@ in
         UN_PARALLEL = "1";
         UN_FILE_MODE = "0644";
         UN_DIR_MODE = "0755";
+
+        # Watch download folder, auto extract
+        UN_FOLDER_0_PATH = "/data/downloads/complete";
+        UN_FOLDER_0_MOVE_BACK = "true";
+        UN_FOLDER_0_DELETE_FILES = "false";
+        UN_FOLDER_0_DELETE_ORIGINAL = "false";
       };
 
       environmentFiles = [
