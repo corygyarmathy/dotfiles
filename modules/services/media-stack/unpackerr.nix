@@ -31,13 +31,9 @@ let
   # On compute server: use container hostnames (both on same host)
   isStorageServer = stack.storage.type == "local" && stack.enable;
 
-  sonarrUrl = if isStorageServer
-    then "https://sonarr.gyarmathy.co"
-    else "http://sonarr:8989";
+  sonarrUrl = if isStorageServer then "https://sonarr.gyarmathy.co" else "http://sonarr:8989";
 
-  radarrUrl = if isStorageServer
-    then "https://radarr.gyarmathy.co"
-    else "http://radarr:7878";
+  radarrUrl = if isStorageServer then "https://radarr.gyarmathy.co" else "http://radarr:7878";
 in
 {
   options.cg.service.unpackerr = {
