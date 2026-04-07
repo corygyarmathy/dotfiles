@@ -98,6 +98,8 @@ in
         UN_FOLDER_0_MOVE_BACK = "true";
         UN_FOLDER_0_DELETE_FILES = "false";
         UN_FOLDER_0_DELETE_ORIGINAL = "false";
+        UN_FOLDERS_INTERVAL = "1m";
+        UN_DEBUG = "true";
       };
 
       environmentFiles = [
