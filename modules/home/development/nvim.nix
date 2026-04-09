@@ -34,22 +34,22 @@ in
 
       # LSP servers
       basedpyright
-      nodePackages.bash-language-server
+      bash-language-server
       docker-compose-language-service
       dockerfile-language-server-nodejs
       gopls
       lua-language-server
       marksman
       nixd
-      nodePackages.vscode-langservers-extracted
+      vscode-langservers-extracted
       powershell-editor-services
-      nodePackages.yaml-language-server
+      yaml-language-server
       taplo
 
       # Formatters
       stylua
       nixfmt-rfc-style
-      nodePackages.prettier
+      prettier
       black
       gotools
       shfmt
