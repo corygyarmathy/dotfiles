@@ -96,11 +96,6 @@
         # Flaresolverr has no persistent state worth backing up
         "/srv/arr/flaresolverr/**"
 
-        # Huntarr logs (109MB) and backups of arr configs (32MB, redundant
-        # since we're already backing up the arr configs directly)
-        "/srv/arr/huntarr/logs/**"
-        "/srv/arr/huntarr/backups/**"
-
         # Recyclarr cache (283MB) - TRaSH guide repo clone, regenerated on run
         "/srv/arr/recyclarr/cache/**"
 
@@ -185,11 +180,6 @@
         };
 
         # Management
-        huntarr = {
-          subdomain = "huntarr";
-          port = 9705;
-          localOnly = true;
-        };
         cleanuparr = {
           subdomain = "cleanuparr";
           port = 11011;
@@ -368,7 +358,7 @@
     bazarr.enable = true;
     flaresolverr.enable = true;
     recyclarr.enable = true;
-    huntarr.enable = true;
+    huntarr.enable = false;
     cleanuparr.enable = true;
     wizarr.enable = true;
     autobrr.enable = true;
