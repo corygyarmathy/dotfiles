@@ -30,6 +30,7 @@
     hyprsunset.enable = true;
     waybar.enable = true;
     waybar.ddc.enable = true;
+    waybar-modifiers.enable = true;
 
     rofi.enable = true;
     stylix.enable = true;

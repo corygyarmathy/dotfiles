@@ -288,6 +288,7 @@
       "wheel"
       "i2c" # For ddcutil
       "docker"
+      "input" # For evdev keyboard monitoring
     ];
   };
 

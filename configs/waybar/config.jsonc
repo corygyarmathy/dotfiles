@@ -8,7 +8,13 @@
   "position": "top",
 
   // Module placement
-  "modules-left": ["hyprland/workspaces", "tray", "idle_inhibitor", "privacy"],
+  "modules-left": [
+    "hyprland/workspaces",
+    "tray",
+    "idle_inhibitor",
+    "privacy",
+    "custom/modifiers",
+  ],
   "modules-center": ["clock"],
   "modules-right": [
     "custom/nixos-upgrade",
@@ -44,6 +50,12 @@
     "on-click": "ddc-brightness-ctl up 10",
     "on-click-right": "ddc-brightness-ctl down 10",
     "on-click-middle": "ddc-brightness-ctl resume",
+  },
+
+  "custom/modifiers": {
+    "exec": "waybar-mod-indicator",
+    "return-type": "json",
+    "tooltip": true,
   },
 
   // ===========================================================================

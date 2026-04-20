@@ -6,6 +6,7 @@
 @import "./rose-pine.css";
 @import "./nixos-upgrade.css";
 @import "./ddc.css";
+@import "modifiers.css";
 
 /* ==============================================================================
  * Base Styles
