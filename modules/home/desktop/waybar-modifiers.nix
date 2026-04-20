@@ -88,13 +88,25 @@ let
 
     # --- Functions ---------------------------------------------------------------
 
+    # Suffixes used by secondary ZSA evdev interfaces that advertise key
+    # capabilities but don't actually carry keystroke events.
+    ZSA_SECONDARY_SUFFIXES = ["keyboard", "consumer control", "system control"]
+
     def find_keyboard():
         """Find the best keyboard evdev device to monitor.
 
-        Prefers ZSA devices; falls back to any device with modifier key
-        capabilities.
+        ZSA keyboards expose multiple evdev nodes. The one that actually
+        carries keystroke events is the *base* device whose name is just
+        the product name (e.g. "ZSA Technology Labs Voyager") without a
+        suffix like "Keyboard", "Consumer Control", or "System Control".
+        The suffixed "Keyboard" node advertises the same capabilities but
+        produces no events — so we must prefer the base name.
+
+        Falls back to any device with modifier key capabilities if no ZSA
+        device is found.
         """
-        zsa_candidates = []
+        zsa_primary = []
+        zsa_secondary = []
         other_candidates = []
 
         for path in evdev.list_devices():
@@ -113,12 +125,20 @@ let
 
             name_lower = device.name.lower()
             if any(kw in name_lower for kw in ZSA_KEYWORDS):
-                zsa_candidates.append(device)
+                # Check if this is a secondary interface (has a suffix
+                # beyond the base product name)
+                is_secondary = any(
+                    name_lower.endswith(suffix)
+                    for suffix in ZSA_SECONDARY_SUFFIXES
+                )
+                if is_secondary:
+                    zsa_secondary.append(device)
+                else:
+                    zsa_primary.append(device)
             else:
                 other_candidates.append(device)
 
-        # Prefer ZSA devices, then fall back
-        candidates = zsa_candidates or other_candidates
+        candidates = zsa_primary or zsa_secondary or other_candidates
         return candidates[0] if candidates else None
 
 
