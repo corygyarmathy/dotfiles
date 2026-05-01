@@ -124,7 +124,7 @@
     lsd # Next-gen 'ls' command
     unixtools.xxd # xxd creates a hex dump of a given file or standard input.
     pandoc # Conversion between documentation formats
-    wineWowPackages.wayland
+    wine-wayland
     winetricks
     bottles # GUI-wine manager
     age # Generate / encrypt with age keys
