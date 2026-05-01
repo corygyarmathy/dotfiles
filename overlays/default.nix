@@ -10,6 +10,10 @@
     # somePackage = prev.somePackage.overrideAttrs (oldAttrs: {
     #   ...
     # });
+    # TODO: revert once https://github.com/NixOS/nixpkgs/issues/514113 resolved
+    openldap = prev.openldap.overrideAttrs (oldAttrs: {
+      doCheck = false;
+    });
   };
 
   # Access stable packages via pkgs.stable
