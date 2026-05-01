@@ -7,6 +7,14 @@
 }:
 let
   cfg = config.cg.home.nvim;
+
+  gotoolsWithoutModernize = pkgs.symlinkJoin {
+    name = "gotools-without-modernize";
+    paths = [ pkgs.gotools ];
+    postBuild = ''
+      rm -f "$out/bin/modernize"
+    '';
+  };
 in
 {
   options.cg.home.nvim.enable = lib.mkEnableOption "Neovim editor";
@@ -51,7 +59,9 @@ in
       nixfmt-rfc-style
       prettier
       black
-      gotools
+      # gotools
+      # Temporary measures for https://github.com/NixOS/nixpkgs/issues/509480
+      gotoolsWithoutModernize
       shfmt
       prettier
 
