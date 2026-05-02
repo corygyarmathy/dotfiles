@@ -328,9 +328,11 @@
   #   sudo zpool add tank /dev/disk/by-id/ata-ST4000VN006-3CW104_WW68ETEH
   #
   # The pool persists across OS reinstalls. extraPools imports it at boot.
-  boot.supportedFilesystems = [ "zfs" ];
-  boot.zfs.forceImportRoot = false;
-  boot.zfs.extraPools = [ "tank" ];
+  boot = {
+    supportedFilesystems = [ "zfs" ];
+    zfs.forceImportRoot = false;
+    zfs.extraPools = [ "tank" ];
+  };
   # Required for ZFS - must be unique per machine
   # Generate with: head -c 8 /etc/machine-id
   networking.hostId = "a7377c6b";
