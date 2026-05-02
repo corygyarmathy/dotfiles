@@ -192,6 +192,13 @@
       ];
     };
 
+    orphan-cleanup = {
+      enable = true;
+      schedule = "weekly";
+      minAgeDays = 7;
+      dryRun = true; # flip to false once verified
+    };
+
     # -------------------------------------------------------------------------
     # NAS Storage (ZFS + NFS)
     # -------------------------------------------------------------------------
