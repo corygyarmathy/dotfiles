@@ -114,6 +114,8 @@ in
     # Create config directory
     systemd.tmpfiles.rules = [
       "d ${stack.configPath}/cleanuparr 0775 ${stack.user} ${stack.group} -"
+      # Copy blacklist into Cleanuparr's config directory
+      "C+ ${stack.configPath}/cleanuparr/blacklist_custom 0644 ${stack.user} ${stack.group} - ${./blacklist_custom}"
     ];
 
     # Container definition
