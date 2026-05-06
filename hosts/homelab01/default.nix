@@ -215,6 +215,7 @@
           subdomain = "maintainerr";
           port = 6246;
           localOnly = true;
+          rateLimitProfile = "media"; # Frequent API calls
         };
       };
     };
