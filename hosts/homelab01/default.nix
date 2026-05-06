@@ -209,6 +209,13 @@
           port = 8083;
           localOnly = false;
         };
+
+        # Maintainerr - media library maintenance
+        maintainerr = {
+          subdomain = "maintainerr";
+          port = 6246;
+          localOnly = true;
+        };
       };
     };
 
@@ -287,6 +294,10 @@
           name = "wallabag";
           url = "https://read.gyarmathy.co";
         }
+        {
+          name = "maintainerr";
+          url = "https://maintainerr.gyarmathy.co";
+        }
       ];
     };
 
@@ -362,6 +373,7 @@
     cleanuparr.enable = true;
     wizarr.enable = true;
     autobrr.enable = true;
+    maintainerr.enable = true;
 
     # -------------------------------------------------------------------------
     # Download Services (NOW ON HOMELAB02)
