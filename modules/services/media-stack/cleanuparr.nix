@@ -114,8 +114,6 @@ in
     # Create config directory
     systemd.tmpfiles.rules = [
       "d ${stack.configPath}/cleanuparr 0775 ${stack.user} ${stack.group} -"
-      # Symlink blacklist into Cleanuparr's config directory
-      "L+ ${stack.configPath}/cleanuparr/blacklist_custom 0644 ${stack.user} ${stack.group} - ${./blacklist_custom}"
     ];
 
     # Container definition
@@ -134,6 +132,8 @@ in
         # Mount downloads for hardlink detection (Download Cleaner feature)
         # Mount downloads at same path as qBittorrent so paths reported via API resolve correctly
         "${stack.dataPath}/downloads:/data/downloads"
+        # Mount custom blacklist file
+        "${./blacklist_custom}:/config/blacklist_custom:ro"
       ];
       ports = [ "${toString cfg.port}:${toString cfg.port}" ];
       extraOptions = [
