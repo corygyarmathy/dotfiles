@@ -1,18 +1,18 @@
 # Private Torrent Cleanup - Remove Low-Value Private Tracker Seeds When Disk Is Low
 #
 # When available disk space drops below a configurable threshold, identifies
-# private tracker torrents that are no longer useful and removes them in
-# priority order until sufficient space is reclaimed:
+# private tracker torrents that are no longer useful and removes them sorted
+# by total uploaded (ascending) — regardless of category — until sufficient
+# space is reclaimed:
 #
-# 1. Uncategorized torrents (freeleech grabs seeded purely for ratio)
-# 2. cleanuparr-unlinked torrents (imported but later unlinked from Sonarr/Radarr)
+# Eligible categories:
+# - Uncategorized torrents (freeleech grabs seeded purely for ratio)
+# - cleanuparr-unlinked torrents (imported but later unlinked from Sonarr/Radarr)
 #
-# Within each tier, torrents are sorted by total uploaded (ascending) so the
-# least-contributing seeds are removed first. Only torrents that have seeded
-# for at least minSeedTimeDays are eligible.
-#
-# Deletion stops as soon as available space exceeds the threshold, preserving
-# as much seeding content as possible.
+# By sorting purely on upload amount, high-seeding freeleech content is
+# preserved over zero-seeding unlinked episodes. Deletion stops as soon as
+# available space exceeds the threshold, preserving as much seeding content
+# as possible.
 #
 # SAFETY:
 # - Only targets torrents in the two specific categories above
@@ -213,11 +213,12 @@ in
           fi
 
           # ── Filter and sort eligible torrents ──────────────────────────
-          # Tier 0 (deleted first): freeleech / uncategorized
-          # Tier 1 (deleted second): cleanuparr-unlinked
-          # Within each tier: sort by total uploaded ascending (least seeded first)
+          # Sort all eligible torrents by total uploaded ascending (least seeded first).
+          # Category (freeleech vs unlinked) is tracked for labelling only — both
+          # types are treated equally so high-seeding freeleech content is preserved
+          # over zero-seeding unlinked content.
           #
-          # jq outputs: hash \t tier \t uploaded \t size \t name \t content_path
+          # jq outputs: hash \t category_label \t uploaded \t size \t name \t content_path
           ELIGIBLE=$(echo "$ALL_TORRENTS" | jq -r --arg fc "$FREELEECH_CAT" --arg uc "$UNLINKED_CAT" --argjson ms "$MIN_SEED_SECONDS" '
             .[]
             | select(
@@ -226,15 +227,15 @@ in
               )
             | {
                 hash,
-                tier: (if .category == $fc then 0 else 1 end),
+                label: (if .category == $fc then "freeleech" else "unlinked" end),
                 uploaded,
                 size,
                 name,
                 content_path
               }
-            | [.hash, .tier, .uploaded, .size, .name, .content_path]
+            | [.hash, .label, .uploaded, .size, .name, .content_path]
             | @tsv
-          ' | sort -t$'\t' -k2,2n -k3,3n)
+          ' | sort -t$'\t' -k3,3n)
 
           if [ -z "$ELIGIBLE" ]; then
             echo "No eligible torrents found (check categories and seed time)."
@@ -248,10 +249,24 @@ in
           # ── Delete in priority order until space is reclaimed ──────────
           DELETED_COUNT=0
           DELETED_BYTES=0
+          SKIPPED_COUNT=0
 
-          while IFS=$'\t' read -r HASH TIER UPLOADED SIZE NAME CONTENT_PATH; do
-            # Re-check free space (skip if we've reclaimed enough)
-            if [ "$DRY_RUN" = "false" ]; then
+          # Calculate how much space we need to reclaim
+          NEED_GIB=$((MIN_FREE_GIB - FREE_GIB))
+          NEED_BYTES=$((NEED_GIB * 1073741824))  # GiB -> bytes
+          echo "Need to reclaim: ~''${NEED_GIB} GiB"
+          echo ""
+
+          while IFS=$'\t' read -r HASH LABEL UPLOADED SIZE NAME CONTENT_PATH; do
+            # Check if we've reclaimed enough space
+            if [ "$DRY_RUN" = "true" ]; then
+              # Simulate threshold: stop when accumulated size exceeds what we need
+              if [ "$DELETED_BYTES" -ge "$NEED_BYTES" ]; then
+                SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+                continue
+              fi
+            else
+              # Live mode: check actual disk space
               FREE_GIB=$(get_free_gib)
               if [ "$FREE_GIB" -ge "$MIN_FREE_GIB" ]; then
                 echo ""
@@ -260,14 +275,16 @@ in
               fi
             fi
 
-            TIER_LABEL=$([ "$TIER" = "0" ] && echo "freeleech" || echo "unlinked")
             SIZE_HUMAN=$(numfmt --to=iec "$SIZE")
             UPLOADED_HUMAN=$(numfmt --to=iec "$UPLOADED")
+            DELETED_BYTES=$((DELETED_BYTES + SIZE))
+            DELETED_COUNT=$((DELETED_COUNT + 1))
+            RUNNING_TOTAL=$(numfmt --to=iec "$DELETED_BYTES")
 
             if [ "$DRY_RUN" = "true" ]; then
-              echo "[DRY RUN] Would delete: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $TIER_LABEL)"
+              echo "[DRY RUN] Would delete: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $LABEL) [running total: $RUNNING_TOTAL]"
             else
-              echo "Deleting: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $TIER_LABEL)"
+              echo "Deleting: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $LABEL)"
 
               # Delete torrent and files via qBittorrent API
               curl -sf "http://localhost:''${QBT_PORT}/api/v2/torrents/delete" \
@@ -278,9 +295,6 @@ in
               # Brief pause to let qBittorrent finish file removal
               sleep 2
             fi
-
-            DELETED_BYTES=$((DELETED_BYTES + SIZE))
-            DELETED_COUNT=$((DELETED_COUNT + 1))
           done <<< "$ELIGIBLE"
 
           # ── Clean up empty directories ─────────────────────────────────
@@ -292,11 +306,16 @@ in
           # ── Summary ────────────────────────────────────────────────────
           echo ""
           echo "=== Summary ==="
-          echo "Torrents removed: $DELETED_COUNT of $ELIGIBLE_COUNT eligible"
+          echo "Torrents to remove: $DELETED_COUNT of $ELIGIBLE_COUNT eligible"
+          if [ "$SKIPPED_COUNT" -gt 0 ]; then
+            echo "Torrents preserved: $SKIPPED_COUNT (threshold met before reaching them)"
+          fi
           echo "Space reclaimed: $(numfmt --to=iec $DELETED_BYTES)"
 
           if [ "$DRY_RUN" = "false" ]; then
             echo "Free space now: $(get_free_gib) GiB"
+          else
+            echo "Estimated free space after: $((FREE_GIB + DELETED_BYTES / 1073741824)) GiB"
           fi
 
           if [ "$DRY_RUN" = "true" ] && [ "$DELETED_COUNT" -gt 0 ]; then
