@@ -194,7 +194,7 @@
 
     orphan-cleanup = {
       enable = true;
-      schedule = "weekly";
+      schedule = "daily";
       minAgeDays = 7;
       dryRun = false;
     };
