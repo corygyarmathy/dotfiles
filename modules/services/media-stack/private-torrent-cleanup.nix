@@ -2,17 +2,18 @@
 #
 # When available disk space drops below a configurable threshold, identifies
 # private tracker torrents that are no longer useful and removes them sorted
-# by total uploaded (ascending) — regardless of category — until sufficient
-# space is reclaimed:
+# by last activity (oldest first), with total uploaded as a tiebreaker —
+# regardless of category — until sufficient space is reclaimed:
 #
 # Eligible categories:
 # - Uncategorized torrents (freeleech grabs seeded purely for ratio)
 # - cleanuparr-unlinked torrents (imported but later unlinked from Sonarr/Radarr)
 #
-# By sorting purely on upload amount, high-seeding freeleech content is
-# preserved over zero-seeding unlinked episodes. Deletion stops as soon as
-# available space exceeds the threshold, preserving as much seeding content
-# as possible.
+# By sorting on last activity, torrents that are still being actively leeched
+# are preserved over stale ones that haven't uploaded in weeks, even if the
+# stale torrent has a higher historical upload total. Deletion stops as soon
+# as available space exceeds the threshold, preserving as much actively
+# seeding content as possible.
 #
 # SAFETY:
 # - Only targets torrents in the two specific categories above
@@ -213,13 +214,14 @@ in
           fi
 
           # ── Filter and sort eligible torrents ──────────────────────────
-          # Sort all eligible torrents by total uploaded ascending (least seeded first).
-          # Category (freeleech vs unlinked) is tracked for labelling only — both
-          # types are treated equally so high-seeding freeleech content is preserved
-          # over zero-seeding unlinked content.
+          # Sort eligible torrents by last_activity ascending (least recently active
+          # first), then by total uploaded ascending as a tiebreaker. This ensures
+          # torrents that are still being actively leeched are preserved over stale
+          # ones, regardless of historical upload totals.
           #
-          # jq outputs: hash \t category_label \t uploaded \t size \t name \t content_path
-          ELIGIBLE=$(echo "$ALL_TORRENTS" | jq -r --arg fc "$FREELEECH_CAT" --arg uc "$UNLINKED_CAT" --argjson ms "$MIN_SEED_SECONDS" '
+          # jq outputs: hash \t label \t last_activity \t uploaded \t size \t name \t content_path
+          NOW=$(date +%s)
+          ELIGIBLE=$(echo "$ALL_TORRENTS" | jq -r --arg fc "$FREELEECH_CAT" --arg uc "$UNLINKED_CAT" --argjson ms "$MIN_SEED_SECONDS" --argjson now "$NOW" '
             .[]
             | select(
                 (.category == $fc or .category == $uc)
@@ -228,14 +230,16 @@ in
             | {
                 hash,
                 label: (if .category == $fc then "freeleech" else "unlinked" end),
+                last_activity,
+                idle_days: (if .last_activity > 0 then (($now - .last_activity) / 86400 | floor) else 9999 end),
                 uploaded,
                 size,
                 name,
                 content_path
               }
-            | [.hash, .label, .uploaded, .size, .name, .content_path]
+            | [.hash, .label, .last_activity, .idle_days, .uploaded, .size, .name, .content_path]
             | @tsv
-          ' | sort -t$'\t' -k3,3n)
+          ' | sort -t$'\t' -k3,3n -k5,5n)
 
           if [ -z "$ELIGIBLE" ]; then
             echo "No eligible torrents found (check categories and seed time)."
@@ -257,7 +261,7 @@ in
           echo "Need to reclaim: ~''${NEED_GIB} GiB"
           echo ""
 
-          while IFS=$'\t' read -r HASH LABEL UPLOADED SIZE NAME CONTENT_PATH; do
+          while IFS=$'\t' read -r HASH LABEL LAST_ACTIVITY IDLE_DAYS UPLOADED SIZE NAME CONTENT_PATH; do
             # Check if we've reclaimed enough space
             if [ "$DRY_RUN" = "true" ]; then
               # Simulate threshold: stop when accumulated size exceeds what we need
@@ -277,14 +281,19 @@ in
 
             SIZE_HUMAN=$(numfmt --to=iec "$SIZE")
             UPLOADED_HUMAN=$(numfmt --to=iec "$UPLOADED")
+            if [ "$IDLE_DAYS" -ge 9999 ]; then
+              IDLE_LABEL="never active"
+            else
+              IDLE_LABEL="idle ''${IDLE_DAYS}d"
+            fi
             DELETED_BYTES=$((DELETED_BYTES + SIZE))
             DELETED_COUNT=$((DELETED_COUNT + 1))
             RUNNING_TOTAL=$(numfmt --to=iec "$DELETED_BYTES")
 
             if [ "$DRY_RUN" = "true" ]; then
-              echo "[DRY RUN] Would delete: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $LABEL) [running total: $RUNNING_TOTAL]"
+              echo "[DRY RUN] Would delete: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $IDLE_LABEL, $LABEL) [running total: $RUNNING_TOTAL]"
             else
-              echo "Deleting: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $LABEL)"
+              echo "Deleting: $NAME ($SIZE_HUMAN, seeded $UPLOADED_HUMAN, $IDLE_LABEL, $LABEL)"
 
               # Delete torrent and files via qBittorrent API
               curl -sf "http://localhost:''${QBT_PORT}/api/v2/torrents/delete" \
