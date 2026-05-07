@@ -204,7 +204,7 @@
       schedule = "daily";
       minFreeGiB = 1000;
       minSeedTimeDays = 14;
-      dryRun = true; # verify first, then flip to false
+      dryRun = false;
     };
 
     # -------------------------------------------------------------------------
