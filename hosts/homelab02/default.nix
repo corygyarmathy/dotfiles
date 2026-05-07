@@ -199,6 +199,14 @@
       dryRun = false;
     };
 
+    private-torrent-cleanup = {
+      enable = true;
+      schedule = "daily";
+      minFreeGiB = 1000;
+      minSeedTimeDays = 14;
+      dryRun = true; # verify first, then flip to false
+    };
+
     # -------------------------------------------------------------------------
     # NAS Storage (ZFS + NFS)
     # -------------------------------------------------------------------------
