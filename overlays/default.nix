@@ -10,6 +10,18 @@
     # somePackage = prev.somePackage.overrideAttrs (oldAttrs: {
     #   ...
     # });
+    #
+
+    # Disable openldap tests only for 32-bit builds (triggered by Steam's
+    # multilib support). The i686 build isn't cached by Hydra and the
+    # syncreplication test fails in the Nix sandbox.
+    # https://github.com/NixOS/nixpkgs/issues/514113
+    openldap = prev.openldap.overrideAttrs (
+      old:
+      final.lib.optionalAttrs final.stdenv.is32bit {
+        doCheck = false;
+      }
+    );
   };
 
   # Access stable packages via pkgs.stable
