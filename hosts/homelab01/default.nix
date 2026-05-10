@@ -87,6 +87,7 @@
         "/var/lib/private/AdGuardHome"
         "/var/lib/autobrr"
         "/var/lib/postgresql"
+        "/var/lib/kavita"
       ];
 
       extraExclude = [
@@ -217,6 +218,23 @@
           localOnly = true;
           rateLimitProfile = "none"; # Scans entire Jellyfin library
         };
+
+        # Reading
+        kavita = {
+          subdomain = "kavita";
+          port = 5000;
+          localOnly = false; # readers need external access
+        };
+        lazylibrarian = {
+          subdomain = "lazylibrarian";
+          port = 5299;
+          localOnly = true; # admin only
+        };
+        mylar3 = {
+          subdomain = "mylar3";
+          port = 8090;
+          localOnly = true; # admin only
+        };
       };
     };
 
@@ -299,6 +317,10 @@
           name = "maintainerr";
           url = "https://maintainerr.gyarmathy.co";
         }
+        {
+          name = "kavita";
+          url = "https://kavita.gyarmathy.co";
+        }
       ];
     };
 
@@ -375,6 +397,13 @@
     wizarr.enable = true;
     autobrr.enable = true;
     maintainerr.enable = true;
+
+    # -------------------------------------------------------------------------
+    # Reading Stack (Ebooks, Comics, Manga)
+    # -------------------------------------------------------------------------
+    kavita.enable = true;
+    lazylibrarian.enable = true;
+    mylar3.enable = true;
 
     # -------------------------------------------------------------------------
     # Download Services (NOW ON HOMELAB02)

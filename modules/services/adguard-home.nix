@@ -112,6 +112,18 @@ let
       domain = "read.${domain}";
       answer = servers.homelab01;
     }
+    {
+      domain = "kavita.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "mylar3.${domain}";
+      answer = servers.homelab01;
+    }
+    {
+      domain = "lazylibrary.${domain}";
+      answer = servers.homelab01;
+    }
 
     # Services on homelab02
     {

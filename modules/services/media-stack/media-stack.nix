@@ -42,7 +42,11 @@ in
           │   └── incomplete/
           ├── movies/
           ├── tv/
-          └── music/
+          ├── music/
+          ├── books/
+          ├── manga/
+          ├── lightnovels/
+          └── comics/
       '';
     };
 
@@ -153,6 +157,10 @@ in
       "d ${cfg.dataPath}/movies 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/tv 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/music 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/books 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/comics 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/manga 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/lightnovels 2775 ${cfg.user} ${cfg.group} -"
     ];
 
     # Create the arr-network before any containers start
