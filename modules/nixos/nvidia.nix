@@ -68,8 +68,8 @@ in
       powerManagement.enable = true;
       powerManagement.finegrained = true;
 
-      # Use proprietary driver (open source still has issues)
-      open = false;
+      # Experimenting with open drivers
+      open = true;
 
       # Enable Nvidia settings panel
       nvidiaSettings = true;
