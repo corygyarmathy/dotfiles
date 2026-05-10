@@ -44,7 +44,20 @@ in
     services.xserver.videoDrivers = [ "nvidia" ];
 
     # Enable graphics support
-    hardware.graphics.enable = true;
+    hardware.graphics = {
+      enable = true;
+      enable32Bit = true; # Required for 32-bit Wine/DXVK
+      extraPackages = with pkgs; [
+        intel-media-driver
+        intel-ocl
+        intel-vaapi-driver
+        vulkan-loader
+        pkgs.mesa
+      ];
+      extraPackages32 = with pkgs.pkgsi686Linux; [
+        mesa
+      ];
+    };
 
     # Nvidia driver configuration
     hardware.nvidia = {
