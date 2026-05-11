@@ -113,6 +113,16 @@ in
             chown ${uid}:${gid} "${cfg.poolPath}/$dir"
             chmod 2775 "${cfg.poolPath}/$dir"
           done
+
+          # Set default ACLs on all managed directories so that any new
+          # files/directories created inside them (e.g. via File Browser,
+          # manual uploads, or containers) inherit group read/write
+          # regardless of the creating user's umask.
+          ${pkgs.acl}/bin/setfacl -d -m g::rwX "${cfg.poolPath}"
+          for dir in ${lib.concatStringsSep " " dirs}; do
+            ${pkgs.acl}/bin/setfacl -d -m g::rwX "${cfg.poolPath}/$dir"
+          done
+
           echo "Created directory structure on ${cfg.poolPath}"
         '';
     };
