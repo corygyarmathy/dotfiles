@@ -113,6 +113,8 @@
     };
     immich.enable = false;
     home-assistant.enable = false;
+    filebrowser.enable = true;
+
     monitoring = {
       enable = true;
       prometheus.enable = true;
@@ -189,6 +191,10 @@
           name = "wallabag";
           url = "https://read.gyarmathy.co";
         }
+        {
+          name = "filebrowser";
+          url = "https://filebrowser.gyarmathy.co";
+        }
       ];
     };
 
@@ -253,6 +259,13 @@
         adguard2 = {
           subdomain = "adguard2";
           port = 3080;
+          localOnly = true;
+        };
+
+        # FileBrowser
+        filebrowser = {
+          subdomain = "filebrowser";
+          port = 8085;
           localOnly = true;
         };
 

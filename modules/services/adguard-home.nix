@@ -134,6 +134,10 @@ let
       domain = "adguard2.${domain}";
       answer = servers.homelab02;
     }
+    {
+      domain = "filebrowser.${domain}";
+      answer = servers.homelab02;
+    }
   ]
   ++ cfg.extraRewrites # add supplied rewrites
   ++ [
