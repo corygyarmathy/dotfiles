@@ -235,18 +235,25 @@ in
             exit 1
           fi
 
-          COOKIE=$(curl -sf -c - "http://localhost:${toString cfg.port}/api/v2/auth/login" \
-            --data-urlencode "username=$QB_USER" \
-            --data-urlencode "password=$QB_PASS" 2>/dev/null \
-            | grep -oP 'SID\s+\K\S+')
+          # qBittorrent >=5.2.0 returns 204 on login (not 200) and renamed
+          # the session cookie from SID to QBT_SID_<port>. Using a cookie jar
+          # file handles both the old and new cookie names transparently.
+          COOKIE_JAR=$(mktemp)
+          trap 'rm -f "$COOKIE_JAR"' EXIT
 
-          if [ -z "$COOKIE" ]; then
-            echo "Failed to authenticate with qBittorrent"
+          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -c "$COOKIE_JAR" \
+            "http://localhost:${toString cfg.port}/api/v2/auth/login" \
+            --data-urlencode "username=$QB_USER" \
+            --data-urlencode "password=$QB_PASS")
+
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "204" ]; then
+            echo "Failed to authenticate with qBittorrent (HTTP $HTTP_CODE)"
             exit 1
           fi
 
           CURRENT_PORT=$(curl -sf "http://localhost:${toString cfg.port}/api/v2/app/preferences" \
-            --cookie "SID=$COOKIE" 2>/dev/null \
+            -b "$COOKIE_JAR" 2>/dev/null \
             | jq -r '.listen_port // empty')
 
           if [ "$CURRENT_PORT" = "$FORWARDED_PORT" ]; then
@@ -256,7 +263,7 @@ in
 
           echo "Updating qBittorrent listen port: $CURRENT_PORT -> $FORWARDED_PORT"
           curl -sf "http://localhost:${toString cfg.port}/api/v2/app/setPreferences" \
-            --cookie "SID=$COOKIE" \
+            -b "$COOKIE_JAR" \
             --data-urlencode "json={\"listen_port\": $FORWARDED_PORT}"
 
           echo "Done"

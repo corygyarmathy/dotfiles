@@ -127,13 +127,19 @@ in
           QB_USER=$(cat "$CREDENTIALS_DIRECTORY/qbt-user")
           QB_PASS=$(cat "$CREDENTIALS_DIRECTORY/qbt-pass")
 
-          COOKIE=$(curl -sf -c - "http://localhost:''${QBT_PORT}/api/v2/auth/login" \
-            --data-urlencode "username=$QB_USER" \
-            --data-urlencode "password=$QB_PASS" 2>/dev/null \
-            | grep -oP 'SID\s+\K\S+')
+          # qBittorrent >=5.2.0 returns 204 on login (not 200) and renamed
+          # the session cookie from SID to QBT_SID_<port>. Using a cookie jar
+          # file handles both the old and new cookie names transparently.
+          COOKIE_JAR=$(mktemp)
 
-          if [ -z "$COOKIE" ]; then
-            echo "Failed to authenticate with qBittorrent"
+          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -c "$COOKIE_JAR" \
+            "http://localhost:''${QBT_PORT}/api/v2/auth/login" \
+            --data-urlencode "username=$QB_USER" \
+            --data-urlencode "password=$QB_PASS")
+
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "204" ]; then
+            echo "Failed to authenticate with qBittorrent (HTTP $HTTP_CODE)"
             exit 1
           fi
 
@@ -141,7 +147,7 @@ in
           # This gives us the save_path + name for each torrent, which is the
           # top-level directory or file that qBittorrent is managing.
           TORRENT_PATHS=$(curl -sf "http://localhost:''${QBT_PORT}/api/v2/torrents/info" \
-            --cookie "SID=$COOKIE" 2>/dev/null \
+            -b "$COOKIE_JAR" 2>/dev/null \
             | jq -r '.[] | .content_path // empty')
 
           if [ $? -ne 0 ]; then
@@ -151,7 +157,7 @@ in
 
           # Build a lookup file of active torrent paths
           TORRENT_LIST=$(mktemp)
-          trap 'rm -f "$TORRENT_LIST"' EXIT
+          trap 'rm -f "$COOKIE_JAR" "$TORRENT_LIST"' EXIT
           echo "$TORRENT_PATHS" > "$TORRENT_LIST"
 
           # Note: qBittorrent reports paths using its container mount (/data/downloads/complete/...)
