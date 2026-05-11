@@ -224,6 +224,7 @@
           subdomain = "kavita";
           port = 5000;
           localOnly = false; # readers need external access
+          rateLimitProfile = "media";
         };
         lazylibrarian = {
           subdomain = "lazylibrarian";
