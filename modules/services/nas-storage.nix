@@ -95,9 +95,19 @@ in
             "tv"
             "music"
             "livetv"
+            "books"
+            "comics"
+            "manga"
+            "lightnovels"
           ];
         in
         ''
+          # Ensure the pool root is group-traversable
+          # ZFS defaults to 0700 on the mountpoint which blocks
+          # non-owner group members (e.g. kavita) from traversing
+          chown ${uid}:${gid} "${cfg.poolPath}"
+          chmod 2775 "${cfg.poolPath}"
+
           for dir in ${lib.concatStringsSep " " dirs}; do
             mkdir -p "${cfg.poolPath}/$dir"
             chown ${uid}:${gid} "${cfg.poolPath}/$dir"
