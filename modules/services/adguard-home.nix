@@ -124,6 +124,10 @@ let
       domain = "lazylibrary.${domain}";
       answer = servers.homelab01;
     }
+    {
+      domain = "audiobookshelf.${domain}";
+      answer = servers.homelab01;
+    }
 
     # Services on homelab02
     {

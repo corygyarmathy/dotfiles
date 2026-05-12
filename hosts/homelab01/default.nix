@@ -236,6 +236,12 @@
           port = 8090;
           localOnly = true; # admin only
         };
+        audiobookshelf = {
+          subdomain = "audiobookshelf";
+          port = 13378;
+          localOnly = false; # listeners need external access for mobile apps
+          rateLimitProfile = "media";
+        };
       };
     };
 
@@ -322,6 +328,10 @@
           name = "kavita";
           url = "https://kavita.gyarmathy.co";
         }
+        {
+          name = "audiobookshelf";
+          url = "https://audiobookshelf.gyarmathy.co";
+        }
       ];
     };
 
@@ -405,6 +415,9 @@
     kavita.enable = true;
     lazylibrarian.enable = true;
     mylar3.enable = true;
+
+    # Audiobooks
+    audiobookshelf.enable = true;
 
     # -------------------------------------------------------------------------
     # Download Services (NOW ON HOMELAB02)

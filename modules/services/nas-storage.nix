@@ -100,6 +100,8 @@ in
             "manga"
             "doujin"
             "lightnovels"
+            "audiobooks"
+            "podcasts"
           ];
         in
         ''
