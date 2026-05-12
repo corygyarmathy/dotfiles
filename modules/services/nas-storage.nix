@@ -98,6 +98,7 @@ in
             "books"
             "comics"
             "manga"
+            "doujin"
             "lightnovels"
           ];
         in
