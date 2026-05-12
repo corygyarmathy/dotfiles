@@ -266,6 +266,7 @@
         filebrowser = {
           subdomain = "filebrowser";
           port = 8085;
+          rateLimitProfile = "media";
           localOnly = true;
         };
 
