@@ -90,6 +90,7 @@
     proton-vpn-cli
     proton-pass
     protonmail-desktop
+    super-productivity
 
     # Development
     gcc
