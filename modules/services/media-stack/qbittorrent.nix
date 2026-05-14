@@ -194,6 +194,13 @@ in
         requires = [ "podman-network-arr.service" ];
       };
 
+      podman-qbittorrent = lib.mkIf cfg.vpn.enable {
+        # Clear stuck lockfile, preventing crashing loop
+        preStart = ''
+          rm -f ${stack.configPath}/qbittorrent/qBittorrent/lockfile
+        '';
+      };
+
       # VPN port forwarding sync service
       # NOTE: This script runs on the HOST, not inside a container.
       # It communicates with Gluetun and qBittorrent via their host-mapped ports.
