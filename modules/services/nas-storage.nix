@@ -105,6 +105,9 @@ in
           ];
         in
         ''
+          # Wait for ZFS to fully settle
+          sleep 2
+
           # Ensure the pool root is group-traversable
           # ZFS defaults to 0700 on the mountpoint which blocks
           # non-owner group members (e.g. kavita) from traversing
