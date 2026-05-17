@@ -1,0 +1,10 @@
+-- Autostart
+-- hl.on("hyprland.start", ...) runs once at launch, not on config reload
+
+hl.on("hyprland.start", function()
+	hl.exec_cmd("waybar")
+	hl.exec_cmd("hyprpaper")
+	hl.exec_cmd("dunst")
+	-- add other daemons here, e.g.:
+	-- hl.exec_cmd("nm-applet --indicator")
+end)
