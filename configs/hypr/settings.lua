@@ -51,6 +51,7 @@ hl.config({
 
 	render = {
 		direct_scanout = true,
+		cm_enabled = false, -- disable color management pipeline
 	},
 
 	misc = {
