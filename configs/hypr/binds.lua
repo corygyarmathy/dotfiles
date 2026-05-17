@@ -96,16 +96,6 @@ hl.bind(mod .. " + ALT + mouse:272", hl.dsp.window.resize(), { mouse = true })
 hl.bind("Print", hl.dsp.exec_cmd("grimblast copy area"))
 
 ---------------------------------------------------------------------------
--- Lid switch
----------------------------------------------------------------------------
-hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd('hyprctl keyword monitor "eDP-1, disable"'), { locked = true })
-hl.bind(
-	"switch:off:Lid Switch",
-	hl.dsp.exec_cmd('hyprctl keyword monitor "eDP-1, 3840x2400, 0x0, 1"'),
-	{ locked = true }
-)
-
----------------------------------------------------------------------------
 -- Media keys
 ---------------------------------------------------------------------------
 hl.bind("XF86AudioPlay", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })

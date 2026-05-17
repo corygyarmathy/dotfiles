@@ -21,6 +21,27 @@ hl.monitor({
 	scale = 1,
 })
 
+-- Lid switch
+hl.bind("switch:on:Lid Switch", function()
+	hl.monitor({ output = "eDP-1", disabled = true })
+end, { locked = true })
+
+hl.bind("switch:off:Lid Switch", function()
+	hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = 1 })
+end, { locked = true })
+
+-- Disable laptop display if lid is already closed at launch
+hl.on("hyprland.start", function()
+	local handle = io.open("/proc/acpi/button/lid/LID0/state", "r")
+	if handle then
+		local state = handle:read("*a")
+		handle:close()
+		if state:find("closed") then
+			hl.monitor({ output = "eDP-1", disabled = true })
+		end
+	end
+end)
+
 -- External displays
 hl.monitor({
 	output = ultrawide,
