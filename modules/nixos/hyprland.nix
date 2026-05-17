@@ -50,6 +50,9 @@ in
       TTYVTDisallocate = true;
     };
 
+    # For Lua LSP stub files
+    environment.pathsToLink = [ "/share/hypr" ];
+
     environment.systemPackages = with pkgs; [
       xdg-desktop-portal-hyprland
       egl-wayland
