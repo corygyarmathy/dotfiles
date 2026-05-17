@@ -89,21 +89,20 @@ in
       enable = true;
       settings = {
         general = {
-          lock_cmd = "pidof ${lib.getExe pkgs.hyprlock} || ${lib.getExe pkgs.hyprlock}";
-          before_sleep_cmd = "${pkgs.hyprland}/bin/loginctl lock-session";
-          after_sleep_cmd = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # to avoid having to press a key twice to turn on the display.
+          lock_cmd = "pidof hyprlock || hyprlock";
+          before_sleep_cmd = "loginctl lock-session";
+          after_sleep_cmd = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on";
         };
 
         listener = [
           {
-            timeout = 150; # In seconds. 300s is 5m
-            # Workaround as per: https://github.com/hyprwm/hyprlock/issues/330 - nixpkgs not yet updated
-            on-timeout = "${pkgs.hyprland}/bin/loginctl lock-session"; # Lock
+            timeout = 150;
+            on-timeout = "loginctl lock-session";
           }
           {
             timeout = 300;
-            on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off"; # Screen off
-            on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on"; # Screen on
+            on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off";
+            on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on";
           }
           # FIXME: waking from suspend failing, review boot4.log
           # Fails even when Nvidia power management disabled - to investigate
