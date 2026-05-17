@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.hyprlock;
-in {
+in
+{
   options.cg.home.hyprlock.enable = lib.mkEnableOption "Hyprlock screen locker";
 
   config = lib.mkIf cfg.enable {
