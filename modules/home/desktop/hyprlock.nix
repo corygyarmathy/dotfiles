@@ -89,20 +89,25 @@ in
       enable = true;
       settings = {
         general = {
-          lock_cmd = "pidof hyprlock || hyprlock";
-          before_sleep_cmd = "loginctl lock-session";
-          after_sleep_cmd = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on";
+          lock_cmd = "pidof hyprlock || hyprlock"; # avoid starting multiple hyprlock instances.
+          before_sleep_cmd = "loginctl lock-session"; # lock before suspend.
+          after_sleep_cmd = "hyprctl dispatch 'hl.disp.dpms({ action = \" enable \" })'"; # to avoid having to press a key twice to turn on the display.
         };
 
         listener = [
           {
-            timeout = 150;
+            timeout = 120; # 2 min
+            on-timeout = "brightnessctl -sd rgb:kbd_backlight set 0"; # turn off keyboard backlight.
+            on-resume = "brightnessctl -rd rgb:kbd_backlight"; # turn on keyboard backlight.
+          }
+          {
+            timeout = 150; # 2.5 mins
             on-timeout = "loginctl lock-session";
           }
           {
-            timeout = 300;
-            on-timeout = "${pkgs.hyprland}/bin/hyprctl dispatch dpms off";
-            on-resume = "${pkgs.hyprland}/bin/hyprctl dispatch dpms on";
+            timeout = 300; # 5 mins
+            on-timeout = "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'";
+            on-resume = "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })' && brightnessctl -r";
           }
           # FIXME: waking from suspend failing, review boot4.log
           # Fails even when Nvidia power management disabled - to investigate
