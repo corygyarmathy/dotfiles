@@ -49,4 +49,4 @@ keybind = ctrl+enter=unbind
 # ==============================================================================
 
 # Uncomment to enable custom shader
-# custom-shader = ./shaders/shader.glsl
+custom-shader = ./shaders/shader.glsl
