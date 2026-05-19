@@ -30,9 +30,9 @@ $lua\
 $docker_context\
 $conda\
 $nix_shell\
-[](fg:blue bg:purple)\
+[](fg:blue bg:pink)\
 $time\
-[ ](fg:purple)\
+[ ](fg:pink)\
 $line_break$character"""
 
 palette = 'tokyo_night_moon'
@@ -296,7 +296,7 @@ format = '[[ $symbol$state ](fg:text bg:blue)]($style)'
 disabled = false
 time_format = "%R"
 style = "bg:peach"
-format = '[[  $time ](fg:surface0 bg:purple)]($style)'
+format = '[[  $time ](fg:surface0 bg:pink)]($style)'
 
 [line_break]
 disabled = false
