@@ -11,7 +11,9 @@ writeShellApplication {
   runtimeInputs = [ playerctl ];
 
   text = ''
-    playerctl -F metadata --format '{{status}}\t{{artist}} - {{title}}' 2>/dev/null | while IFS=$'\t' read -r status text; do
+    playerctl -F metadata --format '{{status}}%%{{artist}} - {{title}}' 2>/dev/null | while read -r line; do
+      status="''${line%%%%*}"
+      text="''${line#*%%}"
       if [[ "$status" == "Playing" ]]; then
         echo "$text"
       else
