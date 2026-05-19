@@ -3,7 +3,7 @@
  * Can be used standalone or sourced by home-manager
  */
 
-@import "./rose-pine.css";
+@import "./tokyo-night.css";
 @import "./nixos-upgrade.css";
 @import "./ddc.css";
 @import "modifiers.css";
@@ -22,7 +22,7 @@
 }
 
 window#waybar {
-  background: rgba(21, 18, 27, 0);
+  background: rgba(34, 36, 54, 0);
   color: @text;
 }
 
@@ -101,7 +101,7 @@ tooltip {
  * ============================================================================== */
 
 #memory {
-  color: #3e8fb0;
+  color: #82aaff;
   border-left: 0px;
   border-right: 0px;
 }

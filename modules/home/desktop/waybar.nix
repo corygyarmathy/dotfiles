@@ -31,12 +31,11 @@ in
     # These files can be used standalone on non-NixOS systems
     xdg.configFile = {
       "waybar/style.css".source = ../../../configs/waybar/style.css;
-      "waybar/rose-pine.css".source = ../../../configs/waybar/rose-pine.css;
+      "waybar/tokyo-night.css".source = ../../../configs/waybar/tokyo-night.css;
       "waybar/config".source = ../../../configs/waybar/config.jsonc;
       # Empty stub - will be overwritten if enabled
       "waybar/nixos-upgrade.css".text = lib.mkDefault "/* auto-upgrade-desktop module not enabled */";
       "waybar/ddc.css".text = lib.mkDefault "/* ddc module not enabled */";
-
     };
 
     programs.waybar = {

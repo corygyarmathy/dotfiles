@@ -1,0 +1,27 @@
+/*
+ * Variant: Tokyo Night Moon
+ * Author: Michaël Ball, based on Tokyo Night by enkia
+ * Mapped from base24 palette to semantic Waybar color names
+ */
+
+@define-color base            #222436;
+@define-color surface         #1e2030;
+@define-color overlay         #2f334d;
+
+@define-color muted           #444a73;
+@define-color subtle          #828bb8;
+@define-color text            #c8d3f5;
+
+@define-color love            #ff757f;
+@define-color gold            #ffc777;
+@define-color rose            #fca7ea;
+@define-color pine            #82aaff;
+@define-color foam            #86e1fc;
+@define-color iris            #c099ff;
+
+@define-color highlightLow    #1e2030;
+@define-color highlightMed    #2f334d;
+@define-color highlightHigh   #444a73;
+
+/* Additional colors */
+@define-color green           #c3e88d;
