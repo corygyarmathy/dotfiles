@@ -28,9 +28,12 @@
     hyprland.enable = true;
     hyprlock.enable = true;
     hyprsunset.enable = true;
-    waybar.enable = true;
-    waybar.ddc.enable = true;
-    waybar-modifiers.enable = true;
+    waybar = {
+      enable = true;
+      ddc.enable = true;
+      media.enable = true;
+      modifiers.enable = true;
+    };
 
     rofi.enable = true;
     stylix.enable = true;

@@ -25,7 +25,7 @@
   ...
 }:
 let
-  cfg = config.cg.home.waybar-modifiers;
+  cfg = config.cg.home.waybar.modifiers;
 
   pythonWithEvdev = pkgs.python3.withPackages (ps: [ ps.evdev ]);
 
@@ -211,7 +211,7 @@ let
 
 in
 {
-  options.cg.home.waybar-modifiers.enable =
+  options.cg.home.waybar.modifiers.enable =
     lib.mkEnableOption "Waybar modifier key indicator for home-row mods";
 
   config = lib.mkIf cfg.enable {

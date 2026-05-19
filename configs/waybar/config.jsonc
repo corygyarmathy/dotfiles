@@ -2,6 +2,11 @@
   // Waybar Configuration
   // This file defines the bar layout and module settings
   // Can be used standalone or sourced by home-manager
+  //
+  // Interaction design language:
+  //   Left click  = primary action (toggle, open default app, activate)
+  //   Right click = alternate view / secondary info (format-alt, details)
+  //   Middle click = contextual action (kill, reset, open settings)
 
   "height": 30,
   "layer": "top",
@@ -13,6 +18,7 @@
     "tray",
     "idle_inhibitor",
     "privacy",
+    "custom/media",
     "custom/modifiers",
   ],
   "modules-center": ["clock"],
@@ -47,6 +53,7 @@
     "return-type": "json",
     "interval": 10,
     "format": "󰃟 {}",
+    // Left = up, Right = down, Middle = reset to auto
     "on-click": "ddc-brightness-ctl up 10",
     "on-click-right": "ddc-brightness-ctl down 10",
     "on-click-middle": "ddc-brightness-ctl resume",
@@ -56,6 +63,17 @@
     "exec": "waybar-mod-indicator",
     "return-type": "json",
     "tooltip": true,
+  },
+
+  "custom/media": {
+    "exec": "waybar-media",
+    "max-length": 35,
+    "format": "󰎈 {}",
+    "on-click": "playerctl play-pause",
+    "on-click-right": "playerctl next",
+    "on-click-middle": "playerctl previous",
+    "on-scroll-up": "playerctl volume 0.05+",
+    "on-scroll-down": "playerctl volume 0.05-",
   },
 
   // ===========================================================================
@@ -87,15 +105,25 @@
   "disk": {
     "interval": 120,
     "format": "{percentage_used}% ",
+    // Left = open file manager, Right = show details, Middle = open terminal at /
+    "on-click": "xdg-open ~",
+    "on-click-right": "notify-send 'Disk' \"$(df -h / --output=source,size,used,avail,pcent | tail -1)\"",
+    "on-click-middle": "foot -e bash -c 'dust / | head -30; read'",
   },
 
   "cpu": {
     "format": "{usage}% ",
     "tooltip": true,
+    // Left = open btop, Right = show top processes, Middle = (reserved)
+    "on-click": "foot -e btop",
+    "on-click-right": "notify-send 'Top CPU' \"$(ps -eo comm,%cpu --sort=-%cpu | head -6)\"",
   },
 
   "memory": {
     "format": "{}% ",
+    // Left = open btop, Right = show top memory consumers
+    "on-click": "foot -e btop",
+    "on-click-right": "notify-send 'Top Memory' \"$(ps -eo comm,%mem --sort=-%mem | head -6)\"",
   },
 
   "temperature": {
@@ -103,6 +131,9 @@
     "critical-threshold": 80,
     "format": "{temperatureC}°C {icon}",
     "format-icons": ["", "", ""],
+    // Left = open btop (sensors), Right = show all thermal zones
+    "on-click": "foot -e btop",
+    "on-click-right": "notify-send 'Temperatures' \"$(sensors 2>/dev/null | grep -E '°C' | head -10)\"",
   },
 
   // ===========================================================================
@@ -118,6 +149,9 @@
       "critical": 15,
       "warning": 30,
     },
+    // Left = toggle format (capacity vs time), Right = show power details
+    // (format-alt handles left click natively)
+    "on-click-right": "notify-send 'Battery' \"$(upower -i $(upower -e | grep battery) | grep -E 'state|percentage|time|energy-rate')\"",
   },
 
   // ===========================================================================
@@ -127,6 +161,7 @@
     "interval": 60,
     "format-alt": "{: %R  %d/%m}",
     "tooltip-format": "<big>{:%Y %B %d}</big>\n<tt><small>{calendar}</small></tt>",
+    // Left = toggle format (format-alt handles natively)
   },
 
   // ===========================================================================
@@ -139,6 +174,8 @@
     "format-ethernet": "{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}",
     "format-linked": "{ifname} (No IP) ",
     "format-wifi": "{signalStrength}% ",
+    // Left = toggle format (format-alt handles natively), Middle = open nm settings
+    "on-click-middle": "nm-connection-editor",
   },
 
   // ===========================================================================
@@ -160,7 +197,21 @@
     "format-muted": " {format_source}",
     "format-source": "{volume}% ",
     "format-source-muted": "",
+    // Left = open pavucontrol, Right = toggle mute, Middle = open pulsemixer
     "on-click": "pavucontrol",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "on-click-middle": "foot -e pulsemixer",
+    "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
+  },
+
+  // ===========================================================================
+  // Backlight
+  // ===========================================================================
+  "backlight": {
+    // Scroll to adjust is handled natively by waybar
+    "on-scroll-up": "brightnessctl set 5%+",
+    "on-scroll-down": "brightnessctl set 5%-",
   },
 
   // ===========================================================================
@@ -172,6 +223,7 @@
       "activated": "",
       "deactivated": "",
     },
+    // Left = toggle (handled natively)
   },
 
   "privacy": {

@@ -22,6 +22,9 @@ pkgs: {
   # Custom script to take comskip output and cut commercials from media
   comskip-cut = pkgs.callPackage ./comskip-cut { };
 
+  # Media player waybar module
+  waybar-media = pkgs.callPackage ./waybar-media { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }
