@@ -209,6 +209,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-kavita": {
+      "locked": {
+        "lastModified": 1779119340,
+        "narHash": "sha256-lv2n+BsNmiGSiyaEQ4wEw0SFyHkmItaFpaSM9TZ9iF8=",
+        "owner": "nevivurn",
+        "repo": "nixpkgs",
+        "rev": "08dc6a8739ca34918ea72812f94bd4873bd514aa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nevivurn",
+        "ref": "update/kavita",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-stable": {
       "locked": {
         "lastModified": 1751274312,
@@ -272,6 +288,7 @@
         "hardware": "hardware",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs",
+        "nixpkgs-kavita": "nixpkgs-kavita",
         "nixpkgs-stable": "nixpkgs-stable",
         "nixpkgs-unstable-small": "nixpkgs-unstable-small",
         "sops-nix": "sops-nix",

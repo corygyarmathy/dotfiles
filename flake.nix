@@ -7,6 +7,10 @@
     nixpkgs-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
 
+    nixpkgs-kavita = {
+      url = "github:nevivurn/nixpkgs/update/kavita";
+    };
+
     # Home Manager
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";

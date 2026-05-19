@@ -12,6 +12,14 @@
     # });
     #
 
+    # Use Kavita 0.9.0 from unmerged nixpkgs PR #515309 for security patches.
+    # https://github.com/NixOS/nixpkgs/pull/515309
+    # TODO: Remove this overlay once the PR is merged and reaches our channel.
+    kavita =
+      (import inputs.nixpkgs-kavita {
+        system = final.system;
+      }).kavita;
+
     # Disable openldap tests only for 32-bit builds (triggered by Steam's
     # multilib support). The i686 build isn't cached by Hydra and the
     # syncreplication test fails in the Nix sandbox.
