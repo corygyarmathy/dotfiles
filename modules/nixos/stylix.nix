@@ -21,7 +21,7 @@ in
           autoEnable = true; # Enables stylix themes for all applications
           base16Scheme = "${pkgs.base16-schemes}/share/themes/kanagawa.yaml";
           polarity = "dark"; # "light" or "either" - sets light or dark mode
-          image = ../../wallpapers/my-neighbour-totoro.jpg; # Sets wallpaper, ""s are not required for path
+          image = ../../wallpapers/wallhaven-6l5emq.png; # Sets wallpaper, ""s are not required for path
 
           cursor = {
             package = pkgs.rose-pine-cursor;
