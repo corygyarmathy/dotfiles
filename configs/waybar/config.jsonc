@@ -159,7 +159,7 @@
   // ===========================================================================
   "clock": {
     "interval": 60,
-    "format": "{:%H:%M - %A, %d/%m}",
+    "format": "{:%H:%M %A, %d/%m}",
     "format-alt": "{:%d/%m/%Y  %H:%M:%S}",
     "tooltip-format": "<span>{calendar}</span>",
     "calendar": {
@@ -168,9 +168,10 @@
       "mode-mon-col": 3,
       "on-click-right": "mode",
       "format": {
-        "month": "<span color='#ffead3'><b>{}</b></span>",
-        "weekdays": "<span color='#ffcc66'><b>{}</b></span>",
-        "today": "<span color='#ff6699'><b>{}</b></span>",
+        "month": "<span color='#E6C384'><b>{}</b></span>",
+        "weekdays": "<span color='#FFA066'><b>{}</b></span>",
+        "days": "<span color='#DCD7BA'><b>{}</b></span>",
+        "today": "<span color='#E46876'><b>{}</b></span>",
       },
     },
     // Left = toggle format (format-alt handles natively)

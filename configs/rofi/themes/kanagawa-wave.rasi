@@ -1,0 +1,237 @@
+/*******************************************************************************
+ *  Kanagawa Wave — Rofi Theme
+ *
+ *  A clean, modern launcher with rounded corners, a prominent search bar,
+ *  subtle accent borders, and the Kanagawa Wave colour palette.
+ *
+ *  Designed for drun / run / window modes with icons enabled.
+ ******************************************************************************/
+
+/* ── Colour Definitions ───────────────────────────────────────────────────── */
+
+* {
+    /* Backgrounds (dark → light) */
+    bg0:        #16161Dcc;          /* window backdrop — slight transparency  */
+    bg1:        #1F1F28;            /* main surface                          */
+    bg2:        #2A2A37;            /* inputbar / raised surface             */
+    bg3:        #363646;            /* subtle separators                     */
+    bg4:        #54546D;            /* borders, muted UI chrome              */
+
+    /* Selection */
+    sel-bg:     #223249;            /* waveBlue1 — selected row bg           */
+    sel-bg2:    #2D4F67;            /* waveBlue2 — active highlight          */
+
+    /* Foreground */
+    fg0:        #DCD7BA;            /* fujiWhite — primary text              */
+    fg1:        #C8C093;            /* oldWhite  — secondary / dimmed text   */
+    fg2:        #727169;            /* fujiGray  — placeholder, comments     */
+
+    /* Accents */
+    accent:     #7E9CD8;            /* crystalBlue — functions / titles      */
+    accent2:    #957FB8;            /* oniViolet  — keywords / statements    */
+    urgent:     #E46876;            /* waveRed                               */
+    active:     #98BB6C;            /* springGreen                           */
+    orange:     #FFA066;            /* surimiOrange                          */
+    pink:       #D27E99;            /* sakuraPink                            */
+
+    /* Meta */
+    transparent: transparent;
+
+    /* Typography */
+    font:       "Hack Nerd Font 13";
+
+    /* Global resets */
+    background-color:   @transparent;
+    text-color:         @fg0;
+}
+
+/* ── Window ───────────────────────────────────────────────────────────────── */
+
+window {
+    location:           center;
+    anchor:             center;
+    width:              680px;
+    border:             2px;
+    border-color:       @bg4;
+    border-radius:      16px;
+    background-color:   @bg0;
+    padding:            0px;
+    cursor:             "default";
+}
+
+/* ── Main Container ───────────────────────────────────────────────────────── */
+
+mainbox {
+    spacing:            0px;
+    padding:            0px;
+    children:           [ inputbar, message, listview, mode-switcher ];
+    background-color:   @transparent;
+}
+
+/* ── Input Bar ────────────────────────────────────────────────────────────── */
+
+inputbar {
+    padding:            16px 20px;
+    spacing:            12px;
+    children:           [ textbox-prompt, entry ];
+    background-color:   @bg2;
+    border-radius:      16px 16px 0px 0px;
+    border:             0px 0px 2px 0px;
+    border-color:       @accent;
+}
+
+textbox-prompt {
+    expand:             false;
+    content:            " ";
+    text-color:         @accent;
+    vertical-align:     0.5;
+    horizontal-align:   0.5;
+    font:               "Hack Nerd Font 16";
+    background-color:   @transparent;
+}
+
+entry {
+    font:               "Hack Nerd Font 14";
+    placeholder:        "Search...";
+    placeholder-color:  @fg2;
+    text-color:         @fg0;
+    cursor:             text;
+    vertical-align:     0.5;
+    background-color:   @transparent;
+}
+
+/* ── Message ──────────────────────────────────────────────────────────────── */
+
+message {
+    border:             0px 0px 1px 0px;
+    border-color:       @bg3;
+    background-color:   @bg1;
+    padding:            8px 20px;
+}
+
+textbox {
+    text-color:         @fg1;
+    background-color:   @transparent;
+}
+
+/* ── List View ────────────────────────────────────────────────────────────── */
+
+listview {
+    lines:              8;
+    columns:            1;
+    fixed-height:       true;
+    scrollbar:          false;
+    cycle:              true;
+    dynamic:            true;
+    layout:             vertical;
+    spacing:            4px;
+    padding:            8px 8px;
+    background-color:   @bg1;
+    border:             0px;
+}
+
+/* ── Elements (each row) ──────────────────────────────────────────────────── */
+
+element {
+    padding:            10px 16px;
+    spacing:            14px;
+    border-radius:      10px;
+    background-color:   @transparent;
+    cursor:             pointer;
+}
+
+element normal.normal {
+    background-color:   @transparent;
+    text-color:         @fg0;
+}
+
+element normal.urgent {
+    background-color:   @transparent;
+    text-color:         @urgent;
+}
+
+element normal.active {
+    background-color:   @transparent;
+    text-color:         @active;
+}
+
+element selected.normal {
+    background-color:   @sel-bg;
+    text-color:         @accent;
+    border:             0px 0px 0px 3px;
+    border-color:       @accent;
+}
+
+element selected.urgent {
+    background-color:   @sel-bg;
+    text-color:         @urgent;
+    border:             0px 0px 0px 3px;
+    border-color:       @urgent;
+}
+
+element selected.active {
+    background-color:   @sel-bg;
+    text-color:         @active;
+    border:             0px 0px 0px 3px;
+    border-color:       @active;
+}
+
+element alternate.normal {
+    background-color:   @transparent;
+    text-color:         @fg0;
+}
+
+element alternate.urgent {
+    background-color:   @transparent;
+    text-color:         @urgent;
+}
+
+element alternate.active {
+    background-color:   @transparent;
+    text-color:         @active;
+}
+
+element-icon {
+    size:               28px;
+    cursor:             inherit;
+    vertical-align:     0.5;
+    background-color:   @transparent;
+}
+
+element-text {
+    vertical-align:     0.5;
+    horizontal-align:   0.0;
+    cursor:             inherit;
+    background-color:   @transparent;
+    text-color:         inherit;
+    highlight:          bold underline #7E9CD8;
+}
+
+/* ── Mode Switcher ────────────────────────────────────────────────────────── */
+
+mode-switcher {
+    spacing:            0px;
+    border:             1px 0px 0px 0px;
+    border-color:       @bg3;
+    background-color:   @bg2;
+    border-radius:      0px 0px 16px 16px;
+    padding:            0px;
+}
+
+button {
+    padding:            12px 20px;
+    text-color:         @fg2;
+    background-color:   @transparent;
+    cursor:             pointer;
+    border-radius:      0px;
+}
+
+button selected {
+    text-color:         @accent;
+    background-color:   @sel-bg;
+    border:             2px 0px 0px 0px;
+    border-color:       @accent;
+}
+
+/* vim:ft=css
+*/

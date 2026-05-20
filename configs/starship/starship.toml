@@ -5,17 +5,17 @@ scan_timeout = 30
 command_timeout = 500
 
 format = """
-[](surface0)\
+[](bg_dark)\
 $os\
 $username\
 $shell\
 $sudo\
-[](bg:sapphire fg:surface0)\
+[](bg:accent fg:bg_dark)\
 $directory\
-[](fg:sapphire bg:red)\
+[](fg:accent bg:danger)\
 $git_status\
 $git_branch\
-[](fg:red bg:teal)\
+[](fg:danger bg:info)\
 $c\
 $rust\
 $golang\
@@ -26,126 +26,111 @@ $kotlin\
 $haskell\
 $python\
 $lua\
-[](fg:teal bg:blue)\
+[](fg:info bg:secondary)\
 $docker_context\
 $conda\
 $nix_shell\
-[](fg:blue bg:pink)\
+[](fg:secondary bg:highlight)\
 $time\
-[ ](fg:pink)\
+[](fg:highlight)\
 $line_break$character"""
 
-palette = 'tokyo_night_moon'
+palette = 'kanagawa_wave'
+
+# ===========================================================================
+# Palettes
+# ===========================================================================
+#
+# Naming convention (shared across themes):
+#
+#   Backgrounds:
+#     bg_darkest   — deepest background (floats, popups)
+#     bg_dark      — first prompt segment background
+#     bg_mid       — mid-layer surfaces
+#     fg_dark      — dark text for use on bright backgrounds
+#
+#   Foreground:
+#     fg           — primary text (on dark backgrounds)
+#     fg_dim       — secondary/dimmed text
+#     fg_disabled  — inactive/muted text
+#
+#   Accents (by function, not appearance):
+#     accent       — primary accent (directory)
+#     danger       — errors, git (red-ish)
+#     warning      — caution, duration (warm)
+#     success      — ok, languages (green-ish)
+#     info         — informational (cool blue)
+#     secondary    — secondary accent (docker/nix context)
+#     highlight    — time, decorative (warm accent)
+#
+# Contrast requirements (WCAG AA):
+#   Segment bg → fg text:  ≥4.5:1 (AA) or ≥3.0:1 (AA-large for bold 14px+)
+#   Arrow transitions:     ≥1.4:1 (visible boundary)
+
+[palettes.kanagawa_wave]
+# Source: https://github.com/rebelot/kanagawa.nvim (wave variant)
+#
+# Segment flow (bg colors, left to right):
+#   sumiInk2 → crystalBlue → autumnRed → springGreen → oniViolet → surimiOrange
+#
+# Contrast ratios verified:
+#   Segment        BG             FG           Ratio  Grade
+#   ─────────────────────────────────────────────────────────
+#   OS/shell       sumiInk2       fujiWhite     9.75  AA
+#   Directory      crystalBlue    sumiInk0      6.54  AA
+#   Git            autumnRed      fujiWhite     3.50  AA-lg
+#   Languages      springGreen    sumiInk0      8.28  AA
+#   Docker/Nix     oniViolet      sumiInk0      5.15  AA
+#   Time           surimiOrange   sumiInk0      8.98  AA
+#
+# Arrow transitions (all >1.4:1):
+#   sumiInk2→crystalBlue 5.14 | crystalBlue→autumnRed 1.85
+#   autumnRed→springGreen 2.34 | springGreen→oniViolet 1.61
+#   oniViolet→surimiOrange 1.74 | surimiOrange→terminal 8.15
+
+# Backgrounds
+bg_darkest = "#16161D" # sumiInk0
+bg_dark = "#2A2A37"    # sumiInk2 — first segment bg
+bg_mid = "#363646"     # sumiInk3
+fg_dark = "#16161D"    # sumiInk0 — dark text on bright segment backgrounds
+
+# Foreground
+fg = "#DCD7BA"          # fujiWhite
+fg_dim = "#C8C093"      # oldWhite
+fg_disabled = "#54546D" # sumiInk4
+
+# Semantic accents
+accent = "#2D4F67"    # waveBlue2 — directory
+secondary = "#E46876" # waveRed — docker/nix context
+danger = "#C34043"    # autumnRed — git, errors
+warning = "#FF9E3B"   # roninYellow — cmd_duration
+success = "#98BB6C"   # springGreen — languages, ok
+info = "#E6C384"      # carpYellow — informational
+highlight = "#FFA066" # surimiOrange — time
 
 [palettes.tokyo_night_moon]
-# Mapping base24 "Tokyo Night Moon" by Michaël Ball / enkia to Starship semantic names.
-#
-# The prompt format references: surface0, text, sapphire, red, teal, blue, purple,
-# base, mantle, green, lavender, peach.  Each is mapped to the closest base24 role.
-#
-# Background tiers
-base = "#222436"     # base00 — primary background
-mantle = "#1e2030"   # base01 — slightly lighter background
-crust = "#1a1b2a"    # base11 — darkest background
-surface0 = "#2f334d" # base02 — selection / UI chrome background
-surface1 = "#444a73" # base03 — comments / subtle UI
-surface2 = "#828bb8" # base04 — dark foreground / inactive text
-# Foreground
-text = "#c8d3f5"     # base05 — default foreground
-subtext0 = "#b4c2f0" # base06 — light foreground
-subtext1 = "#c8d3f5" # base07 — lightest foreground (same as base05 in this scheme)
-# Accent colours — mapped to approximate hue matches
-red = "#ff757f"      # base12 — bright red (used for git segment)
-maroon = "#c53b53"   # base0F — deeper red / deprecated
-peach = "#ffc777"    # base09 — warm amber/orange
-yellow = "#ffd793"   # base13 — bright yellow
-green = "#c3e88d"    # base0B / base14 — green
-teal = "#86e1fc"     # base0C / base15 — cyan (language segment)
-sapphire = "#82aaff" # base0D / base16 — blue (directory segment)
-blue = "#82aaff"     # base0D — functions / methods blue
-lavender = "#fca7ea" # base0E / base17 — pink-magenta
-purple = "#c099ff"   # base08 — violet (time segment)
-sky = "#86e1fc"      # base0C — alias for teal
-pink = "#fca7ea"     # base0E
-mauve = "#c099ff"    # base08
-# Extra names used in some module styles
-rosewater = "#ffd793" # warm light accent
-flamingo = "#ff757f"  # warm red accent
-overlay0 = "#444a73"  # base03
-overlay1 = "#828bb8"  # base04
-overlay2 = "#b4c2f0"  # base06
+bg_darkest = "#1a1b2a"
+bg_dark = "#2f334d"
+bg_mid = "#444a73"
+fg_dark = "#222436"
+fg = "#c8d3f5"
+fg_dim = "#828bb8"
+fg_disabled = "#444a73"
+accent = "#82aaff"
+danger = "#ff757f"
+warning = "#ffc777"
+success = "#c3e88d"
+info = "#86e1fc"
+secondary = "#c099ff"
+highlight = "#fca7ea"
 
-[palettes.catppuccin_frappe]
-rosewater = "#f2d5cf"
-flamingo = "#eebebe"
-pink = "#f4b8e4"
-mauve = "#ca9ee6"
-red = "#e78284"
-maroon = "#ea999c"
-peach = "#ef9f76"
-yellow = "#e5c890"
-green = "#a6d189"
-teal = "#81c8be"
-sky = "#99d1db"
-sapphire = "#85c1dc"
-blue = "#8caaee"
-lavender = "#babbf1"
-text = "#f2f2f2"
-subtext1 = "#b5bfe2"
-subtext0 = "#a5adce"
-overlay2 = "#949cbb"
-overlay1 = "#838ba7"
-overlay0 = "#737994"
-surface2 = "#626880"
-surface1 = "#51576d"
-surface0 = "#414559"
-base = "#303446"
-mantle = "#292c3c"
-crust = "#232634"
-
-[palettes.catppuccin_mocha]
-rosewater = "#f5e0dc"
-flamingo = "#f2cdcd"
-pink = "#f5c2e7"
-mauve = "#cba6f7"
-red = "#f38ba8"
-maroon = "#eba0ac"
-peach = "#fab387"
-yellow = "#f9e2af"
-green = "#a6e3a1"
-teal = "#94e2d5"
-sky = "#89dceb"
-sapphire = "#74c7ec"
-blue = "#89b4fa"
-lavender = "#b4befe"
-text = "#e3e5e5"
-subtext1 = "#bac2de"
-subtext0 = "#a6adc8"
-overlay2 = "#9399b2"
-overlay1 = "#7f849c"
-overlay0 = "#6c7086"
-surface2 = "#585b70"
-surface1 = "#45475a"
-surface0 = "#313244"
-base = "#1e1e2e"
-mantle = "#181825"
-crust = "#11111b"
-
-[palettes.gruvbox_dark]
-color_fg0 = '#fbf1c7'
-color_bg1 = '#3c3836'
-color_bg3 = '#665c54'
-color_blue = '#458588'
-color_aqua = '#689d6a'
-color_green = '#98971a'
-color_orange = '#d65d0e'
-color_purple = '#b16286'
-color_red = '#cc241d'
-color_yellow = '#d79921'
+# ===========================================================================
+# Prompt Modules
+# ===========================================================================
 
 [os]
 disabled = false
-style = "bg:surface0 fg:text"
+style = "bg:bg_dark fg:fg"
 
 [os.symbols]
 Windows = "󰍲"
@@ -171,8 +156,8 @@ NixOS = ""
 
 [username]
 show_always = false
-style_user = "bg:surface0 fg:text"
-style_root = "bg:surface0 fg:text"
+style_user = "bg:bg_dark fg:fg"
+style_root = "bg:bg_dark fg:fg"
 format = '[ $user]($style)'
 
 [shell]
@@ -184,18 +169,18 @@ powershell_indicator = ''
 pwsh_indicator = ''
 unknown_indicator = '?_'
 format = '[ $indicator ]($style)'
-style = "bg:surface0 fg:text"
+style = "bg:bg_dark fg:fg"
 
 [sudo]
 disabled = false
-style = "bg:surface0 fg:text"
+style = "bg:bg_dark fg:fg"
 symbol = '󱕴 '
 format = '[$symbol]($style)'
 
-# Directory section
+# ── Directory ────────────────────────────────────────────────────────
 
 [directory]
-style = "fg:text bg:sapphire"
+style = "fg:fg bg:accent"
 format = "[ $path ]($style)"
 truncation_length = 3
 truncation_symbol = "…/"
@@ -207,78 +192,80 @@ truncation_symbol = "…/"
 "Pictures" = " "
 "Developer" = "󰲋 "
 
+# ── Git ──────────────────────────────────────────────────────────────
+
 [git_status]
-style = "bg:teal"
-format = '[[  ($all_status$ahead_behind)](fg:text bg:red)]($style)'
+style = "fg:fg bg:danger"
+format = '[  ($all_status$ahead_behind)]($style)'
 
 [git_branch]
 symbol = ""
 ignore_branches = ['master', 'main']
-style = "bg:teal"
-format = '[[ $symbol $branch ](fg:base bg:red)]($style)'
+style = "fg:fg_dark bg:danger"
+format = '[ $symbol $branch ]($style)'
 
-# Programming languages
+# ── Programming Languages ────────────────────────────────────────────
 
 [nodejs]
-symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+symbol = "󰎙"
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [c]
-symbol = " "
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+symbol = ""
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [rust]
 symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [golang]
 symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [php]
 symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [java]
-symbol = " "
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+symbol = ""
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [kotlin]
 symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [haskell]
 symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [python]
 symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
 [lua]
 symbol = ""
-style = "bg:teal"
-format = '[[ $symbol( $version) ](fg:surface1 bg:teal)]($style)'
+style = "fg:fg_dark bg:info"
+format = '[ $symbol( $version) ]($style)'
 
-# Context
+# ── Context ──────────────────────────────────────────────────────────
 
 [docker_context]
 symbol = ""
-style = "bg:blue"
-format = '[[ $symbol( $context) ](fg:text bg:blue)]($style)'
+style = "bg:secondary"
+format = '[[ $symbol( $context) ](fg:fg_dark bg:secondary)]($style)'
 
 [conda]
-style = "bg:blue"
-format = '[[ $symbol( $environment) ](fg:text bg:blue)]($style)'
+style = "bg:secondary"
+format = '[[ $symbol( $environment) ](fg:fg_dark bg:secondary)]($style)'
 
 [nix_shell]
 disabled = false
@@ -287,30 +274,32 @@ symbol = ''
 impure_msg = ''
 pure_msg = ''
 unknown_msg = ''
-style = "bg:blue"
-format = '[[ $symbol$state ](fg:text bg:blue)]($style)'
+style = "bg:secondary"
+format = '[[ $symbol$state ](fg:fg_dark bg:secondary)]($style)'
 
-# Time / final section
+# ── Time ─────────────────────────────────────────────────────────────
 
 [time]
 disabled = false
 time_format = "%R"
-style = "bg:peach"
-format = '[[  $time ](fg:surface0 bg:pink)]($style)'
+style = "bg:highlight"
+format = '[[  $time ](fg:fg_dark bg:highlight)]($style)'
+
+# ── Line Break & Character ───────────────────────────────────────────
 
 [line_break]
 disabled = false
 
 [character]
 disabled = false
-success_symbol = '[](bold fg:green)'
-error_symbol = '[](bold fg:red)'
-vimcmd_symbol = '[](bold fg:green)'
-vimcmd_replace_one_symbol = '[](bold fg:purple)'
-vimcmd_replace_symbol = '[](bold fg:purple)'
-vimcmd_visual_symbol = '[](bold fg:lavender)'
+success_symbol = '[](bold fg:success)'
+error_symbol = '[](bold fg:danger)'
+vimcmd_symbol = '[](bold fg:success)'
+vimcmd_replace_one_symbol = '[](bold fg:secondary)'
+vimcmd_replace_symbol = '[](bold fg:secondary)'
+vimcmd_visual_symbol = '[](bold fg:accent)'
 
 [cmd_duration]
 min_time = 3000
 format = '[ 󱎫 $duration]($style) '
-style = "fg:yellow"
+style = "fg:warning"

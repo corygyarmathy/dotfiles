@@ -19,7 +19,7 @@ in
         stylix = {
           enable = true;
           autoEnable = true; # Enables stylix themes for all applications
-          base16Scheme = "${pkgs.base16-schemes}/share/themes/tokyo-night-dark.yaml";
+          base16Scheme = "${pkgs.base16-schemes}/share/themes/kanagawa.yaml";
           polarity = "dark"; # "light" or "either" - sets light or dark mode
           image = ../../wallpapers/my-neighbour-totoro.jpg; # Sets wallpaper, ""s are not required for path
 

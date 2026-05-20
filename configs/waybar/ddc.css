@@ -1,29 +1,26 @@
 /* DDC Module Styles
- * This file should be imported into your main waybar style.css:
- * @import "./ddcnixos-upgrade.css";
- *
- * Or the contents can be merged manually.
+ * @import "./ddc.css";
  */
 
 #custom-ddc-brightness {
-  background: @base;
+  background: @bg-base;
   opacity: 0.9;
   padding: 0px 10px;
   margin: 3px 0px;
   margin-top: 15px;
-  border: 2px solid @pine;
+  border: 2px solid @border;
   border-radius: 8px 8px 8px 8px;
   margin-right: 10px;
 }
 
 #custom-ddc-brightness.auto {
-  color: @text;
+  color: @fg-primary;
 }
 
 #custom-ddc-brightness.override {
-  color: @gold;
+  color: @warning;
 }
 
 #custom-ddc-brightness.inactive {
-  color: @surface;
+  color: @fg-disabled;
 }

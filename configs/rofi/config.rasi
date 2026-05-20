@@ -1,9 +1,8 @@
-configuration{
+configuration {
     modi: "run,drun,window";
-    icon-theme: "Oranchelo";
     show-icons: true;
     terminal: "ghostty";
-    drun-display-format: "{icon} {name}";
+    drun-display-format: "{name}";
     location: 0;
     disable-history: false;
     hide-scrollbar: true;
@@ -13,3 +12,5 @@ configuration{
     display-Network: " 󰤨  Network";
     sidebar-mode: true;
 }
+
+@theme "kanagawa-wave"

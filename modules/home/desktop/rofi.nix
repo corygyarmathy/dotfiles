@@ -12,10 +12,8 @@ in
   options.cg.home.rofi.enable = lib.mkEnableOption "Rofi launcher";
 
   config = lib.mkIf cfg.enable {
-    xdg.configFile."rofi/config.rasi".source = ../../../configs/rofi/config.rasi;
-
-    xdg.dataFile."rofi/themes" = {
-      source = ../../../configs/rofi/themes;
+    xdg.configFile."rofi" = {
+      source = ../../../configs/rofi;
       recursive = true;
     };
 

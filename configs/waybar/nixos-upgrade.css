@@ -1,16 +1,13 @@
 /* NixOS Upgrade Waybar Module Styles
- * This file should be imported into your main waybar style.css:
  * @import "./nixos-upgrade.css";
- *
- * Or the contents can be merged manually.
  */
 
 #custom-nixos-upgrade {
   padding: 0 10px;
   margin: 3px 0px;
   margin-top: 15px;
-  border: 2px solid @pine;
-  background: @base;
+  border: 2px solid @border;
+  background: @bg-base;
   opacity: 0.9;
   border-radius: 8px 8px 8px 8px;
   margin-right: 10px;
@@ -26,65 +23,45 @@
 }
 
 #custom-nixos-upgrade.up-to-date {
-  color: @green;
+  color: @success;
 }
 
 /* Updates available - no reboot needed */
 #custom-nixos-upgrade.updates-available {
-  color: @gold;
+  color: @warning;
 }
 
 /* Build complete, ready to apply */
 #custom-nixos-upgrade.ready {
-  color: @green;
+  color: @success;
 }
 
 /* Reboot required after applying */
 #custom-nixos-upgrade.reboot-needed {
-  color: @love;
+  color: @danger;
   font-weight: bold;
 }
 
 /* Checking for updates */
 #custom-nixos-upgrade.checking {
-  color: @foam;
+  color: @info;
   animation: nixos-pulse 2s ease-in-out infinite;
 }
 
 /* Building in background */
 #custom-nixos-upgrade.building {
-  color: @gold;
+  color: @warning;
   animation: nixos-pulse 2s ease-in-out infinite;
 }
 
 /* Applying updates */
 #custom-nixos-upgrade.applying {
-  color: @iris;
+  color: @secondary;
   animation: nixos-blink 1s linear infinite;
 }
 
 /* Error state */
 #custom-nixos-upgrade.error {
-  color: @love;
-  background: @highlightMed;
+  color: @danger;
+  background: @bg-raised;
 }
-
-/* @keyframes pulse { */
-/*   0%, */
-/*   100% { */
-/*     opacity: 1; */
-/*   } */
-/*   50% { */
-/*     opacity: 0.6; */
-/*   } */
-/* } */
-/**/
-/* @keyframes blink { */
-/*   0%, */
-/*   100% { */
-/*     opacity: 1; */
-/*   } */
-/*   50% { */
-/*     opacity: 0.3; */
-/*   } */
-/* } */

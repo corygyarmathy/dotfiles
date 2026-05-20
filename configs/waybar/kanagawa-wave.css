@@ -1,0 +1,63 @@
+/*
+ * Waybar Color Theme: Kanagawa Wave
+ * Source: https://github.com/rebelot/kanagawa.nvim (wave variant)
+ *
+ * This file maps the Kanagawa palette to functional color roles.
+ * To switch themes, create a new file with the same @define-color names
+ * and swap the @import in style.css. No other files need to change.
+ *
+ * Naming convention:
+ *   bg-*         → background surfaces (layered dark to light)
+ *   fg-*         → text colors (primary, secondary, disabled)
+ *   border       → default border/separator color
+ *   accent       → primary accent (borders, prominent UI elements)
+ *   danger       → errors, critical states, destructive actions
+ *   warning      → warnings, caution, pending changes
+ *   success      → healthy, complete, positive states
+ *   info         → informational, neutral-active states
+ *   secondary    → secondary accent (less prominent than accent)
+ *   highlight    → media, decorative, attention-drawing
+ */
+
+/* ── Backgrounds ──────────────────────────────────────────────────── */
+/* sumiInk0: darkest surface — module backgrounds, tooltips */
+@define-color bg-base             #16161D;
+/* sumiInk1: default background — slightly lighter layer */
+@define-color bg-surface          #1F1F28;
+/* sumiInk2: tooltip borders, overlays */
+@define-color bg-overlay          #2A2A37;
+/* waveBlue1: hover backgrounds, visual selection */
+@define-color bg-hover            #223249;
+/* sumiInk3: elevated surfaces, error backgrounds */
+@define-color bg-raised           #363646;
+
+/* ── Foreground ───────────────────────────────────────────────────── */
+/* fujiWhite: primary text */
+@define-color fg-primary          #DCD7BA;
+/* oldWhite: secondary/dimmed text */
+@define-color fg-secondary        #C8C093;
+/* sumiInk4: disabled/inactive text, inactive workspace indicators */
+@define-color fg-disabled         #54546D;
+
+/* ── Border ───────────────────────────────────────────────────────── */
+/* sumiInk4: structural borders and separators */
+@define-color border              #54546D;
+
+/* ── Accent ───────────────────────────────────────────────────────── */
+/* crystalBlue: primary accent — module borders, clock bg, prominent UI */
+@define-color accent-primary      #6A9589;
+@define-color accent-secondary    #7FB4CA;
+
+/* ── Semantic states ──────────────────────────────────────────────── */
+/* autumnRed / samuraiRed: errors, critical temps, disconnected */
+@define-color danger              #C34043;
+/* roninYellow: warnings, overrides, updates available */
+@define-color warning             #FF9E3B;
+/* springGreen: success, up-to-date, ready */
+@define-color success             #98BB6C;
+/* springBlue: informational, cpu, battery, checking */
+@define-color info                #7E9CD8;
+/* oniViolet: secondary accent — disk, audio, applying */
+@define-color secondary           #957FB8;
+/* sakuraPink: highlight/decorative — media player */
+@define-color highlight           #D27E99;
