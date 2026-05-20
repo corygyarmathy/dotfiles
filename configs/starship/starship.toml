@@ -8,6 +8,7 @@ format = """
 [](bg_dark)\
 $os\
 $username\
+$hostname\
 $shell\
 $sudo\
 [](bg:accent fg:bg_dark)\
@@ -158,7 +159,13 @@ NixOS = ""
 show_always = false
 style_user = "bg:bg_dark fg:fg"
 style_root = "bg:bg_dark fg:fg"
-format = '[ $user]($style)'
+format = '[ $user@]($style)'
+
+[hostname]
+disabled = false
+ssh_only = true
+style = "bg:bg_dark fg:fg"
+format = '[$hostname]($style)'
 
 [shell]
 disabled = false
