@@ -121,23 +121,24 @@
               # Allow unfree packages
               nixpkgs.config.allowUnfree = true;
             }
-          ]
-          # Desktop-specific modules (home-manager, stylix)
-          # Only included for non-server hosts
-          ++ nixpkgs.lib.optionals (!isServer) [
+
+            # Home-manager for all hosts
             home-manager.nixosModules.home-manager
-            stylix.nixosModules.stylix
             {
-              # Home-manager settings
               home-manager = {
                 useGlobalPkgs = true;
                 useUserPackages = true;
                 extraSpecialArgs = { inherit inputs self; };
                 sharedModules = [
                   sops-nix.homeManagerModules.sops
+                  stylix.homeModules.stylix
                 ];
               };
             }
+          ]
+          ++ nixpkgs.lib.optionals (!isServer) [
+            stylix.nixosModules.stylix
+            { stylix.homeManagerIntegration.autoImport = false; }
           ]
           ++ extraModules;
         };

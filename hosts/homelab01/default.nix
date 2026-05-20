@@ -703,9 +703,8 @@
     mutableUsers = false;
   };
 
-  # No home-manager for server - keep it simple
-  # If you later want user-specific config, add:
-  # home-manager.users.coryg = import ./home.nix;
+  # Home-manager configuration for this user
+  home-manager.users.coryg = import ./home.nix;
 
   # ============================================================================
   # System Version
