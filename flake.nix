@@ -7,9 +7,7 @@
     nixpkgs-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
 
-    nixpkgs-kavita = {
-      url = "github:nevivurn/nixpkgs/update/kavita";
-    };
+    nixpkgs-kavita.url = "github:nevivurn/nixpkgs/update/kavita";
 
     # Home Manager
     home-manager.url = "github:nix-community/home-manager";
@@ -19,10 +17,8 @@
     hardware.url = "github:nixos/nixos-hardware";
 
     # Theming
-    stylix = {
-      url = "github:nix-community/stylix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    stylix.url = "github:nix-community/stylix";
+    stylix.inputs.nixpkgs.follows = "nixpkgs";
 
     # Secrets management
     sops-nix.url = "github:Mic92/sops-nix";
@@ -86,9 +82,7 @@
             stylix.nixosModules.stylix # Loaded here so all hosts recognize Stylix syntax
 
             # Apply custom overlays
-            {
-              nixpkgs.overlays = builtins.attrValues self.overlays;
-            }
+            { nixpkgs.overlays = builtins.attrValues self.overlays; }
 
             # Shared configuration for all hosts
             {
@@ -155,16 +149,14 @@
         # Desktop: Dell XPS 15 9500
         xps15 = mkHost {
           hostname = "xps15";
-          system = "x86_64-linux";
           extraModules = [
             hardware.nixosModules.dell-xps-15-9500-nvidia
           ];
         };
 
-        # Server: Dell Optiplex 5080 (Homelab - *arr stack)
+        # Server: Dell Optiplex 5080
         homelab01 = mkHost {
           hostname = "homelab01";
-          system = "x86_64-linux";
           extraModules = [
             hardware.nixosModules.common-cpu-intel
             hardware.nixosModules.common-pc
@@ -172,10 +164,9 @@
           ];
         };
 
-        # Server: HP Elitedesk 800 G6 SFF (Homelab - NAS + services)
+        # Server: HP Elitedesk 800 G6 SFF
         homelab02 = mkHost {
           hostname = "homelab02";
-          system = "x86_64-linux";
           extraModules = [
             hardware.nixosModules.common-cpu-intel
             hardware.nixosModules.common-pc
