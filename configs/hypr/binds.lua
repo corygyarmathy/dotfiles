@@ -9,7 +9,6 @@ local mod = "SUPER"
 hl.bind(mod .. " + T", hl.dsp.exec_cmd("ghostty"))
 hl.bind(mod .. " + B", hl.dsp.exec_cmd("vivaldi"))
 hl.bind(mod .. " + E", hl.dsp.exec_cmd("ghostty --working-directory=~ -e yazi"))
-hl.bind(mod .. " + U", hl.dsp.exec_cmd("XDG_CURRENT_DESKTOP=gnome gnome-control-center"))
 hl.bind(mod .. " + R", hl.dsp.exec_cmd("rofi -show drun -show-icons"))
 hl.bind(mod .. " + W", hl.dsp.exec_cmd("rofi -show window -show-icons"))
 hl.bind(mod .. " + S", hl.dsp.exec_cmd("pgrep hyprlock || hyprlock"))
