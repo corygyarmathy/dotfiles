@@ -29,7 +29,7 @@ hl.bind(mod .. " + SHIFT + N", hl.dsp.group.next())
 hl.bind(mod .. " + SHIFT + P", hl.dsp.group.prev())
 
 ---------------------------------------------------------------------------
--- Focus navigation (vim-style, matching Colemak-DHm muscle memory)
+-- Focus navigation (vim-motions)
 ---------------------------------------------------------------------------
 hl.bind(mod .. " + H", hl.dsp.focus({ direction = "left" }))
 hl.bind(mod .. " + L", hl.dsp.focus({ direction = "right" }))
