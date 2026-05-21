@@ -60,7 +60,6 @@
           hostname,
           system ? "x86_64-linux",
           extraModules ? [ ],
-          isServer ? false,
         }:
         nixpkgs.lib.nixosSystem {
           inherit system;
@@ -81,9 +80,10 @@
             # Host-specific configuration
             ./hosts/${hostname}
 
-            # Core module systems
+            # Core module schemas loaded globally
             sops-nix.nixosModules.sops
             disko.nixosModules.disko
+            stylix.nixosModules.stylix # Loaded here so all hosts recognize Stylix syntax
 
             # Apply custom overlays
             {
@@ -122,23 +122,29 @@
               nixpkgs.config.allowUnfree = true;
             }
 
-            # Home-manager for all hosts
+            # Global Home Manager Configuration Setup
             home-manager.nixosModules.home-manager
-            {
-              home-manager = {
-                useGlobalPkgs = true;
-                useUserPackages = true;
-                extraSpecialArgs = { inherit inputs self; };
-                sharedModules = [
-                  sops-nix.homeManagerModules.sops
-                  stylix.homeModules.stylix
-                ];
-              };
-            }
-          ]
-          ++ nixpkgs.lib.optionals (!isServer) [
-            stylix.nixosModules.stylix
-            { stylix.homeManagerIntegration.autoImport = false; }
+
+            # Convert this block into an inline NixOS module function.
+            # This gives native, clean access to the host's root `config` and `lib`.
+            (
+              { config, lib, ... }:
+              {
+                home-manager = {
+                  useGlobalPkgs = true;
+                  useUserPackages = true;
+                  extraSpecialArgs = { inherit inputs self; };
+
+                  # Dynamically construct our shared Home Manager modules list
+                  sharedModules = [
+                    sops-nix.homeManagerModules.sops
+                  ]
+                  ++ lib.optional (!config.cg.stylix.enable) inputs.stylix.homeModules.stylix;
+                  # ^ If system-level stylix is NOT enabled (like on servers),
+                  # safely inject the schema so `stylix-hm.nix` doesn't crash!
+                };
+              }
+            )
           ]
           ++ extraModules;
         };
@@ -159,7 +165,6 @@
         homelab01 = mkHost {
           hostname = "homelab01";
           system = "x86_64-linux";
-          isServer = true;
           extraModules = [
             hardware.nixosModules.common-cpu-intel
             hardware.nixosModules.common-pc
@@ -171,7 +176,6 @@
         homelab02 = mkHost {
           hostname = "homelab02";
           system = "x86_64-linux";
-          isServer = true;
           extraModules = [
             hardware.nixosModules.common-cpu-intel
             hardware.nixosModules.common-pc

@@ -1,12 +1,15 @@
 # Stylix home-manager settings
 {
+  inputs,
   config,
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.stylix;
-in {
+in
+{
   options.cg.home.stylix.enable = lib.mkEnableOption "Stylix home-manager theming";
 
   # TODO: investigate enabling this when the main cg.stylix option is enabled
