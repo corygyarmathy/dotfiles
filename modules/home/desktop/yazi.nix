@@ -41,6 +41,7 @@ in
       yazi # File explorer
       ffmpeg # Video thumbnails
       _7zz # 7-Zip
+      jq # JSON preview
       poppler # PDF preview
       fd # File searching
       ripgrep # File content searching
