@@ -14,6 +14,9 @@ hl.bind(mod .. " + R", hl.dsp.exec_cmd("rofi -show drun -show-icons"))
 hl.bind(mod .. " + W", hl.dsp.exec_cmd("rofi -show window -show-icons"))
 hl.bind(mod .. " + S", hl.dsp.exec_cmd("pgrep hyprlock || hyprlock"))
 
+hl.bind(mod .. " + P", hl.dsp.exec_cmd("project-launcher pick"))
+hl.bind(mod .. " + Q", hl.dsp.exec_cmd("project-launcher close"))
+
 ---------------------------------------------------------------------------
 -- Window management
 ---------------------------------------------------------------------------

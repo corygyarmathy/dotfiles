@@ -41,6 +41,12 @@
     playerctl.enable = true;
     yazi.enable = true;
 
+    project-launcher = {
+      enable = true;
+      monitor = "desc:Dell Inc. DELL U3419W 1Y9Q5T2"; # ultrawide
+      # directories defaults to [ "~/Projects" "~/git" ]; override if needed
+    };
+
     # Desktop Services
     dunst.enable = true; # Notification daemon (extracted from hyprland)
     udiskie.enable = true; # USB automounting (extracted from hyprland)

@@ -25,6 +25,9 @@ pkgs: {
   # Media player waybar module
   waybar-media = pkgs.callPackage ./waybar-media { };
 
+  # Project launcher / picker
+  project-launcher = pkgs.callPackage ./project-launcher { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }

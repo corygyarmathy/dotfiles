@@ -15,6 +15,7 @@
   // Module placement
   "modules-left": [
     "hyprland/workspaces",
+    "custom/project",
     "tray",
     "idle_inhibitor",
     "privacy",
@@ -74,6 +75,13 @@
     "on-click-middle": "playerctl previous",
     "on-scroll-up": "playerctl volume 0.05+",
     "on-scroll-down": "playerctl volume 0.05-",
+  },
+
+  "custom/project": {
+    "exec": "project-launcher waybar",
+    "return-type": "json",
+    "tooltip": true,
+    "on-click": "project-launcher pick",
   },
 
   // ===========================================================================
