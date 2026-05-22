@@ -27,7 +27,7 @@ window#waybar {
 }
 
 tooltip {
-  background: @bg-base;
+  background: @bg-surface;
   border-radius: 4px;
   border-width: 2px;
   border-style: solid;
@@ -55,7 +55,7 @@ tooltip {
 }
 
 #workspaces button.urgent {
-  color: @bg-base;
+  color: @bg-surface;
   background: @border;
   border-radius: 8px;
 }
@@ -90,7 +90,7 @@ tooltip {
 #idle_inhibitor,
 #privacy,
 #backlight {
-  background: @bg-base;
+  background: @bg-surface;
   opacity: 0.9;
   padding: 0px 10px;
   margin: 3px 0px;
@@ -157,7 +157,7 @@ tooltip {
 }
 
 #workspaces {
-  background: @bg-base;
+  background: @bg-surface;
   border-radius: 8px;
   margin-left: 10px;
   padding-right: 0px;
@@ -189,7 +189,7 @@ window#waybar.empty #window {
 
 #clock {
   color: @fg-primary;
-  background: @bg-base;
+  background: @bg-surface;
   border-radius: 8px;
 }
 
