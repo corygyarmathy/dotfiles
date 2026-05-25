@@ -128,7 +128,7 @@
     miniflux.enable = true;
     wallabag.enable = true;
 
-    vikunja.enable = true; # Todo app
+    vikunja.enable = false; # Todo app
 
     # -------------------------------------------------------------------------
     # Reverse Proxy (Caddy)
@@ -247,12 +247,6 @@
           localOnly = false; # listeners need external access for mobile apps
           rateLimitProfile = "media";
         };
-
-        tasks = {
-          subdomain = "tasks";
-          port = 3456;
-          localOnly = false; # you'll want mobile access
-        };
       };
     };
 
@@ -342,10 +336,6 @@
         {
           name = "audiobookshelf";
           url = "https://audiobookshelf.gyarmathy.co";
-        }
-        {
-          name = "vikunja";
-          url = "https://tasks.gyarmathy.co";
         }
       ];
     };

@@ -128,10 +128,6 @@ let
       domain = "audiobookshelf.${domain}";
       answer = servers.homelab01;
     }
-    {
-      domain = "tasks.${domain}";
-      answer = servers.homelab01;
-    }
 
     # Services on homelab02
     {

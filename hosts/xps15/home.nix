@@ -99,7 +99,7 @@
     proton-vpn-cli
     proton-pass
     protonmail-desktop
-    super-productivity
+    todoist-electron
 
     # Development
     gcc
