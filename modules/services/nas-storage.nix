@@ -120,12 +120,12 @@ in
             chmod 2775 "${cfg.poolPath}/$dir"
           done
 
-          # Set default ACLs on all managed directories so that any new
-          # files/directories created inside them (e.g. via File Browser,
-          # manual uploads, or containers) inherit group read/write
-          # regardless of the creating user's umask.
+          # Set BOTH access ACL (grants access to this directory)
+          # and default ACL (inherited by new children)
+          ${pkgs.acl}/bin/setfacl -m g::rwX "${cfg.poolPath}"
           ${pkgs.acl}/bin/setfacl -d -m g::rwX "${cfg.poolPath}"
           for dir in ${lib.concatStringsSep " " dirs}; do
+            ${pkgs.acl}/bin/setfacl -m g::rwX "${cfg.poolPath}/$dir"
             ${pkgs.acl}/bin/setfacl -d -m g::rwX "${cfg.poolPath}/$dir"
           done
 
