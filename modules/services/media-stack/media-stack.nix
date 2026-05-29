@@ -91,7 +91,7 @@ in
 
       nfsExportPath = lib.mkOption {
         type = lib.types.str;
-        default = "/export/media";
+        default = "/srv/media";
         description = "Export path on the NFS server";
       };
 
