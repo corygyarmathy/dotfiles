@@ -69,8 +69,8 @@ in
     # ========================================================================
     systemd.services.nas-directory-setup = {
       description = "Create NAS directory structure on ZFS pool";
-      after = [ "zfs-mount.target" ];
-      requires = [ "zfs-mount.target" ];
+      after = [ "zfs.target" ];
+      requires = [ "zfs.target" ];
       wantedBy = [ "multi-user.target" ];
 
       unitConfig = {
