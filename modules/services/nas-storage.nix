@@ -70,11 +70,11 @@ in
     systemd.services.nas-directory-setup = {
       description = "Create NAS directory structure on ZFS pool";
       after = [ "zfs-mount.target" ];
-      wants = [ "zfs-mount.target" ];
+      requires = [ "zfs-mount.target" ];
       wantedBy = [ "multi-user.target" ];
 
       unitConfig = {
-        ConditionPathIsMountPoint = cfg.poolPath;
+        RequiresMountsFor = cfg.poolPath; # blocks until path is actually mounted
       };
 
       serviceConfig = {
