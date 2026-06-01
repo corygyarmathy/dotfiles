@@ -77,7 +77,7 @@
   home = {
     username = "coryg";
     homeDirectory = "/home/coryg";
-    stateVersion = "24.11";
+    stateVersion = "26.05";
   };
 
   # ============================================================================

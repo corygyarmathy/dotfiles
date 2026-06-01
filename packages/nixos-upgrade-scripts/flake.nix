@@ -24,7 +24,7 @@
         # Define the revision (commit hash or branch) for the older nixpkgs source
         # Using a stable branch like nixos-23.11 is often reliable for older versions.
         # You could also find a specific commit hash from nixos-unstable before the breakage.
-        stableNixpkgsRev = "nixos-24.11";
+        stableNixpkgsRev = "nixos-26.05";
 
         # Fetch the older nixpkgs source
         stableNixpkgs =
@@ -32,7 +32,7 @@
             (fetchTarball {
               url = "https://github.com/NixOS/nixpkgs/archive/${stableNixpkgsRev}.tar.gz";
               sha256 = "0lc1d2hh5bmzqv7z1bbx8xdxl8p2lvvc7f70hsb2h8xxk9c6lzrx"; # Optional but recommended for reproducibility
-              # You can get the sha256 by running `nix-prefetch-url https://github.com/NixOS/nixpkgs/archive/nixos-24.11.tar.gz`
+              # You can get the sha256 by running `nix-prefetch-url https://github.com/NixOS/nixpkgs/archive/nixos-26.05.tar.gz`
             })
             {
               inherit system;
