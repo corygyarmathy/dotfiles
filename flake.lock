@@ -209,6 +209,22 @@
         "url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"
       }
     },
+    "nixpkgs-faugus-launcher": {
+      "locked": {
+        "lastModified": 1780206432,
+        "narHash": "sha256-hRFN4a0ZUVA6AdRASmf+Pa19SgwMH7EopxQgMfYNNrk=",
+        "owner": "rogreat",
+        "repo": "nixpkgs",
+        "rev": "af3091eccaf18eda979a26b951e556eb4ce232b8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rogreat",
+        "ref": "faugus-launcher",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-kavita": {
       "locked": {
         "lastModified": 1779119340,
@@ -304,6 +320,7 @@
         "hardware": "hardware",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs_2",
+        "nixpkgs-faugus-launcher": "nixpkgs-faugus-launcher",
         "nixpkgs-kavita": "nixpkgs-kavita",
         "nixpkgs-stable": "nixpkgs-stable",
         "nixpkgs-unstable-small": "nixpkgs-unstable-small",

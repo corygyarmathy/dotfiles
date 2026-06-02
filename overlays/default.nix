@@ -20,6 +20,14 @@
         system = final.system;
       }).kavita;
 
+    # Use faugus-launcher 1.20.4 from unmerged nixpkgs PR #508497 for security patches.
+    # https://github.com/NixOS/nixpkgs/pull/508497
+    # TODO: Remove this overlay once the PR is merged and reaches our channel.
+    faugus-launcher =
+      (import inputs.nixpkgs-faugus-launcher {
+        system = final.system;
+      }).faugus-launcher;
+
     # Disable openldap tests only for 32-bit builds (triggered by Steam's
     # multilib support). The i686 build isn't cached by Hydra and the
     # syncreplication test fails in the Nix sandbox.
