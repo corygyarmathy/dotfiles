@@ -1,7 +1,6 @@
 -- Prose-friendly soft wrapping
 vim.opt_local.wrap = true
 vim.opt_local.linebreak = true -- wrap at word boundaries, not mid-word
-vim.opt_local.breakindent = true -- keep wrapped lines visually indented
 
 -- Centre + cap width, but only inside the notes vault
 local notes = vim.fn.expand("~/git/personal-notes")

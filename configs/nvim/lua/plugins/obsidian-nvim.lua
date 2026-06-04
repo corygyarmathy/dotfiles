@@ -25,10 +25,10 @@ return {
 		opts = {
 			workspaces = {
 				{ name = "personal", path = "~/git/personal-notes" },
+			picker = { name = "snacks.pick" },
+			attachments = { img_folder = "Files" },
+			ui = { enable = false },
 			},
-			attachments = { folder = "Files" },
-			ui = { enable = false }, -- render-markdown does the rendering
-			legacy_commands = false,
 
 			-- Optional: title-based filenames instead of Zettelkasten timestamp IDs
 			-- note_id_func = function(title)
