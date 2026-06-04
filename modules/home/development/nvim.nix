@@ -44,7 +44,7 @@ in
       basedpyright
       bash-language-server
       docker-compose-language-service
-      dockerfile-language-server-nodejs
+      nodejs
       gopls
       lua-language-server
       marksman

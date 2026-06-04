@@ -8,7 +8,7 @@ return {
 			-- entry points (work from anywhere; they load the plugin + open notes)
 			{ "<leader>oo", "<cmd>Obsidian quick_switch<cr>", desc = "Quick switch (open note)" },
 			{ "<leader>os", "<cmd>Obsidian search<cr>", desc = "Search notes (grep)" },
-			{ "<leader>on", "<cmd>Obsidian new<cr>", desc = "New note" },
+			{ "<leader>on", "<cmd>Obsidian new_from_template<cr>", desc = "New note from template" },
 			{ "<leader>oj", "<cmd>Obsidian today<cr>", desc = "Today's daily note" },
 			{ "<leader>ot", "<cmd>Obsidian tags<cr>", desc = "Search tags" },
 			{ "<leader>oT", "<cmd>Obsidian template<cr>", desc = "Insert template" },
@@ -23,20 +23,31 @@ return {
 		---@module 'obsidian'
 		---@type obsidian.config
 		opts = {
-			workspaces = {
-				{ name = "personal", path = "~/git/personal-notes" },
+			workspaces = { { name = "personal", path = "~/git/personal-notes" } },
 			picker = { name = "snacks.pick" },
 			attachments = { img_folder = "Files" },
 			ui = { enable = false },
+
+			-- keep your frontmatter, just don't add `id`
+			frontmatter = {
+				func = function(note)
+					local out = { aliases = note.aliases, tags = note.tags }
+					for k, v in pairs(note.metadata or {}) do
+						out[k] = v -- preserve custom keys like `parent`
+					end
+					return out
+				end,
+				sort = { "aliases", "tags", "parent" },
 			},
 
-			-- Optional: title-based filenames instead of Zettelkasten timestamp IDs
-			-- note_id_func = function(title)
-			--   if title then
-			--     return title:gsub(" ", "-"):gsub("[^A-Za-z0-9-]", ""):lower()
-			--   end
-			--   return tostring(os.time())
-			-- end,
+			templates = { folder = "Templates" },
+
+			link = { style = "wiki", format = "shortest" },
+
+			sync = {
+				enabled = true,
+				configs = {}, -- safe even if the desktop app is occasionally open on this machine
+			},
 		},
 	},
 
