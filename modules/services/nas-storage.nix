@@ -102,6 +102,7 @@ in
             "lightnovels"
             "audiobooks"
             "podcasts"
+            "whisparr"
           ];
         in
         ''

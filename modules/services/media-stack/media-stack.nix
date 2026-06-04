@@ -161,6 +161,7 @@ in
       "d ${cfg.dataPath}/comics 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/manga 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/lightnovels 2775 ${cfg.user} ${cfg.group} -"
+      "d ${cfg.dataPath}/whisparr 2775 ${cfg.user} ${cfg.group} -"
     ];
 
     # Create the arr-network before any containers start
