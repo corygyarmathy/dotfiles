@@ -18,7 +18,7 @@ return {
 		attachments = {
 			img_folder = "Files",
 		},
-		-- Handled by markdonw-render
+		-- Handled by markdown-render
 		ui = { enable = false },
 	},
 	keys = {
