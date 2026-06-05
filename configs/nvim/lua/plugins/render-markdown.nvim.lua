@@ -4,15 +4,12 @@ return {
 	---@type render.md.UserConfig
 	opts = {
 		pipe_table = { cell = "trimmed" }, -- or "overlay" if table alignment matters more than conceal
-		quote = { repeat_linebreak = true },
+		pipe_table = { cell = "trimmed" },
+		quote = { repeat_linebreak = false }, -- stops from clobbering first character in line wrapped-paragraph
 		completions = { lsp = { enabled = true } },
 		win_options = {
 			conceallevel = { default = 0, rendered = 3 },
 			concealcursor = { default = "", rendered = "" },
-			-- wrapped quote/callout lines indent 2 cols instead of clobbering the first char
-			showbreak = { default = "", rendered = "  " },
-			breakindent = { default = false, rendered = true },
-			breakindentopt = { default = "", rendered = "" },
 		},
 		link = { wiki = { conceal_destination = true, icon = "󱗖 " } },
 	},
