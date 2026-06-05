@@ -25,7 +25,7 @@ return {
 		opts = {
 			workspaces = { { name = "personal", path = "~/git/personal-notes" } },
 			picker = { name = "snacks.pick" },
-			attachments = { img_folder = "Files" },
+			attachments = { folder = "Files" },
 			ui = { enable = false },
 
 			-- keep your frontmatter, just don't add `id`
