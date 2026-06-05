@@ -28,6 +28,9 @@ pkgs: {
   # Project launcher / picker
   project-launcher = pkgs.callPackage ./project-launcher { };
 
+  # Obsidian Sync headless CLI (`ob`)
+  obsidian-headless = pkgs.callPackage ./obsidian-headless { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }

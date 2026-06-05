@@ -45,7 +45,7 @@ return {
 			link = { style = "wiki", format = "shortest" },
 
 			sync = {
-				enabled = true,
+				enabled = false, -- handled by obsidian-sync.nix systemd service
 				configs = {}, -- safe even if the desktop app is occasionally open on this machine
 			},
 		},

@@ -41,6 +41,8 @@
     playerctl.enable = true;
     yazi.enable = true;
 
+    obsidian-sync.enable = true;
+
     project-launcher = {
       enable = true;
       monitor = "desc:Dell Inc. DELL U3419W 1Y9Q5T2"; # ultrawide
