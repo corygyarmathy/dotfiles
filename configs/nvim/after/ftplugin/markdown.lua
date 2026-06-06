@@ -2,6 +2,11 @@
 vim.opt_local.wrap = true
 vim.opt_local.linebreak = true -- wrap at word boundaries, not mid-word
 
+-- Wrap lists preserving indents
+vim.opt_local.breakindent = true
+vim.opt_local.breakindentopt = "list:-1"
+vim.opt_local.formatlistpat = [[^\s*[0-9]\+[.)]\s\+\|^\s*[-*+]\s\+\|^\s*>\s*]] -- Pattern for: - and >
+
 -- Centre + cap width, but only inside the notes vault
 local notes = vim.fn.expand("~/git/personal-notes")
 local path = vim.api.nvim_buf_get_name(0)
