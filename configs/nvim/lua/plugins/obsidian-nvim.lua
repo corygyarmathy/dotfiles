@@ -27,6 +27,7 @@ return {
 			picker = { name = "snacks.pick" },
 			attachments = { folder = "Files" },
 			ui = { enable = false },
+			legacy_commands = false, -- Just to suppress the annoying warning every startup
 
 			-- keep your frontmatter, just don't add `id`
 			frontmatter = {
