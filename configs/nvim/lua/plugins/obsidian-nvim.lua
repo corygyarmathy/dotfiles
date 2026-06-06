@@ -29,7 +29,7 @@ return {
 			ui = { enable = false },
 			legacy_commands = false, -- Just to suppress the annoying warning every startup
 
-			-- keep your frontmatter, just don't add `id`
+			-- keep basic frontmatter, just don't have `id`
 			frontmatter = {
 				func = function(note)
 					local out = { aliases = note.aliases, tags = note.tags }
