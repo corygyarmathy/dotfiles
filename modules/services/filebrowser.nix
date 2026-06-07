@@ -53,6 +53,13 @@ in
       }
     ];
 
+    # The upstream services.filebrowser module emits a tmpfiles rule to ensure
+    # settings.root exists, hardcoded to 0700. Because root is the shared pool
+    # (/srv/media), that 0700 reasserts on every `nixos-rebuild switch` and
+    # locks the media group (jellyfin, kavita, *arr) out of traversing it.
+    # Force the mode to match nas-storage's 2775 instead of overriding it.
+    systemd.tmpfiles.settings.filebrowser."${stack.dataPath}".d.mode = lib.mkForce "2775";
+
     # Use the upstream NixOS module
     services.filebrowser = {
       enable = true;
