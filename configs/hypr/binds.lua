@@ -47,6 +47,12 @@ hl.bind(mod .. " + SHIFT + K", hl.dsp.window.move({ direction = "u" }))
 hl.bind(mod .. " + SHIFT + J", hl.dsp.window.move({ direction = "d" }))
 
 ---------------------------------------------------------------------------
+-- Move windows (across next or previous workspaces)
+---------------------------------------------------------------------------
+hl.bind(mod .. " + SHIFT + bracketleft", hl.dsp.window.move({ workspace = "m-1" }))
+hl.bind(mod .. " + SHIFT + bracketright", hl.dsp.window.move({ workspace = "m+1" }))
+
+---------------------------------------------------------------------------
 -- Resize submap
 ---------------------------------------------------------------------------
 hl.bind(mod .. " + SHIFT + R", hl.dsp.submap("resize"))
@@ -74,10 +80,11 @@ hl.bind(mod .. " + bracketleft", hl.dsp.focus({ workspace = "m-1" }))
 hl.bind(mod .. " + bracketright", hl.dsp.focus({ workspace = "m+1" }))
 
 -- Cross-monitor focus and workspace moves
-hl.bind(mod .. " + SHIFT + bracketleft", hl.dsp.focus({ monitor = "l" }))
-hl.bind(mod .. " + SHIFT + bracketright", hl.dsp.focus({ monitor = "r" }))
-hl.bind(mod .. " + SHIFT + ALT + bracketleft", hl.dsp.workspace.move({ monitor = "l" }))
-hl.bind(mod .. " + SHIFT + ALT + bracketright", hl.dsp.workspace.move({ monitor = "r" }))
+
+hl.bind(mod .. " + CTRL + bracketleft", hl.dsp.focus({ monitor = "l" }))
+hl.bind(mod .. " + CTRL + bracketright", hl.dsp.focus({ monitor = "r" }))
+hl.bind(mod .. " + CTRL + ALT + bracketleft", hl.dsp.workspace.move({ monitor = "l" }))
+hl.bind(mod .. " + CTRL + ALT + bracketright", hl.dsp.workspace.move({ monitor = "r" }))
 
 ---------------------------------------------------------------------------
 -- Scratchpad (special workspace)
