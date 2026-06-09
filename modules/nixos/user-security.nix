@@ -54,16 +54,5 @@ in
       # Enable polkit for privilege escalation prompts
       polkit.enable = true;
     };
-
-    # Automatic screen lock on idle (handled by hyprlock in your case)
-    # This is a backup via logind
-    services.logind = {
-      lidSwitch = "suspend";
-      lidSwitchExternalPower = "lock";
-      extraConfig = ''
-        IdleAction=lock
-        IdleActionSec=600
-      '';
-    };
   };
 }
