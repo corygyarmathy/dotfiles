@@ -72,6 +72,7 @@
       # Service ports are opened by individual service modules
       enable = true;
     };
+    user-security.enable = true;
   };
 
   # ============================================================================
