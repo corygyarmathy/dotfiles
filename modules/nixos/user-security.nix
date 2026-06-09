@@ -36,7 +36,20 @@ in
       };
 
       # Enable polkit for privilege escalation prompts
-      polkit.enable = true;
+      polkit = {
+        enable = true;
+        extraConfig = ''
+          // Allow the unprivileged fwupd-refresh service to refresh LVFS metadata
+          // without an active session (headless servers have no polkit auth agent).
+          polkit.addRule(function(action, subject) {
+            if ((action.id == "org.freedesktop.fwupd.refresh-remote" ||
+                 action.id == "org.freedesktop.fwupd.update-metadata") &&
+                subject.user == "fwupd-refresh") {
+              return polkit.Result.YES;
+            }
+          });
+        '';
+      };
     };
   };
 }
