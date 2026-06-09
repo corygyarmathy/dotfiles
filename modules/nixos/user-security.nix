@@ -35,22 +35,6 @@ in
         '';
       };
 
-      # Set password policies
-      pam.services.passwd.rules.password.pwquality = {
-        control = "required";
-        modulePath = "${pkgs.libpwquality}/lib/security/pam_pwquality.so";
-        settings = {
-          retry = "3";
-          minlen = "12";
-          difok = "3";
-          ucredit = "-1";
-          lcredit = "-1";
-          dcredit = "-1";
-          ocredit = "-1";
-          maxrepeat = "3";
-        };
-      };
-
       # Enable polkit for privilege escalation prompts
       polkit.enable = true;
     };
