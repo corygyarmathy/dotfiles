@@ -147,6 +147,7 @@
     httpie
     htop
     dig # domain information groper
+    small.bootdev-cli
 
     # Entertainment
     discord
