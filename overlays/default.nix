@@ -47,4 +47,12 @@
       config.allowUnfree = true;
     };
   };
+
+  # Access unstable-small packages via pkgs.unstable-small
+  unstable-small-packages = final: _prev: {
+    small = import inputs.nixpkgs-unstable-small {
+      system = final.system;
+      config.allowUnfree = true;
+    };
+  };
 }
