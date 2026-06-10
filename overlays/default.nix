@@ -12,14 +12,6 @@
     # });
     #
 
-    # Use Kavita 0.9.0 from unmerged nixpkgs PR #515309 for security patches.
-    # https://github.com/NixOS/nixpkgs/pull/515309
-    # TODO: Remove this overlay once the PR is merged and reaches our channel.
-    kavita =
-      (import inputs.nixpkgs-kavita {
-        system = final.system;
-      }).kavita;
-
     # Use faugus-launcher 1.20.4 from unmerged nixpkgs PR #508497 for security patches.
     # https://github.com/NixOS/nixpkgs/pull/508497
     # TODO: Remove this overlay once the PR is merged and reaches our channel.

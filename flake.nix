@@ -7,7 +7,6 @@
     nixpkgs-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-26.05";
 
-    nixpkgs-kavita.url = "github:nevivurn/nixpkgs/update/kavita";
     nixpkgs-faugus-launcher.url = "github:rogreat/nixpkgs/faugus-launcher";
 
     # Home Manager
