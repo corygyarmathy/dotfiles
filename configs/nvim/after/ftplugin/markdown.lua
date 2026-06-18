@@ -7,14 +7,8 @@ vim.opt_local.breakindent = true
 vim.opt_local.breakindentopt = "list:-1"
 vim.opt_local.formatlistpat = [[^\s*[0-9]\+[.)]\s\+\|^\s*[-*+]\s\+\|^\s*>\s*]] -- Pattern for: - and >
 
--- Centre + cap width, but only inside the notes vault
-local notes = vim.fn.expand("~/git/personal-notes")
-local path = vim.api.nvim_buf_get_name(0)
-if path ~= "" and path:sub(1, #notes) == notes then
-	pcall(function()
-		require("no-neck-pain").enable()
-	end)
-end
+-- Centre + cap width
+require("no-neck-pain").enable()
 
 -- Optional: spell-check (can be noisy with technical jargon)
 -- vim.opt_local.spell = true
