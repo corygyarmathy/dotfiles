@@ -23,7 +23,7 @@
     hyprland.enable = true;
     nvidia = {
       enable = true;
-      driverPackage = "beta";
+      driverPackage = "production";
     };
     stylix.enable = true;
     ddc.enable = true;
