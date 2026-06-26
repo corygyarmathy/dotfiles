@@ -149,6 +149,7 @@
     dig # domain information groper
     small.bootdev-cli
     claude-code # TUI Claude code (agentic AI coding assistant)
+    opencode
 
     # Entertainment
     discord
