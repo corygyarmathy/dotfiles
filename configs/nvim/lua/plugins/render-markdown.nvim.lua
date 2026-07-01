@@ -4,7 +4,6 @@ return {
 	---@type render.md.UserConfig
 	opts = {
 		pipe_table = { cell = "trimmed" }, -- or "overlay" if table alignment matters more than conceal
-		pipe_table = { cell = "trimmed" },
 		quote = { repeat_linebreak = true }, -- stops from clobbering first character in line wrapped-paragraph
 		completions = { lsp = { enabled = true } },
 		win_options = {
