@@ -138,7 +138,6 @@
     pandoc # Conversion between documentation formats
     wine-wayland
     winetricks
-    bottles # GUI-wine manager
     faugus-launcher # GUI wine manager
     age # Generate / encrypt with age keys
     tldr # man, but with practical examples instead
