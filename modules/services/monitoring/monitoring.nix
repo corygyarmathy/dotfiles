@@ -385,14 +385,15 @@ in
 
         services.prometheus = {
           enable = true;
+          globalConfig = {
+            scrape_interval = "1m";
+            scrape_timeout = "30s"; # was defaulting to 10s
+          };
           scrapeConfigs = [
             {
               job_name = "node";
-              static_configs = [
-                {
-                  targets = cfg.scrapeTargets;
-                }
-              ];
+              scrape_timeout = "45s"; # heavy: systemd + processes + textfile
+              static_configs = [ { targets = cfg.scrapeTargets; } ];
             }
             {
               job_name = "smartctl";
