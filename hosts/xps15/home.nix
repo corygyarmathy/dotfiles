@@ -144,6 +144,8 @@
     pavucontrol # Audio settings GUI # TODO: add to waybar on right click of audio module?
     jq # JSON processor
     xh # CLI for HTTP requests
+    bruno
+    bruno-cli
     htop
     dig # domain information groper
     small.bootdev-cli
