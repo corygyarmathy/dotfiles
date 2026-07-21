@@ -143,7 +143,7 @@
     tldr # man, but with practical examples instead
     pavucontrol # Audio settings GUI # TODO: add to waybar on right click of audio module?
     jq # JSON processor
-    httpie
+    xh # CLI for HTTP requests
     htop
     dig # domain information groper
     small.bootdev-cli
