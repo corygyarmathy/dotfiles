@@ -152,6 +152,8 @@ in
           dryRunFlag = if cfg.dryRun then "true" else "false";
           completePath = "${stack.dataPath}/downloads/complete";
           containerPrefix = "/data/downloads/complete";
+          # On-disk source of truth for how many torrents qBittorrent has.
+          btBackupPath = "${stack.configPath}/qbittorrent/qBittorrent/BT_backup";
         in
         ''
           set -euo pipefail
@@ -165,6 +167,7 @@ in
           CONTAINER_PREFIX="${containerPrefix}"
           FREELEECH_CAT="${cfg.freeleechCategory}"
           UNLINKED_CAT="${cfg.unlinkedCategory}"
+          BT_BACKUP_DIR="${btBackupPath}"
 
           echo "=== Private Torrent Cleanup ==="
           echo "Threshold: ''${MIN_FREE_GIB} GiB free"
@@ -211,14 +214,36 @@ in
             exit 1
           fi
 
-          # ── Fetch torrent list ─────────────────────────────────────────
-          ALL_TORRENTS=$(curl -sf "http://localhost:''${QBT_PORT}/api/v2/torrents/info" \
-            -b "$COOKIE_JAR" 2>/dev/null)
+          # ── Fetch torrent list (with readiness gate) ───────────────────
+          # SAFETY GATE (added after the 2026-07-25 incident): after a restart,
+          # qBittorrent accepts logins before its torrents finish loading, so the
+          # API can briefly report an empty/partial list. Acting on that could
+          # remove torrents whose data is perfectly fine. Wait until the API
+          # reports at least as many torrents as there are .torrent files in
+          # BT_backup (the on-disk source of truth) before proceeding.
+          EXPECTED_COUNT=$(find "$BT_BACKUP_DIR" -maxdepth 1 -name '*.torrent' 2>/dev/null | wc -l)
+          ALL_TORRENTS=""
+          API_COUNT=0
+          for attempt in $(seq 1 12); do
+            ALL_TORRENTS=$(curl -sf "http://localhost:''${QBT_PORT}/api/v2/torrents/info" -b "$COOKIE_JAR" || true)
+            API_COUNT=$(printf '%s' "$ALL_TORRENTS" | jq 'length' 2>/dev/null || echo 0)
+            case "$API_COUNT" in ""|*[!0-9]*) API_COUNT=0 ;; esac
+            if [ "$API_COUNT" -gt 0 ] && { [ "$EXPECTED_COUNT" -eq 0 ] || [ "$API_COUNT" -ge "$EXPECTED_COUNT" ]; }; then
+              break
+            fi
+            echo "qBittorrent not ready (loaded $API_COUNT of $EXPECTED_COUNT torrents) — waiting ($attempt/12)..."
+            sleep 5
+          done
 
-          if [ -z "$ALL_TORRENTS" ]; then
-            echo "ERROR: Failed to fetch torrent list from qBittorrent"
+          if [ "$API_COUNT" -eq 0 ]; then
+            echo "ERROR: qBittorrent reported 0 torrents after waiting — aborting without deleting anything."
             exit 1
           fi
+          if [ "$EXPECTED_COUNT" -gt 0 ] && [ "$API_COUNT" -lt "$EXPECTED_COUNT" ]; then
+            echo "ERROR: qBittorrent loaded only $API_COUNT of $EXPECTED_COUNT torrents (still starting up?) — aborting."
+            exit 1
+          fi
+          echo "qBittorrent ready: $API_COUNT torrents loaded."
 
           # ── Filter and sort eligible torrents ──────────────────────────
           # Sort eligible torrents by last_activity ascending (least recently active

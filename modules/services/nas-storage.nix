@@ -39,7 +39,13 @@ in
       allowedNetwork = lib.mkOption {
         type = lib.types.str;
         default = "10.20.2.0/24";
-        description = "Network CIDR allowed to mount NFS";
+        example = "10.20.2.85/32";
+        description = ''
+          Host or network allowed to mount the export. Prefer the narrowest
+          value that works — ideally the single NFS client's IP (e.g.
+          "10.20.2.85/32") rather than a whole subnet, since the export grants
+          read-write access to all media.
+        '';
       };
 
       exportPath = lib.mkOption {
@@ -141,8 +147,14 @@ in
       enable = true;
       # fsid=1 is required for FUSE filesystems like MergerFS
       # Using non-zero allows clients to mount with the full path
+      #
+      # root_squash (the default; kept explicit here): a remote root user is
+      # mapped to the anonymous user instead of local root. The media clients
+      # run their containers as the media PUID/PGID, not root, so they are
+      # unaffected — but this prevents a compromised or misbehaving root process
+      # on a client from deleting the whole library over NFS.
       exports = ''
-        ${cfg.nfs.exportPath} ${cfg.nfs.allowedNetwork}(rw,sync,no_subtree_check,no_root_squash,fsid=1)
+        ${cfg.nfs.exportPath} ${cfg.nfs.allowedNetwork}(rw,sync,no_subtree_check,root_squash,fsid=1)
       '';
       extraNfsdConfig = ''
         vers3=n

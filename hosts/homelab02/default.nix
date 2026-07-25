@@ -224,7 +224,9 @@
       poolPath = "/srv/media";
       nfs = {
         enable = true;
-        allowedNetwork = "10.20.2.0/24";
+        # Only homelab01 mounts this export; scope it to that host rather than
+        # the whole subnet so no other device can touch the media as root.
+        allowedNetwork = "10.20.2.85/32";
         exportPath = "/srv/media";
       };
       user = "coryg";

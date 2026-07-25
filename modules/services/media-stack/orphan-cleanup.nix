@@ -105,12 +105,15 @@ in
           qbtPort = toString qbt.port;
           minAge = toString cfg.minAgeDays;
           dryRunFlag = if cfg.dryRun then "true" else "false";
+          # On-disk source of truth for how many torrents qBittorrent has.
+          btBackupPath = "${stack.configPath}/qbittorrent/qBittorrent/BT_backup";
         in
         ''
           DRY_RUN="${dryRunFlag}"
           COMPLETE_DIR="${completePath}"
           MIN_AGE_DAYS="${minAge}"
           QBT_PORT="${qbtPort}"
+          BT_BACKUP_DIR="${btBackupPath}"
 
           echo "=== Orphan Media Cleanup ==="
           echo "Directory: $COMPLETE_DIR"
@@ -131,6 +134,7 @@ in
           # the session cookie from SID to QBT_SID_<port>. Using a cookie jar
           # file handles both the old and new cookie names transparently.
           COOKIE_JAR=$(mktemp)
+          trap 'rm -f "$COOKIE_JAR"' EXIT
 
           HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
             -c "$COOKIE_JAR" \
@@ -143,22 +147,46 @@ in
             exit 1
           fi
 
-          # Get all torrent content paths from qBittorrent
-          # This gives us the save_path + name for each torrent, which is the
-          # top-level directory or file that qBittorrent is managing.
-          TORRENT_PATHS=$(curl -sf "http://localhost:''${QBT_PORT}/api/v2/torrents/info" \
-            -b "$COOKIE_JAR" 2>/dev/null \
-            | jq -r '.[] | .content_path // empty')
+          # ── Wait for qBittorrent to finish loading its torrents ─────────
+          # SAFETY GATE (added after the 2026-07-25 incident): the qBittorrent
+          # WebUI accepts logins before it has finished loading torrents after a
+          # restart, so /torrents/info can briefly return an empty or partial
+          # list. Deleting based on that list treats every not-yet-loaded
+          # torrent's data as "orphaned" and wipes downloads/complete. Compare the
+          # API's torrent count against the .torrent files on disk in BT_backup
+          # (the source of truth) and refuse to delete anything until qBittorrent
+          # reports at least that many.
+          EXPECTED_COUNT=$(find "$BT_BACKUP_DIR" -maxdepth 1 -name '*.torrent' 2>/dev/null | wc -l)
+          TORRENTS_JSON=""
+          API_COUNT=0
+          for attempt in $(seq 1 12); do
+            TORRENTS_JSON=$(curl -sf "http://localhost:''${QBT_PORT}/api/v2/torrents/info" -b "$COOKIE_JAR") || TORRENTS_JSON=""
+            API_COUNT=$(printf '%s' "$TORRENTS_JSON" | jq 'length' 2>/dev/null || echo 0)
+            case "$API_COUNT" in ""|*[!0-9]*) API_COUNT=0 ;; esac
+            if [ "$API_COUNT" -gt 0 ] && { [ "$EXPECTED_COUNT" -eq 0 ] || [ "$API_COUNT" -ge "$EXPECTED_COUNT" ]; }; then
+              break
+            fi
+            echo "qBittorrent not ready (loaded $API_COUNT of $EXPECTED_COUNT torrents) — waiting ($attempt/12)..."
+            sleep 5
+          done
 
-          if [ $? -ne 0 ]; then
-            echo "Failed to fetch torrent list from qBittorrent"
+          if [ "$API_COUNT" -eq 0 ]; then
+            echo "ERROR: qBittorrent reported 0 torrents after waiting — aborting without deleting anything."
             exit 1
           fi
+          if [ "$EXPECTED_COUNT" -gt 0 ] && [ "$API_COUNT" -lt "$EXPECTED_COUNT" ]; then
+            echo "ERROR: qBittorrent loaded only $API_COUNT of $EXPECTED_COUNT torrents (still starting up?)."
+            echo "Aborting without deleting to avoid orphaning active downloads."
+            exit 1
+          fi
+          echo "qBittorrent ready: $API_COUNT torrents loaded."
 
-          # Build a lookup file of active torrent paths
+          # Build a lookup file of active torrent content paths. Each is the
+          # top-level directory or file qBittorrent manages (container path
+          # /data/downloads/complete/..., translated to the host path below).
           TORRENT_LIST=$(mktemp)
           trap 'rm -f "$COOKIE_JAR" "$TORRENT_LIST"' EXIT
-          echo "$TORRENT_PATHS" > "$TORRENT_LIST"
+          printf '%s' "$TORRENTS_JSON" | jq -r '.[] | .content_path // empty' > "$TORRENT_LIST"
 
           # Note: qBittorrent reports paths using its container mount (/data/downloads/complete/...)
           # We need to compare against the host path, so we translate.
