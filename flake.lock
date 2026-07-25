@@ -211,18 +211,18 @@
         "url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"
       }
     },
-    "nixpkgs-faugus-launcher": {
+    "nixpkgs-claude-code-2-1-219": {
       "locked": {
-        "lastModified": 1784827464,
-        "narHash": "sha256-E7hzT9VgiIlCnQld7MfpxfqT41E2DJQvY/rVnnU5RhM=",
-        "owner": "rogreat",
+        "lastModified": 1784917387,
+        "narHash": "sha256-nPejxD1NfI3SGCSaexm95uI9UyHV5fjbpZmTMIohmII=",
+        "owner": "samestep",
         "repo": "nixpkgs",
-        "rev": "a345716df5b50c30c67ff6ed3325253be08bd511",
+        "rev": "e29c342b51311d226c93f22b5d431f44f707760c",
         "type": "github"
       },
       "original": {
-        "owner": "rogreat",
-        "ref": "faugus-launcher",
+        "owner": "samestep",
+        "ref": "claude-code-2.1.219",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -306,7 +306,7 @@
         "hardware": "hardware",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs_2",
-        "nixpkgs-faugus-launcher": "nixpkgs-faugus-launcher",
+        "nixpkgs-claude-code-2-1-219": "nixpkgs-claude-code-2-1-219",
         "nixpkgs-stable": "nixpkgs-stable",
         "nixpkgs-unstable-small": "nixpkgs-unstable-small",
         "sops-nix": "sops-nix",

@@ -12,13 +12,13 @@
     # });
     #
 
-    # Use faugus-launcher 1.20.4 from unmerged nixpkgs PR #508497 for security patches.
-    # https://github.com/NixOS/nixpkgs/pull/508497
-    # TODO: Remove this overlay once the PR is merged and reaches our channel.
-    faugus-launcher =
-      (import inputs.nixpkgs-faugus-launcher {
+    # https://github.com/NixOS/nixpkgs/pull/545319
+    # TODO: Remove this overlay once the PR is merged and available on unstable.
+    claude-code =
+      (import inputs.nixpkgs-claude-code-2-1-219 {
         system = final.system;
-      }).faugus-launcher;
+        config.allowUnfree = true;
+      }).claude-code;
 
     # Disable openldap tests only for 32-bit builds (triggered by Steam's
     # multilib support). The i686 build isn't cached by Hydra and the
