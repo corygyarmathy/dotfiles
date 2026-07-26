@@ -64,6 +64,7 @@
     git.enable = true;
     direnv.enable = true;
     ssh.enable = true;
+    psql.enable = true;
 
     # Media
     spotify-player.enable = false;
