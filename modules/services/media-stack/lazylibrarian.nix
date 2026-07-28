@@ -7,8 +7,29 @@
 #    - Goodreads, LibraryThing, Hardcover, OpenLibrary, or Google Books
 # 3. Add download client (qBittorrent at http://qbittorrent:8080 or http://gluetun:8080 if VPN)
 # 4. Set eBook Library Folder to: /data/books
-# 5. Set Download Directories to: /data/downloads/complete
+# 5. Set Download Directories to: /data/downloads/complete/books
+#    NEVER point this at /data/downloads/complete itself -- see DOWNLOAD DIR below.
 # 6. Add authors to monitor and set books as 'wanted'
+# 7. In qBittorrent, the 'books' category save path must match the directory from
+#    step 5, or LazyLibrarian will not find what it downloads.
+#
+# DOWNLOAD DIR -- DO NOT SHARE IT (destroyed the seed set twice):
+# LazyLibrarian's PostProcessor runs every 10 minutes, treats *every* entry in
+# download_dir as one of its own book downloads, and wipes the tree when it is
+# done ("Created new Download folder: ..." in its log). It spares only the
+# handful of torrents it is itself tracking as seeding.
+#
+# While download_dir was /data/downloads/complete -- the shared qBittorrent
+# completed-downloads root -- this deleted every other application's downloads:
+#   2026-07-25 11:46  779 items enumerated, ~1.1 TB removed
+#   2026-07-27 11:56  542 items enumerated, 6416 hardlinks removed
+# The second event undid the whole 2026-07-26 reconciliation. It runs as the
+# media-stack user (uid 1000), which owns those files, so the NFS root_squash
+# hardening does not constrain it.
+#
+# So download_dir must be a subdirectory owned solely by LazyLibrarian. Note
+# this setting lives in runtime state (/srv/arr/lazylibrarian/config.ini), not
+# in Nix -- it is not reproduced by a rebuild, so verify it after any restore.
 #
 # HARDLINKS:
 # This container mounts the entire dataPath as /data, enabling hardlinks
