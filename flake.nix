@@ -194,7 +194,7 @@
         default = nixpkgs.legacyPackages.${system}.mkShell {
           packages = with nixpkgs.legacyPackages.${system}; [
             nil # Nix LSP
-            nixfmt-rfc-style
+            nixfmt
             sops
             age
             ssh-to-age

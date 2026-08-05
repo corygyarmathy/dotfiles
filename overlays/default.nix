@@ -25,17 +25,17 @@
   };
 
   # Access stable packages via pkgs.stable
-  stable-packages = final: _prev: {
+  stable-packages = _final: prev: {
     stable = import inputs.nixpkgs-stable {
-      system = final.system;
+      inherit (prev.stdenv.hostPlatform) system;
       config.allowUnfree = true;
     };
   };
 
   # Access unstable-small packages via pkgs.unstable-small
-  unstable-small-packages = final: _prev: {
+  unstable-small-packages = _final: prev: {
     small = import inputs.nixpkgs-unstable-small {
-      system = final.system;
+      inherit (prev.stdenv.hostPlatform) system;
       config.allowUnfree = true;
     };
   };

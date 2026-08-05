@@ -11,7 +11,7 @@ let
   cfg = config.cg.home.obsidian-sync;
 
   # Import the package
-  obsidian-headless = self.packages.${pkgs.system}.obsidian-headless;
+  obsidian-headless = self.packages.${pkgs.stdenv.hostPlatform.system}.obsidian-headless;
 
 in
 {

@@ -56,7 +56,7 @@ in
 
       # Formatters
       stylua
-      nixfmt-rfc-style
+      nixfmt
       prettier
       black
       # gotools

@@ -14,8 +14,10 @@ in
   config = lib.mkIf cfg.enable {
     programs.git = {
       enable = true;
-      userName = "Cory Gyarmathy";
-      userEmail = "cory.gyarmathy@gmail.com";
+      settings.user = {
+        name = "Cory Gyarmathy";
+        email = "cory.gyarmathy@gmail.com";
+      };
     };
 
     home.packages = with pkgs; [

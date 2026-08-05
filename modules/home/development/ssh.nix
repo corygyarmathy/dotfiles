@@ -14,25 +14,37 @@ in
   config = lib.mkIf cfg.enable {
     programs.ssh = {
       enable = true;
-      addKeysToAgent = "yes";
 
-      matchBlocks = {
-        git = {
-          host = "gitlab.com github.com";
-          user = "git";
-          forwardAgent = true;
-          identitiesOnly = true;
-          identityFile = [ "~/.ssh/id_github" ];
+      # Home Manager's implicit defaults are on their way out; they are spelled
+      # out under settings."*" below instead.
+      enableDefaultConfig = false;
+
+      # Attribute names become `Host <name>`; the "*" block is always emitted
+      # last so the more specific blocks win.
+      settings = {
+        "gitlab.com github.com" = {
+          User = "git";
+          ForwardAgent = true;
+          IdentitiesOnly = true;
+          IdentityFile = [ "~/.ssh/id_github" ];
         };
 
         "*" = {
-          identityFile = [ "~/.ssh/id_ed25519_personal" ];
+          IdentityFile = [ "~/.ssh/id_ed25519_personal" ];
+          AddKeysToAgent = "yes";
+          ControlMaster = "auto";
+          ControlPath = "~/.ssh/sockets/S.%r@%h:%p";
+          ControlPersist = "10m";
+
+          # Upstream defaults, kept verbatim now that they are no longer implied.
+          ForwardAgent = false;
+          Compression = false;
+          ServerAliveInterval = 0;
+          ServerAliveCountMax = 3;
+          HashKnownHosts = false;
+          UserKnownHostsFile = "~/.ssh/known_hosts";
         };
       };
-
-      controlMaster = "auto";
-      controlPath = "~/.ssh/sockets/S.%r@%h:%p";
-      controlPersist = "10m";
     };
 
     home.file.".ssh/sockets/.keep".text = "# Managed by Home Manager";

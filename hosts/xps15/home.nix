@@ -98,7 +98,7 @@
     libreoffice
     google-chrome
     firefox
-    protonvpn-gui
+    proton-vpn
     proton-vpn-cli
     proton-pass
     protonmail-desktop
@@ -128,10 +128,10 @@
     wireshark
     nmap
     lshw # Used to get hardware info (such as the Bus ID for the GPUs)
-    xfce.thunar # File manager
-    xfce.xfconf # Required for thunar
-    xfce.thunar-archive-plugin # Zip / unzip plugin for Thunar
-    xfce.tumbler # Req. for thunar # Generates image previews
+    thunar # File manager
+    xfconf # Required for thunar
+    thunar-archive-plugin # Zip / unzip plugin for Thunar
+    tumbler # Req. for thunar # Generates image previews
     file-roller # Archive (.zip) manager for GNOME, required for thunar-archive-plugin
     steam-run # Allows running dynamically linked executables, made for steam
     lsd # Next-gen 'ls' command

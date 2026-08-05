@@ -156,12 +156,17 @@ in
       exports = ''
         ${cfg.nfs.exportPath} ${cfg.nfs.allowedNetwork}(rw,sync,no_subtree_check,root_squash,fsid=1)
       '';
-      extraNfsdConfig = ''
-        vers3=n
-        vers4=y
-        vers4.1=y
-        vers4.2=y
-      '';
+    };
+
+    # NFSv4 only — v3 is disabled. Lives under services.nfs.settings rather
+    # than services.nfs.server.extraNfsdConfig, which is deprecated.
+    services.nfs.settings = lib.mkIf cfg.nfs.enable {
+      nfsd = {
+        vers3 = "n";
+        vers4 = "y";
+        "vers4.1" = "y";
+        "vers4.2" = "y";
+      };
     };
 
     # ========================================================================
