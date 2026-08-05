@@ -22,6 +22,22 @@
         doCheck = false;
       }
     );
+
+    # Hyprland's CMake asks for `glaze 7...<8`, but nixpkgs bumped glaze to
+    # 8.0.0, so find_package fails and CMake quietly falls back to fetching
+    # glaze over the network — which the build sandbox blocks.
+    # https://github.com/NixOS/nixpkgs/issues/549246
+    #
+    # This is upstream's own fix, backported verbatim. It is merged to master
+    # but has not reached nixos-unstable yet.
+    # TODO: drop once the channel includes https://github.com/NixOS/nixpkgs/pull/549253
+    hyprland = prev.hyprland.overrideAttrs (old: {
+      postPatch = ''
+        substituteInPlace CMakeLists.txt start/CMakeLists.txt hyprpm/CMakeLists.txt \
+          --replace-fail "glaze 7...<8" "glaze"
+      ''
+      + old.postPatch;
+    });
   };
 
   # Access stable packages via pkgs.stable
