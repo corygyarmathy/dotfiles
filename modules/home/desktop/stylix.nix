@@ -21,9 +21,10 @@ in
       starship.enable = false; # Custom config
     };
 
+    # NOTE: rose-pine-gtk-theme was removed from nixpkgs (depended on the
+    # dropped gtk-engine-murrine/GTK 2). Stylix generates the GTK theme from
+    # base16Scheme anyway, so no replacement is needed.
     home.packages = with pkgs; [
-      # TODO: are these needed?
-      rose-pine-gtk-theme
       rose-pine-icon-theme
     ];
   };
