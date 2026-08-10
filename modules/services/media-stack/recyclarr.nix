@@ -167,8 +167,18 @@ in
       configuration = cfg.settings;
     };
 
-    # sops decrypts into /run/secrets during activation; make sure a
-    # boot-time trigger of the timer can't beat it.
-    systemd.services.recyclarr.after = [ "sops-install-secrets.service" ];
+    systemd.services.recyclarr = {
+      # sops decrypts into /run/secrets during activation; make sure a
+      # boot-time trigger of the timer can't beat it.
+      after = [ "sops-install-secrets.service" ];
+
+      serviceConfig = {
+        # preStart expands the API keys into /var/lib/recyclarr/config.yml.
+        # jq inherits the service umask, and the default leaves that file
+        # world-readable with the keys in plaintext.
+        UMask = "0077";
+        StateDirectoryMode = "0700";
+      };
+    };
   };
 }
