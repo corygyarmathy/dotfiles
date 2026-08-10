@@ -19,8 +19,13 @@
 # - Sonarr: WEB-1080p (Alternative), WEB-2160p (Alternative), [Anime] Remux-1080p
 # - Radarr: HD Bluray + WEB, UHD Bluray + WEB, [Anime] Remux-1080p
 #
-# NOTE: Alternative profiles include lower quality fallbacks (720p, HDTV, etc.)
-# so media that isn't available in the preferred quality will still be grabbed.
+# The Sonarr WEB profiles are deliberately the "(Alternative)" variants. TRaSH
+# Guides presents the plain WEB-1080p / WEB-2160p as the standard choice and
+# treats these as an opt-in, but the Alternative variants add 720p / HDTV /
+# Bluray fallbacks so that a show whose preferred quality was never released
+# still gets grabbed instead of being skipped. That fallback behaviour is wanted
+# here. Do not "simplify" these back to the plain profiles.
+# https://trash-guides.info/Sonarr/sonarr-setup-quality-profiles/
 #
 # CUSTOMIZATION:
 # Override `settings` to customize profiles and custom format groups.
