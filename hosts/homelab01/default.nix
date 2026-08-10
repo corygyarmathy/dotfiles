@@ -89,6 +89,7 @@
         "/var/lib/autobrr"
         "/var/lib/postgresql"
         "/var/lib/kavita"
+        "/var/lib/recyclarr"
       ];
 
       extraExclude = [
@@ -98,8 +99,8 @@
         # Flaresolverr has no persistent state worth backing up
         "/srv/arr/flaresolverr/**"
 
-        # Recyclarr cache (283MB) - TRaSH guide repo clone, regenerated on run
-        "/srv/arr/recyclarr/cache/**"
+        # Recyclarr guide/template repo clones (~75MB), regenerated on run
+        "/var/lib/recyclarr/resources/**"
 
         # Jellyfin - regenerable from library scan
         "/var/lib/jellyfin/metadata/**"

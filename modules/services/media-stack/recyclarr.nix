@@ -2,24 +2,37 @@
 # Automatically syncs quality profiles and custom formats from TRaSH Guides
 # to Sonarr and Radarr
 #
+# Runs as a native systemd oneshot + timer via the nixpkgs `services.recyclarr`
+# module (no container). API keys are injected from sops via systemd
+# LoadCredential, so they never appear in the Nix store.
+#
 # SETUP AFTER DEPLOYMENT:
 # 1. No web UI - runs on a schedule (daily by default)
 # 2. Add API keys to sops secrets:
 #    - media-stack/sonarr/api
 #    - media-stack/radarr/api
-# 3. Config is managed via Nix (recyclarrConfig option)
-# 4. Check logs: journalctl -u podman-recyclarr
+# 3. Config is managed via Nix (the `settings` option)
+# 4. Check logs: journalctl -u recyclarr
+# 5. Run on demand: systemctl start recyclarr
 #
 # The default config includes:
-# - Sonarr: WEB-1080p (alternative), WEB-2160p (alternative), and Anime profiles
-# - Radarr: HD Bluray+WEB, UHD Bluray+WEB, and Anime profiles
+# - Sonarr: WEB-1080p (Alternative), WEB-2160p (Alternative), [Anime] Remux-1080p
+# - Radarr: HD Bluray + WEB, UHD Bluray + WEB, [Anime] Remux-1080p
 #
 # NOTE: Alternative profiles include lower quality fallbacks (720p, HDTV, etc.)
 # so media that isn't available in the preferred quality will still be grabbed.
 #
 # CUSTOMIZATION:
-# Override recyclarrConfig to customize profiles and formats.
-# See: https://recyclarr.dev/wiki/yaml/config-reference/
+# Override `settings` to customize profiles and custom format groups.
+# See: https://recyclarr.dev/reference/configuration/
+#
+# RECYCLARR v8 NOTE:
+# v8 removed the shared `include:` templates that older configs relied on, and
+# replaced the `custom_formats` list with guide-backed `custom_format_groups`.
+# Profiles and CF groups are therefore referenced directly by `trash_id` below.
+# The IDs come from the upstream templates in recyclarr/config-templates; the
+# actual scores and format definitions are still pulled from TRaSH Guides on
+# every sync, so this stays current without manual edits.
 #
 # MIGRATION NOTES (homelab02 NAS):
 # Recyclarr stays on homelab01 alongside Sonarr/Radarr.
@@ -34,74 +47,81 @@ let
   cfg = config.cg.service.recyclarr;
   stack = config.cg.service.media-stack;
 
-  # Default TRaSH Guides configuration
-  defaultConfig = ''
-    # yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
+  # Marks a profile as "reset scores that the guide doesn't define", matching
+  # the upstream templates.
+  profile = trash_id: {
+    inherit trash_id;
+    reset_unmatched_scores.enabled = true;
+  };
 
-    sonarr:
-      shows:
-        base_url: https://sonarr.gyarmathy.co
-        api_key: !env_var SONARR_API_KEY
-        delete_old_custom_formats: true
-        replace_existing_custom_formats: true
+  # Default TRaSH Guides configuration.
+  #
+  # Sonarr and Radarr each get a single instance. Only one `quality_definition`
+  # can apply per instance, so the anime profiles ride along with the series /
+  # movie definitions - the same trade-off the previous config made by including
+  # the series and movie quality definitions exactly once.
+  defaultSettings = {
+    sonarr.shows = {
+      base_url = "https://sonarr.gyarmathy.co";
+      api_key._secret = config.sops.secrets."media-stack/sonarr/api".path;
+      delete_old_custom_formats = true;
 
-        media_naming:
-          series: jellyfin-tvdb
-          season: default
-          episodes:
-            rename: true
-            standard: default
-            daily: default
-            anime: default
+      media_naming = {
+        series = "jellyfin-tvdb";
+        season = "default";
+        episodes = {
+          rename = true;
+          standard = "default";
+          daily = "default";
+          anime = "default";
+        };
+      };
 
-        include:
-          # Quality definitions
-          - template: sonarr-quality-definition-series
+      quality_definition.type = "series";
 
-          # WEB-1080p Alternative - includes lower quality fallbacks (720p, HDTV)
-          # for older shows or less available content
-          - template: sonarr-v4-quality-profile-web-1080p-alternative
-          - template: sonarr-v4-custom-formats-web-1080p
+      quality_profiles = [
+        (profile "9d142234e45d6143785ac55f5a9e8dc9") # WEB-1080p (Alternative)
+        (profile "dfa5eaae7894077ad6449169b6eb03e0") # WEB-2160p (Alternative)
+        (profile "20e0fc959f1f1704bed501f23bdae76f") # [Anime] Remux-1080p
+      ];
 
-          # WEB-2160p Alternative - includes lower quality fallbacks
-          # Will grab 4K when available, but falls back to 1080p/720p if not
-          - template: sonarr-v4-quality-profile-web-2160p-alternative
-          - template: sonarr-v4-custom-formats-web-2160p
+      custom_format_groups.add = [
+        { trash_id = "158188097a58d7687dee647e04af0da3"; } # [Optional] Golden Rule HD
+        { trash_id = "e3f37512790f00d0e89e54fe5e790d1c"; } # [Optional] Golden Rule UHD
+        { trash_id = "74aff4168620ed49dcc67e92b2c2a5b4"; } # [Optional] Language Profiles
+        { trash_id = "85fae4a2294965b75710ef2989c850eb"; } # [Streaming Services] HD/UHD boost
+        { trash_id = "59c3af66780d08332fdc64e68297098f"; } # [Unwanted] Unwanted Formats
+      ];
+    };
 
-          # Anime profile
-          - template: sonarr-v4-quality-profile-anime
-          - template: sonarr-v4-custom-formats-anime
+    radarr.movies = {
+      base_url = "https://radarr.gyarmathy.co";
+      api_key._secret = config.sops.secrets."media-stack/radarr/api".path;
+      delete_old_custom_formats = true;
 
-    radarr:
-      movies:
-        base_url: https://radarr.gyarmathy.co
-        api_key: !env_var RADARR_API_KEY
-        delete_old_custom_formats: true
-        replace_existing_custom_formats: true
+      media_naming = {
+        folder = "jellyfin-tmdb";
+        movie = {
+          rename = true;
+          standard = "jellyfin-tmdb";
+        };
+      };
 
-        media_naming:
-          folder: jellyfin-tmdb
-          movie:
-            rename: true
-            standard: jellyfin-tmdb
+      quality_definition.type = "movie";
 
+      quality_profiles = [
+        (profile "d1d67249d3890e49bc12e275d989a7e9") # HD Bluray + WEB
+        (profile "64fb5f9858489bdac2af690e27c8f42f") # UHD Bluray + WEB
+        (profile "722b624f9af1e492284c4bc842153a38") # [Anime] Remux-1080p
+      ];
 
-        include:
-          # Quality definitions
-          - template: radarr-quality-definition-movie
-
-          # HD Bluray + WEB for most movies (1080p)
-          - template: radarr-quality-profile-hd-bluray-web
-          - template: radarr-custom-formats-hd-bluray-web
-
-          # UHD Bluray + WEB for 4K movies
-          - template: radarr-quality-profile-uhd-bluray-web
-          - template: radarr-custom-formats-uhd-bluray-web
-
-          # Anime movies
-          - template: radarr-quality-profile-anime
-          - template: radarr-custom-formats-anime
-  '';
+      custom_format_groups.add = [
+        { trash_id = "f8bf8eab4617f12dfdbd16303d8da245"; } # [Optional] Golden Rule HD
+        { trash_id = "ff204bbcecdd487d1cefcefdbf0c278d"; } # [Optional] Golden Rule UHD
+        { trash_id = "a3ac6af01d78e4f21fcb75f601ac96df"; } # [Unwanted] Unwanted Formats
+      ];
+    };
+  };
 in
 {
   options.cg.service.recyclarr = {
@@ -109,14 +129,22 @@ in
 
     schedule = lib.mkOption {
       type = lib.types.str;
-      default = "@daily";
-      description = "Cron schedule for syncing (see systemd.time for format)";
+      default = "daily";
+      description = "When to sync, in systemd OnCalendar format";
     };
 
-    recyclarrConfig = lib.mkOption {
-      type = lib.types.lines;
-      default = defaultConfig;
-      description = "Recyclarr YAML configuration content";
+    settings = lib.mkOption {
+      type = (pkgs.formats.yaml { }).type;
+      default = defaultSettings;
+      defaultText = lib.literalMD "TRaSH Guides profiles for Sonarr and Radarr";
+      description = ''
+        Recyclarr configuration as a Nix attribute set.
+
+        An `api_key` may be given as `{ _secret = "/path/to/file"; }` to load it
+        from disk at runtime instead of embedding it in the Nix store.
+
+        See <https://recyclarr.dev/reference/configuration/>.
+      '';
     };
   };
 
@@ -133,46 +161,14 @@ in
     sops.secrets."media-stack/sonarr/api" = { };
     sops.secrets."media-stack/radarr/api" = { };
 
-    # Create config directory
-    systemd.tmpfiles.rules = [
-      "d ${stack.configPath}/recyclarr 0775 ${stack.user} ${stack.group} -"
-    ];
-
-    # Sops template for environment file
-    sops.templates."recyclarr-env" = {
-      content = ''
-        SONARR_API_KEY=${config.sops.placeholder."media-stack/sonarr/api"}
-        RADARR_API_KEY=${config.sops.placeholder."media-stack/radarr/api"}
-      '';
+    services.recyclarr = {
+      enable = true;
+      schedule = cfg.schedule;
+      configuration = cfg.settings;
     };
 
-    # Container definition
-    virtualisation.oci-containers.containers.recyclarr = {
-      image = "ghcr.io/recyclarr/recyclarr:latest";
-      user = "${toString config.users.users.${stack.user}.uid}:${
-        toString config.users.groups.${stack.group}.gid
-      }";
-      volumes = [
-        "${stack.configPath}/recyclarr:/config"
-        "${pkgs.writeText "recyclarr.yml" cfg.recyclarrConfig}:/config/recyclarr.yml:ro"
-      ];
-      environment = {
-        TZ = config.time.timeZone;
-        CRON_SCHEDULE = cfg.schedule;
-      };
-      environmentFiles = [
-        config.sops.templates."recyclarr-env".path
-      ];
-      extraOptions = [
-        "--pull=newer"
-        "--network=arr-network"
-      ];
-    };
-
-    # Ensure network exists before starting
-    systemd.services.podman-recyclarr = {
-      after = [ "podman-network-arr.service" ];
-      requires = [ "podman-network-arr.service" ];
-    };
+    # sops decrypts into /run/secrets during activation; make sure a
+    # boot-time trigger of the timer can't beat it.
+    systemd.services.recyclarr.after = [ "sops-install-secrets.service" ];
   };
 }
