@@ -12,6 +12,22 @@ return {
 			{ "<leader>oj", "<cmd>Obsidian today<cr>", desc = "Today's daily note" },
 			{ "<leader>ot", "<cmd>Obsidian tags<cr>", desc = "Search tags" },
 			{ "<leader>oT", "<cmd>Obsidian template<cr>", desc = "Insert template" },
+			{
+				"<leader>og",
+				function()
+					local vault = vim.fn.expand("~/git/personal-notes")
+					local res = vim.system(
+						{ "python3", vault .. "/.scripts/vault-review.py" },
+						{ text = true }
+					):wait()
+					if res.code ~= 0 then
+						vim.notify("vault-review: " .. (res.stderr or "failed"), vim.log.levels.ERROR)
+						return
+					end
+					vim.cmd.edit(vim.fn.fnameescape(vim.trim(res.stdout)))
+				end,
+				desc = "Generate vault review",
+			},
 			-- in-note commands
 			{ "<leader>ob", "<cmd>Obsidian backlinks<cr>", desc = "Backlinks to this note" },
 			{ "<leader>ol", "<cmd>Obsidian links<cr>", desc = "Links in this note" },
