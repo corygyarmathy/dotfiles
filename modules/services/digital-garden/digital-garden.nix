@@ -61,7 +61,7 @@ let
     import yaml
 
     src, plugin_map_path, dest = sys.argv[1:4]
-    base_url, title, disabled_csv, footer_links_json = sys.argv[4:8]
+    base_url, title, disabled_csv, footer_links_json, enabled_out = sys.argv[4:9]
     disabled = {n for n in disabled_csv.split(",") if n}
     footer_links = json.loads(footer_links_json)
 
@@ -100,6 +100,22 @@ let
         # links, which would otherwise appear on this site.
         if name == "footer":
             entry.setdefault("options", {})["links"] = footer_links
+
+    # Only the enabled plugins get linked into .quartz/plugins. Everything
+    # placed there is pulled into the esbuild pass whether or not it is
+    # enabled, so linking the lot means compiling ~10 unused plugins, wading
+    # through their warnings in the journal, and bundling third-party code the
+    # site never asked for.
+    enabled = {
+        name: path
+        for name, path in plugins.items()
+        if any(
+            entry.get("source") == path and entry.get("enabled")
+            for entry in conf.get("plugins", [])
+        )
+    }
+    with open(enabled_out, "w") as fh:
+        json.dump(enabled, fh)
 
     with open(dest, "w") as fh:
         yaml.safe_dump(conf, fh, sort_keys=False)
@@ -149,20 +165,23 @@ let
       ${mkConfig} quartz.config.default.yaml ${pluginMap} quartz.config.yaml \
         "${cfg.baseUrl}" "${cfg.siteTitle}" \
         "${lib.concatStringsSep "," cfg.disabledPlugins}" \
-        ${lib.escapeShellArg (builtins.toJSON cfg.footerLinks)}
+        ${lib.escapeShellArg (builtins.toJSON cfg.footerLinks)} \
+        "$work/enabled-plugins.json"
 
       # Plugins are vendored from npm (they ship dist/, which the source repos
       # do not — and regeneratePluginIndex skips anything without
-      # dist/index.d.ts, yielding a featureless site).
+      # dist/index.d.ts, yielding a featureless site). Only the enabled ones
+      # are linked; see the note in mkConfig.
       mkdir -p .quartz/plugins
       python3 - <<'EOF'
       import json, os
-      plugins = json.load(open("${pluginMap}"))
+      plugins = json.load(open("enabled-plugins.json"))
       for name, path in plugins.items():
           dest = os.path.join(".quartz", "plugins", name)
           if os.path.lexists(dest):
               os.unlink(dest)
           os.symlink(path, dest)
+      print(f"linked {len(plugins)} enabled plugins")
       EOF
 
       # Regenerates .quartz/plugins/index.ts. It also tries to `git fetch` each
