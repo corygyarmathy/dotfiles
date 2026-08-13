@@ -47,79 +47,79 @@ let
   # name -> /nix/store/... for every vendored plugin. Written to disk so the
   # config rewriter can turn `github:quartz-community/x` into a local absolute
   # path, which Quartz symlinks instead of cloning. See packages/quartz.
-  pluginMap = pkgs.writeText "quartz-plugin-map.json" (
-    builtins.toJSON quartz.passthru.pluginPaths
-  );
+  pluginMap = pkgs.writeText "quartz-plugin-map.json" (builtins.toJSON quartz.passthru.pluginPaths);
 
   # Rewrites upstream's default config rather than pinning a full copy of it,
   # so a Quartz upgrade that adds or renames plugins does not silently produce
   # a broken site. Only the values we care about are forced.
-  mkConfig = pkgs.writers.writePython3 "quartz-mkconfig" { libraries = [ pkgs.python3Packages.pyyaml ]; } ''
-    import json
-    import sys
+  mkConfig =
+    pkgs.writers.writePython3 "quartz-mkconfig" { libraries = [ pkgs.python3Packages.pyyaml ]; }
+      ''
+        import json
+        import sys
 
-    import yaml
+        import yaml
 
-    src, plugin_map_path, dest = sys.argv[1:4]
-    base_url, title, disabled_csv, footer_links_json, enabled_out = sys.argv[4:9]
-    disabled = {n for n in disabled_csv.split(",") if n}
-    footer_links = json.loads(footer_links_json)
+        src, plugin_map_path, dest = sys.argv[1:4]
+        base_url, title, disabled_csv, footer_links_json, enabled_out = sys.argv[4:9]
+        disabled = {n for n in disabled_csv.split(",") if n}
+        footer_links = json.loads(footer_links_json)
 
-    with open(src) as fh:
-        conf = yaml.safe_load(fh)
-    with open(plugin_map_path) as fh:
-        plugins = json.load(fh)
+        with open(src) as fh:
+            conf = yaml.safe_load(fh)
+        with open(plugin_map_path) as fh:
+            plugins = json.load(fh)
 
-    c = conf.setdefault("configuration", {})
-    c["pageTitle"] = title
-    c["baseUrl"] = base_url
-    # No third-party analytics, and no Google Fonts / CDN fetches from a page
-    # that is meant to be self-hosted.
-    c["analytics"] = None
-    theme = c.setdefault("theme", {})
-    theme["fontOrigin"] = "local"
-    theme["cdnCaching"] = False
+        c = conf.setdefault("configuration", {})
+        c["pageTitle"] = title
+        c["baseUrl"] = base_url
+        # No third-party analytics, and no Google Fonts / CDN fetches from a page
+        # that is meant to be self-hosted.
+        c["analytics"] = None
+        theme = c.setdefault("theme", {})
+        theme["fontOrigin"] = "local"
+        theme["cdnCaching"] = False
 
-    for entry in conf.get("plugins", []):
-        source = entry.get("source", "")
-        name = source.rsplit("/", 1)[-1]
-        if name in plugins:
-            entry["source"] = plugins[name]
-        elif source.startswith("github:"):
-            # Not vendored: leaving it would make Quartz try to clone at build
-            # time, which fails closed here rather than reaching the network.
-            entry["enabled"] = False
-        # A plugin whose own runtime deps are missing does not degrade — it
-        # leaves an undefined in the component list and kills the whole build.
-        if name in disabled:
-            entry["enabled"] = False
-        # Defence in depth only — publish-filter.py is the real boundary.
-        elif name == "explicit-publish":
-            entry["enabled"] = True
-        # Upstream ships the Quartz project's own GitHub and Discord as footer
-        # links, which would otherwise appear on this site.
-        if name == "footer":
-            entry.setdefault("options", {})["links"] = footer_links
+        for entry in conf.get("plugins", []):
+            source = entry.get("source", "")
+            name = source.rsplit("/", 1)[-1]
+            if name in plugins:
+                entry["source"] = plugins[name]
+            elif source.startswith("github:"):
+                # Not vendored: leaving it would make Quartz try to clone at build
+                # time, which fails closed here rather than reaching the network.
+                entry["enabled"] = False
+            # A plugin whose own runtime deps are missing does not degrade — it
+            # leaves an undefined in the component list and kills the whole build.
+            if name in disabled:
+                entry["enabled"] = False
+            # Defence in depth only — publish-filter.py is the real boundary.
+            elif name == "explicit-publish":
+                entry["enabled"] = True
+            # Upstream ships the Quartz project's own GitHub and Discord as footer
+            # links, which would otherwise appear on this site.
+            if name == "footer":
+                entry.setdefault("options", {})["links"] = footer_links
 
-    # Only the enabled plugins get linked into .quartz/plugins. Everything
-    # placed there is pulled into the esbuild pass whether or not it is
-    # enabled, so linking the lot means compiling ~10 unused plugins, wading
-    # through their warnings in the journal, and bundling third-party code the
-    # site never asked for.
-    enabled = {
-        name: path
-        for name, path in plugins.items()
-        if any(
-            entry.get("source") == path and entry.get("enabled")
-            for entry in conf.get("plugins", [])
-        )
-    }
-    with open(enabled_out, "w") as fh:
-        json.dump(enabled, fh)
+        # Only the enabled plugins get linked into .quartz/plugins. Everything
+        # placed there is pulled into the esbuild pass whether or not it is
+        # enabled, so linking the lot means compiling ~10 unused plugins, wading
+        # through their warnings in the journal, and bundling third-party code the
+        # site never asked for.
+        enabled = {
+            name: path
+            for name, path in plugins.items()
+            if any(
+                entry.get("source") == path and entry.get("enabled")
+                for entry in conf.get("plugins", [])
+            )
+        }
+        with open(enabled_out, "w") as fh:
+            json.dump(enabled, fh)
 
-    with open(dest, "w") as fh:
-        yaml.safe_dump(conf, fh, sort_keys=False)
-  '';
+        with open(dest, "w") as fh:
+            yaml.safe_dump(conf, fh, sort_keys=False)
+      '';
 
   buildScript = pkgs.writeShellApplication {
     name = "digital-garden-build";
