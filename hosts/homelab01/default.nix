@@ -130,6 +130,21 @@
     miniflux.enable = true;
     wallabag.enable = true;
 
+    # -------------------------------------------------------------------------
+    # Digital Garden (published subset of the Obsidian vault)
+    # -------------------------------------------------------------------------
+    # Only notes carrying `publish: true` are ever copied out of the vault;
+    # see modules/services/digital-garden/publish-filter.py.
+    digital-garden = {
+      enable = true;
+      port = 8086;
+      baseUrl = "garden.gyarmathy.co";
+      siteTitle = "Cory Gyarmathy";
+      footerLinks = {
+        GitHub = "https://github.com/corygyarmathy";
+      };
+    };
+
     vikunja.enable = false; # Todo app
 
     # -------------------------------------------------------------------------
@@ -215,6 +230,13 @@
         read = {
           subdomain = "read";
           port = 8083;
+          localOnly = false;
+        };
+
+        # Digital garden - static, public, no backend to protect
+        garden = {
+          subdomain = "garden";
+          port = 8086;
           localOnly = false;
         };
 
@@ -338,6 +360,10 @@
         {
           name = "audiobookshelf";
           url = "https://audiobookshelf.gyarmathy.co";
+        }
+        {
+          name = "garden";
+          url = "https://garden.gyarmathy.co";
         }
       ];
     };
