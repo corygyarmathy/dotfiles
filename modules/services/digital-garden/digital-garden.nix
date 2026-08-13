@@ -252,7 +252,7 @@ in
 
     schedule = lib.mkOption {
       type = lib.types.str;
-      default = "daily";
+      default = "hourly";
       description = "systemd OnCalendar expression for rebuilds";
     };
 
