@@ -163,6 +163,7 @@
         "recent-notes"
         "tag-list"
         "tag-page"
+        "stacked-pages"
       ];
 
       pluginOptions = {
