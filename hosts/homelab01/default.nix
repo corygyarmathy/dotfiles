@@ -220,10 +220,31 @@
         .page[data-frame="full-width"] > #quartz-body {
           & .center.full-width,
           & footer {
+            // Auto margins on a grid item switch off `justify-self: stretch`,
+            // so the box shrinks to fit its contents and then centres. The
+            // article never showed it (its text is wider than the cap), but
+            // the footer is two short lines, so it shrank to their width and
+            // sat in the middle of the column instead of starting at its left
+            // edge. An explicit width restores the stretch; max-width still
+            // caps it.
+            width: 100%;
             max-width: 40rem;
             min-width: 0;
             margin-left: auto;
             margin-right: auto;
+          }
+
+          // Upstream's 6rem is a lot of nothing above a one-line masthead.
+          & .page-header {
+            margin-top: 3rem;
+          }
+        }
+
+        // ...but not on a phone, where upstream closes the gap entirely and
+        // the rule above would otherwise reopen it on specificity.
+        @media (max-width: 800px) {
+          .page[data-frame="full-width"] > #quartz-body .page-header {
+            margin-top: 0;
           }
         }
 
@@ -261,7 +282,12 @@
           display: none;
         }
 
+        // 18px against darkmode's 20px, which read as the two icons sitting at
+        // different heights even though both are centred in the same 2rem box.
         .search > .search-button svg {
+          width: 20px;
+          min-width: 20px;
+          height: 20px;
           margin: 0;
         }
       '';
