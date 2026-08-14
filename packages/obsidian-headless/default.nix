@@ -19,11 +19,11 @@
 
 buildNpmPackage rec {
   pname = "obsidian-headless";
-  version = "0.0.10";
+  version = "0.0.14";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/obsidian-headless/-/obsidian-headless-${version}.tgz";
-    hash = "sha512-rs90kHkX9uJNPf6fMGQoNRw9KTA+cpkBbPG2Un5iT1IZxdpW1+yaBrONbsc2t5KHpbc+s5G7/krz0VoUn+r5nw==";
+    hash = "sha512-S1d/hxLKvCUG2g5tRyXFkzPqMs3Ntw1tDyzoF2yfHGRuB4B+Mi3X2vgT8LbfQKrkEEi3LfJRdXtYzAVHcbpccw==";
   };
 
   # npm tarballs unpack into ./package
@@ -34,10 +34,9 @@ buildNpmPackage rec {
     cp ${./package-lock.json} ./package-lock.json
   '';
 
-  # Placeholder. Replace with the real value on the first build, e.g.
+  # Regenerate whenever version changes (the lockfile is ours, not upstream's):
   #   nix run nixpkgs#prefetch-npm-deps -- packages/obsidian-headless/package-lock.json
-  # or build once with lib.fakeHash and copy the hash Nix reports.
-  npmDepsHash = "sha256-vg1udNOnkp/pnzf4VXJUe90biQsu3AOwGVOw4FQM+3g=";
+  npmDepsHash = "sha256-Pcy6hxgc9MyTe/a7bE4pMtXjG9hx4HNwZgbfIzTtVRQ=";
 
   nodejs = nodejs_22; # package requires node >= 22
 
