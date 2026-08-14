@@ -260,11 +260,13 @@
           margin-top: 0;
         }
 
-        // ...but not on a phone, where upstream closes the gap entirely and
-        // the rule above would otherwise reopen it on specificity.
+        // Less on a phone, but not none. Upstream closes the gap entirely
+        // below 800px, which suits its layout — the mobile sidebar sits above
+        // the header and provides the spacing. There is no sidebar here, so
+        // zero puts the title hard against the top of the viewport.
         @media (max-width: 800px) {
           .page[data-frame="full-width"] > #quartz-body .page-header {
-            margin-top: 0;
+            margin-top: 1.5rem;
           }
         }
 
