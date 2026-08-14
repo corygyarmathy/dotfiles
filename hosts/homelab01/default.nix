@@ -236,8 +236,28 @@
 
           // Upstream's 6rem is a lot of nothing above a one-line masthead.
           & .page-header {
-            margin-top: 3rem;
+            margin-top: 4rem;
           }
+
+          // The frame puts a rule between the article and the footer, and then
+          // 2rem of hr margin, 1rem of page-footer margin and the grid gap
+          // underneath it — 65px between the rule and the footer text, against
+          // 20px between the masthead and its rule. Close it up so the two ends
+          // of the page mirror each other.
+          & .center.full-width > hr {
+            margin-bottom: 0;
+          }
+
+          & .page-footer {
+            margin-top: 0;
+          }
+        }
+
+        // The last of it: nothing resets the footer paragraph, so it carries
+        // the browser's default 1em top margin. Only the top — its bottom
+        // margin is what the list's own -1rem is written against.
+        footer p {
+          margin-top: 0;
         }
 
         // ...but not on a phone, where upstream closes the gap entirely and
@@ -282,13 +302,31 @@
           display: none;
         }
 
-        // 18px against darkmode's 20px, which read as the two icons sitting at
-        // different heights even though both are centred in the same 2rem box.
+        // 18px against darkmode's 20px.
         .search > .search-button svg {
           width: 20px;
           min-width: 20px;
           height: 20px;
           margin: 0;
+        }
+
+        // Matching the glyph sizes was not enough: darkmode is a 2rem-tall box
+        // positioning its icon absolutely at calc(50% - 10px), search is a
+        // 2rem-tall flex box centring its own, and the two landed 3px apart.
+        // Give both a box the size of the glyph and centre them the same way,
+        // so the row's own align-items has something consistent to work with.
+        .page-header .flex-component {
+          & .search > .search-button,
+          & .darkmode {
+            justify-content: center;
+            align-items: center;
+            height: 20px;
+            display: flex;
+          }
+
+          & .darkmode svg {
+            position: static;
+          }
         }
       '';
     };
