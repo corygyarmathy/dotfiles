@@ -143,6 +143,7 @@
       footerLinks = {
         GitHub = "https://github.com/corygyarmathy";
       };
+      source = "obsidian-sync";
     };
 
     vikunja.enable = false; # Todo app
