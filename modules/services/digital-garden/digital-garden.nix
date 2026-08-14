@@ -408,7 +408,7 @@ in
 
     remoteVault = lib.mkOption {
       type = lib.types.str;
-      default = "personal-notes";
+      default = "_gyarmathy";
       description = ''
         Name of the remote Obsidian Sync vault, used when source =
         "obsidian-sync". Run `ob sync-list-remote` to see the available names.
