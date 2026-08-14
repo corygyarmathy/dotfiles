@@ -41,6 +41,11 @@
 # prose still renders the words "Some Private Note" (as plain text, not a
 # link). Titles you type into published notes are published.
 #
+# The filter also FLATTENS published notes to the root, so a URL is /some-essay
+# and stays that way when the vault is reorganised, and derives `published:`
+# dates from a ledger at ${stateDir}/dates.json rather than asking for them to
+# be written by hand. Both are explained in publish-filter.py.
+#
 # Secrets required in secrets/homelab.yaml, depending on `source`:
 #   git:           digital-garden/deploy-key
 #                  <ssh private key with read access to the vault repo>
@@ -83,6 +88,7 @@ let
         siteTitle
         footerLinks
         disabledPlugins
+        pluginOptions
         ;
     }
   );
@@ -105,8 +111,19 @@ let
 
         src, plugin_map_path, dest = sys.argv[1:4]
         base_url, title, disabled_csv, footer_links_json, enabled_out = sys.argv[4:9]
+        plugin_options_json = sys.argv[9]
         disabled = {n for n in disabled_csv.split(",") if n}
         footer_links = json.loads(footer_links_json)
+        plugin_options = json.loads(plugin_options_json)
+
+
+        def options_of(entry):
+            # `options:` is absent for most layout entries and can be an explicit
+            # null, neither of which .setdefault alone survives.
+            if not isinstance(entry.get("options"), dict):
+                entry["options"] = {}
+            return entry["options"]
+
 
         with open(src) as fh:
             conf = yaml.safe_load(fh)
@@ -122,6 +139,11 @@ let
         theme = c.setdefault("theme", {})
         theme["fontOrigin"] = "local"
         theme["cdnCaching"] = False
+        # publish-filter.py derives a `published:` date for every note from its
+        # ledger, so that is the date worth showing. Upstream defaults to
+        # "modified", which here would just be the last time the note was
+        # touched at all.
+        c["defaultDateType"] = "published"
 
         for entry in conf.get("plugins", []):
             source = entry.get("source", "")
@@ -142,7 +164,22 @@ let
             # Upstream ships the Quartz project's own GitHub and Discord as footer
             # links, which would otherwise appear on this site.
             if name == "footer":
-                entry.setdefault("options", {})["links"] = footer_links
+                options_of(entry)["links"] = footer_links
+            # Applied BEFORE the caller's options, so it is only a default. The
+            # site-level configuration.defaultDateType above cannot do this job:
+            # this plugin writes defaultDateType onto every file, and the
+            # per-file value is what content-meta actually reads.
+            if name == "created-modified-date":
+                options_of(entry)["defaultDateType"] = "published"
+
+            if name in plugin_options:
+                options_of(entry).update(plugin_options[name])
+
+            # Applied AFTER, because it is not negotiable: the vendored plugin
+            # has its git support stubbed out, and asking for it throws at build
+            # time. See packages/quartz/default.nix.
+            if name == "created-modified-date":
+                options_of(entry)["priority"] = ["frontmatter", "filesystem"]
 
         # Only the enabled plugins get linked into .quartz/plugins. Everything
         # placed there is pulled into the esbuild pass whether or not it is
@@ -169,7 +206,9 @@ let
     runtimeInputs = [
       pkgs.git
       pkgs.openssh
-      pkgs.python3
+      # pyyaml for publish-filter.py, which rewrites the frontmatter of every
+      # published note (dates, aliases, description).
+      (pkgs.python3.withPackages (ps: [ ps.pyyaml ]))
       quartz
       pkgs.nodejs_22
       # The skip gates lean on find/sha256sum/sort/grep. NixOS puts these on a
@@ -229,7 +268,11 @@ let
       fi
 
       # ---- 3. reduce it to only what is marked publish: true -----------------
-      python3 ${./publish-filter.py} "${vaultDir}" "${stateDir}/content"
+      # The ledger lives outside the staging tree because it must survive it:
+      # staging is rebuilt from scratch every run, and the first date a note was
+      # seen is not recoverable from anywhere else.
+      python3 ${./publish-filter.py} "${vaultDir}" "${stateDir}/content" \
+        "${stateDir}/dates.json"
 
       # Gate two: the vault moved, but did the PUBLISHED set? Editing a private
       # note changes vault_id and nothing else, and that is the common case.
@@ -268,7 +311,8 @@ let
         "${cfg.baseUrl}" "${cfg.siteTitle}" \
         "${lib.concatStringsSep "," cfg.disabledPlugins}" \
         ${lib.escapeShellArg (builtins.toJSON cfg.footerLinks)} \
-        "$work/enabled-plugins.json"
+        "$work/enabled-plugins.json" \
+        ${lib.escapeShellArg (builtins.toJSON cfg.pluginOptions)}
 
       # Plugins are vendored from npm (they ship dist/, which the source repos
       # do not — and regeneratePluginIndex skips anything without
@@ -461,7 +505,6 @@ in
     disabledPlugins = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [
-        "created-modified-date" # needs @napi-rs/simple-git
         "latex" # needs @myriaddreamin/rehype-typst
         "favicon" # needs sharp
         "og-image" # needs sharp
@@ -471,10 +514,30 @@ in
         dependencies are native and not vendored by the quartz package; leaving
         any of them enabled aborts the build, because Quartz responds to a
         plugin that fails to instantiate by putting undefined in the component
-        list rather than skipping it.
+        list rather than skipping it. Add to this list to switch off plugins
+        that work but are not wanted.
 
-        Note that created-modified-date is what reads dates from git, so
-        published pages fall back to frontmatter and filesystem mtime.
+        Note that note-properties looks like a presentation plugin and is not:
+        it is what parses frontmatter into aliases, tags and description.
+        Disabling it breaks alias redirects. To hide the properties panel it
+        renders, set its hidePropertiesView option in pluginOptions instead.
+      '';
+    };
+
+    pluginOptions = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      default = { };
+      example = {
+        content-meta.showReadingTime = false;
+      };
+      description = ''
+        Per-plugin options, merged over whatever upstream's default config sets
+        for that plugin. Keyed by plugin name, i.e. the last segment of its
+        `source:`.
+
+        Only the keys given are overridden, so this does not have to restate a
+        plugin's whole option set — which also means an upstream change to an
+        option left unmentioned here is picked up rather than pinned.
       '';
     };
   };

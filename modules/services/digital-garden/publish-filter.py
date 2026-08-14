@@ -12,19 +12,45 @@ generator is told to do.
 Fail-closed rules, in order of importance:
   * publish defaults to false. Only a real YAML boolean true publishes.
   * Any note that fails to parse is skipped, never published.
+  * The rewritten frontmatter is re-checked against the same strict pattern
+    before it is written, so a note can only leave here still marked.
   * Wikilinks that point at unpublished notes are flattened to plain text, so
     the garden contains no links to pages that do not exist.
   * Only attachments actually embedded by a published note are copied.
   * The staging tree is built fresh and swapped in, so a removed `publish: true`
     always disappears from the next build.
 
-Usage: publish-filter.py <vault> <staging>
+Published notes are FLATTENED to the root of the staging tree, so the site's
+URLs are `/some-essay` rather than `/whatever-folder/some-essay`. The vault's
+folder names are private working vocabulary, and reorganising the vault must
+not break a published URL. A note that moves keeps its address; a note's old
+address keeps working via an injected `aliases:` entry, which the
+alias-redirects plugin turns into a redirect page.
+
+Flattening makes filenames the global namespace, which the link rewriter below
+already assumed (it resolves wikilinks by stem). Two published notes sharing a
+filename is therefore a hard error rather than a silent drop.
+
+Dates are derived, not written by hand. `<ledger>` records the first time each
+note appeared in the published set and the last time its text changed, and
+those are injected as `published:`/`modified:` frontmatter for Quartz to
+render. Frontmatter written by hand always wins, so the ledger is a default and
+not an authority — which also means losing the ledger costs you nothing that
+matters. `thesis:` is optional; when present it becomes the page description,
+and when absent it is reported, not enforced.
+
+Usage: publish-filter.py <vault> <staging> <ledger>
 """
 
+import hashlib
+import json
 import re
 import shutil
 import sys
+from datetime import date
 from pathlib import Path
+
+import yaml
 
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 # (?!\() rejects [[1]](url) — pasted Wikipedia prose is full of these
@@ -42,11 +68,59 @@ def is_published(text):
     return bool(m) and bool(PUBLISH_TRUE.search(m.group(1)))
 
 
+def split_frontmatter(text):
+    """(mapping, body) for a note, or None if the frontmatter is not usable.
+
+    Returning None is a decision not to publish: a note whose frontmatter does
+    not round-trip is one whose `publish:` marker we cannot reason about.
+    """
+    m = FRONTMATTER.match(text)
+    if not m:
+        return None
+    try:
+        front = yaml.safe_load(m.group(1))
+    except yaml.YAMLError:
+        return None
+    if not isinstance(front, dict):
+        return None
+    return front, text[m.end() :]
+
+
+def coalesce_aliases(front):
+    """Obsidian accepts `alias` and `aliases`, scalar or list. Normalise both."""
+    out = []
+    for key in ("aliases", "alias"):
+        value = front.get(key)
+        if isinstance(value, str):
+            value = [value]
+        if isinstance(value, list):
+            out += [str(v) for v in value]
+    return out
+
+
+def update_ledger(ledger, slug, text, today):
+    """First sighting sets `published`; a changed note bumps `modified`.
+
+    The hash covers the note as it was READ, not as it is written below, so a
+    note's date does not move because some *other* note was published and its
+    links here turned back into links.
+    """
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    entry = ledger.get(slug)
+    if not isinstance(entry, dict) or "published" not in entry:
+        entry = {"published": today, "modified": today, "hash": digest}
+    elif entry.get("hash") != digest:
+        entry = {**entry, "modified": today, "hash": digest}
+    ledger[slug] = entry
+    return entry
+
+
 def main(argv):
-    if len(argv) != 3:
+    if len(argv) != 4:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
     vault, staging = Path(argv[1]).resolve(), Path(argv[2]).resolve()
+    ledger_path = Path(argv[3]).resolve()
     if not vault.is_dir():
         print(f"vault not a directory: {vault}", file=sys.stderr)
         return 2
@@ -57,6 +131,7 @@ def main(argv):
     # ---- pass 1: decide what is published -----------------------------------
     published = {}     # stem(lower) -> (relative path, text)
     attachments = {}   # stem(lower) -> path
+    collisions = []
     skipped = 0
     for path in sorted(vault.rglob("*")):
         if not path.is_file() or any(p.startswith(".") for p in path.relative_to(vault).parts):
@@ -73,12 +148,24 @@ def main(argv):
             skipped += 1
             continue
         if is_published(text):
-            published[path.stem.lower()] = (path.relative_to(vault), text)
+            rel = path.relative_to(vault)
+            if path.stem.lower() in published:
+                collisions.append((published[path.stem.lower()][0], rel))
+            published[path.stem.lower()] = (rel, text)
+
+    # Flattening puts every published note in one namespace, so a duplicate
+    # filename would silently publish whichever sorted last — under the URL of
+    # the other one. Refuse to build rather than guess which was meant.
+    if collisions:
+        print("published notes share a filename; rename one of each pair:", file=sys.stderr)
+        for first, second in collisions:
+            print(f"  {first}\n  {second}", file=sys.stderr)
+        return 1
 
     # ---- pass 2: rewrite links, gather the attachments actually used --------
     used_attachments = {}
 
-    def rewrite(m, _rel):
+    def rewrite(m):
         embed, target, _heading, alias = m.groups()
         key = target.strip().lower()
         if embed:
@@ -91,19 +178,71 @@ def main(argv):
             return m.group(0)
         return alias or target                  # link to an unpublished note
 
-    out = {}
-    for key, (rel, text) in published.items():
-        out[key] = (rel, LINK.sub(lambda m: rewrite(m, rel), text))
+    # ---- pass 3: derive dates, then write a flat tree and swap it in --------
+    try:
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        if not isinstance(ledger, dict):
+            ledger = {}
+    except (OSError, ValueError):
+        ledger = {}
 
-    # ---- pass 3: build a fresh tree and swap it in --------------------------
+    today = date.today().isoformat()
     tmp = staging.with_name(staging.name + ".new")
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
-    for _key, (rel, text) in out.items():
-        dest = tmp / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(text, encoding="utf-8")
+
+    written = 0
+    no_thesis = []
+    for slug, (rel, text) in sorted(published.items()):
+        split = split_frontmatter(LINK.sub(rewrite, text))
+        if split is None:
+            print(f"unparseable frontmatter, not publishing: {rel}", file=sys.stderr)
+            skipped += 1
+            continue
+        front, body = split
+
+        entry = update_ledger(ledger, slug, text, today)
+        # The landing page is a table of contents, not an essay: it has no
+        # publication date worth showing and owes nobody a thesis.
+        if rel.name.lower() != "index.md":
+            # As real YAML dates, so they match a hand-written `published:` and
+            # reach Quartz as dates rather than as strings that look like them.
+            front.setdefault("published", date.fromisoformat(entry["published"]))
+            if entry["modified"] != entry["published"]:
+                front.setdefault("modified", date.fromisoformat(entry["modified"]))
+
+            # The one-sentence claim, when there is one, is the page's
+            # description: a better summary than the first 150 characters of
+            # prose will ever be.
+            thesis = front.get("thesis")
+            if thesis and not front.get("description"):
+                front["description"] = str(thesis).strip()
+            if not thesis:
+                no_thesis.append(rel)
+
+        # Everything published lives at the root, so anything that used to live
+        # in a folder needs its old address kept alive.
+        old_url = str(rel.with_suffix(""))
+        if rel.parent != Path("."):
+            aliases = coalesce_aliases(front)
+            if old_url not in aliases:
+                aliases.append(old_url)
+            front["aliases"] = aliases
+            front.pop("alias", None)
+
+        head = yaml.safe_dump(front, sort_keys=False, allow_unicode=True)
+        # Defence in depth against this function itself: whatever we just built
+        # has to still satisfy the check that let the note through in the first
+        # place, or it does not get written.
+        if not PUBLISH_TRUE.search(head):
+            print(f"lost publish marker while rewriting, dropping: {rel}", file=sys.stderr)
+            skipped += 1
+            continue
+
+        (tmp / rel.name).write_text(f"---\n{head}---\n{body}", encoding="utf-8")
+        written += 1
+
     for src in used_attachments:
         dest = tmp / "attachments" / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -118,10 +257,16 @@ def main(argv):
     if old.exists():
         shutil.rmtree(old)
 
+    # Only after the tree is in place: a run that died above should not record
+    # dates for notes that were never published.
+    ledger_path.write_text(json.dumps(ledger, indent=2, sort_keys=True), encoding="utf-8")
+
     print(
-        f"published {len(out)} notes, {len(used_attachments)} attachments"
-        + (f", skipped {skipped} unreadable" if skipped else "")
+        f"published {written} notes, {len(used_attachments)} attachments"
+        + (f", skipped {skipped}" if skipped else "")
     )
+    for rel in no_thesis:
+        print(f"  no thesis: {rel}", file=sys.stderr)
     return 0
 
 

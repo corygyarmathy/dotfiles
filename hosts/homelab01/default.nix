@@ -144,6 +144,36 @@
         GitHub = "https://github.com/corygyarmathy";
       };
       source = "obsidian-sync";
+
+      # This is a collection of finished essays, not a published Zettelkasten.
+      # Every plugin below exists to help a reader browse a *cloud* of notes,
+      # and each one actively works against that: a graph of a dozen unrelated
+      # essays advertises how few there are, an explorer publishes the vault's
+      # private folder names, and automatic backlinks manufacture exactly the
+      # Wikipedia-ish adjacency that the writing is meant to avoid. Navigation
+      # is index.md and search, deliberately.
+      disabledPlugins = [
+        "latex" # needs @myriaddreamin/rehype-typst
+        "favicon" # needs sharp
+        "og-image" # needs sharp
+        "graph"
+        "explorer"
+        "backlinks"
+        "breadcrumbs" # everything is at the root; there is no trail to draw
+        "recent-notes"
+        "tag-list"
+        "tag-page"
+      ];
+
+      pluginOptions = {
+        # note-properties has to stay ON — it is the frontmatter parser, and
+        # alias redirects for old URLs come out of it — but the Obsidian-style
+        # properties panel it draws on every page is scaffolding, not content.
+        note-properties.hidePropertiesView = true;
+        # Leaves the publication date, which publish-filter.py derives. A
+        # reading time on an essay that promises to be short is noise.
+        content-meta.showReadingTime = false;
+      };
     };
 
     vikunja.enable = false; # Todo app
