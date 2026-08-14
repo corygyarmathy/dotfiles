@@ -36,8 +36,18 @@ note appeared in the published set and the last time its text changed, and
 those are injected as `published:`/`modified:` frontmatter for Quartz to
 render. Frontmatter written by hand always wins, so the ledger is a default and
 not an authority — which also means losing the ledger costs you nothing that
-matters. `thesis:` is optional; when present it becomes the page description,
-and when absent it is reported, not enforced.
+matters.
+
+`thesis:` is the note's claim in one sentence. It becomes the page description
+and the RSS item's summary, and it is appended to any list item elsewhere that
+is nothing but a link to the note — so an index or hub page reads as claims,
+while each claim lives in exactly one place: the essay making it. It is
+optional; a note without one is reported, not withheld. Notes past
+LONG_NOTE_WORDS are reported on the same terms.
+
+A leading H1 is lifted out of the body and becomes the title. Quartz renders a
+title of its own, so a note written the ordinary way would otherwise show it
+twice.
 
 Usage: publish-filter.py <vault> <staging> <ledger>
 """
@@ -57,6 +67,14 @@ FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 LINK = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]*))?\]\](?!\()")
 # deliberately not a YAML parser: we accept exactly one literal spelling
 PUBLISH_TRUE = re.compile(r"^publish:\s*true\s*(?:#.*)?$", re.M | re.I)
+# The first thing in the body, if it is an ATX H1. Setext underlining is not
+# matched: Obsidian does not produce it and guessing costs more than it saves.
+LEADING_H1 = re.compile(r"\A\s*#[ \t]+(.+?)[ \t]*\n+")
+# A list item that is nothing but a link to another published note — the shape
+# an index or hub entry takes before its thesis is filled in.
+BARE_LINK_ITEM = re.compile(r"^([ \t]*[-*+][ \t]+)\[\[([^\]|#]+)(?:\|([^\]]*))?\]\][ \t]*$", re.M)
+# Not a limit, just the point past which a note is worth another look.
+LONG_NOTE_WORDS = 500
 ATTACHMENT_SUFFIXES = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif",
     ".pdf", ".mp4", ".webm", ".mp3", ".ogg", ".wav",
@@ -162,7 +180,26 @@ def main(argv):
             print(f"  {first}\n  {second}", file=sys.stderr)
         return 1
 
-    # ---- pass 2: rewrite links, gather the attachments actually used --------
+    # ---- pass 2: read frontmatter, so a thesis is known before anything is
+    #              written and an unusable note is dropped before it is linked -
+    fronts = {}   # stem(lower) -> (frontmatter mapping, body)
+    theses = {}   # stem(lower) -> one-line claim
+    for slug, (rel, text) in sorted(published.items()):
+        split = split_frontmatter(text)
+        if split is None:
+            print(f"unparseable frontmatter, not publishing: {rel}", file=sys.stderr)
+            skipped += 1
+            continue
+        fronts[slug] = split
+        thesis = split[0].get("thesis")
+        if thesis:
+            theses[slug] = " ".join(str(thesis).split())
+    # Drop the unusable ones BEFORE the link rewriter runs, or a note that is
+    # about to be discarded still reads as published and every wikilink to it
+    # survives as a link to a page that will not exist.
+    published = {slug: v for slug, v in published.items() if slug in fronts}
+
+    # ---- pass 3: rewrite links, gather the attachments actually used --------
     used_attachments = {}
 
     def rewrite(m):
@@ -178,7 +215,7 @@ def main(argv):
             return m.group(0)
         return alias or target                  # link to an unpublished note
 
-    # ---- pass 3: derive dates, then write a flat tree and swap it in --------
+    # ---- pass 4: derive dates, then write a flat tree and swap it in --------
     try:
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         if not isinstance(ledger, dict):
@@ -194,18 +231,36 @@ def main(argv):
 
     written = 0
     no_thesis = []
+    overlong = []
     for slug, (rel, text) in sorted(published.items()):
+        # Rewritten as one string, frontmatter included: a wikilink to a private
+        # note is just as much of a leak in an `aliases:` list as it is in prose.
+        # That rewriting can itself invalidate the YAML, which is why this is
+        # re-checked here having already parsed in pass 2.
         split = split_frontmatter(LINK.sub(rewrite, text))
         if split is None:
-            print(f"unparseable frontmatter, not publishing: {rel}", file=sys.stderr)
+            print(f"link rewriting broke the frontmatter, dropping: {rel}", file=sys.stderr)
             skipped += 1
             continue
         front, body = split
+
+        # Markdown convention says the first H1 is the title, and Quartz renders
+        # a title of its own from the filename, so a note written the usual way
+        # shows it twice. Take the H1 out and let it BE the title, which also
+        # means a note can be titled differently from its filename without
+        # anyone having to remember a frontmatter key.
+        heading = LEADING_H1.match(body)
+        if heading:
+            front.setdefault("title", heading.group(1).strip())
+            body = body[heading.end() :]
 
         entry = update_ledger(ledger, slug, text, today)
         # The landing page is a table of contents, not an essay: it has no
         # publication date worth showing and owes nobody a thesis.
         if rel.name.lower() != "index.md":
+            words = len(body.split())
+            if words > LONG_NOTE_WORDS:
+                overlong.append((rel, words))
             # As real YAML dates, so they match a hand-written `published:` and
             # reach Quartz as dates rather than as strings that look like them.
             front.setdefault("published", date.fromisoformat(entry["published"]))
@@ -220,6 +275,20 @@ def main(argv):
                 front["description"] = str(thesis).strip()
             if not thesis:
                 no_thesis.append(rel)
+
+        # A list item that is only a link gets the target's thesis appended, so
+        # an index or hub page reads as claims rather than as bare titles, and
+        # the claim itself lives in exactly one place: the essay making it. An
+        # item the author has already written prose after is left alone.
+        def annotate(m):
+            indent, target, alias = m.groups()
+            thesis = theses.get(target.strip().lower())
+            if not thesis:
+                return m.group(0)
+            shown = f"[[{target}|{alias}]]" if alias else f"[[{target}]]"
+            return f"{indent}{shown} — {thesis}"
+
+        body = BARE_LINK_ITEM.sub(annotate, body)
 
         # Everything published lives at the root, so anything that used to live
         # in a folder needs its old address kept alive.
@@ -265,8 +334,12 @@ def main(argv):
         f"published {written} notes, {len(used_attachments)} attachments"
         + (f", skipped {skipped}" if skipped else "")
     )
+    # Reported, never enforced. These are the author's own standards and the
+    # build has no business deciding when a note has met them.
     for rel in no_thesis:
         print(f"  no thesis: {rel}", file=sys.stderr)
+    for rel, words in overlong:
+        print(f"  {words} words: {rel}", file=sys.stderr)
     return 0
 
 
