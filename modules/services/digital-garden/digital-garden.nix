@@ -341,7 +341,15 @@ let
 
       # Quartz compiles quartz/styles/custom.scss into its stylesheet last, so
       # these rules win over base.scss at equal specificity without !important.
-      cp ${pkgs.writeText "quartz-custom.scss" cfg.extraCss} quartz/styles/custom.scss
+      #
+      # APPEND, never overwrite. That file is not the empty hook it looks like:
+      # it carries the `@use "./base.scss"` that pulls the ENTIRE base
+      # stylesheet into the build. Replacing it drops every base rule — fonts,
+      # colours, the flex helpers the layout depends on — and the site still
+      # builds, still deploys, and renders as nearly unstyled prose. Fail here
+      # if that import ever moves, rather than discovering it in a browser.
+      grep -q '@use "./base.scss"' quartz/styles/custom.scss
+      cat ${pkgs.writeText "quartz-custom.scss" cfg.extraCss} >> quartz/styles/custom.scss
 
       # Plugins are vendored from npm (they ship dist/, which the source repos
       # do not — and regeneratePluginIndex skips anything without

@@ -164,6 +164,9 @@
         "tag-list"
         "tag-page"
         "stacked-pages"
+        # Its entire job is hiding the sidebars for distraction-free reading.
+        # There are no sidebars, so the button was real and did nothing.
+        "reader-mode"
       ];
 
       pluginOptions = {
@@ -190,13 +193,16 @@
           position = "beforeBody";
           group = "toolbar";
           priority = 1; # leftmost in the row
+          # Takes up the slack in the row, which pushes everything after it to
+          # the right. Upstream puts this on search instead, which stretches
+          # the search control into a full-width bar.
+          groupOptions.grow = true;
         };
-        # These are already in the toolbar group, and search already carries
-        # groupOptions.grow, so it fills the middle and pushes the toggles
-        # right. Only the position changes.
-        search.position = "beforeBody";
+        search = {
+          position = "beforeBody";
+          groupOptions.grow = false; # a control, not a bar
+        };
         darkmode.position = "beforeBody";
-        reader-mode.position = "beforeBody";
       };
 
       layoutConfig = {
@@ -233,6 +239,30 @@
           margin: 0;
           font-size: 1.1rem;
           white-space: nowrap;
+        }
+
+        // Search reduced to its icon. Upstream draws it as a bordered box with
+        // the word "Search" in it, which reads as an input you can type into —
+        // it is not, it opens a modal. The button keeps its aria-label, so
+        // dropping the visible word costs nothing to a screen reader.
+        .search {
+          flex-grow: 0;
+          max-width: none;
+        }
+
+        .search > .search-button {
+          width: auto;
+          padding: 0;
+          border: none;
+          border-radius: 0;
+        }
+
+        .search > .search-button > p {
+          display: none;
+        }
+
+        .search > .search-button svg {
+          margin: 0;
         }
       '';
     };
