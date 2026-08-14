@@ -20,13 +20,16 @@
 # - dontNpmBuild: there is no build script; we only want deps installed and the
 #   `quartz` bin linked.
 #
-# Four plugins are unusable here because their own runtime dependencies are
-# native and not vendored — created-modified-date (@napi-rs/simple-git), latex
-# (@myriaddreamin/rehype-typst), favicon and og-image (both sharp). Quartz does
-# not degrade gracefully when a plugin fails to instantiate: it leaves an
-# undefined in the component list and the build dies in ComponentResources.
-# They are disabled by the consuming module; see
+# Three plugins are unusable here because their own runtime dependencies are
+# native and not vendored — latex (@myriaddreamin/rehype-typst), favicon and
+# og-image (both sharp). Quartz does not degrade gracefully when a plugin fails
+# to instantiate: it leaves an undefined in the component list and the build
+# dies in ComponentResources. They are disabled by the consuming module; see
 # cg.service.digital-garden.disabledPlugins.
+#
+# created-modified-date was a fourth until its one native dependency was stubbed
+# out below, which costs it the ability to read dates from git history and
+# nothing else.
 #
 # Several plugins also fetch browser-side libraries from a CDN at runtime, which
 # would leak every visitor's IP to a third party from a site whose whole point
@@ -147,6 +150,22 @@ let
     '';
 
   plugins = rawPlugins // {
+    # created-modified-date imports @napi-rs/simple-git at the TOP of its
+    # bundle, so the module fails to load whatever its `priority` says, and the
+    # plugin had to be switched off entirely — which took every date on the site
+    # with it, since nothing else populates file.data.dates. Only the "git"
+    # priority source ever reaches that import, and a vault arriving over
+    # Obsidian Sync has no history to read anyway, so the dependency is replaced
+    # with something that throws if it is ever called. The consuming module
+    # forces priority to frontmatter+filesystem; see digital-garden.nix.
+    created-modified-date = runCommand "quartz-plugin-created-modified-date-nogit" { } ''
+      cp -r ${rawPlugins.created-modified-date} $out
+      chmod -R u+w $out
+      substituteInPlace $out/created-modified-date/dist/index.js \
+        --replace-fail "import { Repository } from '@napi-rs/simple-git';" \
+          "const Repository = { discover() { throw new Error('quartz: packaged without git date support'); } };"
+    '';
+
     obsidian-flavored-markdown = localiseCdn {
       name = "obsidian-flavored-markdown";
       plugin = rawPlugins.obsidian-flavored-markdown;
