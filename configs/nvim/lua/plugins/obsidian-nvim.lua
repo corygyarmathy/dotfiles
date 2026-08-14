@@ -1,3 +1,35 @@
+-- Name new notes after their title instead of a Zettelkasten id, so `[[Note Name]]`
+-- creates `Note Name.md`. Used for every note that goes through `Note.create`
+-- (link creation, `Obsidian new`, `Obsidian new_from_template`); daily notes and
+-- `Obsidian unique_note` pass their own ids verbatim and are unaffected.
+local function title_to_filename(title, dir)
+	if type(title) ~= "string" then
+		return require("obsidian.builtin").zettel_id()
+	end
+
+	-- Keep the title readable, just drop what Obsidian disallows in filenames.
+	-- A "Folder/Note Name" input is still fine: obsidian.nvim splits the folder
+	-- off before this runs, so only the last segment ever gets here.
+	local name = title:gsub('[/\\*"<>:|?]', ""):gsub("%s+", " ")
+	name = vim.trim(name):gsub("%.+$", "")
+
+	if name == "" then
+		return require("obsidian.builtin").zettel_id()
+	elseif not dir then
+		return name
+	end
+
+	-- Don't silently write into an existing note of the same name.
+	local base_dir = require("obsidian.path").new(dir)
+	local candidate, idx = name, 2
+	while (base_dir / candidate):with_suffix(".md", true):exists() do
+		candidate = string.format("%s %d", name, idx)
+		idx = idx + 1
+	end
+
+	return candidate
+end
+
 return {
 	{
 		"obsidian-nvim/obsidian.nvim",
@@ -44,6 +76,8 @@ return {
 			attachments = { folder = "Files" },
 			ui = { enable = false },
 			legacy_commands = false, -- Just to suppress the annoying warning every startup
+
+			note_id_func = title_to_filename,
 
 			-- keep basic frontmatter, just don't have `id`
 			frontmatter = {
