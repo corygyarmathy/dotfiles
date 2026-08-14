@@ -175,6 +175,66 @@
         # reading time on an essay that promises to be short is noise.
         content-meta.showReadingTime = false;
       };
+
+      # One column. With the browsing plugins gone the left sidebar held a
+      # title and three controls above a large empty space, which reads as
+      # unfinished rather than as restraint. The four survivors move to a
+      # masthead across the top and the column goes away.
+      # Note that "header" is not a position a plugin can be given — Quartz
+      # only routes entries to left, right, beforeBody and afterBody, and
+      # anything else is dropped without a word. The masthead is therefore the
+      # existing toolbar group moved to the top of beforeBody, which is what
+      # renders above the article title.
+      pluginLayout = {
+        page-title = {
+          position = "beforeBody";
+          group = "toolbar";
+          priority = 1; # leftmost in the row
+        };
+        # These are already in the toolbar group, and search already carries
+        # groupOptions.grow, so it fills the middle and pushes the toggles
+        # right. Only the position changes.
+        search.position = "beforeBody";
+        darkmode.position = "beforeBody";
+        reader-mode.position = "beforeBody";
+      };
+
+      layoutConfig = {
+        # Ahead of article-title, which sits at 10.
+        groups.toolbar.priority = 1;
+        byPageType = {
+          content.template = "full-width";
+          "404".template = "full-width";
+        };
+      };
+
+      extraCss = ''
+        // Cap the measure. "full-width" means no sidebars, not that prose
+        // should span a 27" monitor; line length is a legibility function.
+        .page[data-frame="full-width"] > #quartz-body {
+          & .center.full-width,
+          & footer {
+            max-width: 40rem;
+            min-width: 0;
+            margin-left: auto;
+            margin-right: auto;
+          }
+        }
+
+        // Masthead: one row, ruled off from the article beneath it.
+        .page-header .flex-component {
+          align-items: center;
+          padding-bottom: 0.75rem;
+          margin-bottom: 2rem;
+          border-bottom: 1px solid var(--lightgray);
+        }
+
+        .page-title {
+          margin: 0;
+          font-size: 1.1rem;
+          white-space: nowrap;
+        }
+      '';
     };
 
     vikunja.enable = false; # Todo app

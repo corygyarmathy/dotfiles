@@ -89,6 +89,9 @@ let
         footerLinks
         disabledPlugins
         pluginOptions
+        pluginLayout
+        layoutConfig
+        extraCss
         ;
     }
   );
@@ -111,18 +114,31 @@ let
 
         src, plugin_map_path, dest = sys.argv[1:4]
         base_url, title, disabled_csv, footer_links_json, enabled_out = sys.argv[4:9]
-        plugin_options_json = sys.argv[9]
+        plugin_options_json, plugin_layout_json, layout_config_json = sys.argv[9:12]
         disabled = {n for n in disabled_csv.split(",") if n}
         footer_links = json.loads(footer_links_json)
         plugin_options = json.loads(plugin_options_json)
+        plugin_layout = json.loads(plugin_layout_json)
+        layout_config = json.loads(layout_config_json)
 
 
-        def options_of(entry):
-            # `options:` is absent for most layout entries and can be an explicit
-            # null, neither of which .setdefault alone survives.
-            if not isinstance(entry.get("options"), dict):
-                entry["options"] = {}
-            return entry["options"]
+        def slot(entry, key):
+            # These keys are absent for many entries and can be an explicit null,
+            # neither of which .setdefault alone survives.
+            if not isinstance(entry.get(key), dict):
+                entry[key] = {}
+            return entry[key]
+
+
+        def deep_merge(base, over):
+            # byPageType is a map of maps: assigning content.template must not
+            # take folder's settings with it.
+            for key, value in over.items():
+                if isinstance(value, dict) and isinstance(base.get(key), dict):
+                    deep_merge(base[key], value)
+                else:
+                    base[key] = value
+            return base
 
 
         with open(src) as fh:
@@ -164,22 +180,29 @@ let
             # Upstream ships the Quartz project's own GitHub and Discord as footer
             # links, which would otherwise appear on this site.
             if name == "footer":
-                options_of(entry)["links"] = footer_links
+                slot(entry, "options")["links"] = footer_links
             # Applied BEFORE the caller's options, so it is only a default. The
             # site-level configuration.defaultDateType above cannot do this job:
             # this plugin writes defaultDateType onto every file, and the
             # per-file value is what content-meta actually reads.
             if name == "created-modified-date":
-                options_of(entry)["defaultDateType"] = "published"
+                slot(entry, "options")["defaultDateType"] = "published"
 
             if name in plugin_options:
-                options_of(entry).update(plugin_options[name])
+                slot(entry, "options").update(plugin_options[name])
 
             # Applied AFTER, because it is not negotiable: the vendored plugin
             # has its git support stubbed out, and asking for it throws at build
             # time. See packages/quartz/default.nix.
             if name == "created-modified-date":
-                options_of(entry)["priority"] = ["frontmatter", "filesystem"]
+                slot(entry, "options")["priority"] = ["frontmatter", "filesystem"]
+
+            # `layout` is a sibling of `options`, not part of it: it is where a
+            # component's position on the page is decided.
+            if name in plugin_layout:
+                slot(entry, "layout").update(plugin_layout[name])
+
+        deep_merge(conf.setdefault("layout", {}), layout_config)
 
         # Only the enabled plugins get linked into .quartz/plugins. Everything
         # placed there is pulled into the esbuild pass whether or not it is
@@ -312,7 +335,13 @@ let
         "${lib.concatStringsSep "," cfg.disabledPlugins}" \
         ${lib.escapeShellArg (builtins.toJSON cfg.footerLinks)} \
         "$work/enabled-plugins.json" \
-        ${lib.escapeShellArg (builtins.toJSON cfg.pluginOptions)}
+        ${lib.escapeShellArg (builtins.toJSON cfg.pluginOptions)} \
+        ${lib.escapeShellArg (builtins.toJSON cfg.pluginLayout)} \
+        ${lib.escapeShellArg (builtins.toJSON cfg.layoutConfig)}
+
+      # Quartz compiles quartz/styles/custom.scss into its stylesheet last, so
+      # these rules win over base.scss at equal specificity without !important.
+      cp ${pkgs.writeText "quartz-custom.scss" cfg.extraCss} quartz/styles/custom.scss
 
       # Plugins are vendored from npm (they ship dist/, which the source repos
       # do not — and regeneratePluginIndex skips anything without
@@ -538,6 +567,52 @@ in
         Only the keys given are overridden, so this does not have to restate a
         plugin's whole option set — which also means an upstream change to an
         option left unmentioned here is picked up rather than pinned.
+      '';
+    };
+
+    pluginLayout = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      default = { };
+      example = {
+        search.position = "header";
+      };
+      description = ''
+        Where each component is placed on the page, merged over upstream's
+        default. Keyed by plugin name, same as pluginOptions.
+
+        This is the plugin entry's `layout:` block, which is a sibling of
+        `options:` and not part of it — hence the separate setting. Valid
+        positions are header, beforeBody, left, right and afterBody.
+      '';
+    };
+
+    layoutConfig = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      default = { };
+      example = {
+        byPageType.content.template = "full-width";
+      };
+      description = ''
+        Site-wide layout, deep-merged over upstream's top-level `layout:` block.
+        Holds component groups and per-page-type overrides.
+
+        `byPageType.<type>.template` picks the page frame: "default" (two
+        sidebars), "full-width" (none) or "minimal" (none, and no header or
+        footer chrome). `byPageType.<type>.positions.<pos> = []` clears a
+        position for that page type, and `.exclude` drops named components
+        from it.
+      '';
+    };
+
+    extraCss = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      description = ''
+        Appended to the generated site as quartz/styles/custom.scss, which
+        Quartz compiles into its stylesheet AFTER base.scss. Rules here
+        therefore win at equal specificity and do not need !important.
+
+        Scss, not plain css: nesting and the theme's variables are available.
       '';
     };
   };
