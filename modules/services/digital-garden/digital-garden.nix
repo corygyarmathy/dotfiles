@@ -683,7 +683,18 @@ in
       extraConfig = ''
         root * ${stateDir}/public
         encode gzip zstd
+        # Quartz emits `<slug>.html` but links to `<slug>`, so a bare
+        # file_server 404s on every internal link. Try the literal path first
+        # (assets, and the folder pages that emit as directories), then the
+        # directory index, then the extension the page was actually written as.
+        try_files {path} {path}/ {path}.html
         file_server
+        # Quartz also generates a styled 404 page; without this Caddy answers
+        # with its own empty one.
+        handle_errors {
+          rewrite * /404.html
+          file_server
+        }
         header {
           X-Content-Type-Options "nosniff"
           Referrer-Policy "strict-origin-when-cross-origin"
