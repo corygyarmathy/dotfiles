@@ -210,6 +210,7 @@ in
           "${stack.dataPath}/books:/books/books"
           "${stack.dataPath}/comics:/books/comics"
           "${stack.dataPath}/manga:/books/manga"
+          "${stack.dataPath}/doujin:/books/doujin"
           "${stack.dataPath}/lightnovels:/books/lightnovels"
           "${stack.dataPath}/audiobooks:/books/audiobooks"
           "${stack.dataPath}/bookdrop:/bookdrop"
