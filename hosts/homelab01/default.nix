@@ -446,11 +446,6 @@
           localOnly = false; # readers need external access
           rateLimitProfile = "media";
         };
-        lazylibrarian = {
-          subdomain = "lazylibrarian";
-          port = 5299;
-          localOnly = true; # admin only
-        };
         mylar3 = {
           subdomain = "mylar3";
           port = 8090;
@@ -647,8 +642,10 @@
     # Reading Stack (Ebooks, Comics, Manga)
     # -------------------------------------------------------------------------
     kavita.enable = true;
-    lazylibrarian.enable = true;
     mylar3.enable = true;
+    # LazyLibrarian was removed in favour of Shelfmark on homelab02. Its state
+    # is still on disk at /srv/arr/lazylibrarian and in the backups; nothing
+    # here deletes it. Remove that directory by hand once you are sure.
 
     # Audiobooks
     audiobookshelf.enable = true;

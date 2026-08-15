@@ -129,7 +129,18 @@ let
       answer = servers.homelab01;
     }
 
-    # Services on homelab02
+    # Services on homelab02.
+    #
+    # These entries are load-bearing, not documentation. The wildcard at the
+    # bottom of this list sends every subdomain that is not named here to
+    # homelab01, so a service added to homelab02's reverse proxy without a
+    # rewrite here resolves to a machine whose Caddy has never heard of it.
+    # That fails as a TLS error rather than a 404, because Caddy has no
+    # certificate for a hostname it does not serve, which points suspicion at
+    # the certificate rather than at DNS.
+    #
+    # A service on homelab02 that is proxied *by homelab01* (via the reverse
+    # proxy's `upstream` option, as grimmory is) belongs above, not here.
     {
       domain = "downloads.${domain}";
       answer = servers.homelab02;
@@ -140,6 +151,10 @@ let
     }
     {
       domain = "filebrowser.${domain}";
+      answer = servers.homelab02;
+    }
+    {
+      domain = "shelfmark.${domain}";
       answer = servers.homelab02;
     }
   ]
