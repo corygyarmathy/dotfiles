@@ -37,9 +37,16 @@
   # ============================================================================
   # Auto-Upgrade
   # ============================================================================
+  # Follows `deploy-stable`, which trails `deploy` by 24h (ADR 0001). This is
+  # the storage node - ZFS, the NFS export homelab01 depends on - so it takes a
+  # revision only after homelab01 has run it for a day. A bad kernel or systemd
+  # bump therefore takes out the compute node, not the one holding the data.
+  #
+  # The lag is time-based, not health-based: nothing yet checks that homelab01
+  # is actually *well*, only that it has had the revision for 24h.
   system.autoUpgrade = {
     enable = true;
-    flake = "github:corygyarmathy/dotfiles#homelab02";
+    flake = "github:corygyarmathy/dotfiles/deploy-stable#homelab02";
     dates = "04:15"; # Offset from homelab01
     allowReboot = true;
     rebootWindow = {

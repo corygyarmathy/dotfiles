@@ -14,6 +14,12 @@ name: NixOS CI
 # NOTE: the `nixos ci` job name is the status-check context required by the
 # `protect-main` repository ruleset. Renaming that job silently blocks every
 # merge until the ruleset is updated to match, so treat the two as a pair.
+#
+# NOTE: never create a branch under `deploy/` or `deploy-stable/`. Git stores
+# refs as paths, so a `deploy/my-branch` ref makes `refs/heads/deploy` a
+# directory, and promotion then fails with "directory file conflict" for as long
+# as that branch exists. The `reserve-deploy-namespace` ruleset blocks this at
+# the server, but the failure is obscure enough to be worth naming here.
 
 on:
   push:
