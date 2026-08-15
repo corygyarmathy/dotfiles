@@ -116,6 +116,11 @@ in
         ]
         ++ lib.optionals config.cg.service.cross-seed.enable [
           "${toString config.cg.service.cross-seed.port}:2468"
+        ]
+        # Shelfmark shares this namespace too, so its UI is published here for
+        # the same reason cross-seed's is.
+        ++ lib.optionals config.cg.service.shelfmark.enable [
+          "${toString config.cg.service.shelfmark.port}:${toString config.cg.service.shelfmark.port}"
         ];
         extraOptions = [
           "--pull=newer"

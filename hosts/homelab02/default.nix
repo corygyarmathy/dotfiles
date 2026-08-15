@@ -286,6 +286,14 @@
           localOnly = true;
         };
 
+        # Shelfmark. Published by the gluetun container on this host, so from
+        # Caddy's point of view it is just another local port.
+        shelfmark = {
+          subdomain = "shelfmark";
+          port = 8084;
+          localOnly = true; # acquisition tooling, same as lazylibrarian/mylar3
+        };
+
         # Future NAS-related services would go here
         # e.g., syncthing, nextcloud, etc.
       };
@@ -351,6 +359,17 @@
       enable = true;
       diskType = "LOCAL"; # /srv/media is the local ZFS pool on this host
     };
+
+    # Search-and-grab for books and audiobooks, feeding Grimmory's BookDrop.
+    # It lives here rather than beside LazyLibrarian on homelab01 because
+    # BookDrop watches with inotify, which does not fire for writes arriving
+    # over NFS from another machine. It shares Gluetun's network namespace, so
+    # its UI is published by the gluetun container, not by this one.
+    #
+    # This does NOT retire LazyLibrarian. Shelfmark replaces the search half of
+    # it and has no equivalent of monitoring an author for future releases, so
+    # both run until that gap is either filled or decided against.
+    shelfmark.enable = true;
 
     # -------------------------------------------------------------------------
     # Services that stay on homelab01
