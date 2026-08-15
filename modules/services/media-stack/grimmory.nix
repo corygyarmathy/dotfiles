@@ -230,8 +230,18 @@ in
       };
 
       podman-grimmory = {
-        after = [ "podman-network-arr.service" ];
-        requires = [ "podman-network-arr.service" ];
+        # nas-directory-setup builds the media tree but is only ordered against
+        # zfs.target, so without this the container can be started before
+        # /srv/media/bookdrop exists and Podman fails the mount outright
+        # ("statfs ...: no such file or directory") rather than waiting.
+        after = [
+          "podman-network-arr.service"
+        ]
+        ++ lib.optional config.cg.service.nas-storage.enable "nas-directory-setup.service";
+        requires = [
+          "podman-network-arr.service"
+        ]
+        ++ lib.optional config.cg.service.nas-storage.enable "nas-directory-setup.service";
       };
 
       # Consistent dump for restic to pick up -- see BACKUPS above.

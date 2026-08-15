@@ -92,24 +92,10 @@ in
         let
           uid = toString config.users.users.${cfg.user}.uid;
           gid = toString config.users.groups.${cfg.group}.gid;
-          dirs = [
-            "downloads"
-            "downloads/complete"
-            "downloads/incomplete"
-            "downloads/cross-seed"
-            "movies"
-            "tv"
-            "music"
-            "livetv"
-            "books"
-            "comics"
-            "manga"
-            "doujin"
-            "lightnovels"
-            "audiobooks"
-            "podcasts"
-            "whisparr"
-          ];
+          # Defined by media-stack so the two modules cannot disagree about
+          # what the tree contains. Read from the options rather than the
+          # enabled config, since nas-storage does not require media-stack.
+          dirs = config.cg.service.media-stack.directories;
         in
         ''
           # Wait for ZFS to fully settle
