@@ -246,6 +246,14 @@ let
       );
     };
 
+    passthru = {
+      autoUpdate = true;
+
+      # Updates the vendored plugins only, never Quartz itself - see update.sh
+      # for why bumping Quartz automatically is unsafe here.
+      updateScript = [ "packages/quartz/update.sh" ];
+    };
+
     meta = {
       description = "Static site generator for Obsidian-style markdown vaults";
       homepage = "https://quartz.jzhao.xyz";
