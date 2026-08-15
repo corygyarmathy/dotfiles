@@ -86,6 +86,30 @@ a workflow discovers and runs them. `nix-update` covers the common cases; bespok
 handle the rest. Attaching the updater to the package rather than listing packages in YAML
 means adding a package does not mean editing CI.
 
+Participation is an explicit `passthru.autoUpdate` flag rather than the presence of
+`updateScript`, because nixpkgs' `buildPythonApplication` sets a default `updateScript` of
+its own. Inferring from that swept up three packages that are our own code, with no
+upstream to track at all.
+
+Every updater obeys one contract: an argv list, run from the repository root, mutating the
+working tree, silent when already current, and on a change printing a one-line summary
+first. `nix-update` does not satisfy that by itself - it narrates to stdout unconditionally,
+which on a real update would become the pull request title - so it is wrapped.
+
+Only three packages qualify. `comskip` tracks an upstream tag and `obsidian-headless` an
+npm release; `quartz` has ~42 npm-pinned plugins that nothing else would ever move. The
+remaining packages are our own code, where the version string tracks nothing. `argtable2`
+is deliberately left out: upstream last moved in 2024 and its tag namespace contains
+`vjonathanmarvens-0.1.1`, so an automated updater has more ways to go wrong than right.
+
+Quartz's own release is *not* automated, only its plugins. Its derivation carries a page
+of workarounds tied to how v5 resolves plugins, and getting that wrong produces a build
+that succeeds and a site that is silently featureless - precisely the failure the CI gate
+cannot see.
+
+These pull requests are not auto-merged, unlike lock bumps. Crossing an upstream release
+boundary is where "it built" is weakest as evidence.
+
 **4. Reporting rides the monitoring stack that already exists.** Hosts export deployment
 state as node_exporter textfile metrics, recorded from `nixos-upgrade.service`'s
 `ExecStopPost` where `SERVICE_RESULT` is available - the same mechanism the restic backup

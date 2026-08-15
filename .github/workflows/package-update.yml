@@ -1,0 +1,191 @@
+name: package-update
+
+# Updates packages that `nix flake update` cannot reach (ADR 0001).
+#
+# A package pinned to an upstream tag or an npm version never moves when the
+# lock does, so it rots silently. Each such package opts in by declaring
+# `passthru.autoUpdate` and `passthru.updateScript`, and this workflow
+# discovers them rather than hardcoding a list - adding a package means editing
+# the package, not this file.
+#
+# Participation is an explicit `autoUpdate` flag rather than the mere presence
+# of `updateScript`, because nixpkgs' buildPythonApplication sets a default
+# updateScript of its own. Inferring from that would sweep up every Python
+# package here and run nix-update against packages that have no upstream at all.
+#
+# The updateScript contract, shared by every updater in packages/*:
+#   - it is an argv list, executed from the repository root
+#   - it mutates the working tree in place
+#   - it prints NOTHING when already current
+#   - on a change, the FIRST line is a one-line summary used as the PR title,
+#     and any further lines are detail for the PR body
+#
+# One PR per package, so a single broken update cannot hold up the others.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Single package to update (blank = all opted-in packages)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-update
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: discover packages
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.list.outputs.packages }}
+      any: ${{ steps.list.outputs.any }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: List opted-in packages
+        id: list
+        run: |
+          set -euo pipefail
+
+          requested="${{ inputs.package }}"
+          if [ -n "$requested" ]; then
+            packages="[\"$requested\"]"
+          else
+            packages="$(nix eval --json '.#packages.x86_64-linux' --apply \
+              'ps: builtins.filter (n: (ps.${n}.autoUpdate or false)) (builtins.attrNames ps)')"
+          fi
+
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          if [ "$packages" = "[]" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No packages declare passthru.autoUpdate."
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "::notice::Packages to check: $packages"
+
+  update:
+    name: update ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    needs: [discover]
+    if: needs.discover.outputs.any == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      # One package's updater failing must not stop the others.
+      fail-fast: false
+      max-parallel: 1 # they all push branches; keep it calm
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            extra-substituters = https://hyprland.cachix.org
+            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
+
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: corygyarmathy-dotfiles
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
+      - name: Run the updater
+        id: run
+        run: |
+          set -euo pipefail
+
+          # argv, executed from the repository root. Elements may be store paths
+          # (nix-update-script) or repo-relative script paths - both are just
+          # argv, so the runner does not care which.
+          mapfile -t argv < <(
+            nix eval --json ".#packages.x86_64-linux.${{ matrix.package }}.updateScript" \
+              | jq -r '.[]'
+          )
+
+          echo "::notice::Running: ${argv[*]}"
+          out="$("${argv[@]}")"
+
+          if [ -z "$out" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.package }} is already current."
+            exit 0
+          fi
+
+          # An updater can print a summary without actually changing anything;
+          # trust the working tree, not the output.
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::${{ matrix.package }} printed a summary but changed no files."
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo 'summary<<OUT_EOF'
+            printf '%s\n' "$out"
+            echo 'OUT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          # First line is the subject by contract. Updaters print a
+          # self-contained line ("comskip: 0.82 -> 0.83") so they read well when
+          # run by hand, but the package name is already in the conventional
+          # -commit scope, so strip a leading "<package>: " to avoid
+          # "build(comskip): comskip: ...".
+          subject="$(printf '%s' "$out" | head -1)"
+          subject="${subject#"${{ matrix.package }}: "}"
+          echo "title=$subject" >> "$GITHUB_OUTPUT"
+
+      # Build before proposing: an update that cannot build should never become
+      # a PR in the first place, the same posture flake-update takes.
+      - name: Build ${{ matrix.package }}
+        if: steps.run.outputs.changed == 'true'
+        run: nix build --print-build-logs --no-link ".#${{ matrix.package }}"
+
+      - name: Open pull request
+        if: steps.run.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+          branch: deps/${{ matrix.package }}
+          base: master
+          delete-branch: true
+          title: "build(${{ matrix.package }}): ${{ steps.run.outputs.title }}"
+          commit-message: |
+            build(${{ matrix.package }}): ${{ steps.run.outputs.title }}
+
+            Regenerated by the package's own passthru.updateScript.
+
+            ${{ steps.run.outputs.summary }}
+          body: |
+            Automated update by `${{ matrix.package }}`'s own
+            `passthru.updateScript`.
+
+            ```
+            ${{ steps.run.outputs.summary }}
+            ```
+
+            `nix build .#${{ matrix.package }}` passed before this PR was
+            opened, so a version that cannot build never gets proposed. The
+            `nixos ci` gate still has to pass before it can merge.
+
+            Not auto-merged: unlike a lock bump, these move a package across an
+            upstream release boundary, where building successfully is weaker
+            evidence than it looks.
+          labels: |
+            dependencies
+            nix

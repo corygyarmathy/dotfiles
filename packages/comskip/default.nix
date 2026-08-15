@@ -7,6 +7,7 @@
   argtable2,
   ffmpeg,
   SDL2,
+  nix-update,
 }:
 
 stdenv.mkDerivation rec {
@@ -53,6 +54,34 @@ stdenv.mkDerivation rec {
   configureFlags = [
     "--bindir=${placeholder "out"}/bin"
   ];
+
+  # Upstream tags are inconsistent - V0.83, 0.82.009, v0.82.003, v0.81.089 - and
+  # `rev` here is built as "V${version}". The regex keeps nix-update to the
+  # V-prefixed releases so it cannot propose a version whose tag does not exist
+  # under that template.
+  passthru = {
+    # Opt in to .github/workflows/package-update.yml. Explicit rather than
+    # inferred from updateScript's presence: nixpkgs' buildPythonApplication
+    # sets a default updateScript of its own, so every Python package here
+    # would otherwise be picked up and "updated" against no upstream at all.
+    autoUpdate = true;
+
+    # Wrapped rather than nix-update-script directly: nix-update narrates to
+    # stdout even when it changes nothing, and the contract is silence when
+    # current. See packages/update-via-nix-update.sh.
+    #
+    # Upstream tags are inconsistent - V0.83, 0.82.009, v0.82.003 - and `rev`
+    # here is built as "V${version}", so the regex keeps nix-update to the
+    # V-prefixed releases and it cannot propose a version whose tag would not
+    # exist under that template.
+    updateScript = [
+      "packages/update-via-nix-update.sh"
+      (lib.getExe nix-update)
+      "comskip"
+      "--version-regex"
+      "^V(.*)"
+    ];
+  };
 
   meta = with lib; {
     description = "Free commercial detector";
