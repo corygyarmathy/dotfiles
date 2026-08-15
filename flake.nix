@@ -86,6 +86,12 @@
             {
               networking.hostName = hostname;
 
+              # Record the flake revision this system was built from, so a host
+              # can report what it is actually running (see docs/adr/0001).
+              # `self.rev` only exists for a clean tree; fall back to dirtyRev
+              # for local `nixos-rebuild` from a working copy.
+              system.configurationRevision = self.rev or self.dirtyRev or "dirty";
+
               # Nix settings
               nix = {
                 settings = {
@@ -93,9 +99,18 @@
                     "nix-command"
                     "flakes"
                   ];
-                  # Hyprland cachix
-                  substituters = [ "https://hyprland.cachix.org" ];
-                  trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
+                  substituters = [
+                    # Hyprland cachix
+                    "https://hyprland.cachix.org"
+                    # Our own CI builds - every host toplevel is pushed here by
+                    # .github/workflows/ci.yml, so the nightly autoUpgrade
+                    # substitutes the closure instead of rebuilding it (ADR 0001).
+                    "https://corygyarmathy-dotfiles.cachix.org"
+                  ];
+                  trusted-public-keys = [
+                    "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
+                    "corygyarmathy-dotfiles.cachix.org-1:/DMVcdDI+4GCAzS6iDTtiwERF1py+MD+w1Z/NTAd2oU="
+                  ];
                 };
                 # Automatic garbage collection
                 gc = {
