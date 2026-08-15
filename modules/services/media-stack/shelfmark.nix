@@ -9,8 +9,22 @@
 # 3. Configure sources under Settings. Nothing is enabled by default -- this
 #    module deliberately ships no source list; which ones to run is a decision
 #    for the operator, not for the Nix config.
-# 4. Add qBittorrent as a download client at http://localhost:8080 (see NETWORK)
-# 5. Leave the download destination at /books, which is the BookDrop folder
+# 4. Add qBittorrent as a download client at http://localhost:8080
+# 5. Point it at Prowlarr by address: http://10.20.2.85:9696
+# 6. Leave the download destination at /books, which is the BookDrop folder
+#
+# THOSE TWO ADDRESSES LOOK INCONSISTENT AND ARE NOT:
+# qBittorrent shares this container's network namespace, so it is genuinely on
+# localhost -- and it must be addressed that way, because WebUI
+# HostHeaderValidation rejects a Host header that is not one of its own names.
+# Giving it the LAN address returns 401 before the request reaches
+# authentication, so nothing appears in qBittorrent's failure log and the
+# client reports it as a wrong password.
+#
+# Prowlarr is on another machine and has to be reached by address for the
+# opposite reason: Gluetun's resolver serves this namespace and cannot see the
+# internal DNS zone, so prowlarr.gyarmathy.co does not resolve here at all.
+# Same symptom class, opposite fixes.
 #
 # WHAT THIS REPLACED, AND WHAT WAS DROPPED WITH IT:
 # LazyLibrarian did two jobs: search/grab, and monitor an author for future
