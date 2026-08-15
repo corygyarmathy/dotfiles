@@ -204,6 +204,27 @@
         import ./packages pkgs
       );
 
+      # Checks run by `nix flake check`, and therefore by the CI gate.
+      #
+      # Building a host proves its Nix evaluates, not that the config files it
+      # ships are valid. A malformed alert rule builds perfectly and then takes
+      # Prometheus down on activation, so validate it here where it is cheap.
+      checks = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        {
+          alert-rules =
+            # promtool lives in the `cli` output, not `out`.
+            pkgs.runCommand "check-alert-rules" { nativeBuildInputs = [ pkgs.prometheus.cli ]; }
+              ''
+                promtool check rules ${./modules/services/monitoring/alert-rules.yml}
+                touch $out
+              '';
+        }
+      );
+
       # Development shell for working on this config
       devShells = forAllSystems (system: {
         default = nixpkgs.legacyPackages.${system}.mkShell {
