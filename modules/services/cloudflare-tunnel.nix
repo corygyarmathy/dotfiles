@@ -60,7 +60,17 @@ in
             };
             port = lib.mkOption {
               type = lib.types.port;
-              description = "Local port the service listens on";
+              description = "Port the service listens on";
+            };
+            upstream = lib.mkOption {
+              type = lib.types.str;
+              default = "localhost";
+              example = "homelab02";
+              description = ''
+                Host the service runs on. Defaults to this machine -- cloudflared
+                bypasses Caddy and connects to the origin directly, so a service
+                living on another node needs its hostname here too.
+              '';
             };
             localOnly = lib.mkOption {
               type = lib.types.bool;
@@ -114,7 +124,7 @@ in
             # Public services only (where localOnly = false)
             (lib.mapAttrsToList (name: svc: {
               hostname = "${svc.subdomain}.${cfg.domain}";
-              service = "http://localhost:${toString svc.port}";
+              service = "http://${svc.upstream}:${toString svc.port}";
               originRequest = {
                 httpHostHeader = "${svc.subdomain}.${cfg.domain}";
                 noTLSVerify = true;
