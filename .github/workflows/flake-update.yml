@@ -1,0 +1,243 @@
+name: flake-update
+
+# Daily flake.lock updater (ADR 0001).
+#
+# Splits into three jobs because the useful artefact is a *per-host* closure
+# delta, and computing one means holding two full NixOS system closures in the
+# store at once. Three hosts x two closures does not fit comfortably on a single
+# runner, so each host gets its own.
+#
+#   update  - runs `nix flake update` once, so every host is diffed against the
+#             same lock. Running it per-host would race: nixpkgs moves between
+#             jobs and the hosts would end up on different revisions.
+#   diff    - per host: build at the old lock, build at the new one, and record
+#             `nix store diff-closures` between them.
+#   pr      - assembles one pull request carrying every host's delta in the
+#             COMMIT BODY, so it survives in `git log` rather than only on the PR.
+#
+# Checkout and PR creation use FLAKE_UPDATE_TOKEN rather than the default
+# GITHUB_TOKEN: GitHub suppresses workflow events on PRs opened by GITHUB_TOKEN,
+# so ci.yml would never run and the `nixos ci` required check would never
+# arrive - leaving the PR unmergeable forever.
+
+on:
+  schedule:
+    # 15:00 UTC = 23:00 Perth. Early enough that a green PR auto-merges, master
+    # promotes `deploy`, and homelab01 picks it up at 04:00 the same night.
+    - cron: "0 15 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# One updater at a time. Two overlapping runs would race on the deps/flake-lock
+# branch and could leave the PR describing a lock it does not contain.
+concurrency:
+  group: flake-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: update lock
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.update.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Update flake.lock
+        id: update
+        run: |
+          set -euo pipefail
+          nix flake update
+          if git diff --quiet -- flake.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::flake.lock is already current; nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the updated lock
+        if: steps.update.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flake-lock
+          path: flake.lock
+          retention-days: 1
+
+  diff:
+    name: diff ${{ matrix.host }}
+    runs-on: ubuntu-latest
+    needs: [update]
+    if: needs.update.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [homelab01, homelab02, xps15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            extra-substituters = https://hyprland.cachix.org
+            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
+
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: corygyarmathy-dotfiles
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
+      # Almost entirely substituted: ci.yml already pushed this exact closure
+      # when the current master was promoted.
+      - name: Build ${{ matrix.host }} at the current lock
+        run: |
+          set -euo pipefail
+          nix build --no-link --print-out-paths --print-build-logs \
+            ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel" \
+            > before.path
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: flake-lock
+
+      - name: Build ${{ matrix.host }} at the updated lock
+        run: |
+          set -euo pipefail
+          # flake.lock is tracked, so overwriting it in place is enough for Nix
+          # to evaluate against it - the tree is simply dirty.
+          nix build --no-link --print-out-paths --print-build-logs \
+            ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel" \
+            > after.path
+
+      # Non-fatal, as in ci.yml: a cache failure must never block an update.
+      # Worth doing here because it front-loads the PR's own CI run.
+      - name: Push the updated closure to Cachix
+        continue-on-error: true
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: cachix push corygyarmathy-dotfiles < after.path
+
+      - name: Compute the closure delta
+        run: |
+          set -euo pipefail
+          before="$(cat before.path)"
+          after="$(cat after.path)"
+
+          # diff-closures emits ANSI colour codes even when not writing to a
+          # terminal; strip them so the commit message stays plain text.
+          #
+          # Deliberately not `|| true`: a failure here would produce an empty
+          # file, which the PR job reads as "no package changes" - a silently
+          # wrong summary is worse than a failed job.
+          NO_COLOR=1 nix store diff-closures "$before" "$after" \
+            | sed $'s/\x1b\\[[0-9;]*m//g' > "diff-${{ matrix.host }}.txt"
+
+          echo "--- ${{ matrix.host }} ---"
+          cat "diff-${{ matrix.host }}.txt"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: diff-${{ matrix.host }}
+          path: diff-${{ matrix.host }}.txt
+          retention-days: 1
+
+  pr:
+    name: open pull request
+    runs-on: ubuntu-latest
+    needs: [update, diff]
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: flake-lock
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: diff-*
+          merge-multiple: true
+
+      - name: Assemble the delta summary
+        id: summary
+        run: |
+          set -euo pipefail
+
+          summary=""
+          any_changed=false
+
+          for host in homelab01 homelab02 xps15; do
+            file="diff-$host.txt"
+            summary="$summary### $host"$'\n\n'
+            if [ -s "$file" ]; then
+              any_changed=true
+              summary="$summary$(cat "$file")"$'\n\n'
+            else
+              summary="$summary(no package changes)"$'\n\n'
+            fi
+          done
+
+          # Every host closure identical means the update only refreshed lock
+          # metadata - rev and narHash - without moving any package. There is
+          # nothing to review and nothing worth recording in git history.
+          if [ "$any_changed" != true ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Lock metadata changed but no closure did. Skipping PR."
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo 'summary<<DIFF_EOF'
+            printf '%s' "$summary"
+            echo 'DIFF_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open / update the flake bump PR
+        id: cpr
+        if: steps.summary.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+          branch: deps/flake-lock
+          base: master
+          delete-branch: true
+          add-paths: flake.lock
+          title: "build(nix): update flake.lock"
+          commit-message: |
+            build(nix): update flake.lock
+
+            Per-host package changes (nix store diff-closures):
+
+            ${{ steps.summary.outputs.summary }}
+          body: |
+            Automated `flake.lock` update.
+
+            The per-host deltas below are recorded in the commit body so they
+            land in `git log` on merge (ADR 0001).
+
+            Each host was built at the current lock and at the updated one, and
+            the closures compared. All three builds passing is a precondition of
+            this PR existing at all — but the `nixos ci` gate still has to pass
+            before it can merge, and merging is what promotes `deploy`.
+
+            ${{ steps.summary.outputs.summary }}
+          labels: |
+            dependencies
+            nix
+
+      # Schedules the merge; the ruleset's required check is the actual gate.
+      # Idempotent, so re-running against an existing PR is safe.
+      - name: Enable auto-merge
+        if: steps.summary.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+        run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"

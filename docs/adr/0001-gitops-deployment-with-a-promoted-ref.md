@@ -70,6 +70,16 @@ runs `nix flake update`, builds again, and opens one pull request carrying the p
 freshness stops depending on the laptop being awake, and server packages update on the
 same cadence as everything else.
 
+`nix flake update` runs exactly once, and every host is diffed against that one lock.
+Updating per-host would race - nixpkgs moves between jobs, and the hosts would end up
+proposing different revisions of the same update. The per-host builds are split across
+runners because computing a delta means holding two complete system closures at once, and
+three hosts times two closures does not fit on one.
+
+If every host's closure is identical afterwards, no pull request is opened: the update
+moved only lock metadata (`rev`, `narHash`) without changing a single package, so there is
+nothing to review and nothing worth recording in `git log`.
+
 **3. Pinned packages update through `passthru.updateScript`.** Packages that cannot move
 via `nix flake update` - an upstream tag, an npm release - declare their own updater, and
 a workflow discovers and runs them. `nix-update` covers the common cases; bespoke scripts
