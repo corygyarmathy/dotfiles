@@ -14,7 +14,7 @@ name: promote deploy-stable
 
 on:
   schedule:
-    # 19:30 UTC = 03:30 Perth (UTC+8, no DST), which sits between homelab01's
+    # 19:30 UTC = 03:30 Perth (UTC+8, no DST), which sits before homelab01's
     # 04:00 upgrade and homelab02's 04:15 one. A revision promoted here has
     # therefore been running on homelab01 since its 04:00 run the day before.
     - cron: "30 19 * * *"
