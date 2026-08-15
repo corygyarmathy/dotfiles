@@ -1,117 +1,61 @@
 # packages/nixos-upgrade-scripts/default.nix
 #
-# Python package containing all NixOS upgrade scripts.
-# These scripts handle checking, building, and applying updates.
+# Waybar front-end for the NixOS upgrade module on desktops.
+#
+# This used to be ~1800 lines of Python that ran `nix flake update`, decided
+# what to build, built it, applied it, committed the result, and kept a JSON
+# state machine describing where it had got to. CI now owns the lock (ADR 0001)
+# and the hosts follow a promoted ref, so all that remains here is the desktop
+# affordance: show what is pending and let the user apply it.
+#
+# The state machine went with it. Everything the indicator reports is read from
+# systemd or from the store at display time, so it cannot drift out of sync
+# with what is actually true.
 {
   lib,
-  python3Packages,
-  makeWrapper,
-  nix,
-  git,
-  nvd,
-  fwupd,
-  coreutils,
-  gnugrep,
-  sudo,
+  writeShellApplication,
+  symlinkJoin,
+  jq,
   systemd,
-  util-linux,
-  procps,
   libnotify,
+  polkit,
+  fwupd,
+  ghostty,
 }:
-python3Packages.buildPythonApplication rec {
-  pname = "nixos-upgrade-scripts";
-  version = "1.0.0";
+let
+  status = writeShellApplication {
+    name = "nixos-upgrade-waybar";
+    runtimeInputs = [
+      jq
+      systemd
+      fwupd
+    ];
+    text = builtins.readFile ./waybar-status.sh;
+  };
 
-  src = ./src;
+  click = writeShellApplication {
+    name = "nixos-upgrade-waybar-click";
+    runtimeInputs = [
+      jq
+      systemd
+      libnotify
+      polkit
+      fwupd
+      ghostty
+    ];
+    text = builtins.readFile ./waybar-click.sh;
+  };
+in
+symlinkJoin {
+  name = "nixos-upgrade-scripts";
+  paths = [
+    status
+    click
+  ];
 
-  format = "other";
-
-  nativeBuildInputs = [ makeWrapper ];
-
-  propagatedBuildInputs = [ ];
-
-  installPhase = ''
-    runHook preInstall
-
-    # Install Python modules
-    mkdir -p $out/lib/python
-    cp -r *.py $out/lib/python/
-
-    # Create bin directory
-    mkdir -p $out/bin
-
-    # Create wrapper scripts for each entry point
-    # These set PYTHONPATH and wrap with required tools in PATH
-
-    makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-check \
-      --set PYTHONPATH "$out/lib/python" \
-      --add-flags "$out/lib/python/check_updates.py" \
-      --prefix PATH : ${
-        lib.makeBinPath [
-          nix
-          git
-          nvd
-          fwupd
-          coreutils
-          gnugrep
-          systemd
-          sudo
-        ]
-      }
-
-    makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-build \
-      --set PYTHONPATH "$out/lib/python" \
-      --add-flags "$out/lib/python/background_build.py" \
-      --prefix PATH : ${
-        lib.makeBinPath [
-          nix
-          git
-          coreutils
-          systemd
-          util-linux
-          sudo
-        ]
-      }
-
-    makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-apply \
-      --set PYTHONPATH "$out/lib/python" \
-      --add-flags "$out/lib/python/apply_updates.py" \
-      --prefix PATH : ${
-        lib.makeBinPath [
-          nix
-          git
-          nvd
-          fwupd
-          coreutils
-          gnugrep
-          systemd
-          procps
-          libnotify
-          sudo
-        ]
-      }:/run/current-system/sw/bin
-
-    makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-waybar \
-      --set PYTHONPATH "$out/lib/python" \
-      --add-flags "$out/lib/python/waybar_status.py"
-
-    makeWrapper ${python3Packages.python.interpreter} $out/bin/nixos-upgrade-waybar-click \
-      --set PYTHONPATH "$out/lib/python" \
-      --add-flags "$out/lib/python/waybar_click.py" \
-      --prefix PATH : ${
-        lib.makeBinPath [
-          systemd
-          libnotify
-          procps
-        ]
-      }
-
-    runHook postInstall
-  '';
-
-  meta = with lib; {
-    description = "NixOS upgrade management scripts";
-    license = licenses.mit;
-    platforms = platforms.linux;
+  meta = {
+    description = "Waybar indicator and click handler for NixOS upgrades";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.linux;
   };
 }
