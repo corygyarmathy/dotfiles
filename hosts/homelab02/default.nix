@@ -291,7 +291,7 @@
         shelfmark = {
           subdomain = "shelfmark";
           port = 8084;
-          localOnly = true; # acquisition tooling, same as lazylibrarian/mylar3
+          localOnly = true; # acquisition tooling, same as mylar3
         };
 
         # Future NAS-related services would go here
@@ -361,14 +361,17 @@
     };
 
     # Search-and-grab for books and audiobooks, feeding Grimmory's BookDrop.
-    # It lives here rather than beside LazyLibrarian on homelab01 because
-    # BookDrop watches with inotify, which does not fire for writes arriving
-    # over NFS from another machine. It shares Gluetun's network namespace, so
-    # its UI is published by the gluetun container, not by this one.
+    # It lives here rather than on homelab01 with the other reading services
+    # because BookDrop watches with inotify, which does not fire for writes
+    # arriving over NFS from another machine. It shares Gluetun's network
+    # namespace, so its UI is published by the gluetun container, not this one.
     #
-    # This does NOT retire LazyLibrarian. Shelfmark replaces the search half of
-    # it and has no equivalent of monitoring an author for future releases, so
-    # both run until that gap is either filled or decided against.
+    # This replaced LazyLibrarian, which is gone. Shelfmark covers the search
+    # half; author monitoring was the other half and was given up knowingly,
+    # since it was not being used.
+    #
+    # Needs a DNS rewrite in adguard-home.nix to reach this host -- the
+    # wildcard there points everything else at homelab01.
     shelfmark.enable = true;
 
     # -------------------------------------------------------------------------

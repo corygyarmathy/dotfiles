@@ -12,10 +12,12 @@
 # 4. Add qBittorrent as a download client at http://localhost:8080 (see NETWORK)
 # 5. Leave the download destination at /books, which is the BookDrop folder
 #
-# WHY THIS REPLACES THE SEARCH HALF OF LAZYLIBRARIAN, NOT ALL OF IT:
-# LazyLibrarian does two jobs: search/grab, and monitor an author for future
-# releases. Shelfmark does the first well and does not do the second at all.
-# So this module does not retire anything -- see the note in hosts/homelab02.
+# WHAT THIS REPLACED, AND WHAT WAS DROPPED WITH IT:
+# LazyLibrarian did two jobs: search/grab, and monitor an author for future
+# releases. Shelfmark does the first and has no equivalent of the second, so
+# retiring LazyLibrarian gave up author monitoring deliberately -- it was not
+# being used. Nothing in the stack does it now. If that changes, it wants a
+# separate tool rather than an option here.
 #
 # NETWORK -- SHARES THE GLUETUN NAMESPACE:
 # Shelfmark makes direct HTTP requests to book sources, which would otherwise
