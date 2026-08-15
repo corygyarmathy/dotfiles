@@ -70,6 +70,37 @@ in
       description = "Group for container PGID and file ownership";
     };
 
+    directories = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [
+        "downloads"
+        "downloads/complete"
+        "downloads/incomplete"
+        "downloads/cross-seed"
+        "movies"
+        "tv"
+        "music"
+        "livetv"
+        "books"
+        "comics"
+        "manga"
+        "doujin"
+        "lightnovels"
+        "audiobooks"
+        "podcasts"
+        "bookdrop"
+        "whisparr"
+      ];
+      description = ''
+        The media tree, relative to dataPath. This is the single definition of
+        it: nas-storage creates these on the pool it owns, and the tmpfiles
+        rules below create them on a host that stores media locally without
+        nas-storage. Both used to carry their own copy and had already drifted
+        apart, which is how bookdrop came to exist on one path and not the
+        other. Add a directory here and both agree.
+      '';
+    };
+
     storage = {
       type = lib.mkOption {
         type = lib.types.enum [
@@ -149,27 +180,18 @@ in
       # Config directory (always local, even with NFS storage)
       "d ${cfg.configPath} 0775 root ${cfg.group} -"
     ]
-    ++ lib.optionals (cfg.storage.type == "local" && !config.cg.service.nas-storage.enable) [
-      # Data directories (only when using local storage AND nas-storage isn't managing them)
-      # setgid (2xxx) for group inheritance
-      "d ${cfg.dataPath} 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/downloads 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/downloads/complete 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/downloads/incomplete 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/movies 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/tv 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/music 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/books 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/comics 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/manga 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/lightnovels 2775 ${cfg.user} ${cfg.group} -"
-      # Audiobookshelf has always read this, but it was never declared here --
-      # it existed only because someone created it by hand.
-      "d ${cfg.dataPath}/audiobooks 2775 ${cfg.user} ${cfg.group} -"
-      # Watched ingest folder: drop a file here and Grimmory imports it.
-      "d ${cfg.dataPath}/bookdrop 2775 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.dataPath}/whisparr 2775 ${cfg.user} ${cfg.group} -"
-    ];
+    ++ lib.optionals (cfg.storage.type == "local" && !config.cg.service.nas-storage.enable) (
+      # Data directories, only when this host stores media locally AND
+      # nas-storage is not already managing them. Neither homelab currently
+      # meets that: homelab01 is an NFS client and homelab02 runs nas-storage,
+      # so on the present fleet this branch is unreachable. It is kept for a
+      # single-box deployment -- but that is exactly why it must not carry its
+      # own copy of the directory list, since nothing here would notice it
+      # going stale.
+      # setgid (2xxx) for group inheritance.
+      [ "d ${cfg.dataPath} 2775 ${cfg.user} ${cfg.group} -" ]
+      ++ map (dir: "d ${cfg.dataPath}/${dir} 2775 ${cfg.user} ${cfg.group} -") cfg.directories
+    );
 
     # Create the arr-network before any containers start
     systemd.services.podman-network-arr = {
