@@ -30,9 +30,12 @@
   # ============================================================================
   # Auto-Upgrade
   # ============================================================================
+  # Follows `deploy`, which CI fast-forwards only after every host builds
+  # (ADR 0001). This host is the canary: it takes each promoted revision first,
+  # and homelab02 follows the same revision 24h later via `deploy-stable`.
   system.autoUpgrade = {
     enable = true;
-    flake = "github:corygyarmathy/dotfiles#homelab01";
+    flake = "github:corygyarmathy/dotfiles/deploy#homelab01";
     dates = "04:00";
     allowReboot = true;
     rebootWindow = {

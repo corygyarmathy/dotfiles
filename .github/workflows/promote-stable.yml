@@ -1,0 +1,81 @@
+name: promote deploy-stable
+
+# Advances `deploy-stable` to whatever `deploy` pointed at 24h ago (ADR 0001).
+#
+# homelab01 follows `deploy` and takes every promoted revision the night it
+# lands. homelab02 - the storage node, holding the ZFS pool and the NFS export
+# homelab01 depends on - follows `deploy-stable` and takes the same revision a
+# day later. A kernel or systemd bump that fails to boot therefore takes out the
+# compute node while the data node keeps serving.
+#
+# The lag is time-based only: it proves homelab01 has *had* the revision for a
+# day, not that homelab01 is well. Phase 4 adds the deployment metrics that
+# would let this gate on actual health instead.
+
+on:
+  schedule:
+    # 19:30 UTC = 03:30 Perth (UTC+8, no DST), which sits between homelab01's
+    # 04:00 upgrade and homelab02's 04:15 one. A revision promoted here has
+    # therefore been running on homelab01 since its 04:00 run the day before.
+    - cron: "30 19 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Need full history on every branch: the 24h cutoff is a walk over
+          # `deploy`, and the fast-forward check is an ancestry test.
+          fetch-depth: 0
+
+      - name: Advance deploy-stable
+        run: |
+          set -euo pipefail
+
+          if ! git rev-parse --verify -q origin/deploy >/dev/null; then
+            echo "::error::origin/deploy does not exist - has CI promoted yet?"
+            exit 1
+          fi
+
+          # First run: there is nothing to lag behind, so start level with
+          # `deploy`. No soak on day one, but the alternative is homelab02
+          # sitting on a pre-pipeline revision that still points at master.
+          if ! git rev-parse --verify -q origin/deploy-stable >/dev/null; then
+            target="$(git rev-parse origin/deploy)"
+            echo "::notice::bootstrapping deploy-stable at $target"
+            git push origin "$target:refs/heads/deploy-stable"
+            exit 0
+          fi
+
+          current="$(git rev-parse origin/deploy-stable)"
+
+          # Newest commit on `deploy` that has been there long enough to have
+          # soaked on homelab01.
+          target="$(git rev-list -1 --before='24 hours ago' origin/deploy)"
+
+          if [ -z "$target" ]; then
+            echo "::notice::nothing on deploy is 24h old yet; holding at $current"
+            exit 0
+          fi
+
+          if [ "$target" = "$current" ]; then
+            echo "::notice::deploy-stable already at $target; nothing to do"
+            exit 0
+          fi
+
+          # Only ever move forward. If deploy-stable is not an ancestor of the
+          # target, history was rewritten somewhere and this should stop rather
+          # than drag homelab02 sideways onto an unrelated revision.
+          if ! git merge-base --is-ancestor "$current" "$target"; then
+            echo "::error::$current is not an ancestor of $target - refusing to move deploy-stable"
+            exit 1
+          fi
+
+          echo "::notice::advancing deploy-stable $current -> $target"
+          git log --oneline "$current..$target"
+          git push origin "$target:refs/heads/deploy-stable"
