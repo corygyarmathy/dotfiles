@@ -51,6 +51,8 @@ jobs:
         with:
           name: corygyarmathy-dotfiles
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # Substitute only; nothing worth pushing is built here.
+          skipPush: true
 
       - name: Check flake
         run: nix flake check --print-build-logs
@@ -77,11 +79,27 @@ jobs:
         with:
           name: corygyarmathy-dotfiles
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # The action's own push runs as a post-job step, where a failure fails
+          # the job - which would let a cache hiccup block a deployment. The
+          # cache is a performance dependency, not a correctness one (ADR 0001),
+          # so we push explicitly below instead.
+          skipPush: true
 
       - name: Build ${{ matrix.host }}
         run: |
-          nix build --print-build-logs --no-link \
-            ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+          nix build --print-build-logs --no-link --print-out-paths \
+            ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel" \
+            | tee "$RUNNER_TEMP/toplevel"
+
+      # Deliberately non-fatal: if this fails, the hosts build from source at
+      # 04:00 instead of substituting. Slower, never wrong. Pushing the toplevel
+      # pushes its closure, which is exactly what a host needs - and nothing
+      # build-time-only, unlike the action's watch-the-whole-store approach.
+      - name: Push ${{ matrix.host }} closure to Cachix
+        continue-on-error: true
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: cachix push corygyarmathy-dotfiles < "$RUNNER_TEMP/toplevel"
 
   # Single stable status-check context for the ruleset. Matrix job names change
   # whenever a host is added or renamed; this one does not.
