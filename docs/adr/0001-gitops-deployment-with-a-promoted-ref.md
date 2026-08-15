@@ -77,11 +77,37 @@ handle the rest. Attaching the updater to the package rather than listing packag
 means adding a package does not mean editing CI.
 
 **4. Reporting rides the monitoring stack that already exists.** Hosts export deployment
-state as node_exporter textfile metrics - success, timestamp, deployed revision - and
-`nixos-upgrade.service` gains an `onFailure` handler. Alert rules cover the upgrade
-failing, and, more importantly, a host whose last successful upgrade is older than 48
-hours. No new services; the existing `probe_success` and `node_systemd_unit_state` rules
-already cover "the service did not come back".
+state as node_exporter textfile metrics, recorded from `nixos-upgrade.service`'s
+`ExecStopPost` where `SERVICE_RESULT` is available - the same mechanism the restic backup
+metrics already use. No new services; the existing `probe_success` and
+`node_systemd_unit_state` rules already cover "the service did not come back".
+
+Three alerts, in ascending order of how badly they are needed:
+
+- `nixos_deploy_last_run_success == 0` - the upgrade failed. Largely redundant with the
+  existing failed-unit alert, but explicit and survives a restart of the unit.
+- `nixos_deploy_last_run_timestamp_seconds` older than 48h - **the host stopped
+  upgrading**. Nothing else catches this: no unit has failed, no probe is down, the
+  machine is simply falling behind in silence. This is the alert the whole exercise is
+  for.
+- `nixos_deploy_pending_reboot == 1` with a staged timestamp older than 26h - a
+  generation is built and staged but never activated.
+
+That third one exists because of what `nixos-upgrade` actually does. It runs
+`nixos-rebuild boot` first, then reboots only if the kernel changed *and* the clock is
+still inside the reboot window. A build that runs long - entirely plausible for a large
+nixpkgs bump on this hardware - pushes the clock past the window, at which point the unit
+prints `Outside of configured reboot window, skipping.` and **exits zero**. A host can sit
+on an unactivated kernel indefinitely while reporting success every night. Nothing in the
+original plan would have caught that.
+
+The duration is carried in a staged-timestamp metric rather than a long Prometheus `for:`
+clause, because Prometheus restarts on every deploy and a restart resets a pending alert's
+timer - a `for: 26h` on a daily-deploying host would never mature.
+
+Alert rules are validated by `promtool check rules` as a flake check, so a malformed rule
+fails the CI gate. Building a host proves its Nix evaluates, not that the config files it
+ships are valid; a bad rule builds perfectly and then takes Prometheus down on activation.
 
 **5. CI builds are shared through a binary cache.** CI pushes to Cachix; hosts substitute
 from it. Without this, the same closure is built four times - once in CI and once per host

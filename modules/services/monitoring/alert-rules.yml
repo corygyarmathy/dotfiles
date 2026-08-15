@@ -272,6 +272,46 @@ groups:
           severity: warning
         annotations:
           summary: "Restic backup {{ $labels.job }} on {{ $labels.host }} hasn't run in over 26 hours"
+  - name: deploy
+    rules:
+      - alert: NixosDeployFailed
+        expr: nixos_deploy_last_run_success == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NixOS auto-upgrade failed on {{ $labels.host }}"
+          description: "The last nixos-upgrade run exited non-zero. The host keeps running its previous generation, so nothing is broken yet — but it has stopped receiving updates."
+
+      # The one that catches silence. A host that stops upgrading raises nothing
+      # at all otherwise: no failed unit, no failed probe, just a machine
+      # quietly falling behind. Only arms once a first run has been recorded.
+      - alert: NixosDeployStale
+        expr: time() - nixos_deploy_last_run_timestamp_seconds > 172800
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NixOS auto-upgrade has not run on {{ $labels.host }} in over 48 hours"
+          description: "Neither a success nor a failure has been recorded. The timer, the network, the flake ref or the host itself has stopped."
+
+      # nixos-upgrade stages a generation with `nixos-rebuild boot`, then reboots
+      # only if the kernel changed AND the clock is still inside the reboot
+      # window. A long build pushes it past the window, and the unit reports
+      # success while the new kernel never activates.
+      #
+      # Deliberately not expressed as `for: 26h`: Prometheus restarts on every
+      # deploy, which resets a pending alert's timer, so a long `for` would
+      # never mature. The staged timestamp carries the duration instead.
+      - alert: NixosRebootPending
+        expr: nixos_deploy_pending_reboot == 1 and time() - nixos_deploy_staged_timestamp_seconds > 93600
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} has a generation staged but not activated for over 26 hours"
+          description: "A new kernel is staged and waiting for a reboot that has not happened — most likely the build ran past the configured reboot window, which nixos-upgrade reports as success."
+
   - name: vpn
     rules:
       - alert: GluetunVpnDisconnected
