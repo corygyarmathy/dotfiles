@@ -446,11 +446,6 @@
           localOnly = false; # readers need external access
           rateLimitProfile = "media";
         };
-        mylar3 = {
-          subdomain = "mylar3";
-          port = 8090;
-          localOnly = true; # admin only
-        };
         audiobookshelf = {
           subdomain = "audiobookshelf";
           port = 13378;
@@ -641,11 +636,16 @@
     # -------------------------------------------------------------------------
     # Reading Stack (Ebooks, Comics, Manga)
     # -------------------------------------------------------------------------
+    # Reading and acquisition now live on homelab02, where the media pool is
+    # local: Grimmory serves all four library types, Shelfmark acquires books,
+    # Suwayomi pulls manga. Kavita stays here, still the better comic and manga
+    # reader, and still reading the same directories over NFS.
     kavita.enable = true;
-    mylar3.enable = true;
-    # LazyLibrarian was removed in favour of Shelfmark on homelab02. Its state
-    # is still on disk at /srv/arr/lazylibrarian and in the backups; nothing
-    # here deletes it. Remove that directory by hand once you are sure.
+    # LazyLibrarian and Mylar3 were removed, replaced by Shelfmark and Suwayomi
+    # respectively -- though Suwayomi does manga, not Western comics, so comics
+    # are a manual search now. Their state is still on disk at
+    # /srv/arr/lazylibrarian and /srv/arr/mylar3 and in the backups; nothing
+    # here deletes it. Remove those directories by hand once you are sure.
 
     # Audiobooks
     audiobookshelf.enable = true;

@@ -99,6 +99,10 @@
 
         # Services with state outside /srv/arr
         "/var/lib/private/AdGuardHome"
+
+        # Suwayomi's database, installed extensions and library metadata.
+        # The downloaded chapters live in the media pool and are not this.
+        "/var/lib/suwayomi-server"
       ];
 
       extraExclude = [
@@ -291,7 +295,15 @@
         shelfmark = {
           subdomain = "shelfmark";
           port = 8084;
-          localOnly = true; # acquisition tooling, same as mylar3
+          localOnly = true; # acquisition tooling
+        };
+
+        # Suwayomi. Not behind gluetun, so this is an ordinary local port.
+        suwayomi = {
+          subdomain = "suwayomi";
+          port = 4567;
+          localOnly = true;
+          rateLimitProfile = "media"; # it is a reader as well as a downloader
         };
 
         # Future NAS-related services would go here
@@ -373,6 +385,14 @@
     # Needs a DNS rewrite in adguard-home.nix to reach this host -- the
     # wildcard there points everything else at homelab01.
     shelfmark.enable = true;
+
+    # Manga sources, downloading CBZ into /srv/media/suwayomi. Kept out of the
+    # curated manga tree because it writes its own layout; add it as its own
+    # library in Grimmory. Here rather than homelab01 because manga downloads
+    # are many small files and this host owns the pool.
+    #
+    # Also needs a DNS rewrite in adguard-home.nix.
+    suwayomi.enable = true;
 
     # -------------------------------------------------------------------------
     # Services that stay on homelab01
