@@ -1,0 +1,141 @@
+# ADR 0001: GitOps deployment with a promoted ref
+
+- **Status:** Accepted
+- **Date:** 2026-08-15
+- **Related Artefacts:**
+  - Implemented by: `.github/workflows/ci.yml` (build gate + promotion), `.github/workflows/flake-update.yml` (lock updates), `system.autoUpgrade` on each host
+  - Supersedes: the flake-update and apply logic in `packages/nixos-upgrade-scripts`
+  - Depends on: the `protect-main` repository ruleset, the `corygyarmathy-dotfiles` Cachix cache
+
+## Context
+
+Three machines run this flake: two servers (`homelab01`, `homelab02`) and one laptop
+(`xps15`). Keeping them current has been split across two mechanisms that do not know
+about each other.
+
+The servers pull. `system.autoUpgrade` fetches `github:corygyarmathy/dotfiles#hostname`
+nightly and rebuilds. This works and needs no inbound access, but it follows `master`
+unconditionally: CI runs on push, so a commit that fails to build is already what the
+servers will fetch at 04:00. The build result and the deployment are racing, and nothing
+enforces the ordering.
+
+The laptop pushes. `packages/nixos-upgrade-scripts` is 1834 lines of Python that runs
+`nix flake update`, builds in the background, drives a waybar indicator, applies on
+confirmation, and commits the result. It conflates two jobs: deciding what the *fleet*
+should run, which is a repository-wide question, and presenting an upgrade to an
+interactive user, which is genuinely local. Because the first job lives on the laptop,
+`flake.lock` only moves when the laptop is on - so server package versions are gated on
+a machine that has nothing to do with them.
+
+Neither path reports. A failed rebuild, a service that does not come back, or a host that
+quietly stops upgrading altogether are all invisible until noticed by hand. This is the
+gap that matters most: the failure mode of an automated deploy pipeline is not a loud
+error, it is silence.
+
+A Prometheus + blackbox + Alertmanager stack already runs on both servers, with HTTP
+probes on every public service and an alert on failed systemd units. The reporting
+primitives exist; they are simply not connected to deployment.
+
+## Decision
+
+Keep the pull model - it is correct for hosts with no inbound access and no dependency on
+an operator's machine - and add the two things it lacks: a gate and a report.
+
+**1. Hosts follow a promoted ref, not `master`.** A `deploy` branch is fast-forwarded to
+`master` by CI, and only after every host configuration builds. `system.autoUpgrade`
+points at `github:corygyarmathy/dotfiles/deploy#hostname`. A host can therefore only ever
+fetch a revision proven to evaluate and build *for that host*. `master` stays the
+integration branch and may be red; `deploy` is the fleet's contract.
+
+**2. `flake.lock` updates move to CI.** A scheduled workflow builds every host toplevel,
+runs `nix flake update`, builds again, and opens one pull request carrying the per-host
+`nix store diff-closures` output in the commit body. It auto-merges on green. Lock
+freshness stops depending on the laptop being awake, and server packages update on the
+same cadence as everything else.
+
+**3. Pinned packages update through `passthru.updateScript`.** Packages that cannot move
+via `nix flake update` - an upstream tag, an npm release - declare their own updater, and
+a workflow discovers and runs them. `nix-update` covers the common cases; bespoke scripts
+handle the rest. Attaching the updater to the package rather than listing packages in YAML
+means adding a package does not mean editing CI.
+
+**4. Reporting rides the monitoring stack that already exists.** Hosts export deployment
+state as node_exporter textfile metrics - success, timestamp, deployed revision - and
+`nixos-upgrade.service` gains an `onFailure` handler. Alert rules cover the upgrade
+failing, and, more importantly, a host whose last successful upgrade is older than 48
+hours. No new services; the existing `probe_success` and `node_systemd_unit_state` rules
+already cover "the service did not come back".
+
+**5. CI builds are shared through a binary cache.** CI pushes to Cachix; hosts substitute
+from it. Without this, the same closure is built four times - once in CI and once per host
+- on hardware chosen for storage and transcoding rather than compilation.
+
+**6. Interactive deployment stays out of the pipeline.** Iterating on a service is not a
+deployment; requiring a commit, a push, and a CI round-trip to test a config change would
+make the pipeline something to route around. `nixos-rebuild --target-host` from the
+working tree remains the supported path for that, and the nightly pull reconciles the host
+afterwards.
+
+The laptop keeps a reduced build-and-notify unit, because `system.autoUpgrade` has no
+notify-then-confirm mode and interrupting an interactive session to switch generations is
+not acceptable. Everything else it currently does - updating the lock, committing,
+deciding what to build - belongs to CI and is removed.
+
+## Consequences
+
+**Positive**
+
+- A broken `master` cannot reach a host. The gate is structural rather than a matter of
+  timing.
+- Lock updates no longer depend on any particular machine being online, and server
+  packages track the same lock as everything else.
+- `deploy` is a single, inspectable answer to "what is the fleet supposed to be running",
+  and holding a deployment back is just declining to promote.
+- Silent failure becomes loud: a host that stops upgrading alerts on staleness, which is
+  the failure this pipeline is otherwise most likely to hide.
+- `packages/nixos-upgrade-scripts` loses most of its reason to exist.
+
+**Negative**
+
+- **Building is the only pre-deploy gate, and building is not working.** A package that
+  compiles and then fails at runtime will auto-merge and deploy. Mitigated after the fact
+  by the alert rules, and to be narrowed by NixOS VM tests added per service module.
+  Accepted deliberately: the alternative is manual review of every nixpkgs-unstable bump,
+  which is the status quo that does not happen.
+- Unattended nixpkgs-unstable now reaches servers without a human ever looking. This is
+  the point, but it is a real change in posture.
+- A required status check whose name no longer matches the CI job blocks every merge with
+  no bypass. Renaming the gate job means updating the ruleset in lockstep - the gate job
+  exists partly to make that a one-line, rarely-touched name.
+- The laptop's auto-upgrade follows the promoted ref, so uncommitted local config is no
+  longer picked up automatically. Deliberate - the laptop should not silently run a
+  configuration CI never saw - but it is a behaviour change to get used to.
+- Cachix is an external dependency in the deploy path. Hosts degrade to building from
+  source if it is unreachable, so it is a performance dependency rather than a
+  correctness one.
+
+## Alternatives considered
+
+- **Push-based deployment with `deploy-rs` or `colmena`.** Better ergonomics for many
+  hosts, and `deploy-rs` adds magic rollback, which is real insurance against locking
+  yourself out with a firewall or network change. Rejected as the *primary* mechanism
+  because it inverts the connectivity requirement: something must reach the hosts, which
+  means either the laptop is online - the constraint being removed - or CI gets inbound
+  access to the homelab. Worth revisiting for the rollback alone if a host is ever bricked,
+  or past roughly four machines.
+- **Keep hosts on `master` and rely on CI running first.** No new branch, no promotion
+  job. Rejected: it is a race, not a gate. CI usually finishes before 04:00, and "usually"
+  is the whole problem.
+- **Per-host promotion branches (`deploy/homelab01`).** One host's build failure would not
+  block the other's deployment. Rejected as premature at two servers, and it trades a
+  fleet that is consistent by construction for one that can drift. Reconsider when hosts
+  diverge enough that one failing build routinely blocks unrelated hosts.
+- **`DeterminateSystems/update-flake-lock` for the lock workflow.** Well-maintained, and
+  its PR body lists input revision changes. Rejected because it does not build what it
+  proposes and reports input revisions rather than package deltas; `nix store
+  diff-closures` per host answers "what actually changes on my machines", which is the
+  question worth asking.
+- **Self-hosted Attic instead of Cachix.** No external dependency and full control.
+  Rejected for now: CI can only push to it if the homelab is reachable from GitHub, which
+  reintroduces the inbound-access problem the pull model exists to avoid. Cachix is free
+  for a public repository and needs no such exposure.
