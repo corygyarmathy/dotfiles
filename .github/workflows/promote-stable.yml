@@ -63,16 +63,19 @@ jobs:
             exit 0
           fi
 
-          if [ "$target" = "$current" ]; then
-            echo "::notice::deploy-stable already at $target; nothing to do"
+          # Already at or beyond the cutoff, so there is nothing to advance to.
+          # Being *ahead* of it is normal, not an error: bootstrapping starts
+          # deploy-stable level with deploy, and it then sits ahead of the 24h
+          # cutoff until the revision it holds is itself a day old.
+          if git merge-base --is-ancestor "$target" "$current"; then
+            echo "::notice::deploy-stable ($current) is already at or ahead of $target; nothing to do"
             exit 0
           fi
 
-          # Only ever move forward. If deploy-stable is not an ancestor of the
-          # target, history was rewritten somewhere and this should stop rather
-          # than drag homelab02 sideways onto an unrelated revision.
+          # Neither ref contains the other, so history was rewritten somewhere.
+          # Stop rather than drag homelab02 sideways onto an unrelated revision.
           if ! git merge-base --is-ancestor "$current" "$target"; then
-            echo "::error::$current is not an ancestor of $target - refusing to move deploy-stable"
+            echo "::error::$current and $target have diverged - refusing to move deploy-stable"
             exit 1
           fi
 
