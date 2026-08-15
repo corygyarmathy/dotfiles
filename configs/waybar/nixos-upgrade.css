@@ -42,12 +42,6 @@
   font-weight: bold;
 }
 
-/* Checking for updates */
-#custom-nixos-upgrade.checking {
-  color: @info;
-  animation: nixos-pulse 2s ease-in-out infinite;
-}
-
 /* Building in background */
 #custom-nixos-upgrade.building {
   color: @warning;

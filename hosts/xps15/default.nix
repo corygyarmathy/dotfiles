@@ -35,13 +35,14 @@
         "Wireless"
       ];
     };
+    # Follows the promoted `deploy` ref like the servers, but never switches on
+    # its own - it builds in the background and waits to be clicked (ADR 0001).
+    #
+    # Uncommitted local config is therefore no longer picked up automatically;
+    # `sudo nixos-rebuild switch --flake .#xps15` is the path for that.
     auto-upgrade = {
       enable = true;
-      mode = "desktop"; # or "server"
-      flake = "/home/coryg/git/dotfiles";
       firmware.enable = true;
-      backgroundBuild.enable = true;
-      upgradeUsers = [ "coryg" ];
     };
     firewall = {
       enable = true;
