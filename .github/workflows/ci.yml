@@ -1,5 +1,20 @@
 name: NixOS CI
 
+# Build gate and promotion (ADR 0001).
+#
+# Every host configuration is built on every pull request and on every push to
+# master. On master, once the gate passes, `deploy` is fast-forwarded to the
+# tested commit. Hosts run `system.autoUpgrade` against `deploy`, so a revision
+# that fails to build for any host can never reach a machine.
+#
+# Builds are pushed to the `corygyarmathy-dotfiles` Cachix cache, which the
+# hosts substitute from - CI builds the closure once instead of each host
+# rebuilding it independently at 04:00.
+#
+# NOTE: the `nixos ci` job name is the status-check context required by the
+# `protect-main` repository ruleset. Renaming that job silently blocks every
+# merge until the ruleset is updated to match, so treat the two as a pair.
+
 on:
   push:
     branches: [master]
@@ -7,27 +22,105 @@ on:
     branches: [master]
   workflow_dispatch: # Allows manual triggering
 
+# Read-only by default; the promote job opts into contents: write for itself.
+permissions:
+  contents: read
+
+# A newer commit on the same branch makes an in-flight run obsolete. Never
+# cancel on master, since those runs are what promote `deploy`.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
+  flake-check:
+    name: flake check
     runs-on: ubuntu-latest
     steps:
-      # Clones your repo into the runner
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Installs Nix with flakes enabled (faster than the official installer and designed for CI)
-      - uses: DeterminateSystems/nix-installer-action@main
-
-      # Provides free build caching between CI runs without needing a Cachix account.
-      # It uploads your build artifacts to their cache and restores them on subsequent runs.
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
         with:
-          use-flakehub: false
+          # The hosts trust this cache for Hyprland; CI needs it too, or every
+          # Hyprland-adjacent path is built from source here.
+          extra-conf: |
+            extra-substituters = https://hyprland.cachix.org
+            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
+
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: corygyarmathy-dotfiles
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Check flake
-        run: nix flake check
+        run: nix flake check --print-build-logs
 
-      - name: Build homelab01
-        run: nix build .#nixosConfigurations.homelab01.config.system.build.toplevel
+  build:
+    name: build ${{ matrix.host }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Build every host even when one fails - knowing that two of three hosts
+      # are broken is more useful than knowing one is.
+      fail-fast: false
+      matrix:
+        host: [homelab01, homelab02, xps15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Build homelab02
-        run: nix build .#nixosConfigurations.homelab02.config.system.build.toplevel
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            extra-substituters = https://hyprland.cachix.org
+            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
+
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: corygyarmathy-dotfiles
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build ${{ matrix.host }}
+        run: |
+          nix build --print-build-logs --no-link \
+            ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+
+  # Single stable status-check context for the ruleset. Matrix job names change
+  # whenever a host is added or renamed; this one does not.
+  gate:
+    name: nixos ci
+    runs-on: ubuntu-latest
+    needs: [flake-check, build]
+    # `always()` so the gate reports a real failure when a dependency fails.
+    # Without it the job is *skipped*, and a skipped required check does not
+    # block a merge - the gate would silently stop gating.
+    if: always()
+    steps:
+      - name: Verify all checks passed
+        run: |
+          echo "flake-check: ${{ needs.flake-check.result }}"
+          echo "build:       ${{ needs.build.result }}"
+          [ "${{ needs.flake-check.result }}" = "success" ] || exit 1
+          [ "${{ needs.build.result }}" = "success" ] || exit 1
+
+  # Fast-forward `deploy` to the commit that just passed the gate. This is the
+  # only thing that moves what the fleet runs (ADR 0001).
+  promote:
+    name: promote to deploy
+    runs-on: ubuntu-latest
+    needs: [gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A shallow clone cannot be used to update another ref.
+          fetch-depth: 0
+
+      - name: Fast-forward deploy
+        run: |
+          set -euo pipefail
+          # Deliberately not a force push: if `deploy` has diverged from master,
+          # something manual happened and it should fail loudly rather than
+          # silently discard whatever is there.
+          git push origin "${{ github.sha }}:refs/heads/deploy"
+          echo "::notice::deploy now at ${{ github.sha }}"
