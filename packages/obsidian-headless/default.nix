@@ -47,6 +47,15 @@ buildNpmPackage rec {
   # No build script; we only want the deps installed and the `ob` bin linked.
   dontNpmBuild = true;
 
+  passthru = {
+    autoUpdate = true;
+
+    # Repo-relative rather than a store path: the script regenerates the
+    # vendored package-lock.json in this directory, which nix-update cannot do
+    # (upstream ships no lockfile, so there is nothing for it to rehash).
+    updateScript = [ "packages/obsidian-headless/update.sh" ];
+  };
+
   meta = {
     description = "Headless client for Obsidian Sync";
     homepage = "https://obsidian.md/help/sync/headless";
