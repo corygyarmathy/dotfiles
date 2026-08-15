@@ -1,16 +1,23 @@
 # modules/nixos/auto-upgrade.nix
 #
-# Unified auto-upgrade module for NixOS.
+# Desktop upgrade module: build promoted updates in the background, show what
+# is pending, and apply only when asked.
 #
-# Features:
-# - Automatic flake updates and system rebuilds
-# - Firmware updates via fwupd
-# - Low-priority background builds
-# - Server mode (auto-reboot) vs Desktop mode (notification-based)
-# - Git commit integration with detailed changelogs
+# Servers do not use this. They run stock `system.autoUpgrade` against a
+# promoted ref and apply unattended (ADR 0001). A laptop should not switch
+# generations under someone who is working, which is the only reason this
+# module still exists.
 #
-# For desktop-specific features (waybar, notifications), see:
-# modules/home/desktop/auto-upgrade-desktop.nix
+# What it deliberately no longer does, compared to its previous form:
+#
+#   - update flake.lock          CI owns the lock now; this follows `deploy`
+#   - commit anything to git     there is nothing local to commit
+#   - keep a JSON state machine  systemd and the store already hold that state
+#   - reboot on a schedule       that is a server behaviour
+#   - catch up on resume         systemd timers with Persistent already do this
+#
+# The waybar front-end is packages/nixos-upgrade-scripts; the home-manager
+# side is modules/home/desktop/auto-upgrade-desktop.nix.
 {
   config,
   lib,
@@ -19,60 +26,47 @@
 }:
 let
   cfg = config.cg.auto-upgrade;
-  stateDir = "/var/lib/nixos-auto-upgrade";
 
-  # Import the upgrade scripts package
+  stateDir = "/var/lib/nixos-upgrade";
+  nextLink = "${stateDir}/next";
+
+  flakeRef = "${cfg.flake}#nixosConfigurations.${config.networking.hostName}.config.system.build.toplevel";
+
   upgradeScripts = pkgs.callPackage ../../packages/nixos-upgrade-scripts { };
-
 in
 {
   options.cg.auto-upgrade = {
-    enable = lib.mkEnableOption "Automatic system upgrades";
-
-    mode = lib.mkOption {
-      type = lib.types.enum [
-        "desktop"
-        "server"
-      ];
-      default = "desktop";
-      description = ''
-        Operating mode:
-        - desktop: Never auto-reboot, rely on user interaction via waybar/notifications
-        - server: Auto-reboot during maintenance window if kernel/firmware updated
-      '';
-    };
+    enable = lib.mkEnableOption "Desktop upgrade indicator and on-demand apply";
 
     flake = lib.mkOption {
       type = lib.types.str;
-      default = "/home/coryg/git/dotfiles";
-      description = "Path to flake directory";
+      default = "github:corygyarmathy/dotfiles/deploy";
+      description = ''
+        Flake reference to follow, without the attribute. Defaults to the
+        promoted `deploy` branch, so the desktop tracks exactly what CI has
+        proven builds for every host.
+      '';
     };
 
     schedule = {
       check = lib.mkOption {
         type = lib.types.str;
         default = "04:00";
-        description = "When to check for updates (systemd calendar format)";
+        description = "When to build pending updates (systemd calendar format)";
       };
 
       randomizedDelay = lib.mkOption {
         type = lib.types.str;
         default = "30min";
-        description = "Random delay to add to scheduled time";
+        description = "Random delay added to the scheduled time";
       };
     };
 
     backgroundBuild = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Enable low-priority background builds after detecting updates";
-      };
-
       nice = lib.mkOption {
         type = lib.types.int;
         default = 19;
-        description = "Nice level for background builds (0-19, higher = lower priority)";
+        description = "Nice level for the background build (0-19, higher is lower priority)";
       };
 
       ionice = lib.mkOption {
@@ -82,334 +76,156 @@ in
           "realtime"
         ];
         default = "idle";
-        description = "IO scheduling class for background builds";
+        description = "IO scheduling class for the background build";
       };
     };
 
-    firmware = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Include firmware updates via fwupd";
-      };
-    };
-
-    git = {
-      autoPush = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = "Automatically push commits to remote after upgrade";
-      };
-    };
-
-    server = {
-      rebootWindow = {
-        start = lib.mkOption {
-          type = lib.types.str;
-          default = "03:00";
-          description = "Start of reboot window (HH:MM) - server mode only";
-        };
-
-        end = lib.mkOption {
-          type = lib.types.str;
-          default = "05:00";
-          description = "End of reboot window (HH:MM) - server mode only";
-        };
-      };
-    };
-
-    catchup = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Run upgrade check on boot/resume if scheduled time was missed";
-      };
-    };
-    upgradeGroup = lib.mkOption {
-      type = lib.types.str;
-      default = "nixos-upgrade";
-      description = "Group that can manage upgrade state";
-    };
-
-    # Add users who should be able to interact with the module
-    upgradeUsers = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [ ];
-      description = "Users to add to the upgrade group for state management";
+    firmware.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Include firmware updates via fwupd in the indicator and apply action";
     };
   };
 
   config = lib.mkIf cfg.enable {
-    # Create the upgrade group
-    users.groups.${cfg.upgradeGroup} = { };
-
-    # Add specified users to the group
-    users.users = lib.mkMerge (
-      map (user: {
-        ${user}.extraGroups = [ cfg.upgradeGroup ];
-      }) cfg.upgradeUsers
-    );
-
-    # Ensure state directory exists with proper permissions
-    systemd.tmpfiles.rules = [
-      "d /var/lib/nixos-auto-upgrade 0775 root ${cfg.upgradeGroup} -"
-    ];
-
-    # Install the upgrade scripts
     environment.systemPackages = [
       upgradeScripts
-      pkgs.nvd
-      pkgs.procps
+      pkgs.nvd # for inspecting a diff by hand
     ]
-    ++ lib.optionals cfg.firmware.enable [
-      pkgs.fwupd
-    ];
+    ++ lib.optional cfg.firmware.enable pkgs.fwupd;
 
-    # Enable fwupd if firmware updates are enabled
     services.fwupd.enable = lib.mkIf cfg.firmware.enable true;
 
+    systemd.tmpfiles.rules = [
+      "d ${stateDir} 0755 root root -"
+    ];
+
     # =========================================================================
-    # Check Service - Checks for available updates
+    # Build - fetch the promoted revision and build it, without activating
     # =========================================================================
-    systemd.services.nixos-upgrade-check = {
-      description = "Check for NixOS updates";
+    systemd.services.nixos-upgrade-build = {
+      description = "Build the promoted NixOS configuration";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
 
       serviceConfig = {
         Type = "oneshot";
-        TimeoutStartSec = "15min";
+        TimeoutStartSec = "4h";
+        Nice = cfg.backgroundBuild.nice;
+        IOSchedulingClass = cfg.backgroundBuild.ionice;
       };
 
-      environment = {
-        HOME = "/root";
-      };
+      path = [
+        pkgs.nix
+        pkgs.git
+      ];
+      environment.HOME = "/root";
 
       script = ''
-        ${upgradeScripts}/bin/nixos-upgrade-check \
-          --flake-dir "${cfg.flake}" \
-          --hostname "${config.networking.hostName}" \
-          ${lib.optionalString cfg.firmware.enable "--check-firmware"}
+        # --refresh, or the flake evaluation cache pins `deploy` to whatever it
+        # resolved to last time and the build silently never sees a new
+        # revision.
+        #
+        # --out-link doubles as a GC root, so the built system survives until
+        # the next build replaces it - otherwise `nix-collect-garbage` between
+        # the nightly build and the user clicking apply would throw the work
+        # away and leave the indicator pointing at nothing.
+        nix build --refresh --print-build-logs \
+          "${flakeRef}" \
+          --out-link "${nextLink}"
       '';
     };
 
-    # =========================================================================
-    # Build Service - Low-priority background build
-    # =========================================================================
-    systemd.services.nixos-upgrade-build = lib.mkIf cfg.backgroundBuild.enable {
-      description = "Background build for NixOS updates";
-
-      # Start after check completes
-      after = [ "nixos-upgrade-check.service" ];
-
-      serviceConfig = {
-        Type = "oneshot";
-        TimeoutStartSec = "4h"; # Background builds can take a while
+    systemd.timers.nixos-upgrade-build = {
+      description = "Timer for building promoted NixOS updates";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = cfg.schedule.check;
+        RandomizedDelaySec = cfg.schedule.randomizedDelay;
+        # Covers both a missed run while powered off and one missed while
+        # suspended: systemd re-arms wall-clock timers after resume, so the
+        # bespoke catch-up and resume units this module used to carry were
+        # doing what systemd already does.
+        Persistent = true;
+        Unit = "nixos-upgrade-build.service";
       };
-
-      environment = {
-        HOME = "/root";
-      };
-
-      script = ''
-        ${upgradeScripts}/bin/nixos-upgrade-build \
-          --flake-dir "${cfg.flake}" \
-          --hostname "${config.networking.hostName}" \
-          --nice ${toString cfg.backgroundBuild.nice} \
-          --ionice ${cfg.backgroundBuild.ionice}
-      '';
     };
 
     # =========================================================================
-    # Apply Service - Applies updates
+    # Apply - activate exactly what was built and displayed
     # =========================================================================
     systemd.services.nixos-upgrade-apply = {
-      description = "Apply NixOS updates";
+      description = "Apply the built NixOS configuration";
 
       serviceConfig = {
         Type = "oneshot";
         TimeoutStartSec = "1h";
       };
 
-      environment = {
-        HOME = "/root";
-        GIT_AUTHOR_NAME = "NixOS Auto-Upgrade";
-        GIT_AUTHOR_EMAIL = "auto-upgrade@${config.networking.hostName}.local";
-        GIT_COMMITTER_NAME = "NixOS Auto-Upgrade";
-        GIT_COMMITTER_EMAIL = "auto-upgrade@${config.networking.hostName}.local";
-      };
-
-      script = ''
-        ${upgradeScripts}/bin/nixos-upgrade-apply \
-          --flake-dir "${cfg.flake}" \
-          --hostname "${config.networking.hostName}" \
-          --mode "${cfg.mode}" \
-          ${lib.optionalString cfg.firmware.enable "--apply-firmware"} \
-          ${lib.optionalString cfg.git.autoPush "--auto-push"} \
-          ${lib.optionalString (cfg.mode == "server") "--auto-reboot"}
-      '';
-    };
-
-    # =========================================================================
-    # Timer - Scheduled checks
-    # =========================================================================
-    systemd.timers.nixos-upgrade-check = {
-      description = "Timer for NixOS update checks";
-      wantedBy = [ "timers.target" ];
-
-      timerConfig = {
-        OnCalendar = cfg.schedule.check;
-        RandomizedDelaySec = cfg.schedule.randomizedDelay;
-        Persistent = true; # Run if missed
-        Unit = "nixos-upgrade-check.service";
-      };
-    };
-
-    # =========================================================================
-    # Background Build Timer - Starts after check
-    # =========================================================================
-    systemd.paths.nixos-upgrade-build-trigger = lib.mkIf cfg.backgroundBuild.enable {
-      description = "Trigger background build when updates detected";
-      wantedBy = [ "multi-user.target" ];
-
-      pathConfig = {
-        PathModified = "${stateDir}/state.json";
-        Unit = "nixos-upgrade-build-check.service";
-      };
-    };
-
-    # Helper service to check if build should start
-    systemd.services.nixos-upgrade-build-check = lib.mkIf cfg.backgroundBuild.enable {
-      description = "Check if background build should start";
-
-      serviceConfig = {
-        Type = "oneshot";
-      };
-
-      script = ''
-        # Only start build if state shows updates available and not already building
-        if [[ -f "${stateDir}/state.json" ]]; then
-          STATUS=$(${pkgs.jq}/bin/jq -r '.status' "${stateDir}/state.json" 2>/dev/null || echo "unknown")
-          HAS_NIX=$(${pkgs.jq}/bin/jq -r '.pending_nix != null and .pending_nix.count > 0' "${stateDir}/state.json" 2>/dev/null || echo "false")
-          BUILD_COMPLETE=$(${pkgs.jq}/bin/jq -r '.build_complete' "${stateDir}/state.json" 2>/dev/null || echo "false")
-
-          if [[ "$STATUS" == "idle" ]] && [[ "$HAS_NIX" == "true" ]] && [[ "$BUILD_COMPLETE" != "true" ]]; then
-            echo "Updates detected, starting background build..."
-            systemctl start nixos-upgrade-build.service --no-block
-          else
-            echo "No build needed (status=$STATUS, has_nix=$HAS_NIX, build_complete=$BUILD_COMPLETE)"
-          fi
-        fi
-      '';
-    };
-
-    # =========================================================================
-    # Catchup Services - Run on boot/resume if check was missed
-    # =========================================================================
-    systemd.services.nixos-upgrade-catchup = lib.mkIf cfg.catchup.enable {
-      description = "NixOS upgrade catchup (if scheduled check was missed)";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-      };
-
-      script = ''
-        # Check if we missed the scheduled time
-        LAST_CHECK=""
-        if [[ -f "${stateDir}/state.json" ]]; then
-          LAST_CHECK=$(${pkgs.jq}/bin/jq -r '.last_check // empty' "${stateDir}/state.json" 2>/dev/null || echo "")
-        fi
-
-        # If no last check or it was more than 24 hours ago, run check
-        if [[ -z "$LAST_CHECK" ]]; then
-          echo "No previous check recorded, triggering check..."
-          systemctl start nixos-upgrade-check.service --no-block
-        else
-          LAST_CHECK_EPOCH=$(date -d "$LAST_CHECK" +%s 2>/dev/null || echo 0)
-          NOW_EPOCH=$(date +%s)
-          AGE=$((NOW_EPOCH - LAST_CHECK_EPOCH))
-
-          # 24 hours in seconds
-          if [[ $AGE -gt 86400 ]]; then
-            echo "Last check was $(($AGE / 3600)) hours ago, triggering check..."
-            systemctl start nixos-upgrade-check.service --no-block
-          else
-            echo "Last check was recent ($(($AGE / 3600)) hours ago), skipping"
-          fi
-        fi
-      '';
-    };
-
-    # Also check on resume from suspend
-    systemd.services.nixos-upgrade-resume = lib.mkIf cfg.catchup.enable {
-      description = "Check for missed upgrades on resume";
-      wantedBy = [
-        "suspend.target"
-        "hibernate.target"
-        "hybrid-sleep.target"
+      path = [
+        pkgs.nix
+        pkgs.systemd
       ];
-      after = [
-        "suspend.target"
-        "hibernate.target"
-        "hybrid-sleep.target"
-      ];
-
-      serviceConfig = {
-        Type = "oneshot";
-      };
+      environment.HOME = "/root";
 
       script = ''
-        # Small delay to let network come up
-        sleep 15
-        systemctl start nixos-upgrade-catchup.service --no-block
+        set -euo pipefail
+
+        if [ ! -L "${nextLink}" ]; then
+          echo "Nothing built to apply; run nixos-upgrade-build.service first." >&2
+          exit 1
+        fi
+
+        target="$(readlink -f "${nextLink}")"
+
+        if [ "$target" = "$(readlink -f /run/current-system)" ]; then
+          echo "Already running $target; nothing to do."
+          exit 0
+        fi
+
+        # Activating the built path directly, rather than `nixos-rebuild switch
+        # --flake`, so what gets applied is exactly what the indicator showed.
+        # Re-resolving the flake here would race with `deploy` moving between
+        # the nightly build and the click, and silently install something the
+        # user never saw. These two steps are what nixos-rebuild itself does.
+        nix-env -p /nix/var/nix/profiles/system --set "$target"
+        "$target/bin/switch-to-configuration" switch
       '';
     };
 
     # =========================================================================
-    # Polkit Rules - Allow wheel group to manage upgrade services
+    # Firmware - separate, because it reboots differently and fails differently
+    # =========================================================================
+    systemd.services.nixos-upgrade-firmware = lib.mkIf cfg.firmware.enable {
+      description = "Apply pending firmware updates";
+
+      serviceConfig = {
+        Type = "oneshot";
+        TimeoutStartSec = "1h";
+      };
+
+      script = ''
+        # Not --offline: scheduling a firmware update for the next boot without
+        # saying so would surprise someone who clicked "apply" on a laptop.
+        ${pkgs.fwupd}/bin/fwupdmgr update --assume-yes --no-reboot-check
+      '';
+    };
+
+    # =========================================================================
+    # Let the user drive it from the bar
     # =========================================================================
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
         if (action.id == "org.freedesktop.systemd1.manage-units") {
           var unit = action.lookup("unit");
-          if ((unit == "nixos-upgrade-check.service" ||
-               unit == "nixos-upgrade-build.service" ||
-               unit == "nixos-upgrade-apply.service") &&
+          if ((unit == "nixos-upgrade-build.service" ||
+               unit == "nixos-upgrade-apply.service" ||
+               unit == "nixos-upgrade-firmware.service") &&
               subject.isInGroup("wheel")) {
             return polkit.Result.YES;
           }
         }
       });
     '';
-
-    # =========================================================================
-    # Notification Service - For completed upgrades (server mode)
-    # =========================================================================
-    systemd.services.nixos-upgrade-notify = lib.mkIf (cfg.mode == "server") {
-      description = "Notify about completed NixOS upgrade";
-      after = [ "nixos-upgrade-apply.service" ];
-      wantedBy = [ "nixos-upgrade-apply.service" ];
-
-      serviceConfig = {
-        Type = "oneshot";
-      };
-
-      script = ''
-        # Log completion for server monitoring
-        if [[ -f "${stateDir}/state.json" ]]; then
-          STATUS=$(${pkgs.jq}/bin/jq -r '.status' "${stateDir}/state.json" 2>/dev/null || echo "unknown")
-          ERROR=$(${pkgs.jq}/bin/jq -r '.error_message // empty' "${stateDir}/state.json" 2>/dev/null || echo "")
-
-          if [[ "$STATUS" == "error" ]]; then
-            echo "NixOS upgrade failed: $ERROR"
-            # Could integrate with monitoring here (e.g., send to Prometheus, email, etc.)
-          else
-            echo "NixOS upgrade completed successfully"
-          fi
-        fi
-      '';
-    };
   };
 }
