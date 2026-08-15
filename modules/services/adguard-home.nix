@@ -117,14 +117,6 @@ let
       answer = servers.homelab01;
     }
     {
-      domain = "mylar3.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "lazylibrary.${domain}";
-      answer = servers.homelab01;
-    }
-    {
       domain = "audiobookshelf.${domain}";
       answer = servers.homelab01;
     }
@@ -155,6 +147,10 @@ let
     }
     {
       domain = "shelfmark.${domain}";
+      answer = servers.homelab02;
+    }
+    {
+      domain = "suwayomi.${domain}";
       answer = servers.homelab02;
     }
   ]

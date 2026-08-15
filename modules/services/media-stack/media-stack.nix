@@ -89,6 +89,7 @@ in
         "audiobooks"
         "podcasts"
         "bookdrop"
+        "suwayomi"
         "whisparr"
       ];
       description = ''
