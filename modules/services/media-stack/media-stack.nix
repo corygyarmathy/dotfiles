@@ -46,7 +46,9 @@ in
           ├── books/
           ├── manga/
           ├── lightnovels/
-          └── comics/
+          ├── comics/
+          ├── audiobooks/
+          └── bookdrop/
       '';
     };
 
@@ -161,6 +163,11 @@ in
       "d ${cfg.dataPath}/comics 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/manga 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/lightnovels 2775 ${cfg.user} ${cfg.group} -"
+      # Audiobookshelf has always read this, but it was never declared here --
+      # it existed only because someone created it by hand.
+      "d ${cfg.dataPath}/audiobooks 2775 ${cfg.user} ${cfg.group} -"
+      # Watched ingest folder: drop a file here and Grimmory imports it.
+      "d ${cfg.dataPath}/bookdrop 2775 ${cfg.user} ${cfg.group} -"
       "d ${cfg.dataPath}/whisparr 2775 ${cfg.user} ${cfg.group} -"
     ];
 

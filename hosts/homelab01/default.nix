@@ -462,6 +462,16 @@
           localOnly = false; # listeners need external access for mobile apps
           rateLimitProfile = "media";
         };
+        # Runs on homelab02, where the library is on local disk rather than the
+        # NFS mount -- see the header of modules/services/media-stack/grimmory.nix.
+        # Proxied from here because homelab01 owns the Cloudflare tunnel.
+        grimmory = {
+          subdomain = "grimmory";
+          port = 6060;
+          upstream = "10.20.2.130"; # homelab02
+          localOnly = false; # readers need external access
+          rateLimitProfile = "media";
+        };
       };
     };
 
@@ -672,6 +682,7 @@
       services = lib.mapAttrs (name: svc: {
         subdomain = svc.subdomain;
         port = svc.port;
+        upstream = svc.upstream;
         localOnly = svc.localOnly;
       }) config.cg.service.reverse-proxy.services;
     };

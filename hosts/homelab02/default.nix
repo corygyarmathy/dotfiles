@@ -104,6 +104,12 @@
       extraExclude = [
         # cross-seed logs are ~1GB
         "/srv/arr/cross-seed/logs/**"
+
+        # Grimmory's live MariaDB datadir. Restic snapshots of a running
+        # database are torn and may not restore; grimmory-db-backup.timer
+        # writes a consistent dump to /srv/arr/grimmory/db-dump at 02:00,
+        # half an hour before the restic window, and that is what gets backed up.
+        "/srv/arr/grimmory/mariadb/databases/**"
       ];
 
       repositories = {
@@ -333,6 +339,18 @@
     };
 
     unpackerr.enable = true;
+
+    # -------------------------------------------------------------------------
+    # Reading Stack
+    # -------------------------------------------------------------------------
+    # Grimmory lives here rather than with the other reading services on
+    # homelab01, because it needs the library on local disk: over NFS it loses
+    # UI file operations and its BookDrop watcher stops firing. Caddy and the
+    # Cloudflare tunnel on homelab01 proxy across to it.
+    grimmory = {
+      enable = true;
+      diskType = "LOCAL"; # /srv/media is the local ZFS pool on this host
+    };
 
     # -------------------------------------------------------------------------
     # Services that stay on homelab01

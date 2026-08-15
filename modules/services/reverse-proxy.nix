@@ -121,6 +121,9 @@ let
     {
       subdomain,
       port,
+      # Optional: host the service actually runs on. Defaults to this machine;
+      # set it to proxy a service hosted on another homelab node.
+      upstream ? "localhost",
       # Optional: restrict to local network only
       localOnly ? false,
       # Optional: rate limiting profile ("media", "admin", "none")
@@ -153,7 +156,7 @@ let
             respond @denied "Access denied" 403
           ''}
 
-          reverse_proxy localhost:${toString port} {
+          reverse_proxy ${upstream}:${toString port} {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-For {remote_host}
@@ -197,7 +200,18 @@ in
             };
             port = lib.mkOption {
               type = lib.types.port;
-              description = "Local port the service listens on";
+              description = "Port the service listens on";
+            };
+            upstream = lib.mkOption {
+              type = lib.types.str;
+              default = "localhost";
+              example = "homelab02";
+              description = ''
+                Host the service runs on. Defaults to this machine. Set it to
+                another node's hostname or IP to proxy a service hosted there --
+                the traffic crosses the LAN in the clear, so only use it for
+                links inside the trusted network.
+              '';
             };
             localOnly = lib.mkOption {
               type = lib.types.bool;
