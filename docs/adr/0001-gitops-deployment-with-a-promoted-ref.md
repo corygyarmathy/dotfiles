@@ -47,6 +47,23 @@ points at `github:corygyarmathy/dotfiles/deploy#hostname`. A host can therefore 
 fetch a revision proven to evaluate and build *for that host*. `master` stays the
 integration branch and may be red; `deploy` is the fleet's contract.
 
+**1a. The servers roll out in stages.** `homelab01` follows `deploy` and takes each
+promoted revision the night it lands. `homelab02` follows `deploy-stable`, which a
+scheduled job advances to whatever `deploy` pointed at 24 hours earlier. The two servers
+are not interchangeable: `homelab02` holds the ZFS pool and exports the NFS storage
+`homelab01` mounts, so it is the host whose failure cascades. Staging the rollout means a
+kernel or systemd bump that fails to boot takes out the compute node while the data node
+keeps serving.
+
+The soak is worth less than it looks for host-specific packages - a regression in ZFS or
+qBittorrent will not surface on `homelab01`, which runs neither - but the shared base
+(kernel, systemd, nix, glibc) is where an unattended update does catastrophic rather than
+annoying damage, and that is exactly what a day of uptime on another machine exercises.
+
+The lag is measured in elapsed time, not health: it establishes that `homelab01` has *had*
+the revision for a day, not that `homelab01` is well. Closing that gap needs the
+deployment metrics below, at which point the same job can gate on them.
+
 **2. `flake.lock` updates move to CI.** A scheduled workflow builds every host toplevel,
 runs `nix flake update`, builds again, and opens one pull request carrying the per-host
 `nix store diff-closures` output in the commit body. It auto-merges on green. Lock
@@ -126,10 +143,17 @@ deciding what to build - belongs to CI and is removed.
 - **Keep hosts on `master` and rely on CI running first.** No new branch, no promotion
   job. Rejected: it is a race, not a gate. CI usually finishes before 04:00, and "usually"
   is the whole problem.
-- **Per-host promotion branches (`deploy/homelab01`).** One host's build failure would not
-  block the other's deployment. Rejected as premature at two servers, and it trades a
-  fleet that is consistent by construction for one that can drift. Reconsider when hosts
-  diverge enough that one failing build routinely blocks unrelated hosts.
+- **Per-host promotion branches (`deploy/homelab01`).** A *different* idea to the staged
+  rollout in 1a: there, both servers traverse the same sequence of revisions at different
+  times; here, each host would advance independently so one host's build failure could not
+  block another's deployment. Rejected as premature at two servers, and it trades a fleet
+  that is consistent by construction for one that can drift arbitrarily. Reconsider when
+  hosts diverge enough that one failing build routinely blocks unrelated hosts.
+- **Staggering the servers by time of day instead of by revision.** Moving `homelab02`'s
+  upgrade a few hours after `homelab01`'s needs no second ref. Rejected because it is not
+  a soak: in a pull model both hosts fetch whatever the ref points at when they wake, so a
+  later hour gets the *same* revision the same night, and the failure it is meant to catch
+  happens at 3am with nobody watching either way.
 - **`DeterminateSystems/update-flake-lock` for the lock workflow.** Well-maintained, and
   its PR body lists input revision changes. Rejected because it does not build what it
   proposes and reports input revisions rather than package deltas; `nix store
