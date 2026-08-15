@@ -45,8 +45,10 @@
 #   qBittorrent also shares gluetun's network.
 # - When VPN disabled: cross-seed uses arr-network and accesses qBittorrent via
 #   its container hostname.
-# - Prowlarr is always accessed via the reverse proxy (prowlarr.gyarmathy.co)
-#   since it's on the arr-network and cross-seed needs a stable route to it.
+# - Prowlarr is accessed by address (see the prowlarrUrl option). It used to be
+#   accessed by its reverse-proxy hostname, which does not resolve inside
+#   Gluetun's namespace, so every Torznab request failed and every search ran
+#   with no indexers.
 #
 # MIGRATION NOTES (homelab02 NAS):
 # Cross-seed will MOVE to homelab02 alongside qBittorrent.
@@ -73,12 +75,14 @@ let
   # When VPN disabled: cross-seed is on arr-network, uses container hostname
   effectiveQbtHost = if qbt.vpn.enable then "localhost" else cfg.qbittorrentHost;
 
-  # Build Torznab URL list for config
-  # Always use the reverse proxy URL for Prowlarr since it's accessible from
-  # both VPN and non-VPN network configurations
+  # Build Torznab URL list for config.
+  # This used the reverse proxy hostname, on the stated grounds that it worked
+  # under both VPN and non-VPN configurations. It did not: under VPN this
+  # container has Gluetun's resolver, which cannot see the internal zone. See
+  # the prowlarrUrl option.
   torznabUrlList = lib.concatMapStringsSep ",\n    " (
     id:
-    ''"https://prowlarr.gyarmathy.co/${toString id}/api?apikey=${
+    ''"${cfg.prowlarrUrl}/${toString id}/api?apikey=${
       config.sops.placeholder."media-stack/prowlarr/api"
     }"''
   ) cfg.torznabIndexerIds;
@@ -104,7 +108,12 @@ let
       // TORRENT CLIENT CONNECTION
       // ========================================================================
       // Host is ${effectiveQbtHost} because:
-      // ${if qbt.vpn.enable then "VPN mode: cross-seed shares gluetun's network namespace with qBittorrent" else "Direct mode: cross-seed uses arr-network container hostname"}
+      // ${
+        if qbt.vpn.enable then
+          "VPN mode: cross-seed shares gluetun's network namespace with qBittorrent"
+        else
+          "Direct mode: cross-seed uses arr-network container hostname"
+      }
       torrentClients: [
         "qbittorrent:http://${config.sops.placeholder."media-stack/qbittorrent/username"}:${
           config.sops.placeholder."media-stack/qbittorrent/password"
@@ -182,6 +191,24 @@ in
       type = lib.types.port;
       default = 2468;
       description = "Port for cross-seed API";
+    };
+
+    prowlarrUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "http://10.20.2.85:9696";
+      example = "http://prowlarr:9696";
+      description = ''
+        Base URL for Prowlarr's Torznab feeds. An address, not a hostname, and
+        deliberately not the reverse proxy.
+
+        Under VPN this container lives in Gluetun's network namespace, where
+        DNS is Gluetun's own DoT resolver pointed at a public upstream. The
+        internal zone does not exist there: prowlarr.gyarmathy.co resolves only
+        on AdGuard and has no public record, so every Torznab request failed to
+        resolve and every search silently skipped its indexers. Reaching
+        Prowlarr by address avoids resolution entirely, and Gluetun's
+        FIREWALL_OUTBOUND_SUBNETS already permits the LAN.
+      '';
     };
 
     torznabIndexerIds = lib.mkOption {
