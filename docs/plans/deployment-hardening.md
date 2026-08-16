@@ -8,7 +8,7 @@ Six pieces. The first two are small and independent; the rest can proceed in any
 
 | #   | Item                      | Size    | Status                                                   |
 | --- | ------------------------- | ------- | -------------------------------------------------------- |
-| 1   | Boot counting             | ~1 line | **partly done** - homelab01 only, awaiting first boot    |
+| 1   | Boot counting             | ~1 line | **proven on homelab01** - remaining hosts still to follow |
 | 2   | Retire `deploy-stable`    | small   | **done** 2026-08-16                                      |
 | 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
 | 4   | Behaviour tests           | large   | not started - now the highest-value item                 |
@@ -19,8 +19,8 @@ Six pieces. The first two are small and independent; the rest can proceed in any
 
 Items 1-3 landed today as four PRs (#22-#25). What remains before any of them can be called finished:
 
-- **Item 1** is on `homelab01` alone, and `homelab01` has not yet booted with it - it takes the config at 04:00 and the counters only appear on the next `nixos-rebuild boot`/`switch`. Confirm `bootctl` shows entries blessed, then a second PR enables `homelab02` and `xps15`.
-- **Item 3** landed with `rollback.enable = false` on both servers. It verifies, exports metrics and alerts; it does not act. Arming it is one line per host, and should wait for a few weeks of evidence about how often it would have fired on a host that was actually fine.
+- **Item 1** is proven end to end on `homelab01` - counter written, boot counted, `boot-complete.target` reached, entry blessed - and is still on that host alone. A second PR enables `homelab02` and `xps15`.
+- **Item 3** landed with `rollback.enable = false` on both servers and has passed once on each. It verifies, exports metrics and alerts; it does not act. Arming it is one line per host, and should wait for a few weeks of evidence about how often it would have fired on a host that was actually fine.
 - **Item 4** is now the binding constraint. ADR 0002 made behaviour tests the primary pre-deploy gate, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after.
 
 A note on sequencing, since it caught us out today: item 2's ordering section argued it was safe to take before item 3, and that held - but only because the interval was hours. Both servers now take a promoted revision on the same night with no automated recovery from a bad one, and that stays true until item 3 is armed.
@@ -61,7 +61,51 @@ Both servers have booted at least once with counting enabled, and `bootctl` show
 
 Confirmed on `homelab01` before it took the config: the ESP already held `nixos-<hash>.conf` entries and `loader.conf` held a plain `default`, which is exactly the state the corrected risk note above predicts - the renaming was never boot counting's doing.
 
-**Still outstanding:** `homelab01` had not yet activated it as of 2026-08-16 afternoon. Counters appear on the next `nixos-rebuild boot`/`switch`, so the first evidence arrives after the 04:00 run. Then a second PR for `homelab02` and `xps15`.
+### First evidence, 2026-08-16 16:08
+
+Activated on `homelab01` ahead of the 04:00 run. Everything on the _write_ side does what it should:
+
+```
+$ cat /boot/loader/loader.conf
+timeout 5
+preferred nixos-62c2ed95…c877a8ef.conf
+default nixos-*
+console-mode keep
+
+$ ls /boot/loader/entries/ | grep '+'
+nixos-62c2ed95…c877a8ef+3.conf          # the new generation, and only it
+
+$ bootctl
+  Current Boot Loader: systemd-boot 261.1
+             Features: ✓ Boot counting
+Default Boot Loader Entry:
+                tries: 3 left
+```
+
+Exactly one of the 32 entries carries a counter - the other 31 predate this and have none, which is what makes the fallback safe: an entry that was never counted is treated as good, so `default nixos-*` still has somewhere to land.
+
+`systemd-bless-boot.service` and `boot-complete.target` are both present in the running system and both `inactive`, which is correct rather than concerning: this boot came from an uncounted entry, so `systemd-bless-boot-generator` had no reason to pull them in.
+
+### Blessing confirmed, 2026-08-16 16:25
+
+`homelab01` was rebooted rather than left to a kernel bump, because the clearing half of the mechanism is the half that can bite: blessing only happens on a boot _from_ a counted entry, and had `boot-complete.target` not been reached on this host, the counter would never clear and the third reboot would mark a perfectly good generation bad and fall back to an older one. Worth one deliberate reboot on the compute node to find out, rather than discovering it on the storage node three reboots later.
+
+```
+$ bootctl | grep 'Current Entry'
+  Current Entry: nixos-62c2ed95…c877a8ef.conf     # no +N - the counter was cleared
+
+$ systemctl is-active systemd-bless-boot.service
+active
+
+$ ls /boot/loader/entries/ | grep '+'
+                                                  # nothing counting down
+```
+
+`systemd-bless-boot.service` entered active at 16:24:51 with `Result=success` and exit status 0, and `loader.conf` kept its `preferred` line through the blessing. The round trip is therefore complete and observed: entry written `+3` → booted → decremented → `boot-complete.target` reached → counter cleared → entry blessed.
+
+Item 1's "done when" is met for `homelab01`.
+
+**Still outstanding:** enabling `homelab02` and `xps15`, now that the mechanism has been proven end to end somewhere it was safe to prove it.
 
 ---
 
@@ -158,6 +202,36 @@ One addition worth considering: arm the rollback _before_ switching rather than 
 ### Landed in two stages
 
 Shipped reporting-only (#24): `modules/nixos/upgrade-verify.nix`, the `NixosVerifyFailed` and `NixosRolledBack` rules, and `criticalUnits` on both servers - with the rollback itself behind `cg.upgrade-verify.rollback.enable`, default false. The failure mode of this module is reverting a healthy server, and watching it decide for a few weeks costs nothing while guessing at the false-positive rate could cost a night's uptime on the storage node. Arming it afterwards is a one-line change per host.
+
+### First run, 2026-08-16
+
+Both servers, triggered by `nixos-upgrade`'s `ExecStartPost` rather than the boot timer - so the same-unit switch path is exercised and works:
+
+```
+Verifying generation: /nix/store/xzd1cyim…-nixos-system-homelab01-…
+systemd reports: running
+Verification passed.
+Consumed 69ms CPU time over 2min 90ms wall clock time, 4.2M memory peak
+```
+
+`homelab02` identical. Two useful readings beyond "it passed":
+
+- **The critical unit lists are right.** A pass means every unit in them was active, so `srv-media.automount`, `caddy`, `jellyfin`, `zfs-import-tank`, `nfs-server` all reported correctly. Had the automount trap not been caught, this is where it would have shown up as a spurious failure on `homelab01`.
+- **It is free.** Under 70ms of CPU; the two minutes of wall clock are the deliberate settle, and it runs `--no-block` so nothing waits on it.
+
+### The boot timer, 2026-08-16 16:27
+
+The reboot of `homelab01` for item 1 incidentally exercised item 3's other trigger, three minutes into the new boot:
+
+```
+Starting Verify the running NixOS generation came up healthy...
+Generation already verified: /nix/store/xzd1cyim…-nixos-system-homelab01-…
+Finished Verify the running NixOS generation came up healthy.
+```
+
+Small output, three things proven. The timer fires at all, so the reboot path has a trigger - this is the branch the plan's original `ExecStartPost` design could never have reached. The generation-keyed guard works: the running system had been blessed before the reboot, so it exited immediately rather than re-verifying and re-sleeping. And nothing deadlocked, which is what the timer exists to avoid - a unit ordered inside the boot transaction while waiting on `is-system-running --wait` would have hung the boot instead.
+
+What remains unexercised is the timer finding _new_ work: booting into a generation that has never been verified, which needs a kernel bump. The trigger is proven; the verdict it will reach on a fresh generation is not.
 
 **Stage two, still outstanding:** arm `rollback.enable`, `homelab01` first. The signal to look for beforehand is `nixos_verify_result` staying at 1 across a few weeks of nightly upgrades - every 0 in that window is a rollback that would have happened, and worth understanding before it does.
 
