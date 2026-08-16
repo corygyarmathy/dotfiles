@@ -219,7 +219,19 @@ Consumed 69ms CPU time over 2min 90ms wall clock time, 4.2M memory peak
 - **The critical unit lists are right.** A pass means every unit in them was active, so `srv-media.automount`, `caddy`, `jellyfin`, `zfs-import-tank`, `nfs-server` all reported correctly. Had the automount trap not been caught, this is where it would have shown up as a spurious failure on `homelab01`.
 - **It is free.** Under 70ms of CPU; the two minutes of wall clock are the deliberate settle, and it runs `--no-block` so nothing waits on it.
 
-One deliberate gap: this exercised the branch where the kernel is unchanged. The reboot path - verification started by the boot timer - is unexercised until a kernel bump, and that is the branch the original design got wrong, so it deserves an explicit look the first time it runs.
+### The boot timer, 2026-08-16 16:27
+
+The reboot of `homelab01` for item 1 incidentally exercised item 3's other trigger, three minutes into the new boot:
+
+```
+Starting Verify the running NixOS generation came up healthy...
+Generation already verified: /nix/store/xzd1cyim…-nixos-system-homelab01-…
+Finished Verify the running NixOS generation came up healthy.
+```
+
+Small output, three things proven. The timer fires at all, so the reboot path has a trigger - this is the branch the plan's original `ExecStartPost` design could never have reached. The generation-keyed guard works: the running system had been blessed before the reboot, so it exited immediately rather than re-verifying and re-sleeping. And nothing deadlocked, which is what the timer exists to avoid - a unit ordered inside the boot transaction while waiting on `is-system-running --wait` would have hung the boot instead.
+
+What remains unexercised is the timer finding _new_ work: booting into a generation that has never been verified, which needs a kernel bump. The trigger is proven; the verdict it will reach on a fresh generation is not.
 
 **Stage two, still outstanding:** arm `rollback.enable`, `homelab01` first. The signal to look for beforehand is `nixos_verify_result` staying at 1 across a few weeks of nightly upgrades - every 0 in that window is a rollback that would have happened, and worth understanding before it does.
 
