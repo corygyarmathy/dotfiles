@@ -88,6 +88,18 @@
       enable = true;
     };
     user-security.enable = true;
+
+    # Reporting only, and deliberately not armed here even when homelab01's is.
+    # This host holds the pool and the NFS export; it is the last place to give
+    # an automatic reverter the benefit of the doubt.
+    upgrade-verify = {
+      enable = true;
+      criticalUnits = [
+        "zfs-import-tank.service" # nothing below matters without the pool
+        "nfs-server.service" # homelab01 mounts this
+        "caddy.service" # everything published is behind it
+      ];
+    };
   };
 
   # ============================================================================

@@ -92,16 +92,29 @@ A revision that builds, boots, and then fails to bring its services up has no au
 
 ### Approach
 
-Verify after switching, and revert if the system does not come up clean:
+Verify after switching, and revert if the system does not come up clean.
+
+**The `ExecStartPost` sketch this plan previously carried does not work**, and the reason is worth recording. `system.autoUpgrade` with `allowReboot` runs `nixos-rebuild boot` and then branches three ways: kernel unchanged means a `switch` inside the unit; kernel changed and inside the window means `shutdown -r +1`, with activation at the next boot; kernel changed outside it means nothing activates at all. `shutdown -r +1` returns immediately, so an `ExecStartPost` fires while the _old_ generation is still running - it would bless the outgoing system on its way out and never see the one that lands. Nightly lock bumps change the kernel often, so that is the common branch, not a corner.
+
+So verification is anchored on the generation rather than on the trigger. It records the store path it last blessed and does nothing unless the running system differs, which makes all three branches fall out of one rule, and lets it be started from two places without coordination:
 
 ```
 nixos-upgrade.service
-  └─ ExecStartPost: nixos-upgrade-verify
-       ├─ systemctl is-system-running --wait   (degraded ⇒ fail)
-       ├─ probe the host's own critical units
-       └─ on failure: nix-env -p /nix/var/nix/profiles/system --rollback
-                      && /run/current-system/bin/switch-to-configuration switch
+  ├─ ExecStartPre:  record the set of units already failing
+  └─ ExecStartPost: systemctl start --no-block nixos-upgrade-verify
+
+nixos-upgrade-verify.service        (also started by a timer at OnBootSec)
+  ├─ running system == last blessed?  ⇒ exit 0
+  ├─ settle, then systemctl is-system-running --wait
+  ├─ failed units now, minus the pre-upgrade baseline
+  ├─ probe the host's own critical units
+  └─ on failure: nix-env -p /nix/var/nix/profiles/system --rollback
+                 && $profile/bin/switch-to-configuration boot && … switch
 ```
+
+A timer rather than `wantedBy = multi-user.target`, because `is-system-running --wait` blocks until startup completes and a unit inside the boot transaction waiting on the boot transaction is a deadlock.
+
+The baseline subtraction is what makes the check conservative in the way the note below demands: without it, a host with one chronically failing unit would revert every generation it was ever offered, for a reason having nothing to do with the new one.
 
 Notes carried over from the previous version of this plan, all still true:
 
@@ -110,11 +123,15 @@ Notes carried over from the previous version of this plan, all still true:
 - A rollback must alert loudly. Silently reverting means the host stops tracking `deploy` and then trips `NixosDeployStale` two days later with a confusing message. Emit it through the existing textfile metrics so it rides the stack that already exists.
 - This cannot recover a network-level mistake: verification runs on the host, and a machine that has lost its network still believes it is fine. Item 6 is the remedy for that case.
 
-One addition worth considering: arm the rollback _before_ switching rather than after, as a transient timer (`systemd-run --on-active=…`) that reverts unless cancelled by a successful verification. That covers activation hanging, and partially covers the network case, since the timer fires locally whether or not anything can reach the host. Verify first that a transient timer survives `switch-to-configuration`.
+One addition worth considering: arm the rollback _before_ switching rather than after, as a transient timer (`systemd-run --on-active=…`) that reverts unless cancelled by a successful verification. That covers activation hanging, and partially covers the network case, since the timer fires locally whether or not anything can reach the host. Verify first that a transient timer survives `switch-to-configuration`. **Not built.** It is a second mechanism for a failure the first does not cover, and there is no evidence yet that activation hanging happens here; the cheaper first move is a `TimeoutStartSec` on `nixos-upgrade.service`, which turns a hang into a failed unit and an existing alert.
+
+### Landed in two stages
+
+Shipped reporting-only: verification, metrics, and the two alerts, with the rollback itself behind `cg.upgrade-verify.rollback.enable`, default false. The failure mode of this module is reverting a healthy server, and watching it decide for a few weeks costs nothing while guessing at the false-positive rate could cost a night's uptime on the storage node. Arming it afterwards is a one-line change per host.
 
 ### Done when
 
-A deliberately broken service configuration, deployed to `homelab01`, reverts itself and raises an alert saying so.
+A deliberately broken service configuration, deployed to `homelab01`, reverts itself and raises an alert saying so. Reaching that requires arming `rollback.enable`, which is deliberately a separate decision from landing the mechanism.
 
 ---
 

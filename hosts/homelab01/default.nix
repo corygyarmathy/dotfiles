@@ -75,6 +75,22 @@
     # here first, ahead of homelab02, because homelab02 holds the pool and its
     # ESP should not be the one this is proven on.
     boot-counting.enable = true;
+
+    # Health-gate what boot counting cannot see: a generation that boots and
+    # then fails to bring its services up. Reporting only for now - rollback
+    # stays off until there is evidence about how often it would fire on a
+    # host that is actually fine.
+    upgrade-verify = {
+      enable = true;
+      criticalUnits = [
+        "caddy.service" # everything published is behind it
+        "jellyfin.service" # the reason this host exists
+        # The media tree from homelab02 is an automount, so `srv-media.mount`
+        # is legitimately inactive most of the time. The automount unit is the
+        # one that is always meant to be up.
+        "srv-media.automount"
+      ];
+    };
   };
 
   # ============================================================================

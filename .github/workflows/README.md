@@ -62,17 +62,21 @@ Both servers land on the same revision the same night. The 15 minute offset is n
 
 Hosts export deployment state as node_exporter textfile metrics from `nixos-upgrade.service`'s `ExecStopPost` (see `modules/services/monitoring/deploy-metrics.nix`), alerted through the Prometheus and Alertmanager stack that already runs on both servers.
 
-| Alert                | Catches                                    |
-| -------------------- | ------------------------------------------ |
-| `NixosDeployFailed`  | the upgrade ran and failed                 |
-| `NixosDeployStale`   | **no upgrade has run in 48 hours**         |
-| `NixosRebootPending` | a generation is staged but never activated |
+| Alert                | Catches                                                  |
+| -------------------- | -------------------------------------------------------- |
+| `NixosDeployFailed`  | the upgrade ran and failed                               |
+| `NixosDeployStale`   | **no upgrade has run in 48 hours**                       |
+| `NixosRebootPending` | a generation is staged but never activated               |
+| `NixosVerifyFailed`  | the upgrade succeeded and the generation came up broken  |
+| `NixosRolledBack`    | a host reverted itself, and is no longer tracking `deploy` |
 
 The middle one is the point of the exercise. A host that stops upgrading raises nothing else - no unit fails, no probe drops, it simply falls behind in silence.
 
 The last one exists because `nixos-upgrade` runs `nixos-rebuild boot` and then reboots _only_ if the kernel changed and the clock is still inside the reboot window. A build that runs long pushes it past that window, and the unit reports success while the new kernel never activates.
 
-Services that fail to come back and endpoints that stop responding are already covered by the existing `node_systemd_unit_state` and `probe_success` rules.
+The last two come from `modules/nixos/upgrade-verify.nix`, which checks a newly activated generation against the set of units that were already failing before the upgrade started, so it reports on the new generation specifically rather than on the host's general health. Rollback is currently off — it reports and alerts, and reverting is a one-line change once there is evidence about how often it would fire on a host that is actually fine.
+
+Services that fail to come back and endpoints that stop responding are already covered by the existing `node_systemd_unit_state` and `probe_success` rules; those describe the host, these describe the deployment.
 
 ## Recovery
 
