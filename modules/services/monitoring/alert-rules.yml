@@ -312,6 +312,33 @@ groups:
           summary: "{{ $labels.host }} has a generation staged but not activated for over 26 hours"
           description: "A new kernel is staged and waiting for a reboot that has not happened — most likely the build ran past the configured reboot window, which nixos-upgrade reports as success."
 
+      # Health-gated activation (modules/nixos/upgrade-verify.nix). The upgrade
+      # itself succeeded — this is about what the generation did once it was
+      # running, which NixosDeployFailed cannot see.
+      #
+      # Only counts units that were not already failing before the upgrade
+      # started, so this is a claim about the new generation specifically.
+      - alert: NixosVerifyFailed
+        expr: nixos_verify_result == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.host }} activated a generation that did not come up healthy"
+          description: "Verification found units failing that were not failing before the upgrade. Check: journalctl -u nixos-upgrade-verify.service"
+
+      # Loud on purpose. A host that reverts itself stops tracking the promoted
+      # ref, and would otherwise announce that two days later as NixosDeployStale
+      # — an alert whose text points nowhere near the actual cause.
+      - alert: NixosRolledBack
+        expr: nixos_verify_rolled_back == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.host }} rolled itself back to its previous generation"
+          description: "Activation verification failed and the host reverted. It is running an older revision than the one deploy points at, and will be offered the same revision again tonight. Fix forward."
+
   - name: vpn
     rules:
       - alert: GluetunVpnDisconnected
