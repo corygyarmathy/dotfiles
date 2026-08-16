@@ -44,6 +44,10 @@
       enable = true;
       firmware.enable = true;
     };
+    # Cheap here, and this is the machine most likely to be handed a
+    # half-finished configuration - it is the one built from a working tree
+    # rather than only from a revision CI has proven.
+    boot-counting.enable = true;
     firewall = {
       enable = true;
       # allowedTCPPorts = [ 9000 ];

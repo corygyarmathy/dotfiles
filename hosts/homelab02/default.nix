@@ -83,6 +83,13 @@
     };
     user-security.enable = true;
 
+    # This host reboots unattended inside the 04:00-05:00 window and holds the
+    # pool, so an initrd or kernel that will not come up is the failure that
+    # costs the most here - and the one nobody can fix without standing in
+    # front of it. Enabled after homelab01 proved the full round trip: counter
+    # written, boot counted, boot-complete.target reached, entry blessed.
+    boot-counting.enable = true;
+
     # Reporting only, and deliberately not armed here even when homelab01's is.
     # This host holds the pool and the NFS export; it is the last place to give
     # an automatic reverter the benefit of the doubt.
