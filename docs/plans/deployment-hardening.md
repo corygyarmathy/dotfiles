@@ -8,7 +8,7 @@ Six pieces. The first two are small and independent; the rest can proceed in any
 
 | #   | Item                      | Size    | Status                                                   |
 | --- | ------------------------- | ------- | -------------------------------------------------------- |
-| 1   | Boot counting             | ~1 line | **armed on homelab01** - blessing unproven until a reboot |
+| 1   | Boot counting             | ~1 line | **proven on homelab01** - remaining hosts still to follow |
 | 2   | Retire `deploy-stable`    | small   | **done** 2026-08-16                                      |
 | 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
 | 4   | Behaviour tests           | large   | not started - now the highest-value item                 |
@@ -19,7 +19,7 @@ Six pieces. The first two are small and independent; the rest can proceed in any
 
 Items 1-3 landed today as four PRs (#22-#25). What remains before any of them can be called finished:
 
-- **Item 1** is on `homelab01` alone and is armed but unexercised: the entry carries its counter, and nothing has yet booted from a counted entry, so the clearing half of the mechanism has never run. One reboot settles it, then a second PR enables `homelab02` and `xps15`.
+- **Item 1** is proven end to end on `homelab01` - counter written, boot counted, `boot-complete.target` reached, entry blessed - and is still on that host alone. A second PR enables `homelab02` and `xps15`.
 - **Item 3** landed with `rollback.enable = false` on both servers and has passed once on each. It verifies, exports metrics and alerts; it does not act. Arming it is one line per host, and should wait for a few weeks of evidence about how often it would have fired on a host that was actually fine.
 - **Item 4** is now the binding constraint. ADR 0002 made behaviour tests the primary pre-deploy gate, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after.
 
@@ -86,15 +86,26 @@ Exactly one of the 32 entries carries a counter - the other 31 predate this and 
 
 `systemd-bless-boot.service` and `boot-complete.target` are both present in the running system and both `inactive`, which is correct rather than concerning: this boot came from an uncounted entry, so `systemd-bless-boot-generator` had no reason to pull them in.
 
-**The clearing side is still unproven, and it is the half that can bite.** Blessing only happens on a boot _from_ a counted entry. If `boot-complete.target` is not reached on this host, the counter never clears, and the third reboot marks a perfectly good generation bad and falls back. `boot-complete.target` requires only `sysinit.target`, so this is very likely fine - which is exactly the sort of "very likely" worth confirming once rather than assuming forever. After the next reboot:
+### Blessing confirmed, 2026-08-16 16:25
 
-```bash
-bootctl | grep 'Current Entry'                 # expect no +N suffix
-systemctl is-active systemd-bless-boot.service # expect active (exited)
-ls /boot/loader/entries/ | grep '+'            # expect only not-yet-booted entries
+`homelab01` was rebooted rather than left to a kernel bump, because the clearing half of the mechanism is the half that can bite: blessing only happens on a boot _from_ a counted entry, and had `boot-complete.target` not been reached on this host, the counter would never clear and the third reboot would mark a perfectly good generation bad and fall back to an older one. Worth one deliberate reboot on the compute node to find out, rather than discovering it on the storage node three reboots later.
+
+```
+$ bootctl | grep 'Current Entry'
+  Current Entry: nixos-62c2ed95…c877a8ef.conf     # no +N - the counter was cleared
+
+$ systemctl is-active systemd-bless-boot.service
+active
+
+$ ls /boot/loader/entries/ | grep '+'
+                                                  # nothing counting down
 ```
 
-**Still outstanding:** that reboot, then a second PR enabling `homelab02` and `xps15`.
+`systemd-bless-boot.service` entered active at 16:24:51 with `Result=success` and exit status 0, and `loader.conf` kept its `preferred` line through the blessing. The round trip is therefore complete and observed: entry written `+3` → booted → decremented → `boot-complete.target` reached → counter cleared → entry blessed.
+
+Item 1's "done when" is met for `homelab01`.
+
+**Still outstanding:** enabling `homelab02` and `xps15`, now that the mechanism has been proven end to end somewhere it was safe to prove it.
 
 ---
 
