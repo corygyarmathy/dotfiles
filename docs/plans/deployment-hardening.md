@@ -8,20 +8,20 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 
 | #   | Item                      | Size    | Status                                                   |
 | --- | ------------------------- | ------- | -------------------------------------------------------- |
-| 1   | Boot counting             | ~1 line | **proven on homelab01** - remaining hosts still to follow |
+| 1   | Boot counting             | ~1 line | **done** 2026-08-16 - all three hosts                    |
 | 2   | Retire `deploy-stable`    | small   | **done** 2026-08-16                                      |
 | 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
-| 4   | Behaviour tests           | large   | **harness + 2 tests landed** - `data-safety` needs rethinking |
+| 4   | Behaviour tests           | large   | **harness + 3 tests landed** - `media-stack` waits on the container move |
 | 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
 | 6   | `deploy-rs` interactively | small   | not started - one prerequisite removed                   |
 
 ### Where this stands, 2026-08-16
 
-Items 1-3 landed today as four PRs (#22-#25). What remains before any of them can be called finished:
+Items 1-4 all moved today, across PRs #22-#32. What remains before the rest can be called finished:
 
-- **Item 1** is proven end to end on `homelab01` - counter written, boot counted, `boot-complete.target` reached, entry blessed - and is still on that host alone. A second PR enables `homelab02` and `xps15`.
+- **Item 1** is **done**. Proven end to end on `homelab01` first - counter written, boot counted, `boot-complete.target` reached, entry blessed - then extended to `homelab02` and `xps15` in #28. That closes the case the item was written for: `homelab02` reboots unattended inside the 04:00-05:00 window with `allowReboot = true`, and it is the host holding the pool.
 - **Item 3** landed with `rollback.enable = false` on both servers and has passed once on each. It verifies, exports metrics and alerts; it does not act. Arming it is one line per host, and should wait for a few weeks of evidence about how often it would have fired on a host that was actually fine.
-- **Item 4** is now the binding constraint, and more so since ADR 0003. Behaviour tests were already the primary pre-deploy gate per ADR 0002, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after. ADR 0003 then found that service confinement cannot enforce the data-safety property structurally, so the `data-safety` test is now the only thing that will cover it. **This is where the plan was most wrong**: the harness and two tests landed the same day, and `data-safety` turned out to be the one candidate on the list that cannot be built as written and would assert nothing if it were. See below.
+- **Item 4** has a harness and three tests - `monitoring`, `reverse-proxy`, `digital-garden` - all running in the gate, each verified against a deliberate break that the host build accepts. What remains is `media-stack`, which now waits on the migration off `oci-containers` rather than on anything in this harness. **This is also where the plan was most wrong.** It argued that since ADR 0003 ruled out enforcing the data-safety property structurally, the `data-safety` test was the only thing left that could cover it - and that did not follow. The test turned out to be the one candidate on the list that cannot be built as written and would have asserted nothing if it were, so it is struck rather than deferred. A real argument for needing something is not evidence that the proposed something works.
 
 A note on sequencing, since it caught us out today: item 2's ordering section argued it was safe to take before item 3, and that held - but only because the interval was hours. Both servers now take a promoted revision on the same night with no automated recovery from a bad one, and that stays true until item 3 is armed.
 
@@ -105,7 +105,11 @@ $ ls /boot/loader/entries/ | grep '+'
 
 Item 1's "done when" is met for `homelab01`.
 
-**Still outstanding:** enabling `homelab02` and `xps15`, now that the mechanism has been proven end to end somewhere it was safe to prove it.
+### Extended to the rest of the fleet, 2026-08-16
+
+`homelab02` and `xps15` followed in #28, once the mechanism had been proven end to end somewhere it was safe to prove it. The item's "done when" - both servers booted at least once with counting enabled, and `bootctl` showing entries blessed rather than counting down - is now met on the fleet rather than on one host, and **item 1 is closed**.
+
+Worth noting what the sequencing bought, since it is the whole argument for doing it this way: the deliberate reboot on the compute node found nothing wrong, but it was the only way to learn that the _clearing_ half works before trusting it on the storage node. Had `boot-complete.target` not been reachable, the third unattended reboot would have marked a perfectly good generation bad and fallen back - on the machine holding the pool, at 04:00, with nobody watching.
 
 ---
 
@@ -301,7 +305,7 @@ The third is the most faithful and the most work. Start with the second and see 
 | ~~`data-safety`~~ | ~~a canary file in the shared download root survives service startup~~ | **struck** - the assertion is vacuous; see below                              | struck |
 | `reverse-proxy`  | Caddy starts, routes to a stub backend, serves 200                  | every public service depends on it; a routing regression is invisible to a build | **done** |
 | `monitoring`     | Prometheus starts, loads rules, scrapes a target                    | rule and config errors only surface at activation                                | **done** |
-| `digital-garden` | quartz builds a vault and the result is served                      | the failure mode is a _successful_ build and an empty site                       | next   |
+| `digital-garden` | quartz builds a vault and the result is served                      | the failure mode is a _successful_ build and an empty site                       | **done** |
 | `media-stack`    | the arr services reach their ports                                  | the largest module, and the one with the most moving parts                       | waiting on the move off containers |
 
 The original ordering put `data-safety` first, and ADR 0003 sharpened the case: the recent data loss was one root cause - LazyLibrarian's PostProcessor pointed at the shared download root - firing twice, two days apart, for 3.68 TiB, and ADR 0003 established that no arrangement of bind mounts can prevent a recurrence for the services that hardlink, because the kernel will not link across a mount boundary. The conclusion drawn from that - _therefore the test is the only thing that covers it_ - did not follow, and is corrected below. It is a good example of a real argument for needing something being mistaken for evidence that the proposed something works.
@@ -310,9 +314,9 @@ The original ordering put `data-safety` first, and ADR 0003 sharpened the case: 
 
 ### Cost and risks
 
-- **KVM.** NixOS tests need it. GitHub's free runners have historically been inconsistent here, though the `nix-installer-action` already in use enables KVM when available. Verify early with a single trivial test - if it falls back to TCG emulation the tests still run, just slowly enough to matter.
-- **Runtime.** Minutes per test, in parallel matrix jobs. Acceptable for a nightly gate; worth watching if it starts delaying the lock PR's auto-merge.
-- **Maintenance.** A flaky VM test is worse than no test, because it trains you to re-run the gate. Prefer few, sharp assertions over broad ones.
+- ~~**KVM.** NixOS tests need it. GitHub's free runners have historically been inconsistent here.~~ **Answered on the first run: KVM is present and enabled.** Details below; the advice to verify early was right, and it was cheap - a trivial local test up front, then a step in the workflow that says which case CI is in.
+- ~~**Runtime.** Minutes per test.~~ **Measured: seconds, not minutes**, and inside the slowest host build, so the gate is no slower. Below.
+- **Maintenance.** A flaky VM test is worse than no test, because it trains you to re-run the gate. Prefer few, sharp assertions over broad ones. Still the live risk, and the only one of the three that cannot be settled by measuring once - see the four failure modes recorded above, three of which produced a test that passed when it should not have.
 
 ### Done when
 
@@ -391,10 +395,53 @@ That does not make the property unenforceable, it makes it the wrong shape for t
 
 ### Still outstanding
 
-- `digital-garden` - the highest value of the remainder, and the reason is unchanged: a broken plugin index produces a build that _succeeds_ and a site that is empty, so the current gate is not merely silent there but actively misleading. It needs a vault fixture and `source = "obsidian-sync"`, which reads the vault from disk rather than cloning it, and so is the one path through that module that does not want the network.
+- ~~`digital-garden`~~ **done** - see below.
 - `media-stack` - the largest of the candidates, and now waiting on the migration off `oci-containers` rather than on anything in this harness. Taking it before that migration means pinning image digests that are about to become irrelevant.
-- KVM on GitHub's runners is still unverified. The first CI run after this merges answers it.
-- Nothing yet measures what these tests cost the nightly lock PR's auto-merge. Two VMs is around 80 seconds locally; the number that matters is the one on a runner that may have no KVM.
+### KVM and cost, answered on the first run (#32)
+
+Both open questions from "Cost and risks" are now measured rather than guessed, and both came out well.
+
+**KVM is available on GitHub's standard runners.** The `nix-installer-action` reported `kvm: true` and set `DETERMINATE_NIX_KVM=1` on its own, and the new step confirmed it:
+
+```
+##[notice]/dev/kvm present - NixOS tests run accelerated
+```
+
+So the plan's worry about GitHub's free runners being inconsistent here does not apply to the current image. No TCG fallback, and no need for a larger runner.
+
+**The tests cost the gate nothing.** They run in parallel, and `flake-check` still finishes inside the slowest host build:
+
+```
+flake check      3m18s     reverse-proxy  28.6s
+build xps15      4m5s      monitoring     71.0s
+build homelab01  2m1s
+```
+
+Which answers the auto-merge question the risks section raised: the tests do not delay the nightly lock PR, because a longer job already sets the pace. The number to watch is `flake-check` overtaking `build xps15`, not the absolute runtime.
+
+**One thing to fix before the next test lands:** the per-test timeout is nixpkgs' default of 3600s. Against measured runtimes of under 90 seconds that turns a hung VM into an hour-long job. `digital-garden` is the first candidate with a plausible reason to hang - a Quartz build is real work, not a service waiting on a port - so it should arrive with a tighter timeout. Done: `mkTest` now sets `globalTimeout` to 600s for every test, as a `mkDefault` so a test with a real reason to be slower can raise it and say why.
+
+### `digital-garden`, 2026-08-16
+
+Landed, passing in 28 seconds. `source = "obsidian-sync"` reads the vault from disk instead of cloning it, so the builder runs entirely offline; the sync service that would normally fill that directory is disabled and the vault is staged from a three-note fixture - one published, one not, and one with no frontmatter at all.
+
+The assertions are written the other way round from the obvious ones. A test that checked only that the published note appears would pass just as happily if the filter had copied the whole vault, so the private markers must appear **nowhere** in the served tree - deliberately `grep -r` over all of it rather than over the rendered page, because a leak would most plausibly surface in `static/contentIndex.json` or `index.xml`, which are precisely the two files nobody looks at.
+
+**Every assertion here was checked against a deliberate break**, because on this test more than the others a false pass is the expected failure mode:
+
+| Break                                                    | Host build | Test  | Caught by                                     |
+| -------------------------------------------------------- | ---------- | ----- | ---------------------------------------------- |
+| `-d ${stateDir}/content` → `-d ${vaultDir}`               | exit 0     | fails | flattening/URL assertions                     |
+| fixture note flipped to `publish: true`                   | -          | fails | staging tree, then the leak grep              |
+| `cat … >> custom.scss` → `cat … > custom.scss`            | exit 0     | fails | `.flex-component` missing from the served CSS |
+
+Two of those three build perfectly and would have merged, deployed and served.
+
+**The stylesheet assertion had to be rewritten, and the first version was worthless.** It asserted `len(index.css) > 10000`, on the reasoning that a working build produces 59KB. Overwriting `custom.scss` instead of appending - the exact bug the module's own comment warns about - produces **40KB**, because every other component stylesheet still compiles; only base.scss is lost. Any threshold loose enough not to be brittle sits far below 40KB and therefore catches nothing. It now asserts that `.flex-component`, `.desktop-only` and `.table-container` are present in the served CSS, which come from base.scss and nowhere else. That is the second assertion in this suite that looked right, passed, and would have gone on passing after the thing it named broke.
+
+**An unplanned finding: the defence in depth is real.** Pointing Quartz at the vault instead of the staging tree did _not_ leak the unpublished note - Quartz's `explicit-publish` plugin caught what publish-filter.py was no longer catching. The module's header describes the filter as the boundary and the plugin as defence in depth; that relationship was an assumption until this break demonstrated the second layer holding on its own. The break was still caught, by the flattening assertions, because building from the vault also abandons the flat-URL promise.
+
+**Also worth recording:** `digital-garden.nix` adds a Caddy virtual host but never enables Caddy - on a host that arrives via `cg.service.reverse-proxy`. Enabling the garden alone on a host would build a site that nothing serves. Not changed here, since both servers run the proxy, but it is a coupling that is invisible until it bites.
 
 ---
 

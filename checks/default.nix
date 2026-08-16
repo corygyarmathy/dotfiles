@@ -45,6 +45,7 @@ in
         touch $out
       '';
 
+  digital-garden = testLib.mkTest ./digital-garden.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
   reverse-proxy = testLib.mkTest ./reverse-proxy.nix;
 }
