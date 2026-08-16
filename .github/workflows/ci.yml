@@ -72,8 +72,26 @@ jobs:
         with:
           name: corygyarmathy-dotfiles
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # Substitute only; nothing worth pushing is built here.
+          # Substitute only. This job does now build things - the behaviour
+          # test VMs in ./checks - but nothing a host will ever need, and the
+          # test runners themselves have to execute on every commit regardless
+          # of whether their closure was cached.
           skipPush: true
+
+      # The behaviour tests boot real VMs. With KVM that is around a minute
+      # each; without it QEMU falls back to TCG emulation and the same tests
+      # take long enough to matter for a gate that also has to promote. This
+      # step does not fail the build either way - it just makes the answer
+      # visible in the log, so a gate that suddenly got slow has an
+      # explanation rather than a mystery. See the "Cost and risks" section of
+      # docs/plans/deployment-hardening.md.
+      - name: Report KVM availability
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo "::notice::/dev/kvm present - NixOS tests run accelerated"
+          else
+            echo "::warning::/dev/kvm absent - NixOS tests fall back to TCG emulation"
+          fi
 
       - name: Check flake
         run: nix flake check --print-build-logs

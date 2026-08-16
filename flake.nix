@@ -225,23 +225,23 @@
 
       # Checks run by `nix flake check`, and therefore by the CI gate.
       #
-      # Building a host proves its Nix evaluates, not that the config files it
-      # ships are valid. A malformed alert rule builds perfectly and then takes
-      # Prometheus down on activation, so validate it here where it is cheap.
-      checks = forAllSystems (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          alert-rules =
-            # promtool lives in the `cli` output, not `out`.
-            pkgs.runCommand "check-alert-rules" { nativeBuildInputs = [ pkgs.prometheus.cli ]; } ''
-              promtool check rules ${./modules/services/monitoring/alert-rules.yml}
-              touch $out
-            '';
-        }
-      );
+      # Building a host proves its Nix evaluates, not that the services it
+      # ships come up or that the config files they are handed are valid. See
+      # ./checks for what lives here and why.
+      #
+      # x86_64-linux only. Every host is x86_64, and a NixOS VM test for
+      # another system needs a builder for it - `nix flake check` would
+      # evaluate a whole foreign NixOS system just to skip building it.
+      checks = {
+        x86_64-linux = import ./checks {
+          pkgs = import nixpkgs {
+            system = "x86_64-linux";
+            overlays = builtins.attrValues self.overlays;
+            config.allowUnfree = true;
+          };
+          inherit self inputs;
+        };
+      };
 
       # Development shell for working on this config
       devShells = forAllSystems (system: {

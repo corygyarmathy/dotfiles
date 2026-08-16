@@ -24,7 +24,7 @@ The laptop follows `deploy` too, but never switches on its own: it builds in the
 
 | Workflow             | When                        | Does                                                               |
 | -------------------- | --------------------------- | ------------------------------------------------------------------ |
-| `ci.yml`             | every PR and push to master | builds all three hosts, `nix flake check`, fast-forwards `deploy`  |
+| `ci.yml`             | every PR and push to master | builds all three hosts, `nix flake check` (incl. the VM tests in `checks/`), fast-forwards `deploy` |
 | `flake-update.yml`   | daily, 15:00 UTC            | `nix flake update`, per-host closure diff, PR, auto-merge on green |
 | `package-update.yml` | Mondays, 03:00 UTC          | runs each package's own updater, one PR per package                |
 
@@ -51,6 +51,8 @@ Both servers land on the same revision the same night. The 15 minute offset is n
 **A PR must be up to date with `master` before it can merge.** `protect-main` sets `strict_required_status_checks_policy`, so GitHub will not merge a branch whose base has moved since its last green run. This costs an "Update branch" click whenever two PRs are in flight at once, and it buys the thing the gate is supposed to guarantee: a PR builds `refs/pull/N/merge`, its head merged into `master` _as of that run_, so without the strict policy two independently-green PRs can merge minutes apart and produce a `master` tree that nothing ever built. That happened on 2026-08-16 - #24 and #25 landed 33 seconds apart, and #24's CI run started before #25 existed.
 
 **The master build is not the PR build run twice.** `self.rev` is baked into `system.configurationRevision`, so the toplevel store path is a function of the commit SHA, and a squash merge always mints a new one. Master's toplevel has never been built at PR time even when the tree is identical - the run substitutes the closure and builds the rev-dependent tail on top. It is what puts the promoted closure in Cachix, so it stays even though the strict policy above already settled which _tree_ lands.
+
+**`flake-check` boots VMs now, and its runtime depends on KVM.** `nix flake check` runs the behaviour tests in `checks/`, which are NixOS VM tests. Locally, with `/dev/kvm`, the two of them take about 80 seconds; without it QEMU falls back to TCG emulation and the same tests take long enough to matter for a job that also has to promote. The job logs which case it is in rather than failing either way, so a gate that suddenly got slow says why in its own output. Adding a test that needs several minutes is a decision about the nightly lock PR's auto-merge latency, not just about coverage.
 
 **Never create a branch under `deploy/`.** Git stores refs as paths, so `deploy/my-branch` turns `refs/heads/deploy` into a directory and promotion fails with `directory file conflict` for as long as that branch exists. The `reserve-deploy-namespace` ruleset blocks this at the server; the failure is obscure enough to be worth naming twice.
 
