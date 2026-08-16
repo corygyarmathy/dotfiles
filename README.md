@@ -27,6 +27,7 @@ flowchart LR
 | [The deployment pipeline](.github/workflows/README.md)             | how the refs and workflows behave, the invariants, and recovery procedures |
 | [ADR 0001](docs/adr/0001-gitops-deployment-with-a-promoted-ref.md) | why the pipeline is designed this way, and what was rejected               |
 | [ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md) | why the staged rollout was retired, and what replaces it                |
+| [ADR 0003](docs/adr/0003-service-confinement-is-bounded-by-hardlinking.md) | _proposed_ - why confining services to their own data is mostly not available |
 | [Deployment hardening plan](docs/plans/deployment-hardening.md)    | the gaps that remain and how they are meant to close                       |
 
 ## Working on it

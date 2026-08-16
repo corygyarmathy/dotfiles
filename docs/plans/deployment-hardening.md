@@ -4,7 +4,7 @@ Status: revised 2026-08-16 to follow [ADR 0002](../adr/0002-protect-at-activatio
 
 Already in place, and assumed by everything below: the deployment metrics in `modules/services/monitoring/deploy-metrics.nix` and the `NixosDeployFailed` / `NixosDeployStale` / `NixosRebootPending` rules in `modules/services/monitoring/alert-rules.yml`. No new monitoring work is required to start.
 
-Six pieces. The first two are small and independent; the rest can proceed in any order once they are in.
+Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md). The first two are small and independent; the rest can proceed in any order once they are in.
 
 | #   | Item                      | Size    | Status                                                   |
 | --- | ------------------------- | ------- | -------------------------------------------------------- |
@@ -12,7 +12,7 @@ Six pieces. The first two are small and independent; the rest can proceed in any
 | 2   | Retire `deploy-stable`    | small   | **done** 2026-08-16                                      |
 | 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
 | 4   | Behaviour tests           | large   | not started - now the highest-value item                 |
-| 5   | Service confinement       | medium  | _proposed, not yet decided_                              |
+| 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
 | 6   | `deploy-rs` interactively | small   | not started - one prerequisite removed                   |
 
 ### Where this stands, 2026-08-16
@@ -21,7 +21,7 @@ Items 1-3 landed today as four PRs (#22-#25). What remains before any of them ca
 
 - **Item 1** is proven end to end on `homelab01` - counter written, boot counted, `boot-complete.target` reached, entry blessed - and is still on that host alone. A second PR enables `homelab02` and `xps15`.
 - **Item 3** landed with `rollback.enable = false` on both servers and has passed once on each. It verifies, exports metrics and alerts; it does not act. Arming it is one line per host, and should wait for a few weeks of evidence about how often it would have fired on a host that was actually fine.
-- **Item 4** is now the binding constraint. ADR 0002 made behaviour tests the primary pre-deploy gate, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after.
+- **Item 4** is now the binding constraint, and more so since ADR 0003. Behaviour tests were already the primary pre-deploy gate per ADR 0002, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after. ADR 0003 then found that service confinement cannot enforce the data-safety property structurally, so the `data-safety` test is now the only thing that will cover it.
 
 A note on sequencing, since it caught us out today: item 2's ordering section argued it was safe to take before item 3, and that held - but only because the interval was hours. Both servers now take a promoted revision on the same night with no automated recovery from a bad one, and that stays true until item 3 is armed.
 
@@ -304,7 +304,7 @@ The third is the most faithful and the most work. Start with the second and see 
 | `digital-garden` | quartz builds a vault and the result is served                      | the failure mode is a _successful_ build and an empty site                       |
 | `media-stack`    | the arr services reach their ports                                  | the largest module, and the one with the most moving parts                       |
 
-`data-safety` is new and first for a reason: two of the three recent incidents were a service touching data it had no business touching, and it is the cheapest assertion in the table.
+`data-safety` is first for a reason, and ADR 0003 sharpened it. The recent data loss was one root cause - LazyLibrarian's PostProcessor pointed at the shared download root - firing twice, two days apart, for 3.68 TiB. ADR 0003 then established that no arrangement of bind mounts can prevent a recurrence for the services that hardlink, because the kernel will not link across a mount boundary. So this test is not a cheap complement to confinement, as this plan originally had it; for `sonarr`, `radarr` and `cross-seed` it is the only thing that will cover the property at all.
 
 `digital-garden` remains the most valuable per line among the rest: it is the one place where the current gate is actively misleading, because a broken plugin index produces a build that succeeds.
 
@@ -320,26 +320,13 @@ At least one test exists, the gate runs it, and a deliberately broken service co
 
 ---
 
-## 5. Service confinement _(proposed - not part of ADR 0002)_
+## 5. Service confinement _(moved out - see [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md))_
 
-### The problem
+Removed from this plan. It was prevention rather than deployment hardening, and it arrived late in the discussion that produced ADR 0002 - the "decide first" this section used to carry has been decided by moving it out.
 
-Two of the three recent incidents were a service damaging data outside its own scope. Detection after the fact is expensive; prevention is declarative and cheap. A service that cannot write to the shared download root cannot delete it.
+It also turned out to be mostly infeasible, for a reason worth knowing before anyone proposes it again. Narrowing a service's view means per-service bind mounts, and the kernel refuses to hardlink across a mount boundary even within one filesystem - measured on both hosts and both filesystems, with identical `st_dev` on each side and `EXDEV` anyway. The wholesale `/data` mount every service gets is therefore load-bearing for hardlinked imports, not conservatism.
 
-### Approach
-
-Tighten the systemd units the service modules generate - `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, and an explicit `ReadWritePaths` naming only what the service legitimately writes. For the podman-hosted services the equivalent is narrowing the bind mounts rather than mounting the media tree wholesale.
-
-Pairs naturally with the `data-safety` test in item 4: the test asserts the property, the confinement enforces it.
-
-### Risks
-
-- Several of these services legitimately need broad access - qBittorrent writes into the download root by design, unpackerr extracts across it, cross-seed reads the whole media tree. The win is narrowing _which_ tree, not eliminating access, and getting it wrong shows up as a service that starts and then silently fails on IO.
-- Worth doing one module at a time, behind the VM tests, rather than as a sweep.
-
-### Decide first
-
-Whether this belongs in this plan at all or as its own piece of work. It is prevention rather than deployment hardening, and it arrived late in the discussion that produced ADR 0002.
+What survives is one service and a redirection of effort: `bazarr` never hardlinks and can be narrowed, and the property confinement would have enforced is now something for the `data-safety` test in item 4 to assert instead. That raises item 4's value rather than lowering it - the test covers every service, including the ones confinement cannot reach.
 
 ---
 
