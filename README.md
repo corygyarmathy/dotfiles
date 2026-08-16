@@ -153,7 +153,7 @@ sops secrets/homelab.yaml                   # edit
 Stated plainly, because a pipeline whose limits are undocumented invites more trust than it has earned:
 
 - **Building is the only pre-deploy gate, and building is not working.** A package that compiles and then fails at runtime will auto-merge and deploy. The alert rules catch it afterwards. NixOS VM tests are the intended fix.
-- **There is no automated rollback.** A bad deploy is recovered by fixing forward, or by selecting an older generation at the boot menu.
+- **Automated rollback covers only a generation that will not boot, and only on homelab01 so far.** systemd's boot assessment gives a new generation three attempts to reach `boot-complete.target`; one that never does is skipped in favour of an older entry, without anyone standing in front of the machine. A generation that boots and then fails to bring its services up is still recovered by fixing forward.
 - **The `deploy-stable` lag is time-based, not health-based.** It establishes that homelab01 has _had_ a revision for 24 hours, not that homelab01 is well.
 - **The canary soak is weaker for host-specific packages.** A ZFS or qBittorrent regression will not surface on homelab01, which runs neither. What it does exercise is the shared base — kernel, systemd, nix, glibc — which is where an unattended update does catastrophic rather than annoying damage.
 

@@ -68,6 +68,12 @@
       # Service ports are opened by individual service modules
     };
     user-security.enable = true;
+
+    # This host reboots unattended after an upgrade, so a kernel or initrd that
+    # will not come up would otherwise need someone in front of it. Enabled
+    # here first, ahead of homelab02, because homelab02 holds the pool and its
+    # ESP should not be the one this is proven on.
+    boot-counting.enable = true;
   };
 
   # ============================================================================
