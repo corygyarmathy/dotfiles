@@ -38,7 +38,7 @@ Both servers already use systemd-boot (`hosts/homelab01/default.nix:731`, `hosts
 
 ### Risks
 
-- Boot loader entries on the ESP are renamed from `nixos-generation-<n>.conf` to `nixos-<content-hash>.conf`, and existing entries migrate on the next `nixos-rebuild boot`/`switch`. Low risk, but it touches the boot path of the storage node; take it on `homelab01` first and confirm the ESP looks sane before it reaches `homelab02`.
+- ~~Boot loader entries on the ESP are renamed from `nixos-generation-<n>.conf` to `nixos-<content-hash>.conf`, and existing entries migrate on the next `nixos-rebuild boot`/`switch`.~~ Checked against the pinned nixpkgs while implementing: content-hash naming is unconditional in `systemd-boot-builder.py`, so the hosts already write `nixos-<hash>.conf` and boot counting does not cause that migration. What it does change is narrower - a `+<tries>` suffix on the entry filename, and `preferred <entry>` plus `default nixos-*` in `loader.conf` in place of a single `default`. Still worth taking on `homelab01` first, since it is the boot path of the storage node that is not worth proving things on.
 - `boot-complete.target` means the boot succeeded, not that services are healthy. This layer covers a kernel that will not come up, nothing more. Item 3 covers the rest.
 
 ### Done when
