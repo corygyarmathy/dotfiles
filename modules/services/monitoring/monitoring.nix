@@ -385,6 +385,15 @@ in
 
         services.prometheus = {
           enable = true;
+          # Up from the 15d default, because the questions this stack is asked
+          # are monthly ones: whether health-gated activation ever wanted to
+          # roll back, whether a threshold was right, how often the lock update
+          # produced an empty diff. A 30d query against 15d of data silently
+          # returns 15d and looks better-evidenced than it is.
+          #
+          # Cheap here - a handful of targets at a 1m interval, against 160GB
+          # free on the host holding the pool.
+          retentionTime = "30d";
           globalConfig = {
             scrape_interval = "1m";
             scrape_timeout = "30s"; # was defaulting to 10s

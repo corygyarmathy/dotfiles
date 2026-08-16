@@ -327,6 +327,37 @@ groups:
           summary: "{{ $labels.host }} activated a generation that did not come up healthy"
           description: "Verification found units failing that were not failing before the upgrade. Check: journalctl -u nixos-upgrade-verify.service"
 
+      # The silence problem, applied to the safety net itself. NixosVerifyFailed
+      # only speaks when verification runs and fails; if it stopped running —
+      # timer broken, module disabled, unit masked — nixos_verify_result would
+      # sit at 1 forever and the absence of alerts would read as evidence of
+      # health. That absence is exactly what the decision to arm
+      # cg.upgrade-verify.rollback.enable rests on, so it needs checking.
+      #
+      # Not a plain staleness check on the timestamp: verification deliberately
+      # no-ops when the generation has not changed, and exits before writing
+      # metrics, so on a night where `deploy` did not move the timestamp goes
+      # stale for entirely correct reasons. What is wrong is a generation
+      # staged well after the last verification — activated, but never checked.
+      #
+      # `pending_reboot == 0` excludes the staged-but-not-yet-activated case,
+      # which is NixosRebootPending's business and would otherwise fire here
+      # first and more noisily for the same underlying condition.
+      #
+      # 6h rather than something tighter because a manual `nixos-rebuild
+      # switch` also trips this — correctly, since it activates a generation
+      # nothing verifies — and iterating on a service should not page you.
+      - alert: NixosVerifyStale
+        expr: |
+          (nixos_deploy_staged_timestamp_seconds - nixos_verify_timestamp_seconds > 21600)
+          and nixos_deploy_pending_reboot == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} is running a generation that activation verification never checked"
+          description: "A generation was activated over 6 hours ago and nixos-upgrade-verify has not recorded a result since. Either it is not running, or the generation was applied by hand. Check: systemctl status nixos-upgrade-verify.timer"
+
       # Loud on purpose. A host that reverts itself stops tracking the promoted
       # ref, and would otherwise announce that two days later as NixosDeployStale
       # — an alert whose text points nowhere near the actual cause.
