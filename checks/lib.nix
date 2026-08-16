@@ -8,6 +8,9 @@
   self,
   inputs,
 }:
+let
+  inherit (pkgs) lib;
+in
 {
   # runNixOSTest with the specialArgs this repository's modules are written
   # against. `self` is not optional: several modules reach into self.packages
@@ -17,6 +20,14 @@
     module:
     pkgs.testers.runNixOSTest {
       imports = [ module ];
+
+      # nixpkgs defaults this to an hour. Measured runtimes here are under two
+      # minutes, so an hour does not bound anything - it just converts a hung
+      # VM into a CI job that occupies a runner until someone notices. Ten
+      # minutes is comfortably clear of the slowest test and still fails fast.
+      # A test with a genuine reason to be slower should raise this itself,
+      # and say why.
+      globalTimeout = lib.mkDefault 600;
 
       # Applies to every node of every test.
       node.specialArgs = { inherit self inputs; };
