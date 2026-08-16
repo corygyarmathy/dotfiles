@@ -1,8 +1,9 @@
 # ADR 0001: GitOps deployment with a promoted ref
 
-- **Status:** Accepted
+- **Status:** Accepted, except §1a - superseded by [ADR 0002](0002-protect-at-activation-not-in-the-rollout.md)
 - **Date:** 2026-08-15
 - **Related Artefacts:**
+  - Superseded in part by: ADR 0002 (§1a, the staged rollout)
   - Implemented by: `.github/workflows/ci.yml` (build gate + promotion), `.github/workflows/flake-update.yml` (lock updates), `system.autoUpgrade` on each host
   - Supersedes: the flake-update and apply logic in `packages/nixos-upgrade-scripts`
   - Depends on: the `protect-main` repository ruleset, the `corygyarmathy-dotfiles` Cachix cache
@@ -25,7 +26,7 @@ Keep the pull model - it is correct for hosts with no inbound access and no depe
 
 **1. Hosts follow a promoted ref, not `master`.** A `deploy` branch is fast-forwarded to `master` by CI, and only after every host configuration builds. `system.autoUpgrade` points at `github:corygyarmathy/dotfiles/deploy#hostname`. A host can therefore only ever fetch a revision proven to evaluate and build _for that host_. `master` stays the integration branch and may be red; `deploy` is the fleet's contract.
 
-**1a. The servers roll out in stages.** `homelab01` follows `deploy` and takes each promoted revision the night it lands. `homelab02` follows `deploy-stable`, which a scheduled job advances to whatever `deploy` pointed at 24 hours earlier. The two servers are not interchangeable: `homelab02` holds the ZFS pool and exports the NFS storage `homelab01` mounts, so it is the host whose failure cascades. Staging the rollout means a kernel or systemd bump that fails to boot takes out the compute node while the data node keeps serving.
+**1a. The servers roll out in stages.** _Superseded by ADR 0002: both servers now follow `deploy`, and the protection this section sought is provided at activation instead._ `homelab01` follows `deploy` and takes each promoted revision the night it lands. `homelab02` follows `deploy-stable`, which a scheduled job advances to whatever `deploy` pointed at 24 hours earlier. The two servers are not interchangeable: `homelab02` holds the ZFS pool and exports the NFS storage `homelab01` mounts, so it is the host whose failure cascades. Staging the rollout means a kernel or systemd bump that fails to boot takes out the compute node while the data node keeps serving.
 
 The soak is worth less than it looks for host-specific packages - a regression in ZFS or qBittorrent will not surface on `homelab01`, which runs neither - but the shared base (kernel, systemd, nix, glibc) is where an unattended update does catastrophic rather than annoying damage, and that is exactly what a day of uptime on another machine exercises.
 
