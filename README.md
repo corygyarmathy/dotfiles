@@ -63,6 +63,7 @@ dotfiles/
 │   ├── nixos/             # System-level modules
 │   ├── services/          # Homelab service modules (auto-imported)
 │   └── home/              # Home-manager modules
+├── checks/                # Behaviour tests: NixOS VMs booted by `nix flake check`
 ├── configs/               # Portable dotfiles, symlinked by home-manager
 ├── overlays/              # Package overlays
 ├── packages/              # Custom package definitions
@@ -155,7 +156,7 @@ sops secrets/homelab.yaml                   # edit
 
 Stated plainly, because a pipeline whose limits are undocumented invites more trust than it has earned:
 
-- **Building is the only pre-deploy gate, and building is not working.** A package that compiles and then fails at runtime will auto-merge and deploy. The alert rules catch it afterwards. NixOS VM tests are the intended fix.
+- **Building is still most of the pre-deploy gate.** A package that compiles and then fails at runtime will auto-merge and deploy. NixOS VM tests in `checks/` now cover the monitoring stack and the reverse proxy — enough to catch a Prometheus config that will not load or a Caddyfile that will not parse, which between them would take down every service on a host — but the media stack is not covered, and that is where the failure history actually is. The alert rules still catch the rest afterwards.
 - **Automated rollback covers only a generation that will not boot, and only on homelab01 so far.** systemd's boot assessment gives a new generation three attempts to reach `boot-complete.target`; one that never does is skipped in favour of an older entry, without anyone standing in front of the machine.
 - **A generation that boots and then comes up broken is detected but not yet reverted.** Both servers verify what they activated and alert if units are failing that were not failing before, but the rollback that check is wired to is deliberately switched off until there is evidence about its false-positive rate. Until then this is a faster, better-aimed alert, not a recovery.
 - **Nothing protects against a change that cuts the host off.** Verification runs on the host, so a machine that has lost its network still believes it is fine — and locally, it is. A bad firewall or sshd change still means a trip to the cupboard.

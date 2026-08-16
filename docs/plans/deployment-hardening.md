@@ -11,7 +11,7 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 | 1   | Boot counting             | ~1 line | **proven on homelab01** - remaining hosts still to follow |
 | 2   | Retire `deploy-stable`    | small   | **done** 2026-08-16                                      |
 | 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
-| 4   | Behaviour tests           | large   | not started - now the highest-value item                 |
+| 4   | Behaviour tests           | large   | **harness + 2 tests landed** - `data-safety` needs rethinking |
 | 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
 | 6   | `deploy-rs` interactively | small   | not started - one prerequisite removed                   |
 
@@ -21,7 +21,7 @@ Items 1-3 landed today as four PRs (#22-#25). What remains before any of them ca
 
 - **Item 1** is proven end to end on `homelab01` - counter written, boot counted, `boot-complete.target` reached, entry blessed - and is still on that host alone. A second PR enables `homelab02` and `xps15`.
 - **Item 3** landed with `rollback.enable = false` on both servers and has passed once on each. It verifies, exports metrics and alerts; it does not act. Arming it is one line per host, and should wait for a few weeks of evidence about how often it would have fired on a host that was actually fine.
-- **Item 4** is now the binding constraint, and more so since ADR 0003. Behaviour tests were already the primary pre-deploy gate per ADR 0002, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after. ADR 0003 then found that service confinement cannot enforce the data-safety property structurally, so the `data-safety` test is now the only thing that will cover it.
+- **Item 4** is now the binding constraint, and more so since ADR 0003. Behaviour tests were already the primary pre-deploy gate per ADR 0002, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after. ADR 0003 then found that service confinement cannot enforce the data-safety property structurally, so the `data-safety` test is now the only thing that will cover it. **This is where the plan was most wrong**: the harness and two tests landed the same day, and `data-safety` turned out to be the one candidate on the list that cannot be built as written and would assert nothing if it were. See below.
 
 A note on sequencing, since it caught us out today: item 2's ordering section argued it was safe to take before item 3, and that held - but only because the interval was hours. Both servers now take a promoted revision on the same night with no automated recovery from a bad one, and that stays true until item 3 is armed.
 
@@ -296,17 +296,17 @@ The third is the most faithful and the most work. Start with the second and see 
 
 ### Candidates, in order of value
 
-| Test             | Asserts                                                             | Why it earns its place                                                           |
-| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `data-safety`    | a canary file in the shared download root survives service startup  | models the LazyLibrarian incidents directly, and costs three lines per service    |
-| `reverse-proxy`  | Caddy starts, routes to a stub backend, serves 200                  | every public service depends on it; a routing regression is invisible to a build |
-| `monitoring`     | Prometheus starts, loads rules, scrapes a target                    | rule and config errors only surface at activation                                |
-| `digital-garden` | quartz builds a vault and the result is served                      | the failure mode is a _successful_ build and an empty site                       |
-| `media-stack`    | the arr services reach their ports                                  | the largest module, and the one with the most moving parts                       |
+| Test             | Asserts                                                             | Why it earns its place                                                           | Status |
+| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------ |
+| ~~`data-safety`~~ | ~~a canary file in the shared download root survives service startup~~ | **struck** - the assertion is vacuous; see below                              | struck |
+| `reverse-proxy`  | Caddy starts, routes to a stub backend, serves 200                  | every public service depends on it; a routing regression is invisible to a build | **done** |
+| `monitoring`     | Prometheus starts, loads rules, scrapes a target                    | rule and config errors only surface at activation                                | **done** |
+| `digital-garden` | quartz builds a vault and the result is served                      | the failure mode is a _successful_ build and an empty site                       | next   |
+| `media-stack`    | the arr services reach their ports                                  | the largest module, and the one with the most moving parts                       | waiting on the move off containers |
 
-`data-safety` is first for a reason, and ADR 0003 sharpened it. The recent data loss was one root cause - LazyLibrarian's PostProcessor pointed at the shared download root - firing twice, two days apart, for 3.68 TiB. ADR 0003 then established that no arrangement of bind mounts can prevent a recurrence for the services that hardlink, because the kernel will not link across a mount boundary. So this test is not a cheap complement to confinement, as this plan originally had it; for `sonarr`, `radarr` and `cross-seed` it is the only thing that will cover the property at all.
+The original ordering put `data-safety` first, and ADR 0003 sharpened the case: the recent data loss was one root cause - LazyLibrarian's PostProcessor pointed at the shared download root - firing twice, two days apart, for 3.68 TiB, and ADR 0003 established that no arrangement of bind mounts can prevent a recurrence for the services that hardlink, because the kernel will not link across a mount boundary. The conclusion drawn from that - _therefore the test is the only thing that covers it_ - did not follow, and is corrected below. It is a good example of a real argument for needing something being mistaken for evidence that the proposed something works.
 
-`digital-garden` remains the most valuable per line among the rest: it is the one place where the current gate is actively misleading, because a broken plugin index produces a build that succeeds.
+`digital-garden` is now first, and for the reason it was always ranked highly: it is the one place where the current gate is actively misleading, because a broken plugin index produces a build that succeeds.
 
 ### Cost and risks
 
@@ -317,6 +317,84 @@ The third is the most faithful and the most work. Start with the second and see 
 ### Done when
 
 At least one test exists, the gate runs it, and a deliberately broken service configuration fails CI rather than merging.
+
+### What landed
+
+`checks/`, wired into `flake.nix` as `checks.x86_64-linux` and therefore picked up by `nix flake check` in the existing `flake-check` job - no workflow changes, as the approach above predicted.
+
+- `checks/default.nix` - the index, and where `alert-rules` moved to from `flake.nix`.
+- `checks/lib.nix` - `mkTest`, a `runNixOSTest` wrapper supplying the `specialArgs` this repo's modules are written against. `self` is not optional; several modules reach into `self.packages`.
+- `checks/stub-secrets.nix` - the secret stubbing, discussed below.
+- `checks/monitoring.nix`, `checks/reverse-proxy.nix` - the two tests.
+
+Restricted to `x86_64-linux` rather than `forAllSystems`. Every host is x86_64, and a NixOS test for another system makes `nix flake check` evaluate an entire foreign NixOS closure only to decline to build it.
+
+`ci.yml` gained a step that reports whether `/dev/kvm` exists on the runner. It fails nothing - it exists so that a gate which suddenly got five times slower has an explanation in its own log rather than being a mystery. That is the "verify early" from the risks section, moved into the pipeline instead of being done once by hand and forgotten.
+
+**Secret stubbing went with option two, roughly.** Each test hands `stub-secrets.nix` a name-to-content map; it overrides `sops.secrets.<name>.path` and `sops.templates.<name>.path` to plaintext fixtures in the store, and disables the installer that would otherwise try to decrypt the real file. What it deliberately does not do is delete the module's `sops.secrets.<name>` declarations - those stay, so the wiring between a module and the secret names it consumes is still covered, and only the decryption is replaced. The honest cost is that these tests prove nothing about sops itself. Option three - a throwaway age key committed here with an encrypted fixture - remains available for a test that needs to cover the sops wiring rather than route around it.
+
+One wrinkle worth knowing: sops-nix installs secrets from an activation script or a systemd unit depending on `useSystemdActivation`, and the stub disables both rather than depend on which upstream default is in force.
+
+### Evidence, 2026-08-16
+
+Both tests pass locally, on KVM:
+
+```
+vm-test-run-monitoring>      test script finished in 59.81s
+vm-test-run-reverse-proxy>   test script finished in 16.61s
+```
+
+`monitoring` asserts three things, in increasing order of what they are worth. That Prometheus starts at all with the config `monitoring.nix` assembles - the `alert-rules` check validates one file in isolation and says nothing about the scrape jobs, relabelling or alertmanager block around it. That the rule file is loaded _by the running server_, with `NixosDeployFailed`, `NixosDeployStale` and `NixosVerifyFailed` present in `/api/v1/rules`. And that a deployment metric written by `deploy-metrics.nix` travels the whole chain - `.prom` file, node_exporter's textfile collector, scrape, query - which is four independent pieces whose failure is completely silent, because a broken link means the alerts simply never fire.
+
+`reverse-proxy` asserts that Caddy accepts the generated Caddyfile (it validates at startup and refuses to run on a bad one, so an active unit means every directive parsed, including those reachable only through a rate limit profile), that a request reaches the backend, that the backend sees the `header_up` values `mkProxyHost` sets, and that the `localOnly` branch is the one actually taken - security headers present on the public vhost and absent on the LAN-only one.
+
+**The "done when" is met, and was checked rather than assumed.** `deploy-metrics.nix` line 130 sets `cg.service.monitoring.textfileCollector.enable = true`, overriding a `mkDefault` that would otherwise leave the collector off on `homelab01`; it is a real bug that was really made once. Flipping that `true` to `false`:
+
+```
+$ nix build .#nixosConfigurations.homelab01.config.system.build.toplevel
+BUILD_EXIT=0                                    # the existing gate is happy
+
+$ nix build .#checks.x86_64-linux.monitoring
+!!! Test "deployment metrics reach Prometheus" failed
+CHECK_EXIT=1                                    # the new one is not
+```
+
+That is the whole argument for item 4 in six lines: a change that builds perfectly, would have merged, would have deployed, and would have silently stopped the deployment pipeline reporting on itself.
+
+### Four things that only show up by running it
+
+All four produced a test that looked right and was not. Recorded because three of them fail _open_.
+
+- **`auto_https off` does not move the listener.** The first attempt at serving the vhosts over plain HTTP set it, on the reasonable-sounding assumption that disabling automatic HTTPS makes a bare-hostname site listen on 80. It does not: Caddy sat on 443 with no certificate and every request failed. The fix was better anyway - `tls internal` through the module's own per-service `extraConfig`, so the sites are served over real TLS by Caddy's own CA and the only thing substituted is the issuer.
+- **HTTP/2 lowercases header names.** Asserting `"X-Frame-Options: SAMEORIGIN" in response` fails over TLS. The dangerous half is the neighbouring subtest: `assert "X-Frame-Options" not in response` was passing _for every possible input_, and would have gone on passing after the header was deleted from the module. An absence assertion that can never fail is worse than no assertion, because it is counted.
+- **The test driver runs commands under `pipefail`.** `curl -sf … | grep -q x` exits non-zero on a _successful_ match: `grep -q` returns at the first hit, curl takes EPIPE, and the pipeline reports the failure. The symptom is a condition that is already true timing out. Redirect to a file and grep the file.
+- **`wait_for_unit` never succeeds for a `Type=oneshot` without `RemainAfterExit`.** `nixos-deploy-metrics` reads `inactive` the moment it succeeds. This is the same trap item 3 documents for `criticalUnits`, met from the other direction.
+
+### The `data-safety` test does not survive contact
+
+It was first on the candidate list, ADR 0003 sharpened the case for it, and it is the one test here that cannot be written as specified. Two reasons, and the second is the one that matters.
+
+**It cannot run in this harness.** `sonarr`, `radarr`, `cross-seed` and `qbittorrent` are all `virtualisation.oci-containers` services pulling `:latest` from a registry with `--pull=newer`. NixOS tests run inside the Nix build sandbox, which has no network, so those containers cannot start. This is not fatal on its own - `dockerTools.pullImage` is a fixed-output derivation and so _is_ allowed to fetch, which would let the images be pinned by digest and loaded into podman offline. That was not attempted here. It costs a pinned digest and hash per image, permanently, in exchange for testing an image that is by construction not the `:latest` the host will run.
+
+**More decisively, the assertion is vacuous.** "A canary file in the shared download root survives service startup" would pass on an empty configuration, because a freshly started arr container with no `/config` does not post-process anything. The loss it models was not a startup behaviour: it was LazyLibrarian's PostProcessor, _configured_ to point at the shared download root, doing post-processing. Reproducing that means driving a service through a real post-processing run with its real settings - and those settings live in a service-managed SQLite database, not in Nix. So the "three lines per service" this plan budgeted buys a green check that would not have caught the incident it was written for, which is strictly worse than an acknowledged gap.
+
+That does not make the property unenforceable, it makes it the wrong shape for this harness. Cheaper things that would have caught the actual incident, in rough order of value per line:
+
+- an assertion over the _evaluated configuration_ - no VM needed - that no service's output or post-processing directory is equal to, or a parent of, `${dataPath}/downloads`. That is the invariant that was violated, it is checkable statically, and it is the one thing ADR 0003 established confinement cannot enforce;
+- a periodic canary on the hosts: a sentinel file in the download root, alerting through the existing textfile metrics if it disappears. Detection rather than prevention, but it covers every service including the ones no test will ever drive, and it rides a stack that already exists.
+
+**Decided, 2026-08-16: stop trying to prove the negative.** No test can establish that a service will never be told to do something destructive later, and a suite that implies otherwise is worse than an acknowledged gap - it is the same failure as the vacuous canary, just more expensive. The two items above are worth having on their own merits, one as a static invariant over configuration and one as detection, and neither is dressed up as proof. `data-safety` is struck from the candidate list rather than deferred.
+
+**Also decided: the container services are on their way out.** The intended direction is nixpkgs' own service modules instead of `oci-containers`, for the complexity they add as much as for anything here. That retires the first half of the blocker above on its own schedule, and it changes the arithmetic for `media-stack`: a natively packaged `sonarr` needs no registry, no pinned digest and no `podman load`, so the test that is currently blocked becomes ordinary. Worth knowing before anyone invests in pinning image digests to work around a constraint that is being removed anyway.
+
+**Item 4 is not finished**; what is finished is the harness, the two tests that pay for it, and a candidate list that no longer contains a test which would have passed while the thing it named went on being possible.
+
+### Still outstanding
+
+- `digital-garden` - the highest value of the remainder, and the reason is unchanged: a broken plugin index produces a build that _succeeds_ and a site that is empty, so the current gate is not merely silent there but actively misleading. It needs a vault fixture and `source = "obsidian-sync"`, which reads the vault from disk rather than cloning it, and so is the one path through that module that does not want the network.
+- `media-stack` - the largest of the candidates, and now waiting on the migration off `oci-containers` rather than on anything in this harness. Taking it before that migration means pinning image digests that are about to become irrelevant.
+- KVM on GitHub's runners is still unverified. The first CI run after this merges answers it.
+- Nothing yet measures what these tests cost the nightly lock PR's auto-merge. Two VMs is around 80 seconds locally; the number that matters is the one on a runner that may have no KVM.
 
 ---
 
