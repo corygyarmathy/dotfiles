@@ -37,16 +37,24 @@
   # ============================================================================
   # Auto-Upgrade
   # ============================================================================
-  # Follows `deploy-stable`, which trails `deploy` by 24h (ADR 0001). This is
-  # the storage node - ZFS, the NFS export homelab01 depends on - so it takes a
-  # revision only after homelab01 has run it for a day. A bad kernel or systemd
-  # bump therefore takes out the compute node, not the one holding the data.
+  # Follows `deploy`, the same ref as every other host (ADR 0002). This used to
+  # follow `deploy-stable`, a ref trailing by 24h so that the storage node took
+  # a revision only after homelab01 had run it for a day. That lag is retired:
+  # it measured elapsed time rather than health, nothing read the result, and
+  # homelab01 runs neither ZFS nor qBittorrent nor the VPN, so the soak only
+  # ever exercised the shared base. Meanwhile it made this - the host holding
+  # the data - the host least able to receive a considered change.
   #
-  # The lag is time-based, not health-based: nothing yet checks that homelab01
-  # is actually *well*, only that it has had the revision for 24h.
+  # Protection moved to activation time instead: boot counting for a generation
+  # that will not come up, health-gated activation for one that comes up broken.
+  #
+  # The 15 minute offset from homelab01 stays. It is no longer waiting on a
+  # promotion job, but homelab01 mounts NFS from here, and two servers
+  # rebooting into a new kernel simultaneously is worth avoiding for its own
+  # sake.
   system.autoUpgrade = {
     enable = true;
-    flake = "github:corygyarmathy/dotfiles/deploy-stable#homelab02";
+    flake = "github:corygyarmathy/dotfiles/deploy#homelab02";
     dates = "04:15"; # Offset from homelab01
     allowReboot = true;
     rebootWindow = {
