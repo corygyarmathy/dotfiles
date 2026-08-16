@@ -34,7 +34,7 @@ flowchart LR
 ```bash
 # Iterate on a server without a commit, a push, or a CI round-trip
 nixos-rebuild switch --flake .#homelab01 \
-  --target-host root@homelab01 --build-host root@homelab01
+  --target-host coryg@homelab01 --elevate=sudo --ask-elevate-password
 
 # Pull the promoted revision now rather than waiting for 04:00
 ssh homelab01 sudo systemctl start nixos-upgrade.service
@@ -42,6 +42,8 @@ ssh homelab01 sudo systemctl start nixos-upgrade.service
 # Local machine, from the working tree
 sudo nixos-rebuild switch --flake .#xps15
 ```
+
+`coryg@`, not `root@` — `cg.ssh-hardening` sets `PermitRootLogin = "no"` and `AllowUsers = [ "coryg" ]`, so root SSH is refused on both servers. `--elevate=sudo` is what then runs the activation as root, and `--ask-elevate-password` is needed because `wheelNeedsPassword` is on. That command is long enough to discourage the iteration it exists for, which is [item 6](docs/plans/deployment-hardening.md) of the hardening plan.
 
 `flake.lock` is CI's to move — running `nix flake update` by hand only creates a conflict with the nightly PR.
 
