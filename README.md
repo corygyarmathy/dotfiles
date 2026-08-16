@@ -14,12 +14,11 @@ flowchart LR
     C -->|passes| D[master]
     D -->|CI fast-forwards| E[deploy]
     E --> F[homelab01<br/>04:00]
+    E --> I[homelab02<br/>04:15]
     E --> G[xps15<br/>on click]
-    E -->|24h lag| H[deploy-stable]
-    H --> I[homelab02<br/>04:15]
 ```
 
-`master` is the integration branch and may be red. **`deploy` is the fleet's contract** — CI fast-forwards it only after every host configuration builds, so a host can never fetch a revision that fails to build for it. homelab02 holds the storage the rest of the fleet depends on, so it follows a ref that trails by a day.
+`master` is the integration branch and may be red. **`deploy` is the fleet's contract** — CI fast-forwards it only after every host configuration builds, so a host can never fetch a revision that fails to build for it. Every host follows it, and both servers take a promoted revision the same night; each defends itself at activation rather than relying on the other to have soaked it first ([ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md)).
 
 ## Documentation
 
@@ -27,6 +26,7 @@ flowchart LR
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | [The deployment pipeline](.github/workflows/README.md)             | how the refs and workflows behave, the invariants, and recovery procedures |
 | [ADR 0001](docs/adr/0001-gitops-deployment-with-a-promoted-ref.md) | why the pipeline is designed this way, and what was rejected               |
+| [ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md) | why the staged rollout was retired, and what replaces it                |
 | [Deployment hardening plan](docs/plans/deployment-hardening.md)    | the gaps that remain and how they are meant to close                       |
 
 ## Working on it
@@ -154,7 +154,6 @@ Stated plainly, because a pipeline whose limits are undocumented invites more tr
 
 - **Building is the only pre-deploy gate, and building is not working.** A package that compiles and then fails at runtime will auto-merge and deploy. The alert rules catch it afterwards. NixOS VM tests are the intended fix.
 - **Automated rollback covers only a generation that will not boot, and only on homelab01 so far.** systemd's boot assessment gives a new generation three attempts to reach `boot-complete.target`; one that never does is skipped in favour of an older entry, without anyone standing in front of the machine. A generation that boots and then fails to bring its services up is still recovered by fixing forward.
-- **The `deploy-stable` lag is time-based, not health-based.** It establishes that homelab01 has _had_ a revision for 24 hours, not that homelab01 is well.
-- **The canary soak is weaker for host-specific packages.** A ZFS or qBittorrent regression will not surface on homelab01, which runs neither. What it does exercise is the shared base — kernel, systemd, nix, glibc — which is where an unattended update does catastrophic rather than annoying damage.
+- **Nothing soaks a revision before it reaches the storage node.** Both servers take a promoted revision the same night. This is a deliberate bet, argued in [ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md): the staged rollout it replaces measured elapsed time rather than health, and the failure history here is service configuration rather than base-system regression. If a kernel bump ever takes both servers out on the same night, that bet was wrong.
 
 Each of these is expanded, with the intended fix, in [the hardening plan](docs/plans/deployment-hardening.md).

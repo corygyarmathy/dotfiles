@@ -61,6 +61,19 @@ Both servers have booted at least once with counting enabled, and `bootctl` show
 - Update `.github/workflows/README.md` and the repository `README.md`, both of which describe the two-tier rollout.
 - Consider moving `homelab02`'s upgrade time back from 04:15 now that it is not waiting on a promotion job at 03:30. Keeping the offset from `homelab01` is still worth something: `homelab01` mounts NFS from `homelab02`, so the storage node should not be switching underneath it.
 
+### Cutover
+
+There is a trap in doing all of the above in one merge. `homelab02` follows `deploy-stable`, so the commit that repoints it at `deploy` only reaches it once `deploy-stable` advances - and the same merge deletes the workflow that advances it. Scheduled workflows run from the default branch, so `promote-stable.yml` stops firing the moment it leaves `master`, and `homelab02` is then frozen on whatever `deploy-stable` held, following a ref nothing moves.
+
+The unwedge is one push, and needs no ruleset relaxation, since `protect-deploy-stable` blocks deletion and non-fast-forwards but not a fast-forward:
+
+```bash
+git fetch origin --prune
+git push origin origin/deploy:refs/heads/deploy-stable
+```
+
+`homelab02` then takes that revision at 04:15, and from that activation onwards it follows `deploy` like everything else. Only after that has actually happened is it safe to delete the branch and its rulesets.
+
 ### Ordering
 
 Strictly this should follow item 3, since it removes protection that health-gated activation replaces. In practice item 1 covers the catastrophic case and the observed failure history contains no base-system regression, so taking it directly after item 1 is defensible - it just means running for a while with no automated recovery from a revision that boots into broken services, which is the status quo today anyway.
