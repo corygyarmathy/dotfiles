@@ -111,6 +111,25 @@
                     "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
                     "corygyarmathy-dotfiles.cachix.org-1:/DMVcdDI+4GCAzS6iDTtiwERF1py+MD+w1Z/NTAd2oU="
                   ];
+                  # Without this, `nixos-rebuild --target-host` only works for
+                  # a closure the target can substitute from Cachix. Anything
+                  # built locally - which is every change not yet through CI,
+                  # i.e. exactly what interactive iteration is for - is
+                  # unsigned, and the remote daemon rejects it for an untrusted
+                  # user with "lacks a signature by a trusted key".
+                  #
+                  # Be clear-eyed about what this grants: a trusted user can
+                  # add arbitrary paths to the store and name its own
+                  # substituters, which is root-equivalent in practice. It is
+                  # not much of a widening here, since wheel already has sudo
+                  # and anything that can set the system profile can point it
+                  # at a closure containing a root shell - but it is a real
+                  # one, and it is the reason this is `@wheel` rather than
+                  # `*`.
+                  #
+                  # `@wheel` alone: the option is a merged list and nixpkgs
+                  # already contributes `root`.
+                  trusted-users = [ "@wheel" ];
                 };
                 # Automatic garbage collection
                 gc = {
@@ -217,11 +236,10 @@
         {
           alert-rules =
             # promtool lives in the `cli` output, not `out`.
-            pkgs.runCommand "check-alert-rules" { nativeBuildInputs = [ pkgs.prometheus.cli ]; }
-              ''
-                promtool check rules ${./modules/services/monitoring/alert-rules.yml}
-                touch $out
-              '';
+            pkgs.runCommand "check-alert-rules" { nativeBuildInputs = [ pkgs.prometheus.cli ]; } ''
+              promtool check rules ${./modules/services/monitoring/alert-rules.yml}
+              touch $out
+            '';
         }
       );
 
