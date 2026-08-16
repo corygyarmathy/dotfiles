@@ -11,6 +11,21 @@ name: NixOS CI
 # hosts substitute from - CI builds the closure once instead of each host
 # rebuilding it independently at 04:00.
 #
+# NOTE: the PR build and the master build look like the same build run twice.
+# They are not, and dropping the master one breaks promotion. `self.rev` is
+# baked into `system.configurationRevision` (flake.nix), so the toplevel store
+# path is a function of the commit SHA - and a squash merge always mints a new
+# SHA. Master's toplevel therefore cannot have been built on the PR even when
+# the tree is byte-identical. In practice the master run substitutes the whole
+# closure and builds ~19 rev-dependent derivations on top. Without it,
+# `promote` would move `deploy` to a closure the gate never built and the cache
+# never held, and every host would build that tail itself at 04:00.
+#
+# What the master run is *not* covering is a merge of stale content: the
+# `protect-main` ruleset sets `strict_required_status_checks_policy`, so a PR
+# must be up to date with master before it can merge, which makes the merge ref
+# the PR built the tree that actually lands.
+#
 # NOTE: the `nixos ci` job name is the status-check context required by the
 # `protect-main` repository ruleset. Renaming that job silently blocks every
 # merge until the ruleset is updated to match, so treat the two as a pair.
