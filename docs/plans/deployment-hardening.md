@@ -6,14 +6,24 @@ Already in place, and assumed by everything below: the deployment metrics in `mo
 
 Six pieces. The first two are small and independent; the rest can proceed in any order once they are in.
 
-| #   | Item                     | Size   | Blocks                            |
-| --- | ------------------------ | ------ | --------------------------------- |
-| 1   | Boot counting            | ~1 line | nothing - do first                |
-| 2   | Retire `deploy-stable`   | small  | nothing, once 1 is in             |
-| 3   | Health-gated activation  | medium | nothing                           |
-| 4   | Behaviour tests          | large  | nothing - grows incrementally     |
-| 5   | Service confinement      | medium | _proposed, not yet decided_       |
-| 6   | `deploy-rs` interactively | small  | nothing                           |
+| #   | Item                      | Size    | Status                                                   |
+| --- | ------------------------- | ------- | -------------------------------------------------------- |
+| 1   | Boot counting             | ~1 line | **partly done** - homelab01 only, awaiting first boot    |
+| 2   | Retire `deploy-stable`    | small   | **done** 2026-08-16                                      |
+| 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
+| 4   | Behaviour tests           | large   | not started - now the highest-value item                 |
+| 5   | Service confinement       | medium  | _proposed, not yet decided_                              |
+| 6   | `deploy-rs` interactively | small   | not started - one prerequisite removed                   |
+
+### Where this stands, 2026-08-16
+
+Items 1-3 landed today as four PRs (#22-#25). What remains before any of them can be called finished:
+
+- **Item 1** is on `homelab01` alone, and `homelab01` has not yet booted with it - it takes the config at 04:00 and the counters only appear on the next `nixos-rebuild boot`/`switch`. Confirm `bootctl` shows entries blessed, then a second PR enables `homelab02` and `xps15`.
+- **Item 3** landed with `rollback.enable = false` on both servers. It verifies, exports metrics and alerts; it does not act. Arming it is one line per host, and should wait for a few weeks of evidence about how often it would have fired on a host that was actually fine.
+- **Item 4** is now the binding constraint. ADR 0002 made behaviour tests the primary pre-deploy gate, and until they exist the gate is still "it builds" - which is precisely the class of failure items 1 and 3 are left cleaning up after.
+
+A note on sequencing, since it caught us out today: item 2's ordering section argued it was safe to take before item 3, and that held - but only because the interval was hours. Both servers now take a promoted revision on the same night with no automated recovery from a bad one, and that stays true until item 3 is armed.
 
 ---
 
@@ -45,6 +55,14 @@ Both servers already use systemd-boot (`hosts/homelab01/default.nix:731`, `hosts
 
 Both servers have booted at least once with counting enabled, and `bootctl` shows entries blessed rather than counting down.
 
+### What landed
+
+`modules/nixos/boot-counting.nix`, a `cg.boot-counting` wrapper with an assertion that systemd-boot is actually the loader, since the setting is silently inert otherwise. Enabled on `homelab01` only (#22); `homelab02` and `xps15` follow once this is proven.
+
+Confirmed on `homelab01` before it took the config: the ESP already held `nixos-<hash>.conf` entries and `loader.conf` held a plain `default`, which is exactly the state the corrected risk note above predicts - the renaming was never boot counting's doing.
+
+**Still outstanding:** `homelab01` had not yet activated it as of 2026-08-16 afternoon. Counters appear on the next `nixos-rebuild boot`/`switch`, so the first evidence arrives after the 04:00 run. Then a second PR for `homelab02` and `xps15`.
+
 ---
 
 ## 2. Retire `deploy-stable`
@@ -57,7 +75,7 @@ Both servers have booted at least once with counting enabled, and `bootctl` show
 
 - Point `hosts/homelab02/default.nix` at `github:corygyarmathy/dotfiles/deploy#homelab02` and rewrite the comment above it, which currently explains the staging.
 - Delete `.github/workflows/promote-stable.yml`.
-- Delete the `origin/deploy-stable` branch, and drop `deploy-stable` from the `reserve-deploy-namespace` ruleset only if the ruleset names it explicitly - the `deploy/` namespace reservation itself must stay.
+- Delete the `origin/deploy-stable` branch, and drop `deploy-stable` from the `reserve-deploy-namespace` ruleset only if the ruleset names it explicitly - the `deploy/` namespace reservation itself must stay. (It did name it explicitly. Deleting the branch also needs the `protect-deploy-stable` ruleset removed first, which blocks deletion with zero bypass actors.)
 - Update `.github/workflows/README.md` and the repository `README.md`, both of which describe the two-tier rollout.
 - Consider moving `homelab02`'s upgrade time back from 04:15 now that it is not waiting on a promotion job at 03:30. Keeping the offset from `homelab01` is still worth something: `homelab01` mounts NFS from `homelab02`, so the storage node should not be switching underneath it.
 
@@ -81,6 +99,18 @@ Strictly this should follow item 3, since it removes protection that health-gate
 ### Done when
 
 `homelab02` has taken a revision on the same night it was promoted, and no reference to `deploy-stable` remains in the repository.
+
+### What happened
+
+Done 2026-08-16 (#23). `homelab02` follows `deploy`, `promote-stable.yml` is deleted, the branch and the `protect-deploy-stable` ruleset are gone, and `reserve-deploy-namespace` reserves `refs/heads/deploy/**` alone. `protect-deploy` was checked afterwards and is untouched - the API `PUT` replaces a whole ruleset, so a neighbouring one being damaged is a silent failure worth checking for rather than assuming.
+
+The offset stayed at 04:15, on the second of the two arguments above.
+
+The cutover above is written as though it goes cleanly. It took three attempts, and the failures are the useful part:
+
+- **The fast-forward was run against a moving target.** `git push origin origin/deploy:refs/heads/deploy-stable` was issued after #23 merged but before its promote job had advanced `deploy`, so it resolved to the previous commit - one short of the one that repoints `homelab02`. Naming the SHA explicitly is immune to this; `origin/deploy` is not a stable noun for the couple of minutes after a merge.
+- **`homelab02` had to be cut over by hand anyway.** Deleting the branch was only safe once `homelab02` had _activated_ the repointing commit, and that was not scheduled until 04:15. `systemctl start nixos-upgrade.service` did it early. That was only safe because `flake.lock` was unchanged across the range: had the kernel differed, `nixos-upgrade` outside the reboot window would have staged the generation and skipped, leaving the host uncut-over while reporting success.
+- **A stacked PR broke on squash-merge.** #24 was based on #23's branch; squash merging produced new SHAs on `master`, so #24 then carried duplicate copies of two already-merged commits and went `CONFLICTING`. Fixed by rebasing onto `master` and dropping them. Any stack on a squash-merge repository needs that step every time a base lands.
 
 ---
 
@@ -127,7 +157,14 @@ One addition worth considering: arm the rollback _before_ switching rather than 
 
 ### Landed in two stages
 
-Shipped reporting-only: verification, metrics, and the two alerts, with the rollback itself behind `cg.upgrade-verify.rollback.enable`, default false. The failure mode of this module is reverting a healthy server, and watching it decide for a few weeks costs nothing while guessing at the false-positive rate could cost a night's uptime on the storage node. Arming it afterwards is a one-line change per host.
+Shipped reporting-only (#24): `modules/nixos/upgrade-verify.nix`, the `NixosVerifyFailed` and `NixosRolledBack` rules, and `criticalUnits` on both servers - with the rollback itself behind `cg.upgrade-verify.rollback.enable`, default false. The failure mode of this module is reverting a healthy server, and watching it decide for a few weeks costs nothing while guessing at the false-positive rate could cost a night's uptime on the storage node. Arming it afterwards is a one-line change per host.
+
+**Stage two, still outstanding:** arm `rollback.enable`, `homelab01` first. The signal to look for beforehand is `nixos_verify_result` staying at 1 across a few weeks of nightly upgrades - every 0 in that window is a rollback that would have happened, and worth understanding before it does.
+
+Two things worth checking rather than assuming, both of which would have caused nightly reverts of healthy hosts:
+
+- `homelab01`'s media mount is an **automount**, so `srv-media.mount` is legitimately inactive most of the time and `srv-media.automount` is the unit to probe.
+- `zfs-import-tank.service` and `nfs-server.service` are `Type=oneshot`; both set `RemainAfterExit`, so `is-active` stays meaningful after they finish. A oneshot without it would read as inactive forever.
 
 ### Done when
 
@@ -273,3 +310,32 @@ Candidate material:
 - whether health-gated activation ever rolled back, and whether it was right to
 - whether boot counting ever caught a generation, and whether three tries was the right number
 - whether retiring the staged rollout was vindicated or regretted - ADR 0002 makes a falsifiable bet that base-system regressions are not this homelab's problem
+
+### Observations banked 2026-08-16, from building items 1-3
+
+Recorded now because the detail evaporates. Roughly in order of how much they would interest a reader.
+
+**Where the plan was wrong, and why**
+
+- The health-gated activation design in this plan **could not have worked**. `ExecStartPost` on `nixos-upgrade` fires after `shutdown -r +1` returns, so on any kernel-changing upgrade it would have inspected the outgoing generation and blessed it - and never seen the one that lands. Nightly lock bumps change the kernel often, so the broken branch was the common one. The fix was to stop keying on the trigger and key on the generation instead. Worth writing up as the difference between a design that reads correctly and one checked against the unit the module actually generates.
+- Item 1's headline risk - ESP entries migrating to content-hash names - **did not exist**. That naming is unconditional in the pinned nixpkgs, verified first in `systemd-boot-builder.py` and then on `homelab01`'s live ESP. A risk register is only as good as the last time someone checked it against the source.
+- The plan had no cutover section for item 2 until one was written mid-implementation, and it was needed: deleting `promote-stable.yml` freezes the ref that carries the change to the host being changed. A migration that removes the mechanism delivering it is a shape worth naming.
+
+**What the pipeline did under change**
+
+- `deploy-stable` was **18 commits behind** when work started, and the 24h guard was working exactly as written. The storage node had silently missed every service change merged since it was set up. The best argument for ADR 0002 turned out to be the state of the thing it was arguing about.
+- Stacked PRs **never ran CI**, because `ci.yml` is scoped to `branches: [master]`. Two consequences, one obvious and one not: the gate did not gate, and their closures were never pushed to Cachix - which is what made the hosts reject a locally built deploy, since the paths could not be substituted and were therefore unsigned.
+- The gate is scoped by base branch, which is a reasonable default that silently stops applying the moment anyone stacks. Worth deciding whether to widen it or to stop stacking.
+
+**Two failures of identity, not content**
+
+Both cost real time, and both look identical from the outside - a branch that will not merge for no visible reason.
+
+- An `--amend` on a commit another branch was based on forked the stack, leaving two commits with the same tree and different SHAs.
+- Squash-merging a base turned the child PR's already-merged commits into duplicates and marked it `CONFLICTING`. `git merge-tree` was the fastest way to get a straight answer; GitHub's `mergeable` field lags a push by long enough to mislead.
+
+**Deployment ergonomics**
+
+- `trusted-users = root` meant `nixos-rebuild --target-host` only ever worked for a closure already in Cachix - i.e. only for changes that had been through CI, which is the opposite of what iterating is for. The failure surfaces as `lacks a signature by a trusted key`, several lines above a cascade of unrelated I/O errors that read like the real problem.
+- The `README`'s documented deploy command used `root@`, which `cg.ssh-hardening` has always refused. Nobody had run it.
+- Both of these argue item 6 is less optional than its "small" sizing suggests.

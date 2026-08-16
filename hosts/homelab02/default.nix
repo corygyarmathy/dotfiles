@@ -37,21 +37,15 @@
   # ============================================================================
   # Auto-Upgrade
   # ============================================================================
-  # Follows `deploy`, the same ref as every other host (ADR 0002). This used to
-  # follow `deploy-stable`, a ref trailing by 24h so that the storage node took
-  # a revision only after homelab01 had run it for a day. That lag is retired:
-  # it measured elapsed time rather than health, nothing read the result, and
-  # homelab01 runs neither ZFS nor qBittorrent nor the VPN, so the soak only
-  # ever exercised the shared base. Meanwhile it made this - the host holding
-  # the data - the host least able to receive a considered change.
+  # Follows `deploy`, the same ref as every other host. This host used to trail
+  # by 24h on a separate ref so the storage node soaked each revision on
+  # homelab01 first; ADR 0002 retires that and moves protection to activation
+  # time instead - boot counting for a generation that will not come up,
+  # health-gated activation for one that comes up broken.
   #
-  # Protection moved to activation time instead: boot counting for a generation
-  # that will not come up, health-gated activation for one that comes up broken.
-  #
-  # The 15 minute offset from homelab01 stays. It is no longer waiting on a
-  # promotion job, but homelab01 mounts NFS from here, and two servers
-  # rebooting into a new kernel simultaneously is worth avoiding for its own
-  # sake.
+  # The 15 minute offset from homelab01 is not a soak and is not load-bearing.
+  # It is kept because homelab01 mounts NFS from here, and two servers
+  # rebooting into a new kernel simultaneously is worth avoiding on its own.
   system.autoUpgrade = {
     enable = true;
     flake = "github:corygyarmathy/dotfiles/deploy#homelab02";
