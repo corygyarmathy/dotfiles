@@ -41,6 +41,25 @@ Action bumps auto-merge without being read, which is a deliberate trade rather t
 
 That last point matters more here than it looks. `ci.yml` only ever runs three of the six pinned actions, so a bump to `upload-artifact`, `download-artifact` or `create-pull-request` goes green from a workflow that never executed it - see the invariant below.
 
+### Code scanning
+
+CodeQL runs on every PR and weekly, over `actions`, `go` and `python`. It is **not** in this directory: it uses GitHub's _default setup_, so the workflow is generated and versioned server-side rather than committed here. Reading `.github/workflows/` therefore does not tell you the whole CI story. The config is still inspectable from the CLI, which is the intended way to audit it:
+
+```
+gh api repos/{owner}/{repo}/code-scanning/default-setup
+```
+
+Default setup rather than advanced is deliberate. Advanced setup would put a generated `codeql.yml` here - satisfying the same config-as-code instinct as the rest of the repo - at the cost of three more SHA-pinned actions for Dependabot to bump and ownership of keeping the CodeQL bundle current. It buys custom queries, `paths-ignore` and custom build steps, none of which this repo needs. The two settings that actually matter, `query_suite` and `threat_model`, are configurable in default setup anyway.
+
+**`query_suite` is `extended`, `threat_model` is `remote`.** The threat model is the interesting one, and it is set that way from evidence rather than by default. `remote_and_local` was tried on 2026-08-17: it marks local files, argv and environment variables as tainted, which sounds right for a repo whose Python is almost entirely local-input CLI tools. It produced 54 alerts, all of them false positives:
+
+- two `py/command-line-injection` rated _critical_, both at a `subprocess.run` taking an argv **list** with no `shell=True`. There is no shell to inject into. (A real but much smaller nit does live there: no `--` separator, so a filename starting with `-` would be read as an `ffprobe` flag.)
+- around fifty `py/path-injection`, mostly in `publish-filter.py`, where every write goes through `Path.name`. That discards all directory components, so traversal is structurally impossible - CodeQL simply cannot see `.name` as a sanitizer.
+
+The reason it is all noise is that `remote_and_local` assumes an attacker who controls local files, argv or env, and for these tools the operator supplying those paths is a systemd unit with fixed arguments. There is no privilege boundary for the taint to cross. Reverting to `remote` returns the repo to zero alerts while `extended` keeps the broader non-taint queries. A permanently noisy Security tab is worse than a quiet one, because it is the one you stop reading.
+
+**Do not expect CodeQL to protect `publish-filter.py`.** Its failure mode is publishing a note that was never marked for publication, which is a logic property, not a taint path. The VM test in `checks/` is the only real control there, and the `remote_and_local` experiment above is evidence for that rather than against it.
+
 ### How a night runs
 
 All times Perth (UTC+8), which is what the hosts are set to. Both hosts add up to 10 minutes of jitter.
@@ -76,6 +95,8 @@ Both servers land on the same revision the same night. The 15 minute offset is n
 **`dependabot-auto-merge.yml` needs `FLAKE_UPDATE_TOKEN` in _Dependabot_ secrets, not Actions secrets.** Workflow runs triggered by Dependabot read from a separate secret store and get a read-only `GITHUB_TOKEN`; the same name set under Actions resolves to empty there. The workflow fails with an explicit message rather than an opaque `gh` auth error, and it is not a required check, so the PR just sits unmerged. Note this is also why Dependabot PRs run without `CACHIX_AUTH_TOKEN` - harmless, because both `cachix-action` steps are `skipPush` against a public cache and the one real push is `continue-on-error`. They build slower, not wrong.
 
 **Auto-merge must be enabled by the PAT, for the same reason the PR is opened by it.** An auto-merge inherits the actor that enabled it, so a `GITHUB_TOKEN` merge lands on `master` without triggering `ci.yml` - `promote` never runs and `deploy` silently stops tracking `master`. An actions-only bump changes no host's closure, so nothing would look broken until an unrelated merge fast-forwarded past it.
+
+**Not every check on a PR comes from this directory.** CodeQL runs as GitHub default setup, configured server-side, so `Analyze (actions|go|python)` and `CodeQL` appear on every PR with no corresponding file here. They are not required checks and cannot block a merge; `nixos ci` is still the only gate. See "Code scanning" above for how to read the config.
 
 **`nixos ci` passing does not mean a bumped action works.** `ci.yml` runs only `checkout`, `nix-installer-action` and `cachix-action`. `upload-artifact`, `download-artifact` and `create-pull-request` appear exclusively in `flake-update.yml` and `package-update.yml`, which are `schedule` + `workflow_dispatch` and never fire on a pull request. A green gate on those three is a check that tested something else. Expect the failure at 15:00 UTC the next day, and revert rather than debug forward.
 
