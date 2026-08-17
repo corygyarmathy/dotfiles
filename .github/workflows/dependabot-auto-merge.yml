@@ -1,0 +1,77 @@
+name: dependabot-auto-merge
+
+# Schedules Dependabot's PRs for merge. The `nixos ci` gate is still the arbiter -
+# this only sets the intent, exactly as flake-update.yml does for the nightly lock
+# bump.
+#
+# Why these merge unread. An action pin is a SHA, so the diff is
+# `3d3c42e... -> a1b2c3d...` and no amount of staring at it conveys anything. The
+# honest version of "review" is reading someone else's TypeScript changelog every
+# Monday, which will not happen; what replaces it is a queue of stale PRs that
+# eventually get bulk-approved with less attention than this workflow gives them.
+# Stale actions carry their own unpatched-CVE risk, so friction that depends on
+# human attention is the thing to avoid. The evidence that a bump is safe is the
+# gate plus the 7-day cooldown in dependabot.yml - latency the wider ecosystem
+# spends finding compromised releases on this repo's behalf.
+#
+# What the gate does NOT cover, which is why the cooldown carries real weight:
+#
+#   - ci.yml only ever runs three of the six pinned actions: checkout,
+#     nix-installer-action and cachix-action. Bumps to upload-artifact,
+#     download-artifact and create-pull-request get a green `nixos ci` from a
+#     workflow that never executed them - those three run only in
+#     flake-update.yml and package-update.yml, which are cron-triggered and never
+#     fire on a pull request. "It passed CI" is a category error for that half.
+#
+#   - the Cachix push in ci.yml is `continue-on-error` and both cachix-action
+#     steps are `skipPush` (ADR 0001: the cache is a performance dependency, not a
+#     correctness one). So a cachix-action regression that breaks pushing stays
+#     green here forever and surfaces as hosts building from source at 04:00.
+#     Cache hit rate is the signal for that, not this workflow.
+#
+# Merging uses FLAKE_UPDATE_TOKEN rather than GITHUB_TOKEN, for the mirror image
+# of the reason flake-update.yml opens its PR that way. GitHub suppresses workflow
+# events for anything GITHUB_TOKEN does, and an auto-merge inherits the actor that
+# enabled it - so a GITHUB_TOKEN merge would land on master WITHOUT triggering
+# ci.yml, `promote` would never run, and `deploy` would quietly stop tracking
+# master. An actions-only bump does not change any host's closure, so nothing
+# would look wrong until the next unrelated merge fast-forwarded past it.
+#
+# That token has to live in *Dependabot* secrets, not Actions secrets. Workflow
+# runs triggered by Dependabot read from a separate store and are handed a
+# read-only GITHUB_TOKEN; `secrets.FLAKE_UPDATE_TOKEN` resolves to empty here
+# unless it is set under Settings > Secrets and variables > Dependabot. The step
+# below says so out loud rather than failing as an opaque gh auth error.
+
+on: pull_request
+
+# Nothing here uses GITHUB_TOKEN - the merge is performed with the PAT below.
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    name: enable auto-merge
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      # Idempotent: re-running against an already-scheduled PR is a no-op, which
+      # matters because Dependabot rebases its own PRs whenever master moves and
+      # each rebase re-triggers this workflow.
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::FLAKE_UPDATE_TOKEN is empty. Dependabot-triggered runs read Dependabot secrets, not Actions secrets - add it under Settings > Secrets and variables > Dependabot."
+            exit 1
+          fi
+
+          gh pr merge --auto --squash "$PR_URL"
