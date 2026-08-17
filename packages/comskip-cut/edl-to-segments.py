@@ -39,6 +39,10 @@ def get_video_duration(video_path: Path) -> float:
         "-print_format",
         "json",
         "-show_format",
+        # `--` ends option parsing: without it a recording named e.g.
+        # `-show_streams` is read as an ffprobe flag rather than an input, and
+        # ffprobe then exits 0 having probed nothing at all.
+        "--",
         str(video_path),
     ]
 
