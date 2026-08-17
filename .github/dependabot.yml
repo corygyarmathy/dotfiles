@@ -1,0 +1,123 @@
+version: 2
+
+# Dependabot covers the one dependency surface the other two updaters cannot
+# reach: the actions pinned inside .github/workflows.
+#
+#   flake-update.yml    -> flake inputs (nixpkgs et al)
+#   package-update.yml  -> packages pinned to an upstream tag or npm version
+#   this file           -> the actions those two workflows are themselves built from
+#
+# Dependabot has no Nix ecosystem, so it cannot touch flake.lock and cannot
+# compete with either of the above. The three carve the space up cleanly.
+#
+# Why actions need an updater at all: they are pinned to full commit SHAs, which
+# is the right call for supply chain but makes staleness invisible. Nothing
+# about `actions/checkout@3d3c42e...` says it is behind, and the trailing
+# `# v7.0.1` comment is only as truthful as the last person to hand-edit it.
+# Dependabot rewrites both.
+
+updates:
+  # ---------------------------------------------------------------------------
+  # GitHub Actions
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    # `/` is correct even though the workflows live in .github/workflows -
+    # Dependabot always scans that directory relative to the repository root.
+    directory: "/"
+
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC" # 14:00 Perth
+      # Deliberately between package-update (03:00 UTC Mon) and flake-update
+      # (15:00 UTC daily). `protect-main` sets strict_required_status_checks_policy,
+      # so two auto-merging PRs in flight at once means the second has to rebase
+      # before it can land. Dependabot rebases its own PRs, so this self-heals -
+      # the offset just keeps it from happening every week on purpose.
+
+    # The whole safety argument for merging these unread. A compromised action
+    # release is typically public within a day or two (tj-actions/changed-files,
+    # March 2025), so waiting a week means the ecosystem does the review that no
+    # one is realistically going to do by squinting at a SHA diff. It costs
+    # nothing ongoing and expires by itself, so nothing rots in a queue.
+    #
+    # GitHub Actions supports `default-days` ONLY - the semver-major-days /
+    # semver-minor-days / semver-patch-days keys are rejected for this ecosystem,
+    # so majors cannot be made to wait longer than patches here. The `groups`
+    # split below is what separates them instead.
+    #
+    # Dependabot *security* updates ignore cooldown by design: a known CVE should
+    # not sit for a week. That is the correct trade and is not configurable.
+    cooldown:
+      default-days: 7
+
+    # Two version-update PRs at most, plus headroom for a security update
+    # arriving in the same window.
+    open-pull-requests-limit: 4
+
+    labels:
+      - dependencies
+      - github-actions
+
+    # Matches the conventional-commit style already in git log
+    # (`build(nix): update flake.lock`) -> `ci(deps): bump ...`.
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+    groups:
+      # One PR for the boring bumps. Six separate PRs a month is the noise that
+      # trains you to stop reading them.
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+      # Majors get their own PR - not to force a review, but so that a break is
+      # attributable to one action instead of a batch of six. Half these actions
+      # only ever run in the cron-triggered workflows (see the auto-merge
+      # workflow's header), so a regression can surface a day later in
+      # flake-update rather than in the PR's own gate. When it does, the fix
+      # should be a one-line revert, not a bisect.
+      actions-major:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["major"]
+
+  # ---------------------------------------------------------------------------
+  # Go - dormant on purpose
+  # ---------------------------------------------------------------------------
+  #
+  # packages/project-launcher has no `require` block and no go.sum: it is stdlib
+  # only, which is why its derivation sets `vendorHash = null`. Dependabot has
+  # nothing to do here today, and it does NOT bump the `go 1.22` directive, so
+  # this entry is a no-op until the program grows its first dependency.
+  #
+  # It is here so that day is not silent. Read the note in
+  # packages/project-launcher/default.nix before merging the first PR this ever
+  # opens: a go.mod bump invalidates vendorHash, which Dependabot knows nothing
+  # about, so the PR will look clean and fail `nix build`. The gate catches it -
+  # it cannot land broken - but the fix belongs in package-update.yml's
+  # updateScript contract rather than here.
+  - package-ecosystem: "gomod"
+    directory: "/packages/project-launcher"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - go
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      go:
+        applies-to: version-updates
+        patterns: ["*"]
