@@ -27,10 +27,19 @@ The laptop follows `deploy` too, but never switches on its own: it builds in the
 | `ci.yml`             | every PR and push to master | builds all three hosts, `nix flake check` (incl. the VM tests in `checks/`), fast-forwards `deploy` |
 | `flake-update.yml`   | daily, 15:00 UTC            | `nix flake update`, per-host closure diff, PR, auto-merge on green |
 | `package-update.yml` | Mondays, 03:00 UTC          | runs each package's own updater, one PR per package                |
+| `dependabot-auto-merge.yml` | every Dependabot PR  | schedules the merge; `nixos ci` is still the gate                  |
 
 CI builds are pushed to a [Cachix](https://cachix.org) cache that the hosts substitute from, so a closure is built once rather than once per machine.
 
 Lock updates auto-merge when green. Package updates do not - they cross an upstream release boundary, where "it built" is the weakest form of evidence.
+
+### Dependabot
+
+`.github/dependabot.yml` covers the actions pinned inside these workflows - the one dependency surface the two Nix updaters cannot reach. It has no Nix ecosystem, so it never touches `flake.lock` and cannot compete with `flake-update.yml`. A second, dormant entry watches `packages/project-launcher`, which is stdlib-only today.
+
+Action bumps auto-merge without being read, which is a deliberate trade rather than laziness: the diff is a SHA, so review conveys nothing, and the safety comes from a 7-day `cooldown` instead - long enough that the ecosystem finds a compromised release before this repo consumes it, and short enough that nothing rots. Security updates bypass the cooldown by design. Majors are split into their own PR so a break is attributable to one action rather than a batch of six.
+
+That last point matters more here than it looks. `ci.yml` only ever runs three of the six pinned actions, so a bump to `upload-artifact`, `download-artifact` or `create-pull-request` goes green from a workflow that never executed it - see the invariant below.
 
 ### How a night runs
 
@@ -63,6 +72,12 @@ Both servers land on the same revision the same night. The 15 minute offset is n
 **`flake.lock` is CI's to move.** Running `nix flake update` by hand only creates a conflict with the nightly PR.
 
 **`flake-update.yml` checks out and opens its PR with `FLAKE_UPDATE_TOKEN`, not `GITHUB_TOKEN`.** GitHub suppresses workflow events on PRs opened by `GITHUB_TOKEN`, so `ci.yml` would never run, the required check would never arrive, and the PR would be unmergeable forever.
+
+**`dependabot-auto-merge.yml` needs `FLAKE_UPDATE_TOKEN` in _Dependabot_ secrets, not Actions secrets.** Workflow runs triggered by Dependabot read from a separate secret store and get a read-only `GITHUB_TOKEN`; the same name set under Actions resolves to empty there. The workflow fails with an explicit message rather than an opaque `gh` auth error, and it is not a required check, so the PR just sits unmerged. Note this is also why Dependabot PRs run without `CACHIX_AUTH_TOKEN` - harmless, because both `cachix-action` steps are `skipPush` against a public cache and the one real push is `continue-on-error`. They build slower, not wrong.
+
+**Auto-merge must be enabled by the PAT, for the same reason the PR is opened by it.** An auto-merge inherits the actor that enabled it, so a `GITHUB_TOKEN` merge lands on `master` without triggering `ci.yml` - `promote` never runs and `deploy` silently stops tracking `master`. An actions-only bump changes no host's closure, so nothing would look broken until an unrelated merge fast-forwarded past it.
+
+**`nixos ci` passing does not mean a bumped action works.** `ci.yml` runs only `checkout`, `nix-installer-action` and `cachix-action`. `upload-artifact`, `download-artifact` and `create-pull-request` appear exclusively in `flake-update.yml` and `package-update.yml`, which are `schedule` + `workflow_dispatch` and never fire on a pull request. A green gate on those three is a check that tested something else. Expect the failure at 15:00 UTC the next day, and revert rather than debug forward.
 
 ## Knowing whether it worked
 
