@@ -21,6 +21,14 @@ buildGoModule {
   src = ./.;
 
   # No external Go dependencies — stdlib only.
+  #
+  # This is load-bearing for .github/dependabot.yml, which has a dormant `gomod`
+  # entry pointed here. The moment this program gains its first dependency,
+  # vendorHash stops being null, and a Dependabot go.mod/go.sum bump will produce
+  # a PR that looks clean and fails `nix build` — it has no idea the hash exists.
+  # The gate catches it, so it cannot land broken, but the fix is to give this
+  # package a `passthru.updateScript` that bumps the module and regenerates the
+  # hash, and let package-update.yml own it instead of Dependabot.
   vendorHash = null;
 
   # Tests are not included yet; this keeps the build path simple.
