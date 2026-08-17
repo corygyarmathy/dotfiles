@@ -39,10 +39,16 @@ def get_video_duration(video_path: Path) -> float:
         "-print_format",
         "json",
         "-show_format",
+        # `--` ends option parsing: without it a recording named e.g.
+        # `-show_streams` is read as an ffprobe flag rather than an input, and
+        # ffprobe then exits 0 having probed nothing at all.
+        "--",
         str(video_path),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # check=True so a failed probe raises here rather than surfacing as a
+    # KeyError on `data["format"]` three lines down.
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     data = json.loads(result.stdout)
     return float(data["format"]["duration"])
 
