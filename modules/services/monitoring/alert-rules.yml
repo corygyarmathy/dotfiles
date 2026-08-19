@@ -325,6 +325,11 @@ groups:
       #
       # Only counts units that were not already failing before the upgrade
       # started, so this is a claim about the new generation specifically.
+      #
+      # Fires for hand-applied generations too, which is the point - nothing
+      # else checks those. Rollback deliberately will not act on them, so
+      # check nixos_verify_manual_generation before wondering why the host is
+      # still sitting on a generation that failed verification.
       - alert: NixosVerifyFailed
         expr: nixos_verify_result == 0
         for: 10m
@@ -332,7 +337,7 @@ groups:
           severity: critical
         annotations:
           summary: "{{ $labels.host }} activated a generation that did not come up healthy"
-          description: "Verification found units failing that were not failing before the upgrade. Check: journalctl -u nixos-upgrade-verify.service"
+          description: "Verification found units failing that were not failing before the upgrade. If nixos_verify_manual_generation is 1 this generation was applied by hand and will not be rolled back automatically — it is yours to fix or revert. Check: journalctl -u nixos-upgrade-verify.service"
 
       # The silence problem, applied to the safety net itself. NixosVerifyFailed
       # only speaks when verification runs and fails; if it stopped running —
