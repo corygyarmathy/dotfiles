@@ -100,49 +100,107 @@
       };
     };
 
+  # A third machine, because this is the only subtest that lets the rollback
+  # actually happen. It rewrites the running system, so it cannot share a node
+  # with subtests that assume theirs stands still.
+  nodes.rollback =
+    { pkgs, lib, ... }:
+    {
+      imports = [ ../modules/nixos/upgrade-verify.nix ];
+
+      system.autoUpgrade = {
+        enable = true;
+        flake = "/dev/null#nothing";
+      };
+
+      systemd.timers.nixos-upgrade.wantedBy = lib.mkForce [ ];
+      systemd.timers.nixos-upgrade-verify.wantedBy = lib.mkForce [ ];
+
+      # The VM boots its kernel directly, and grub-install cannot write to its
+      # ext2 disk ("will not proceed with blocklists"). That matters here and
+      # nowhere else in this file, because rollback is the only path that runs
+      # switch-to-configuration: bootloader installation happens *before*
+      # activation, so a failure there aborts the switch and the rollback moves
+      # the profile without ever activating it. Disabled so the test measures
+      # this module rather than the harness.
+      #
+      # Worth knowing that the same ordering applies on a real host: if
+      # installing the bootloader fails there, a rollback will report success
+      # while leaving the bad generation running.
+      boot.loader.grub.enable = lib.mkForce false;
+
+      cg.upgrade-verify = {
+        enable = true;
+        rollback.enable = true;
+        settleSeconds = 1;
+        settleTimeoutSeconds = 10;
+        # Nothing fires on its own here; the subtest owns the timing.
+        recheckSchedule = null;
+      };
+
+      systemd.services.cg-verify-canary = {
+        description = "Deliberately failing unit, to give verification something to find";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.coreutils}/bin/false";
+        };
+      };
+
+      # A second system closure to roll back *from*. A specialisation is the
+      # only way to get a genuinely different toplevel in here: the build
+      # sandbox has no network, so the second generation has to come out of the
+      # same build as the first. What differs does not matter - only that the
+      # store path does.
+      specialisation.alt.configuration = {
+        environment.etc."cg-alt-generation".text = "second generation";
+      };
+    };
+
   testScript = ''
     STATE = "/var/lib/nixos-deploy"
     METRICS = "/var/lib/prometheus-node-exporter/nixos_verify.prom"
 
 
-    def metric(name):
+    def metric(name, node=None):
         """One gauge out of the textfile the node exporter would scrape."""
-        out = machine.succeed(
+        node = node or machine
+        out = node.succeed(
             "grep -E '^{}\\{{' {} | awk '{{print $NF}}'".format(name, METRICS)
         ).strip()
         assert out, "metric {} was not written".format(name)
         return out
 
 
-    def arm(staged, rolled_back_ago=None):
+    def arm(staged, rolled_back_ago=None, node=None):
         """Put the state dir in a known shape, then run verification.
 
         `staged` is what nixos-upgrade will claim to have staged - None leaves
         no record at all, which is how a host that has not upgraded since this
         landed looks, and how any hand-applied generation looks.
         """
-        machine.succeed("mkdir -p {}".format(STATE))
-        machine.succeed("rm -f {}/verified-system {}/automation-staged".format(STATE, STATE))
+        node = node or machine
+        node.succeed("mkdir -p {}".format(STATE))
+        node.succeed("rm -f {}/verified-system {}/automation-staged".format(STATE, STATE))
 
         # Empty and fresh: nothing was failing before, so the canary counts as
         # a new failure and the age guards are satisfied.
-        machine.succeed(": > {}/failed-units-baseline".format(STATE))
+        node.succeed(": > {}/failed-units-baseline".format(STATE))
 
         if staged is not None:
-            machine.succeed("echo {} > {}/automation-staged".format(staged, STATE))
+            node.succeed("echo {} > {}/automation-staged".format(staged, STATE))
 
         if rolled_back_ago is None:
-            machine.succeed("rm -f {}/last-rollback".format(STATE))
+            node.succeed("rm -f {}/last-rollback".format(STATE))
         else:
-            machine.succeed(
+            node.succeed(
                 "expr $(date +%s) - {} > {}/last-rollback".format(rolled_back_ago, STATE)
             )
 
-        machine.succeed("journalctl --rotate && journalctl --vacuum-time=1s")
-        # Verification exits non-zero whenever it refuses, by design - the
-        # refusal is the result, not an error.
-        machine.fail("systemctl start nixos-upgrade-verify.service")
-        return machine.succeed("journalctl -u nixos-upgrade-verify.service --no-pager")
+        node.succeed("journalctl --rotate && journalctl --vacuum-time=1s")
+        # Verification exits non-zero whenever it refuses *and* when it acts -
+        # the outcome is the result, not an error.
+        node.fail("systemctl start nixos-upgrade-verify.service")
+        return node.succeed("journalctl -u nixos-upgrade-verify.service --no-pager")
 
 
     machine.wait_for_unit("multi-user.target")
@@ -240,5 +298,72 @@
             )
         ).strip()
         assert manual == "1", manual
+
+    with subtest("a staged generation that came up broken is really rolled back"):
+        # Every other subtest pins a *refusal*. This one is the code that runs
+        # at 04:00 on a real server: nix-env --rollback, then the rolled-back
+        # profile's own switch-to-configuration. Nothing else exercises it, and
+        # a rollback that cannot roll back is the one failure the report-only
+        # period cannot reveal.
+        rollback.wait_for_unit("multi-user.target")
+        gen1 = rollback.succeed("readlink -f /run/current-system").strip()
+        alt = rollback.succeed("readlink -f /run/current-system/specialisation/alt").strip()
+        assert alt != gen1, (alt, gen1)
+
+        # The VM boots straight from the store, so the system profile starts
+        # with no generations at all - unlike a real host, where the running
+        # system is already generation N. Seed it with what is running, or
+        # there is nothing to roll back *to* and the ladder would refuse at the
+        # "no previous generation" rung for reasons that are pure harness.
+        rollback.succeed("nix-env -p /nix/var/nix/profiles/system --set {}".format(gen1))
+
+        # Install and activate the second generation the way nixos-upgrade
+        # would - profile first, then activate what the profile now points at.
+        rollback.succeed("nix-env -p /nix/var/nix/profiles/system --set {}".format(alt))
+        rollback.succeed("{}/bin/switch-to-configuration switch".format(alt))
+        assert rollback.succeed("readlink -f /run/current-system").strip() == alt
+
+        generations = int(
+            rollback.succeed(
+                "nix-env -p /nix/var/nix/profiles/system --list-generations | wc -l"
+            ).strip()
+        )
+        assert generations >= 2, generations
+
+        # ...and let it come up broken.
+        rollback.fail("systemctl start cg-verify-canary.service")
+
+        journal = arm(staged=alt, node=rollback)
+        assert "Rolling back" in journal, journal
+
+        # The claim, three ways: the profile moved, the running system moved,
+        # and the bootloader default moved with it. Checking only the profile
+        # would pass on a rollback that never activated anything.
+        assert rollback.succeed("readlink -f /nix/var/nix/profiles/system").strip() == gen1
+        assert rollback.succeed("readlink -f /run/current-system").strip() == gen1
+        rollback.succeed("test ! -e /etc/cg-alt-generation")
+
+        assert metric("nixos_verify_rolled_back", node=rollback) == "1"
+        assert metric("nixos_verify_result", node=rollback) == "0"
+        assert metric("nixos_verify_manual_generation", node=rollback) == "0"
+        rollback.succeed("test -e {}/last-rollback".format(STATE))
+
+        # The switch really re-activated things rather than only moving
+        # symlinks: the unit that was failing under the abandoned generation
+        # is no longer failing under this one.
+        rollback.succeed("systemctl is-failed cg-verify-canary.service || true")
+        rollback.fail("systemctl is-failed --quiet cg-verify-canary.service")
+
+        # And the rollback cannot cascade. The generation reverted *to* was
+        # never the staged one, so it reads as hand-applied and is exempt from
+        # rollback no matter what it does - which is the property the cooldown
+        # used to be solely responsible for. (The cooldown rung itself is
+        # covered above, on a node that has not moved underneath it.)
+        rollback.succeed("rm -f {}/verified-system".format(STATE))
+        rollback.succeed("systemctl start nixos-upgrade-verify.service")
+        assert metric("nixos_verify_result", node=rollback) == "1"
+        assert metric("nixos_verify_manual_generation", node=rollback) == "1"
+        assert metric("nixos_verify_rolled_back", node=rollback) == "0"
+        assert rollback.succeed("cat {}/verified-system".format(STATE)).strip() == gen1
   '';
 }
