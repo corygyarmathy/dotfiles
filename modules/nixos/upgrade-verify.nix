@@ -31,9 +31,17 @@
 # is started from two places, and either one arriving first is fine:
 #
 #   - a timer at boot, for the reboot path
-#   - nixos-upgrade's ExecStartPost, for the same-unit switch path (where it is
+#   - nixos-upgrade's ExecStopPost, for the same-unit switch path (where it is
 #     a no-op in the other two branches, because the running system has not
 #     changed)
+#
+# ExecStopPost rather than ExecStartPost, because systemd skips ExecStartPost
+# when ExecStart fails - which used to skip verification in precisely the case
+# it is most wanted. `nixos-rebuild switch` exits non-zero if any unit is
+# failing once activation has finished, so a failed nixos-upgrade quite often
+# means "the new generation is live and something on it is unhappy", which is
+# the judgement this module exists to make. Trusting the trigger's exit code
+# would also undo the point of anchoring on the generation.
 #
 # The timer exists rather than `wantedBy = multi-user.target` because
 # `systemctl is-system-running --wait` blocks until startup completes. A unit
@@ -360,11 +368,16 @@ in
     systemd.services.nixos-upgrade = {
       serviceConfig = {
         ExecStartPre = [ baselineScript ];
-        # --no-block: this fires while nixos-upgrade is still finishing, and a
-        # verification that waits minutes to settle should not hold the upgrade
-        # unit open behind it. In the reboot branch it is a no-op anyway, since
-        # the running system has not changed yet.
-        ExecStartPost = [
+        # ExecStopPost fires on both outcomes; ExecStartPost would not fire at
+        # all when the upgrade failed. See the header. deploy-metrics.nix hangs
+        # off the same hook for the same reason.
+        #
+        # --no-block: this fires while nixos-upgrade is still deactivating, and
+        # the queued job is ordered After=nixos-upgrade.service, so it waits for
+        # this unit to finish rather than running mid-activation. Blocking here
+        # would deadlock against that ordering, and a verification that waits
+        # minutes to settle should not hold the upgrade unit open regardless.
+        ExecStopPost = [
           "${pkgs.systemd}/bin/systemctl start --no-block nixos-upgrade-verify.service"
         ];
       };
