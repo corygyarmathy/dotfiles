@@ -123,6 +123,15 @@
 # (`deploy-rs` with magicRollback, which waits for the *deployer* to reconnect)
 # and is not addressed here.
 #
+# A rollback is judged by what ends up running, not by what
+# switch-to-configuration returned. That script installs the bootloader before
+# it activates anything, so a bootloader failure leaves the profile moved and
+# nothing else - and its exit code is useless as a success signal in the other
+# direction too, since it returns non-zero whenever a unit is failing after
+# activation, which is the state every rollback starts from by definition.
+# `nixos_verify_rollback_failed` carries the difference between "the old
+# generation is running again" and "the profile moved and nothing happened".
+#
 # The rollback is deliberately services-only: the previous generation is made
 # current and made the boot default, but nothing reboots. After a kernel-
 # changing upgrade that means the new kernel keeps running under the old
@@ -177,6 +186,10 @@ let
     set -uo pipefail
 
     mkdir -p "${stateDir}" "${metricsDir}"
+
+    # Set only by the rollback path below, but written on every run so the
+    # gauge is never stale from a previous verification.
+    rollback_failed=0
 
     current="$(readlink -f /run/current-system)"
 
@@ -253,6 +266,9 @@ let
     # HELP nixos_verify_manual_generation Whether the verified generation was applied by hand rather than staged by nixos-upgrade (1=manual, and so exempt from rollback)
     # TYPE nixos_verify_manual_generation gauge
     nixos_verify_manual_generation{host="${host}"} $manual
+    # HELP nixos_verify_rollback_failed Whether a rollback was attempted and did not fully take effect (1=yes)
+    # TYPE nixos_verify_rollback_failed gauge
+    nixos_verify_rollback_failed{host="${host}"} $rollback_failed
     EOF
       if [ -r "${rollbackStamp}" ]; then
         cat >> "$tmp" <<EOF
@@ -326,15 +342,54 @@ let
 
           echo "Rolling back to the previous generation."
           ${pkgs.nix}/bin/nix-env -p /nix/var/nix/profiles/system --rollback
+          target="$(readlink -f /nix/var/nix/profiles/system)"
 
           # The rolled-back profile's own script, not /run/current-system's -
           # that one belongs to the generation being abandoned. `boot` first so
           # the bootloader default reverts even if `switch` then has trouble;
           # no reboot, for the reason in the header.
-          /nix/var/nix/profiles/system/bin/switch-to-configuration boot
-          /nix/var/nix/profiles/system/bin/switch-to-configuration switch
+          boot_ok=1
+          /nix/var/nix/profiles/system/bin/switch-to-configuration boot || boot_ok=0
+          /nix/var/nix/profiles/system/bin/switch-to-configuration switch || true
 
+          # ------------------------------------------------------------------
+          # Judged on what is running, never on what switch-to-configuration
+          # returned.
+          #
+          # Its exit code cannot be used here. It exits non-zero whenever any
+          # unit is failing once activation has finished - which is the state
+          # this host is in by definition, since that is what verification just
+          # found - so a non-zero return says nothing about whether the
+          # rollback took. The symlink does.
+          #
+          # The other direction is what made this check necessary: bootloader
+          # installation happens *before* activation, so when it fails,
+          # switch-to-configuration exits without activating anything. The
+          # profile has already moved by then, and the old code took that as
+          # proof of a rollback and reported success while the broken
+          # generation kept running.
+          # ------------------------------------------------------------------
+          running="$(readlink -f /run/current-system)"
+
+          if [ "$running" != "$target" ]; then
+            rollback_failed=1
+            write_metrics 0 0
+            echo "ROLLBACK DID NOT TAKE. The profile was moved to $target, but $running is still running, so activation never happened - most likely switch-to-configuration failed before it got that far. This host is still on the generation that failed verification and needs hands on it now." >&2
+            exit 1
+          fi
+
+          # A real move happened, so the cooldown applies whatever else went
+          # wrong: the point of the stamp is that a re-offered bad revision
+          # flaps once a night rather than in a loop.
           echo "$now" > "${rollbackStamp}"
+
+          if [ "$boot_ok" -eq 0 ]; then
+            rollback_failed=1
+            write_metrics 0 1
+            echo "Rolled back, but the bootloader was not updated. Services are on $target now; the next reboot will return to the generation that failed verification. Fix the bootloader before rebooting." >&2
+            exit 1
+          fi
+
           write_metrics 0 1
           echo "Rolled back. The host is no longer tracking the promoted ref - fix forward and check it takes the next revision." >&2
           exit 1

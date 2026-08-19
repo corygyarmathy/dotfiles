@@ -156,6 +156,58 @@
       };
     };
 
+  # A fourth machine, where installing the bootloader always fails. That is the
+  # fault behind the defect under test: switch-to-configuration installs the
+  # bootloader *before* it activates, so a failure there leaves the profile
+  # moved and nothing else done, and the old code read the moved profile as
+  # proof of a successful rollback.
+  #
+  # Injected directly rather than by leaving grub enabled and letting the VM's
+  # grub-install fail on its ext2 disk. That does reproduce it - it is how the
+  # defect was found - but only in some orderings, and it would quietly stop
+  # testing anything the day nixpkgs changes the test disk.
+  nodes.bootfail =
+    { pkgs, lib, ... }:
+    {
+      imports = [ ../modules/nixos/upgrade-verify.nix ];
+
+      system.autoUpgrade = {
+        enable = true;
+        flake = "/dev/null#nothing";
+      };
+
+      systemd.timers.nixos-upgrade.wantedBy = lib.mkForce [ ];
+      systemd.timers.nixos-upgrade-verify.wantedBy = lib.mkForce [ ];
+
+      boot.loader.grub.enable = lib.mkForce false;
+      system.build.installBootLoader = lib.mkForce (
+        pkgs.writeShellScript "cg-failing-bootloader-install" ''
+          echo "Failed to install bootloader" >&2
+          exit 1
+        ''
+      );
+
+      cg.upgrade-verify = {
+        enable = true;
+        rollback.enable = true;
+        settleSeconds = 1;
+        settleTimeoutSeconds = 10;
+        recheckSchedule = null;
+      };
+
+      systemd.services.cg-verify-canary = {
+        description = "Deliberately failing unit, to give verification something to find";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.coreutils}/bin/false";
+        };
+      };
+
+      specialisation.alt.configuration = {
+        environment.etc."cg-alt-generation".text = "second generation";
+      };
+    };
+
   testScript = ''
     STATE = "/var/lib/nixos-deploy"
     METRICS = "/var/lib/prometheus-node-exporter/nixos_verify.prom"
@@ -344,6 +396,7 @@
         rollback.succeed("test ! -e /etc/cg-alt-generation")
 
         assert metric("nixos_verify_rolled_back", node=rollback) == "1"
+        assert metric("nixos_verify_rollback_failed", node=rollback) == "0"
         assert metric("nixos_verify_result", node=rollback) == "0"
         assert metric("nixos_verify_manual_generation", node=rollback) == "0"
         rollback.succeed("test -e {}/last-rollback".format(STATE))
@@ -365,5 +418,42 @@
         assert metric("nixos_verify_manual_generation", node=rollback) == "1"
         assert metric("nixos_verify_rolled_back", node=rollback) == "0"
         assert rollback.succeed("cat {}/verified-system".format(STATE)).strip() == gen1
+
+    with subtest("a rollback that cannot activate says so instead of claiming success"):
+        # nix-env --rollback moves the profile, then switch-to-configuration
+        # installs the bootloader *before* activating. When that install fails
+        # it exits early, so the profile has moved and nothing else has. The
+        # old code read the moved profile as proof and reported a successful
+        # rollback while the failed generation kept running.
+        bootfail.wait_for_unit("multi-user.target")
+        running = bootfail.succeed("readlink -f /run/current-system").strip()
+        alt = bootfail.succeed("readlink -f /run/current-system/specialisation/alt").strip()
+        assert alt != running, (alt, running)
+
+        # Generations built through the profile rather than by activating,
+        # because activating is precisely what does not work on this node.
+        # Leaves the profile on what is running, with somewhere to roll back to.
+        bootfail.succeed("nix-env -p /nix/var/nix/profiles/system --set {}".format(alt))
+        bootfail.succeed("nix-env -p /nix/var/nix/profiles/system --set {}".format(running))
+
+        # ...and give verification a reason to want the rollback.
+        bootfail.fail("systemctl start cg-verify-canary.service")
+
+        journal = arm(staged=running, node=bootfail)
+
+        # The fault injector really fired, rather than the rollback failing
+        # for some unrelated reason that would make the rest vacuous.
+        assert "Failed to install bootloader" in journal, journal
+
+        assert "ROLLBACK DID NOT TAKE" in journal, journal
+        assert bootfail.succeed("readlink -f /run/current-system").strip() == running
+        assert bootfail.succeed("readlink -f /nix/var/nix/profiles/system").strip() == alt
+
+        assert metric("nixos_verify_rollback_failed", node=bootfail) == "1"
+        assert metric("nixos_verify_rolled_back", node=bootfail) == "0"
+        assert metric("nixos_verify_result", node=bootfail) == "0"
+
+        # No stamp: nothing moved, so nothing should be held off by a cooldown.
+        bootfail.succeed("test ! -e {}/last-rollback".format(STATE))
   '';
 }
