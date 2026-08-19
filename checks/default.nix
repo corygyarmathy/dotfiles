@@ -48,4 +48,5 @@ in
   digital-garden = testLib.mkTest ./digital-garden.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
   reverse-proxy = testLib.mkTest ./reverse-proxy.nix;
+  upgrade-verify = testLib.mkTest ./upgrade-verify.nix;
 }

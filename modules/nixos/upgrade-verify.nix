@@ -62,8 +62,8 @@
 # guards on top of that:
 #
 #   - no baseline, or one older than `baselineMaxAge`, means report but never
-#     roll back. That covers a manual `nixos-rebuild switch`, where nothing
-#     recorded what "before" looked like.
+#     roll back, since a new failure cannot be told from an old one.
+#   - no rollback for a generation nixos-upgrade did not stage. See below.
 #   - no rollback within `rollbackCooldown` of the last one, so a bad revision
 #     that keeps being re-offered flaps once a night rather than in a loop.
 #   - no rollback if the profile has no previous generation to return to.
@@ -71,6 +71,37 @@
 # `rollback.enable` is off by default. The failure mode of this module is
 # reverting a healthy server, and the honest way to find that out is to watch
 # it decide for a few weeks before letting it act.
+#
+# ---------------------------------------------------------------------------
+# Verifying by hand-applied generations, without fighting the person
+# ---------------------------------------------------------------------------
+#
+# Verification runs on whatever is booted, so a hand-run `nixos-rebuild switch`
+# gets judged too. That is wanted - it is a generation nothing else checks -
+# but it must never be reverted. Automatic rollback is worth having because
+# nobody is watching at 04:00; someone at a terminal mid-troubleshooting has
+# more context than this script does, and taking their work away is worse than
+# the degradation it would be protecting against.
+#
+# `baselineMaxAge` was once assumed to cover this. It does not: the baseline is
+# written by nixos-upgrade's ExecStartPre, so switching by hand at 08:00 after
+# an 04:00 upgrade leaves a baseline four hours old and comfortably inside the
+# limit. Rebooting to test a change - an ordinary thing to do while debugging -
+# then fires the OnBootSec trigger straight into an armed rollback.
+#
+# So rollback is gated on provenance rather than on the trigger or the clock:
+# nixos-upgrade records the generation it staged, and rollback is refused
+# unless that is what is running. It falls out of the profile symlink, which
+# nixos-upgrade already sets in both its `boot` and `switch` branches, so there
+# is no new lifecycle to keep honest. A missing record means refuse, which is
+# also what a freshly deployed host sees.
+#
+# It is worth being clear about what this gives up: a generation applied by
+# hand and then abandoned is never reverted automatically. That is the intended
+# reading - a human touched it, so a human owns it - and `nixos_verify_result`
+# still alerts either way. It also makes rollback structurally non-recursive,
+# since the generation reverted *to* was never the staged one, which the
+# cooldown previously handled more bluntly.
 #
 # ---------------------------------------------------------------------------
 # What it cannot do
@@ -105,6 +136,7 @@ let
   verifiedFile = "${stateDir}/verified-system";
   baselineFile = "${stateDir}/failed-units-baseline";
   rollbackStamp = "${stateDir}/last-rollback";
+  stagedFile = "${stateDir}/automation-staged";
 
   host = config.networking.hostName;
 
@@ -118,6 +150,16 @@ let
     mkdir -p "${stateDir}"
     ${failedUnits} | ${pkgs.gawk}/bin/awk '{print $1}' | sort -u > "${baselineFile}.tmp"
     mv "${baselineFile}.tmp" "${baselineFile}"
+  '';
+
+  # What nixos-upgrade staged, read off the profile symlink it just set. Run
+  # from ExecStopPost so it records on both outcomes, and so the `boot` branch
+  # is captured before the reboot that activates it.
+  stagedScript = pkgs.writeShellScript "nixos-upgrade-record-staged" ''
+    set -uo pipefail
+    mkdir -p "${stateDir}"
+    readlink -f /nix/var/nix/profiles/system > "${stagedFile}.tmp"
+    mv "${stagedFile}.tmp" "${stagedFile}"
   '';
 
   verifyScript = pkgs.writeShellScript "nixos-upgrade-verify" ''
@@ -136,6 +178,16 @@ let
     fi
 
     echo "Verifying generation: $current"
+
+    # Provenance, not trigger: rollback is refused below for anything
+    # nixos-upgrade did not stage. A missing record refuses too, which is what
+    # a host that has not upgraded since this landed will see.
+    if [ -r "${stagedFile}" ] && [ "$current" = "$(cat "${stagedFile}")" ]; then
+      manual=0
+    else
+      manual=1
+      echo "Not the generation nixos-upgrade staged; this one was applied by hand."
+    fi
 
     # Let units that are going to fail get on with failing. A switch returns as
     # soon as systemd has accepted the jobs, not when they have settled.
@@ -187,6 +239,9 @@ let
     # HELP nixos_verify_rolled_back Whether the last verification ended in a rollback (1=yes)
     # TYPE nixos_verify_rolled_back gauge
     nixos_verify_rolled_back{host="${host}"} $2
+    # HELP nixos_verify_manual_generation Whether the verified generation was applied by hand rather than staged by nixos-upgrade (1=manual, and so exempt from rollback)
+    # TYPE nixos_verify_manual_generation gauge
+    nixos_verify_manual_generation{host="${host}"} $manual
     EOF
       if [ -r "${rollbackStamp}" ]; then
         cat >> "$tmp" <<EOF
@@ -224,6 +279,12 @@ let
         ''
       else
         ''
+          if [ "$manual" = 1 ]; then
+            write_metrics 0 0
+            echo "This generation was applied by hand, not staged by nixos-upgrade; reporting only. Reverting someone's work mid-troubleshooting is not this script's call." >&2
+            exit 1
+          fi
+
           if [ "$baseline_age" -lt 0 ]; then
             write_metrics 0 0
             echo "No pre-upgrade baseline, so these failures cannot be attributed to this generation; refusing to roll back." >&2
@@ -378,6 +439,10 @@ in
         # would deadlock against that ordering, and a verification that waits
         # minutes to settle should not hold the upgrade unit open regardless.
         ExecStopPost = [
+          # Ordered before the trigger below, so the record is on disk by the
+          # time verification reads it. (It would be anyway - the queued job
+          # waits for this unit to deactivate - but not by accident.)
+          stagedScript
           "${pkgs.systemd}/bin/systemctl start --no-block nixos-upgrade-verify.service"
         ];
       };
