@@ -72,6 +72,34 @@
       };
     };
 
+  # A second machine, because the trigger under test is the one that fires
+  # when nothing asks it to - which cannot be shown on a node whose timer is
+  # detached so the subtests can control their own timing.
+  nodes.scheduled =
+    { lib, ... }:
+    {
+      imports = [ ../modules/nixos/upgrade-verify.nix ];
+
+      system.autoUpgrade = {
+        enable = true;
+        flake = "/dev/null#nothing";
+      };
+
+      # The upgrade never runs, so nothing here announces a generation. The
+      # verify timer is left armed - it is the subject.
+      systemd.timers.nixos-upgrade.wantedBy = lib.mkForce [ ];
+
+      cg.upgrade-verify = {
+        enable = true;
+        settleSeconds = 1;
+        settleTimeoutSeconds = 10;
+
+        # Every ten seconds, so the wait below stays comfortably inside the
+        # three minute OnBootSec that must not be what fires.
+        recheckSchedule = "*:*:0/10";
+      };
+    };
+
   testScript = ''
     STATE = "/var/lib/nixos-deploy"
     METRICS = "/var/lib/prometheus-node-exporter/nixos_verify.prom"
@@ -172,6 +200,14 @@
         assert metric("nixos_verify_manual_generation") == "0"
         assert machine.succeed("cat {}/verified-system".format(STATE)).strip() == current
 
+    with subtest("both triggers are armed on one timer"):
+        timer = machine.succeed(
+            "systemctl show nixos-upgrade-verify.timer -p TimersMonotonic -p TimersCalendar"
+        )
+        # systemd renders OnBootSec= back as OnBootUSec.
+        assert "OnBootUSec=3min" in timer, timer
+        assert "OnCalendar=" in timer, timer
+
     with subtest("a blessed generation is not judged twice"):
         # The guard that lets every trigger fire freely. Without it, adding
         # ExecStopPost would mean re-judging a generation on every upgrade.
@@ -179,5 +215,30 @@
         machine.succeed("systemctl start nixos-upgrade-verify.service")
         journal = machine.succeed("journalctl -u nixos-upgrade-verify.service --no-pager")
         assert "already verified" in journal, journal
+
+    with subtest("the schedule verifies a generation nothing announced"):
+        # Nothing on this node ever starts verification: no upgrade runs, and
+        # the test does not ask. The only other trigger is OnBootSec at three
+        # minutes, so the uptime assertion is what makes this a claim about the
+        # calendar entry rather than about verification working at all.
+        scheduled.wait_for_unit("multi-user.target")
+        scheduled.wait_for_file("{}/verified-system".format(STATE), timeout=100)
+
+        uptime = float(scheduled.succeed("cut -d' ' -f1 /proc/uptime").strip())
+        assert uptime < 170, "OnBootSec may have fired; uptime was {}".format(uptime)
+
+        current_scheduled = scheduled.succeed("readlink -f /run/current-system").strip()
+        blessed = scheduled.succeed("cat {}/verified-system".format(STATE)).strip()
+        assert blessed == current_scheduled, (blessed, current_scheduled)
+
+        # A host that has never upgraded has no staged record, so provenance
+        # reads this as hand-applied - correctly, and harmlessly, since a
+        # healthy generation is never a rollback candidate anyway.
+        manual = scheduled.succeed(
+            "grep -E '^nixos_verify_manual_generation\\{{' {} | awk '{{print $NF}}'".format(
+                METRICS
+            )
+        ).strip()
+        assert manual == "1", manual
   '';
 }

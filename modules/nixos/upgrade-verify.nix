@@ -30,7 +30,9 @@
 # system differs from it. That single rule covers all three branches. The unit
 # is started from two places, and either one arriving first is fine:
 #
-#   - a timer at boot, for the reboot path
+#   - a timer at boot, for the reboot path, which also re-checks on a schedule
+#     (`recheckSchedule`) so that a generation nothing thought to announce is
+#     still eventually judged
 #   - nixos-upgrade's ExecStopPost, for the same-unit switch path (where it is
 #     a no-op in the other two branches, because the running system has not
 #     changed)
@@ -102,6 +104,15 @@
 # still alerts either way. It also makes rollback structurally non-recursive,
 # since the generation reverted *to* was never the staged one, which the
 # cooldown previously handled more bluntly.
+#
+# Provenance is also what makes `recheckSchedule` safe to have. Verification
+# used to run only when something announced a change, so a generation that
+# arrived quietly was never judged; re-checking on a schedule closes that, but
+# only became reasonable once a periodic firing could no longer revert
+# somebody's afternoon. What is left is bounded by `baselineMaxAge` doing the
+# job it was always meant to do: rollback needs evidence contemporary with the
+# upgrade, so a scheduled run can only act inside that window, and reports for
+# the rest of the generation's life.
 #
 # ---------------------------------------------------------------------------
 # What it cannot do
@@ -372,6 +383,23 @@ in
       '';
     };
 
+    recheckSchedule = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = "hourly";
+      example = "*:0/30";
+      description = ''
+        systemd calendar expression for re-checking the running generation,
+        alongside the boot and post-upgrade triggers. `null` disables it,
+        leaving verification dependent on something thinking to ask for it.
+
+        This is a safety net rather than a schedule: a generation that has
+        already been blessed is a no-op, so almost every firing does nothing
+        but read a file. What it catches is the case with no trigger at all -
+        a `nixos-rebuild switch` run by hand, or an upgrade path that failed
+        in a way that skipped its own hook.
+      '';
+    };
+
     baselineMaxAgeSeconds = lib.mkOption {
       type = lib.types.ints.positive;
       default = 6 * 60 * 60;
@@ -468,15 +496,23 @@ in
       ];
     };
 
-    # The reboot path: the generation activates at boot, long after
-    # nixos-upgrade.service has gone. A timer rather than wantedBy, so
-    # verification is not inside the boot transaction it waits on.
+    # Two triggers in one timer. OnBootSec covers the reboot path, where the
+    # generation activates long after nixos-upgrade.service has gone; the
+    # calendar entry covers everything with no trigger at all. A timer rather
+    # than wantedBy, so verification is not inside the boot transaction it
+    # waits on.
+    #
+    # Deliberately not Persistent: a missed calendar run would then fire at
+    # boot, which is what OnBootSec is already there for.
     systemd.timers.nixos-upgrade-verify = {
-      description = "Timer for post-boot generation verification";
+      description = "Timer for post-boot and periodic generation verification";
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnBootSec = "3min";
         Unit = "nixos-upgrade-verify.service";
+      }
+      // lib.optionalAttrs (cfg.recheckSchedule != null) {
+        OnCalendar = cfg.recheckSchedule;
       };
     };
   };
