@@ -339,6 +339,22 @@ groups:
           summary: "{{ $labels.host }} activated a generation that did not come up healthy"
           description: "Verification found units failing that were not failing before the upgrade. If nixos_verify_manual_generation is 1 this generation was applied by hand and will not be rolled back automatically — it is yours to fix or revert. Check: journalctl -u nixos-upgrade-verify.service"
 
+      # Distinct from NixosVerifyFailed, which says a generation came up
+      # unhealthy. This says the thing that was supposed to rescue it did not,
+      # and the two want opposite responses: a successful rollback means the
+      # host is on the old generation and can be fixed forward at leisure,
+      # while this means either the broken generation is still running or it
+      # will be again at the next reboot. Both are in the message, because
+      # which one it is decides how fast you have to move.
+      - alert: NixosRollbackFailed
+        expr: nixos_verify_rollback_failed == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.host }} attempted a rollback that did not fully take effect"
+          description: "Verification decided to revert this generation and could not finish the job. If nixos_verify_rolled_back is 0 the failed generation is still running and needs hands on it now; if it is 1 the services reverted but the bootloader did not, so the next reboot returns to the failed generation. Check: journalctl -u nixos-upgrade-verify.service"
+
       # The silence problem, applied to the safety net itself. NixosVerifyFailed
       # only speaks when verification runs and fails; if it stopped running —
       # timer broken, module disabled, unit masked — nixos_verify_result would
