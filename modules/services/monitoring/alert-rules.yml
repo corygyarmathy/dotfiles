@@ -356,9 +356,18 @@ groups:
       # which is NixosRebootPending's business and would otherwise fire here
       # first and more noisily for the same underlying condition.
       #
-      # 6h rather than something tighter because a manual `nixos-rebuild
-      # switch` also trips this — correctly, since it activates a generation
-      # nothing verifies — and iterating on a service should not page you.
+      # This used to be the alert a manual `nixos-rebuild switch` tripped,
+      # since that activated a generation nothing would ever verify, and 6h was
+      # chosen so that iterating on a service did not page anyone. Verification
+      # now re-checks on a schedule (cg.upgrade-verify.recheckSchedule), so a
+      # hand-applied generation is judged within the hour like any other and no
+      # longer reaches this at all.
+      #
+      # What is left is the case it was named for: verification not running.
+      # The 6h window is generous for that, but the cost of leaving it there is
+      # a slower page on a broken timer, and the cost of tightening it is
+      # inventing a new false positive. It stays until something argues for a
+      # different number.
       - alert: NixosVerifyStale
         expr: |
           (nixos_deploy_staged_timestamp_seconds - nixos_verify_timestamp_seconds > 21600)
