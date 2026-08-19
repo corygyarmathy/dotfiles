@@ -127,12 +127,19 @@ in
         "--network=arr-network"
         # Allow container to reach host services (Jellyfin runs natively on host)
         "--add-host=host.containers.internal:host-gateway"
-        # Health check
-        "--health-cmd=curl -sf http://localhost:6246${cfg.basePath}/api/app/status || exit 1"
-        "--health-interval=30s"
-        "--health-timeout=10s"
-        "--health-start-period=60s"
-        "--health-retries=3"
+        # No podman healthcheck here on purpose. Readiness is probed by
+        # blackbox_exporter (cg.monitoring.httpProbes), which actually alerts;
+        # a podman healthcheck only coloured `podman ps` and fed nothing.
+        #
+        # It also broke the nightly upgrade. Podman runs each healthcheck as a
+        # transient systemd unit, and `podman healthcheck run` exits non-zero
+        # while a container is still starting - podman itself treats that as
+        # fine (health_status=starting, streak 0), but systemd records a failed
+        # unit either way. When `system.autoUpgrade` takes the kernel-unchanged
+        # path it does an in-unit `nixos-rebuild switch`, which restarts this
+        # container and then sweeps for failed units; a healthcheck firing in
+        # that window made switch-to-configuration exit 4 and failed the whole
+        # upgrade after it had already succeeded.
       ];
     };
 

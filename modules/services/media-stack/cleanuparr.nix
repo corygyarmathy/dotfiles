@@ -139,12 +139,9 @@ in
       extraOptions = [
         "--pull=newer"
         "--network=arr-network"
-        # Health check for container orchestration
-        "--health-cmd=curl -sf http://localhost:${toString cfg.port}${cfg.basePath}/health || exit 1"
-        "--health-interval=30s"
-        "--health-timeout=10s"
-        "--health-start-period=30s"
-        "--health-retries=3"
+        # No podman healthcheck here - see the note in maintainerr.nix. The
+        # /health endpoint is probed by blackbox_exporter instead, so the
+        # signal survives without a transient unit that can fail an upgrade.
       ];
     };
 

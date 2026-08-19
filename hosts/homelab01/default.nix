@@ -564,6 +564,13 @@
           url = "https://read.gyarmathy.co";
         }
         {
+          # /health rather than the bare root the other entries use: this is
+          # the readiness endpoint cleanuparr's podman healthcheck used to hit,
+          # so probing it keeps exactly the signal that healthcheck gave.
+          name = "cleanuparr";
+          url = "https://cleanuparr.gyarmathy.co/health";
+        }
+        {
           name = "maintainerr";
           url = "https://maintainerr.gyarmathy.co";
         }
