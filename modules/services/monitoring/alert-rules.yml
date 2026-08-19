@@ -274,6 +274,13 @@ groups:
           summary: "Restic backup {{ $labels.job }} on {{ $labels.host }} hasn't run in over 26 hours"
   - name: deploy
     rules:
+      # A non-zero exit does not tell you which generation is running.
+      # `nixos-rebuild switch` exits non-zero if any unit is failing once
+      # activation has finished, so the common case is that the new generation
+      # activated fine and something on it is unhappy - not that the upgrade
+      # was declined. Saying otherwise sends you looking in the wrong place at
+      # 4am. Once upgrade-verify's rollback is armed the previous generation
+      # will be the usual outcome again, and this wording should follow it.
       - alert: NixosDeployFailed
         expr: nixos_deploy_last_run_success == 0
         for: 10m
@@ -281,7 +288,7 @@ groups:
           severity: warning
         annotations:
           summary: "NixOS auto-upgrade failed on {{ $labels.host }}"
-          description: "The last nixos-upgrade run exited non-zero. The host keeps running its previous generation, so nothing is broken yet — but it has stopped receiving updates."
+          description: "The last nixos-upgrade run exited non-zero. Check `readlink /run/current-system` against `journalctl -u nixos-upgrade` before assuming anything: activation may have completed and then tripped the post-activation check for failed units. Either way the host has stopped tracking the promoted ref."
 
       # The one that catches silence. A host that stops upgrading raises nothing
       # at all otherwise: no failed unit, no failed probe, just a machine
