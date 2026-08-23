@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale | default "en" }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      {{- if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} &middot; {{ site.Title }}{{ end -}}
+    </title>
+    {{ with .Description }}<meta name="description" content="{{ . }}" />{{ end }}
+    <link rel="canonical" href="{{ .Permalink }}" />
+    {{ with resources.Get "main.css" | fingerprint }}
+      <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" />
+    {{ end }}
+    {{ with site.Home.OutputFormats.Get "rss" }}
+      <link rel="alternate" type="application/rss+xml" title="{{ site.Title }}" href="{{ .Permalink }}" />
+    {{ end }}
+    <link rel="stylesheet" href="{{ "pagefind/pagefind-ui.css" | relURL }}" />
+    {{/*
+      Applied before first paint, so a reader who chose dark does not get a
+      white flash on every navigation. Inline for the same reason: an external
+      file would be fetched after the document starts rendering.
+    */}}
+    <script>
+      (function () {
+        var saved = null;
+        try {
+          saved = localStorage.getItem("theme");
+        } catch (e) {}
+        var dark = saved
+          ? saved === "dark"
+          : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <a class="masthead-title" href="{{ "/" | relURL }}">{{ site.Title }}</a>
+        <button
+          class="icon-button"
+          id="search-open"
+          aria-label="Search"
+          aria-haspopup="dialog"
+        >
+          {{ partial "icon-search.html" . }}
+        </button>
+        <button class="icon-button" id="theme-toggle" aria-label="Toggle dark mode">
+          {{ partial "icon-theme.html" . }}
+        </button>
+      </header>
+
+      <main>{{ block "main" . }}{{ end }}</main>
+
+      <footer>
+        <hr />
+        <p>&copy; {{ now.Year }} {{ site.Title }}</p>
+        <ul>
+          {{ range site.Params.footerLinks }}
+            <li><a href="{{ .url }}">{{ .name }}</a></li>
+          {{ end }}
+          {{ with site.Home.OutputFormats.Get "rss" }}<li><a href="{{ .Permalink }}">RSS</a></li>{{ end }}
+        </ul>
+      </footer>
+    </div>
+
+    {{/*
+      Hidden until asked for. Pagefind's own bundle is ~40KB of JS that nothing
+      on a reading page needs, so it is fetched on the first search rather than
+      on every page load.
+    */}}
+    <dialog
+      id="search-dialog"
+      aria-label="Search"
+      data-pagefind-ui="{{ "pagefind/pagefind-ui.js" | relURL }}"
+    >
+      <div id="search-ui"></div>
+    </dialog>
+
+    <script>
+      (function () {
+        var root = document.documentElement;
+        document.getElementById("theme-toggle").addEventListener("click", function () {
+          var next = root.dataset.theme === "dark" ? "light" : "dark";
+          root.dataset.theme = next;
+          try {
+            localStorage.setItem("theme", next);
+          } catch (e) {}
+        });
+
+        var dialog = document.getElementById("search-dialog");
+        var loaded = false;
+        function open() {
+          if (!loaded) {
+            loaded = true;
+            var s = document.createElement("script");
+            s.src = dialog.dataset.pagefindUi;
+            s.onload = function () {
+              new PagefindUI({
+                element: "#search-ui",
+                showImages: false,
+                showSubResults: true,
+                resetStyles: false,
+              });
+              var input = dialog.querySelector("input");
+              if (input) input.focus();
+            };
+            document.body.appendChild(s);
+          }
+          dialog.showModal();
+          var input = dialog.querySelector("input");
+          if (input) input.focus();
+        }
+        document.getElementById("search-open").addEventListener("click", open);
+        document.addEventListener("keydown", function (e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+            e.preventDefault();
+            open();
+          }
+        });
+        // A click on the backdrop lands on the dialog element itself.
+        dialog.addEventListener("click", function (e) {
+          if (e.target === dialog) dialog.close();
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -18,16 +18,18 @@
   pkgs,
   lib,
   site,
-  renderer,
   filter,
-  defaultStyleSheet,
+  # name -> { renderer; styleSheet; workingTreeStyleSheet; } for every generator
+  # this can preview. More than one exists so that a candidate replacement for
+  # Quartz can be looked at beside it rather than argued about.
+  generators,
+  defaultGenerator ? "quartz",
   defaultVault ? "$HOME/git/personal-notes",
 }:
 pkgs.writeShellApplication {
   name = "garden-preview";
   runtimeInputs = [
     (pkgs.python3.withPackages (ps: [ ps.pyyaml ]))
-    renderer
     pkgs.caddy
     pkgs.inotify-tools
     pkgs.coreutils
@@ -37,10 +39,12 @@ pkgs.writeShellApplication {
     port=8087
     once=false
     css=
+    generator=${defaultGenerator}
 
     while [ $# -gt 0 ]; do
       case $1 in
         --vault) vault=$2; shift 2 ;;
+        --generator) generator=$2; shift 2 ;;
         --css) css=$2; shift 2 ;;
         --port) port=$2; shift 2 ;;
         --once) once=true; shift ;;
@@ -50,6 +54,10 @@ pkgs.writeShellApplication {
 
       --vault PATH   Obsidian vault to publish from
                      (default: $GARDEN_VAULT, else ${defaultVault})
+      --generator G  which site generator to render with:
+                     ${lib.concatStringsSep ", " (lib.attrNames generators)}
+                     (default: ${defaultGenerator}). Run two at once on
+                     different ports to compare them.
       --css PATH     stylesheet to render with. Defaults to the working-tree
                      copy if you are sitting in the dotfiles repo, so that
                      editing it re-renders without a Nix evaluation.
@@ -65,15 +73,30 @@ pkgs.writeShellApplication {
       esac
     done
 
-    # Prefer the stylesheet in the working tree when there is one, because
-    # that is the file you are about to edit. The store copy baked into the
-    # renderer is only reachable through a fresh evaluation of the host, which
-    # is the loop this command exists to avoid.
+    # Each generator has its own renderer and its own stylesheet; they are
+    # written against different markup and are not interchangeable.
+    case $generator in
+    ${lib.concatStringsSep "
+    " (
+      lib.mapAttrsToList (name: g: ''
+        ${name})
+            render_with=${lib.getExe g.renderer}
+            store_css=${g.styleSheet}
+            tree_css=${g.workingTreeStyleSheet}
+            ;;'') generators
+    )}
+      *) echo "unknown generator: $generator (have: ${lib.concatStringsSep ", " (lib.attrNames generators)})" >&2; exit 2 ;;
+    esac
+
+    # Prefer the stylesheet in the working tree when there is one, because that
+    # is the file you are about to edit. The store copy baked into the renderer
+    # is only reachable through a fresh evaluation of the host, which is the
+    # loop this command exists to avoid.
     if [ -z "$css" ]; then
-      if [ -f hosts/homelab01/digital-garden.scss ]; then
-        css=hosts/homelab01/digital-garden.scss
+      if [ -f "$tree_css" ]; then
+        css=$tree_css
       else
-        css=${defaultStyleSheet}
+        css=$store_css
         echo "note: using the stylesheet baked into the renderer." >&2
         echo "      run from the dotfiles repo root, or pass --css, to edit it live." >&2
       fi
@@ -107,7 +130,7 @@ pkgs.writeShellApplication {
       started=$(date +%s%N)
       # Same filter, same arguments, same boundary as the service.
       python3 ${filter} "$vault" "$state/content" "$cache/dates.json" || return 1
-      digital-garden-render "$state/content" "$state/public.new" "$css" \
+      "$render_with" "$state/content" "$state/public.new" "$css" \
         > "$state/render.log" 2>&1 || {
           echo "render failed:" >&2
           tail -30 "$state/render.log" >&2
@@ -132,22 +155,31 @@ pkgs.writeShellApplication {
       exit 0
     fi
 
-    cat > "$state/Caddyfile" <<CADDY
+    # A QUOTED heredoc, so nothing in the shared Caddy config is evaluated on
+    # its way through the shell. It is prose meant for a Caddyfile, and it
+    # contains backticks; an unquoted heredoc would run them.
+    #
+    # The two values that do vary are passed as environment variables, which
+    # Caddyfile reads natively as {$NAME}. That keeps the config text identical
+    # to the one the server uses instead of introducing placeholders here.
+    cat > "$state/Caddyfile" <<'CADDY'
     {
       auto_https off
       admin off
     }
-    :$port {
-    ${site.caddyConfig "$state/public"}
+    :{$GARDEN_PORT} {
+    ${site.caddyConfig "{$GARDEN_ROOT}"}
     }
     CADDY
 
-    caddy run --config "$state/Caddyfile" --adapter caddyfile \
+    GARDEN_PORT=$port GARDEN_ROOT=$state/public \
+      caddy run --config "$state/Caddyfile" --adapter caddyfile \
       > "$state/caddy.log" 2>&1 &
     caddy_pid=$!
 
     echo
     echo "  garden-preview  http://localhost:$port"
+    echo "  generator       $generator"
     echo "  vault           $vault"
     echo "  stylesheet      $css"
     echo "  watching for changes — ctrl-c to stop"
