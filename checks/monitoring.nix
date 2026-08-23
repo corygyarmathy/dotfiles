@@ -136,5 +136,54 @@
             return bool(query("nixos_deploy_revision_info"))
 
         retry(revision_exported, timeout=timedelta(seconds=180))
+
+    with subtest("the staged timestamp tracks the generation, not the last rebuild"):
+        # Read off the file rather than out of Prometheus: this is about what
+        # the script computes, and putting a scrape in the middle would add a
+        # minute of waiting and a race to every assertion below.
+        def staged_ts():
+            machine.succeed("systemctl start nixos-deploy-metrics.service")
+            return int(machine.succeed(
+                "awk '/^nixos_deploy_staged_timestamp_seconds/ {print $NF}' "
+                "/var/lib/prometheus-node-exporter/nixos_deploy.prom"
+            ).strip())
+
+        def profile_mtime():
+            return int(machine.succeed("stat -c %Y /nix/var/nix/profiles/system").strip())
+
+        # The VM boots straight from the store, so the profile starts with no
+        # generations at all. Seed it with what is running, as a host has.
+        running = machine.succeed("readlink -f /run/current-system").strip()
+        machine.succeed("nix-env -p /nix/var/nix/profiles/system --set {}".format(running))
+        first, first_mtime = staged_ts(), profile_mtime()
+
+        # Whole-second mtimes, so a timestamp that moves has to move visibly.
+        machine.succeed("sleep 2")
+
+        # What a nightly rebuild does on a host nothing has changed: the same
+        # store path set again. nix keeps the generation it already has and
+        # re-points the profile symlink at it anyway.
+        machine.succeed("nix-env -p /nix/var/nix/profiles/system --set {}".format(running))
+        second, second_mtime = staged_ts(), profile_mtime()
+
+        # The control. Without it the assertion below would also pass on a day
+        # when nix stopped re-pointing an unchanged profile - green because the
+        # condition under test had gone away, which is the failure a regression
+        # test is least able to survive.
+        assert second_mtime > first_mtime, (
+            "the profile symlink was not re-pointed ({} == {}), so this no longer "
+            "reproduces what a no-change rebuild does and proves nothing"
+            .format(first_mtime, second_mtime)
+        )
+
+        # The claim: re-staging the generation that is already staged is not a
+        # staging event. Reading the profile symlink's own mtime said it was,
+        # which reset NixosRebootPending's 26h window nightly and fired
+        # NixosVerifyStale against a generation verified two days earlier.
+        assert second == first, (
+            "staged timestamp moved ({} -> {}) for a generation that was already "
+            "staged; it is reporting rebuilds rather than generations"
+            .format(first, second)
+        )
   '';
 }
