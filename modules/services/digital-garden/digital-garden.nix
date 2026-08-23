@@ -65,8 +65,24 @@ let
   cfg = config.cg.service.digital-garden;
 
   quartz = self.packages.${pkgs.stdenv.hostPlatform.system}.quartz;
-  qpkg = "${quartz}/lib/node_modules/@jackyzha0/quartz";
   obsidian-headless = self.packages.${pkgs.stdenv.hostPlatform.system}.obsidian-headless;
+
+  # Rendering and serving live in lib/site.nix so that the local preview runs the
+  # same code as this service does. See the header there.
+  site = import ./lib/site.nix { inherit pkgs lib quartz; };
+
+  renderer = site.mkRenderer {
+    inherit (cfg)
+      baseUrl
+      siteTitle
+      styleSheet
+      footerLinks
+      disabledPlugins
+      pluginOptions
+      pluginLayout
+      layoutConfig
+      ;
+  };
 
   stateDir = "/var/lib/digital-garden";
   vaultDir = "${stateDir}/vault";
@@ -77,152 +93,14 @@ let
   # skip-if-unchanged check below would happily serve a stale site forever.
   buildInputsId = builtins.hashString "sha256" (
     builtins.toJSON {
-      quartz = qpkg;
-      mkConfig = toString mkConfig;
-      pluginMap = toString pluginMap;
+      # The renderer's store path already moves when Quartz, the config
+      # rewriter, the stylesheet or any rendering option does — that is the
+      # whole content of the derivation. Only the filter has to be named
+      # separately, because it runs before the renderer is reached.
+      renderer = toString renderer;
       filter = toString ./publish-filter.py;
-      mermaid = toString quartz.passthru.mermaidDist;
-      vendor = toString quartz.passthru.vendorDir;
-      inherit (cfg)
-        baseUrl
-        siteTitle
-        footerLinks
-        disabledPlugins
-        pluginOptions
-        pluginLayout
-        layoutConfig
-        extraCss
-        ;
     }
   );
-
-  # name -> /nix/store/... for every vendored plugin. Written to disk so the
-  # config rewriter can turn `github:quartz-community/x` into a local absolute
-  # path, which Quartz symlinks instead of cloning. See packages/quartz.
-  pluginMap = pkgs.writeText "quartz-plugin-map.json" (builtins.toJSON quartz.passthru.pluginPaths);
-
-  # Rewrites upstream's default config rather than pinning a full copy of it,
-  # so a Quartz upgrade that adds or renames plugins does not silently produce
-  # a broken site. Only the values we care about are forced.
-  mkConfig =
-    pkgs.writers.writePython3 "quartz-mkconfig" { libraries = [ pkgs.python3Packages.pyyaml ]; }
-      ''
-        import json
-        import sys
-
-        import yaml
-
-        src, plugin_map_path, dest = sys.argv[1:4]
-        base_url, title, disabled_csv, footer_links_json, enabled_out = sys.argv[4:9]
-        plugin_options_json, plugin_layout_json, layout_config_json = sys.argv[9:12]
-        disabled = {n for n in disabled_csv.split(",") if n}
-        footer_links = json.loads(footer_links_json)
-        plugin_options = json.loads(plugin_options_json)
-        plugin_layout = json.loads(plugin_layout_json)
-        layout_config = json.loads(layout_config_json)
-
-
-        def slot(entry, key):
-            # These keys are absent for many entries and can be an explicit null,
-            # neither of which .setdefault alone survives.
-            if not isinstance(entry.get(key), dict):
-                entry[key] = {}
-            return entry[key]
-
-
-        def deep_merge(base, over):
-            # byPageType is a map of maps: assigning content.template must not
-            # take folder's settings with it.
-            for key, value in over.items():
-                if isinstance(value, dict) and isinstance(base.get(key), dict):
-                    deep_merge(base[key], value)
-                else:
-                    base[key] = value
-            return base
-
-
-        with open(src) as fh:
-            conf = yaml.safe_load(fh)
-        with open(plugin_map_path) as fh:
-            plugins = json.load(fh)
-
-        c = conf.setdefault("configuration", {})
-        c["pageTitle"] = title
-        c["baseUrl"] = base_url
-        # No third-party analytics, and no Google Fonts / CDN fetches from a page
-        # that is meant to be self-hosted.
-        c["analytics"] = None
-        theme = c.setdefault("theme", {})
-        theme["fontOrigin"] = "local"
-        theme["cdnCaching"] = False
-        # publish-filter.py derives a `published:` date for every note from its
-        # ledger, so that is the date worth showing. Upstream defaults to
-        # "modified", which here would just be the last time the note was
-        # touched at all.
-        c["defaultDateType"] = "published"
-
-        for entry in conf.get("plugins", []):
-            source = entry.get("source", "")
-            name = source.rsplit("/", 1)[-1]
-            if name in plugins:
-                entry["source"] = plugins[name]
-            elif source.startswith("github:"):
-                # Not vendored: leaving it would make Quartz try to clone at build
-                # time, which fails closed here rather than reaching the network.
-                entry["enabled"] = False
-            # A plugin whose own runtime deps are missing does not degrade — it
-            # leaves an undefined in the component list and kills the whole build.
-            if name in disabled:
-                entry["enabled"] = False
-            # Defence in depth only — publish-filter.py is the real boundary.
-            elif name == "explicit-publish":
-                entry["enabled"] = True
-            # Upstream ships the Quartz project's own GitHub and Discord as footer
-            # links, which would otherwise appear on this site.
-            if name == "footer":
-                slot(entry, "options")["links"] = footer_links
-            # Applied BEFORE the caller's options, so it is only a default. The
-            # site-level configuration.defaultDateType above cannot do this job:
-            # this plugin writes defaultDateType onto every file, and the
-            # per-file value is what content-meta actually reads.
-            if name == "created-modified-date":
-                slot(entry, "options")["defaultDateType"] = "published"
-
-            if name in plugin_options:
-                slot(entry, "options").update(plugin_options[name])
-
-            # Applied AFTER, because it is not negotiable: the vendored plugin
-            # has its git support stubbed out, and asking for it throws at build
-            # time. See packages/quartz/default.nix.
-            if name == "created-modified-date":
-                slot(entry, "options")["priority"] = ["frontmatter", "filesystem"]
-
-            # `layout` is a sibling of `options`, not part of it: it is where a
-            # component's position on the page is decided.
-            if name in plugin_layout:
-                slot(entry, "layout").update(plugin_layout[name])
-
-        deep_merge(conf.setdefault("layout", {}), layout_config)
-
-        # Only the enabled plugins get linked into .quartz/plugins. Everything
-        # placed there is pulled into the esbuild pass whether or not it is
-        # enabled, so linking the lot means compiling ~10 unused plugins, wading
-        # through their warnings in the journal, and bundling third-party code the
-        # site never asked for.
-        enabled = {
-            name: path
-            for name, path in plugins.items()
-            if any(
-                entry.get("source") == path and entry.get("enabled")
-                for entry in conf.get("plugins", [])
-            )
-        }
-        with open(enabled_out, "w") as fh:
-            json.dump(enabled, fh)
-
-        with open(dest, "w") as fh:
-            yaml.safe_dump(conf, fh, sort_keys=False)
-      '';
 
   buildScript = pkgs.writeShellApplication {
     name = "digital-garden-build";
@@ -232,8 +110,7 @@ let
       # pyyaml for publish-filter.py, which rewrites the frontmatter of every
       # published note (dates, aliases, description).
       (pkgs.python3.withPackages (ps: [ ps.pyyaml ]))
-      quartz
-      pkgs.nodejs_22
+      renderer
       # The skip gates lean on find/sha256sum/sort/grep. NixOS puts these on a
       # service's PATH by default, but this unit is hardened enough that relying
       # on the ambient environment for its correctness is asking for trouble.
@@ -313,113 +190,10 @@ let
       fi
 
       # ---- 4. build ---------------------------------------------------------
-      # Quartz is designed to run in-tree: it reads ./package.json from CWD, and
-      # quartz/components/Head.tsx imports "../../.quartz/plugins" relative to
-      # its own source file. Symlinking the package in resolves that path back
-      # into the read-only store, so the tree has to be a writable COPY and the
-      # CLI has to be invoked from that copy — not via ${quartz}/bin/quartz,
-      # which would resolve its transpile cache into the store and fail.
-      work="${stateDir}/work"
-      rm -rf "$work"
-      mkdir -p "$work"
-      # Everything EXCEPT node_modules, which is symlinked back in below. cp -r
-      # follows the store symlinks inside it and expands ~19MB of tree into
-      # ~2.3GB, only for the next line to delete it again.
-      ( cd ${qpkg} && find . -mindepth 1 -maxdepth 1 ! -name node_modules \
-          -exec cp -r --no-preserve=mode,ownership {} "$work"/ \; )
-      ln -s ${qpkg}/node_modules "$work/node_modules"
-      cd "$work"
-
-      ${mkConfig} quartz.config.default.yaml ${pluginMap} quartz.config.yaml \
-        "${cfg.baseUrl}" "${cfg.siteTitle}" \
-        "${lib.concatStringsSep "," cfg.disabledPlugins}" \
-        ${lib.escapeShellArg (builtins.toJSON cfg.footerLinks)} \
-        "$work/enabled-plugins.json" \
-        ${lib.escapeShellArg (builtins.toJSON cfg.pluginOptions)} \
-        ${lib.escapeShellArg (builtins.toJSON cfg.pluginLayout)} \
-        ${lib.escapeShellArg (builtins.toJSON cfg.layoutConfig)}
-
-      # Quartz compiles quartz/styles/custom.scss into its stylesheet last, so
-      # these rules win over base.scss at equal specificity without !important.
-      #
-      # APPEND, never overwrite. That file is not the empty hook it looks like:
-      # it carries the `@use "./base.scss"` that pulls the ENTIRE base
-      # stylesheet into the build. Replacing it drops every base rule — fonts,
-      # colours, the flex helpers the layout depends on — and the site still
-      # builds, still deploys, and renders as nearly unstyled prose. Fail here
-      # if that import ever moves, rather than discovering it in a browser.
-      grep -q '@use "./base.scss"' quartz/styles/custom.scss
-      cat ${pkgs.writeText "quartz-custom.scss" cfg.extraCss} >> quartz/styles/custom.scss
-
-      # Plugins are vendored from npm (they ship dist/, which the source repos
-      # do not — and regeneratePluginIndex skips anything without
-      # dist/index.d.ts, yielding a featureless site). Only the enabled ones are
-      # linked, plus whatever core Quartz imports unconditionally; see below and
-      # the note in mkConfig.
-      mkdir -p .quartz/plugins
-      python3 - ${pluginMap} <<'EOF'
-      import json, os, sys
-
-      all_plugins = json.load(open(sys.argv[1]))
-      linked = json.load(open("enabled-plugins.json"))
-
-      # quartz/components/Head.tsx imports CustomOgImagesEmitterName from
-      # ../../.quartz/plugins at the top level, whether or not og-image is
-      # switched on — so the plugin must be present for the index to export the
-      # symbol, even though it stays disabled (it needs sharp at runtime).
-      # Being in the index costs nothing: Quartz instantiates only what
-      # quartz.config.yaml enables. Without this, esbuild fails the whole build
-      # with "No matching export in .quartz/plugins/index.ts".
-      for name in ["og-image"]:
-          linked.setdefault(name, all_plugins[name])
-
-      for name, path in linked.items():
-          dest = os.path.join(".quartz", "plugins", name)
-          if os.path.lexists(dest):
-              os.unlink(dest)
-          os.symlink(path, dest)
-
-      # `plugin install` below is run ONLY to regenerate index.ts, but it also
-      # clones every lockfile entry missing from disk — and this service has
-      # network, so it really does fetch third-party plugins from GitHub and npm
-      # at build time, which is exactly what vendoring them was meant to stop.
-      # Declaring the linked set as `local` entries resolving to the symlink
-      # targets makes it verify each one and move on: no network, no npm.
-      json.dump(
-          {
-              "version": "1.0.0",
-              "plugins": {
-                  n: {"commit": "local", "resolved": p} for n, p in sorted(linked.items())
-              },
-          },
-          open("quartz.lock.json", "w"),
-          indent=2,
-      )
-      print(f"linked {len(linked)} plugins")
-      EOF
-
-      # Regenerates .quartz/plugins/index.ts from what is on disk.
-      node ./quartz/bootstrap-cli.mjs plugin install
-
-      # A plugin missing from the index surfaces only as an opaque esbuild error
-      # about Head.tsx, so fail here instead, where the cause is obvious.
-      grep -q CustomOgImagesEmitterName .quartz/plugins/index.ts
-
-      node ./quartz/bootstrap-cli.mjs build \
-        -d "${stateDir}/content" -o "${stateDir}/public.new"
-
-      # Serve the browser-side libraries ourselves rather than letting the page
-      # pull them from cdnjs/jsdelivr. The quartz package rewrites the imports
-      # to these paths; mermaid resolves its chunks relative to the bundle, so
-      # that directory has to come along too.
-      mkdir -p "${stateDir}/public.new/static/mermaid" \
-               "${stateDir}/public.new/static/vendor"
-      cp ${quartz.passthru.mermaidDist}/dist/mermaid.esm.min.mjs \
-        "${stateDir}/public.new/static/mermaid/"
-      cp -r ${quartz.passthru.mermaidDist}/dist/chunks \
-        "${stateDir}/public.new/static/mermaid/"
-      cp ${quartz.passthru.vendorDir}/* "${stateDir}/public.new/static/vendor/"
-      chmod -R u+w "${stateDir}/public.new/static"
+      # Everything about how the site is generated lives in lib/site.nix, which the
+      # local preview calls the same way. Passing no stylesheet takes the one
+      # baked into the renderer, which is cfg.styleSheet.
+      ${lib.getExe renderer} "${stateDir}/content" "${stateDir}/public.new"
 
       # ---- 5. swap in atomically -------------------------------------------
       rm -rf "${stateDir}/public.old"
@@ -427,7 +201,7 @@ let
         mv "${stateDir}/public" "${stateDir}/public.old"
       fi
       mv "${stateDir}/public.new" "${stateDir}/public"
-      rm -rf "${stateDir}/public.old" "$work"
+      rm -rf "${stateDir}/public.old"
 
       # Only after the new site is actually serving, so a failed build is retried
       # on the next tick rather than being recorded as done.
@@ -612,15 +386,35 @@ in
       '';
     };
 
-    extraCss = lib.mkOption {
-      type = lib.types.lines;
-      default = "";
+    renderer = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      internal = true;
+      default = renderer;
+      defaultText = lib.literalMD "the renderer built from the options above";
       description = ''
-        Appended to the generated site as quartz/styles/custom.scss, which
-        Quartz compiles into its stylesheet AFTER base.scss. Rules here
-        therefore win at equal specificity and do not need !important.
+        The `digital-garden-render` program this host's settings produce,
+        exposed so that `nix run .#garden-preview` can run the very same one.
+        Reading it from here rather than rebuilding it in the flake is what
+        stops the preview and the server drifting apart.
+      '';
+    };
+
+    styleSheet = lib.mkOption {
+      type = lib.types.path;
+      default = pkgs.emptyFile;
+      description = ''
+        A stylesheet appended to the generated site as
+        quartz/styles/custom.scss, which Quartz compiles into its stylesheet
+        AFTER base.scss. Rules here therefore win at equal specificity and do
+        not need !important.
 
         Scss, not plain css: nesting and the theme's variables are available.
+
+        A path rather than a block of inline lines, so that the preview can be
+        pointed at the file in the working tree and re-render on save. Inline
+        Nix lines can only reach the preview through a fresh evaluation of the
+        whole host, which is most of what made tuning this site tedious.
       '';
     };
   };
@@ -825,28 +619,8 @@ in
     # Plain HTTP on a local port. TLS, the public hostname and rate limiting are
     # supplied by cg.service.reverse-proxy / cloudflare-tunnel, same as every
     # other service — this just has no upstream process to proxy to.
-    services.caddy.virtualHosts.":${toString cfg.port}" = {
-      extraConfig = ''
-        root * ${stateDir}/public
-        encode gzip zstd
-        # Quartz emits `<slug>.html` but links to `<slug>`, so a bare
-        # file_server 404s on every internal link. Try the literal path first
-        # (assets, and the folder pages that emit as directories), then the
-        # directory index, then the extension the page was actually written as.
-        try_files {path} {path}/ {path}.html
-        file_server
-        # Quartz also generates a styled 404 page; without this Caddy answers
-        # with its own empty one.
-        handle_errors {
-          rewrite * /404.html
-          file_server
-        }
-        header {
-          X-Content-Type-Options "nosniff"
-          Referrer-Policy "strict-origin-when-cross-origin"
-        }
-      '';
-    };
+    services.caddy.virtualHosts.":${toString cfg.port}".extraConfig =
+      site.caddyConfig "${stateDir}/public";
 
     # Caddy must be able to traverse into the generated site.
     users.users.caddy.extraGroups = [ "digital-garden" ];
