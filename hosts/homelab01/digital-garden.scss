@@ -1,0 +1,123 @@
+// Digital garden stylesheet, appended to quartz/styles/custom.scss and
+// therefore compiled after base.scss — these rules win at equal specificity
+// without !important.
+//
+// Kept as a real .scss file rather than inline Nix lines so that
+// `nix run .#garden-preview` can watch it and re-render on save. Inline lines
+// can only reach a rendered page through a fresh evaluation of the whole host.
+
+// Cap the measure. "full-width" means no sidebars, not that prose
+// should span a 27" monitor; line length is a legibility function.
+.page[data-frame="full-width"] > #quartz-body {
+  & .center.full-width,
+  & footer {
+    // Auto margins on a grid item switch off `justify-self: stretch`,
+    // so the box shrinks to fit its contents and then centres. The
+    // article never showed it (its text is wider than the cap), but
+    // the footer is two short lines, so it shrank to their width and
+    // sat in the middle of the column instead of starting at its left
+    // edge. An explicit width restores the stretch; max-width still
+    // caps it.
+    width: 100%;
+    max-width: 40rem;
+    min-width: 0;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  // Upstream's 6rem is a lot of nothing above a one-line masthead.
+  & .page-header {
+    margin-top: 4rem;
+  }
+
+  // The frame puts a rule between the article and the footer, and then
+  // 2rem of hr margin, 1rem of page-footer margin and the grid gap
+  // underneath it — 65px between the rule and the footer text, against
+  // 20px between the masthead and its rule. Close it up so the two ends
+  // of the page mirror each other.
+  & .center.full-width > hr {
+    margin-bottom: 0;
+  }
+
+  & .page-footer {
+    margin-top: 0;
+  }
+}
+
+// The last of it: nothing resets the footer paragraph, so it carries
+// the browser's default 1em top margin. Only the top — its bottom
+// margin is what the list's own -1rem is written against.
+footer p {
+  margin-top: 0;
+}
+
+// Less on a phone, but not none. Upstream closes the gap entirely
+// below 800px, which suits its layout — the mobile sidebar sits above
+// the header and provides the spacing. There is no sidebar here, so
+// zero puts the title hard against the top of the viewport.
+@media (max-width: 800px) {
+  .page[data-frame="full-width"] > #quartz-body .page-header {
+    margin-top: 1.5rem;
+  }
+}
+
+// Masthead: one row, ruled off from the article beneath it.
+.page-header .flex-component {
+  align-items: center;
+  padding-bottom: 0.75rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--lightgray);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.1rem;
+  white-space: nowrap;
+}
+
+// Search reduced to its icon. Upstream draws it as a bordered box with
+// the word "Search" in it, which reads as an input you can type into —
+// it is not, it opens a modal. The button keeps its aria-label, so
+// dropping the visible word costs nothing to a screen reader.
+.search {
+  flex-grow: 0;
+  max-width: none;
+}
+
+.search > .search-button {
+  width: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.search > .search-button > p {
+  display: none;
+}
+
+// 18px against darkmode's 20px.
+.search > .search-button svg {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+// Matching the glyph sizes was not enough: darkmode is a 2rem-tall box
+// positioning its icon absolutely at calc(50% - 10px), search is a
+// 2rem-tall flex box centring its own, and the two landed 3px apart.
+// Give both a box the size of the glyph and centre them the same way,
+// so the row's own align-items has something consistent to work with.
+.page-header .flex-component {
+  & .search > .search-button,
+  & .darkmode {
+    justify-content: center;
+    align-items: center;
+    height: 20px;
+    display: flex;
+  }
+
+  & .darkmode svg {
+    position: static;
+  }
+}
