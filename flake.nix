@@ -223,6 +223,48 @@
         import ./packages pkgs
       );
 
+      # Local preview for the digital garden:
+      #
+      #   nix run .#garden-preview
+      #
+      # Renders the published subset of the vault with the same renderer and
+      # serves it with the same Caddy config the server uses, and re-renders on
+      # save. See modules/services/digital-garden/lib/preview.nix for why.
+      #
+      # The renderer comes out of homelab01's own evaluated config rather than
+      # being rebuilt here, so the preview cannot drift from what is deployed.
+      apps = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = builtins.attrValues self.overlays;
+            config.allowUnfree = true;
+          };
+          garden = self.nixosConfigurations.homelab01.config.cg.service.digital-garden;
+          # caddyConfig takes no settings, so importing site.nix again for it
+          # duplicates no configuration - unlike the renderer above.
+          site = import ./modules/services/digital-garden/lib/site.nix {
+            inherit pkgs;
+            inherit (nixpkgs) lib;
+            quartz = self.packages.${system}.quartz;
+          };
+          preview = import ./modules/services/digital-garden/lib/preview.nix {
+            inherit pkgs site;
+            inherit (nixpkgs) lib;
+            renderer = garden.renderer;
+            filter = ./modules/services/digital-garden/publish-filter.py;
+            defaultStyleSheet = garden.styleSheet;
+          };
+        in
+        {
+          garden-preview = {
+            type = "app";
+            program = nixpkgs.lib.getExe preview;
+          };
+        }
+      );
+
       # Checks run by `nix flake check`, and therefore by the CI gate.
       #
       # Building a host proves its Nix evaluates, not that the services it
