@@ -60,7 +60,24 @@
 
         A gate that only proves the Nix evaluates is a gate against typos.
 
-        This links to [[Rates And Figures]], which is not published.
+        This links to [[Rates And Figures]], which is not published, and to
+        [[On Boundaries|the boundary essay]], which is.
+
+        - [[On Boundaries]]
+        NOTE
+
+        # Named as Obsidian names things - spaces and capitals - because a
+        # wikilink resolves by filename, and because the staging tree should
+        # then show it renamed to the slug it is served under.
+        cat > "$out/essays/On Boundaries.md" <<'NOTE'
+        ---
+        publish: true
+        thesis: MARKER-THESIS-BOUNDARIES
+        ---
+
+        # On Boundaries
+
+        MARKER-BOUNDARIES-BODY
         NOTE
 
         cat > $out/private/rates-and-figures.md <<'NOTE'
@@ -134,12 +151,16 @@
         machine.succeed("systemctl start digital-garden-build.service")
         machine.succeed(f"test -f {SITE}/index.css")
 
-    with subtest("only the published note is in the staging tree"):
+    with subtest("only published notes are in the staging tree"):
         # The boundary is publish-filter.py, and it works by never copying an
-        # unpublished note - so the check that matches the design is that the
-        # staging tree Quartz is pointed at contains exactly one file.
-        staged = machine.succeed("ls /var/lib/digital-garden/content").split()
-        assert staged == ["on-gates.md"], staged
+        # unpublished note - so the check that matches the design is on what
+        # the staging tree Quartz is pointed at contains, not on what renders.
+        #
+        # The names are the slugs, not the vault's filenames: the filter owns
+        # the URL, and a file staged under any other name would mean the
+        # generator was deciding the address after all.
+        staged = sorted(machine.succeed("ls /var/lib/digital-garden/content").split())
+        assert staged == ["on-boundaries.md", "on-gates.md"], staged
 
     with subtest("no unpublished content reaches the served site"):
         # Deliberately the whole tree rather than the rendered page. A leak
@@ -151,6 +172,28 @@
         # And the note that fails to parse is skipped rather than published,
         # which is the fail-closed half of the filter's contract.
         machine.fail(f"test -e {SITE}/no-frontmatter-at-all.html")
+
+    with subtest("the staging tree is plain CommonMark"):
+        # The filter converts wikilinks so that the generator never has to
+        # understand Obsidian, which is what makes the generator replaceable.
+        # Asserted on the staging tree AND on the served site: a surviving
+        # wikilink renders as the literal text "[[Some Note]]" on the page,
+        # which is a build that succeeds and a site that is wrong.
+        machine.fail("grep -rq -e '[[' /var/lib/digital-garden/content")
+        machine.fail(f"grep -rq -e '[[' {SITE}")
+
+    with subtest("a link to a published note is a real link"):
+        page = machine.succeed(f"cat {SITE}/on-gates.html")
+        assert 'href="./on-boundaries"' in page, "published link did not survive as a link"
+        # The alias is what the reader sees, not the filename.
+        assert "the boundary essay" in page
+
+        # A list item that is nothing but a link gets the target's thesis
+        # appended, so a hub page reads as claims. This is matched against the
+        # rewritten Markdown link rather than the wikilink it started as, and
+        # if that pattern stopped matching, every index would quietly lose its
+        # annotations while the build stayed green.
+        assert "MARKER-THESIS-BOUNDARIES" in page, "thesis was not appended to the bare link"
 
     with subtest("a link to an unpublished note is not a link"):
         page = machine.succeed(f"cat {SITE}/on-gates.html")
@@ -195,6 +238,7 @@
         assert "MARKER-PUBLISHED-BODY" in served("/static/contentIndex.json")
         assert "on-gates" in served("/index.xml")
         assert "on-gates" in served("/sitemap.xml")
+        assert "MARKER-BOUNDARIES-BODY" in served("/on-boundaries")
 
     with subtest("caddy serves the generated 404 rather than its own"):
         # try_files plus handle_errors in the module's vhost. Quartz emits a
