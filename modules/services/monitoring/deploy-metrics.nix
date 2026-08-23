@@ -71,8 +71,40 @@ let
         PENDING=1
       fi
 
-      # mtime of the profile symlink itself - when this generation was staged.
-      STAGED_TS="$(stat -c %Y /nix/var/nix/profiles/system 2>/dev/null || echo 0)"
+      # The mtime of the *generation* link, not of the profile symlink.
+      #
+      # nixos-rebuild re-points /nix/var/nix/profiles/system on every run,
+      # including the ones where the build came out byte-identical and nix
+      # created no new generation. So the symlink's own mtime answers "when
+      # did a rebuild last run" - which is NixosDeployStale's question, and it
+      # already has a better source for it. Both consumers of this metric ask
+      # something else: when was the generation that is running now staged.
+      #
+      # Neither of them survives a timestamp that moves nightly on a host that
+      # is not changing. NixosRebootPending measures how long a staged
+      # generation has sat unactivated, and its 26h window is reset every
+      # night by the rebuild that finds nothing to do, so it can never mature
+      # - the "sitting on an unactivated kernel indefinitely" case in the
+      # header is exactly what it would fail to report. NixosVerifyStale
+      # compares this against the last verification, which correctly no-ops
+      # while the generation stands still, so a moving timestamp fires it on
+      # the second quiet night. That is how this was found.
+      #
+      # system-NNN-link is written once, when the generation is staged, and is
+      # never touched again. Read with lstat, deliberately: `stat -L` would
+      # follow it into the store, where mtimes are normalised to the epoch.
+      gen_link="$(readlink /nix/var/nix/profiles/system 2>/dev/null || true)"
+      case "$gen_link" in
+        # No profile at all: a host that has never had a generation staged,
+        # which is the same nothing-to-report as the old `|| echo 0`.
+        "") STAGED_TS=0 ;;
+        # nix writes the target relative whenever it is a sibling, which for
+        # the system profile it always is. The absolute branch is here so that
+        # a profile someone re-pointed by hand reports its real age instead of
+        # silently reporting 0.
+        /*) STAGED_TS="$(stat -c %Y "$gen_link" 2>/dev/null || echo 0)" ;;
+        *) STAGED_TS="$(stat -c %Y "/nix/var/nix/profiles/$gen_link" 2>/dev/null || echo 0)" ;;
+      esac
 
       TMP="$METRICS_FILE.tmp"
 

@@ -309,7 +309,11 @@ groups:
       #
       # Deliberately not expressed as `for: 26h`: Prometheus restarts on every
       # deploy, which resets a pending alert's timer, so a long `for` would
-      # never mature. The staged timestamp carries the duration instead.
+      # never mature. The staged timestamp carries the duration instead, which
+      # works only because it is the mtime of the generation link and not of
+      # the profile symlink — that one is re-pointed by every nightly rebuild,
+      # including the ones that find nothing to do, and would reset this
+      # window before it could ever mature. See deploy-metrics.nix.
       - alert: NixosRebootPending
         expr: nixos_deploy_pending_reboot == 1 and time() - nixos_deploy_staged_timestamp_seconds > 93600
         for: 30m
@@ -367,6 +371,11 @@ groups:
       # metrics, so on a night where `deploy` did not move the timestamp goes
       # stale for entirely correct reasons. What is wrong is a generation
       # staged well after the last verification — activated, but never checked.
+      #
+      # Which leans entirely on `staged_timestamp` meaning "when this
+      # generation was staged" rather than "when a rebuild last ran". It meant
+      # the latter until 2026-08-23, and both hosts fired this on the second
+      # quiet night for a generation they had verified two days earlier.
       #
       # `pending_reboot == 0` excludes the staged-but-not-yet-activated case,
       # which is NixosRebootPending's business and would otherwise fire here
