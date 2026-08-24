@@ -142,6 +142,21 @@
         machine.wait_for_unit("caddy.service")
         machine.wait_for_open_port(443)
 
+        # An open 443 does not mean a certificate exists. `tls internal` has
+        # Caddy issue one per vhost from its own CA, and that happens after the
+        # listener comes up - so a request sent in between fails the handshake
+        # with curl exit 35, several subtests before anything about routing is
+        # actually wrong. Waiting on a real handshake is the readiness signal;
+        # the port is only the start of one.
+        #
+        # Both vhosts, because Caddy issues their certificates independently
+        # and either one can be the straggler.
+        #
+        # Without -f, so this waits on TLS alone and does not quietly double as
+        # an assertion about the response.
+        for host in ["internal.gyarmathy.co", "public.gyarmathy.co"]:
+            machine.wait_until_succeeds(curl(host, "-o /dev/null"), timeout=60)
+
     with subtest("a LAN-only service routes to its backend"):
         body = get("internal.gyarmathy.co", "/some/path")
         assert body["path"] == "/some/path", body
