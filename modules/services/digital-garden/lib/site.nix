@@ -156,10 +156,17 @@ in
   caddyConfig = root: ''
     root * ${root}
     encode gzip zstd
-    # Try the literal path first (assets, and the folder pages that emit as
-    # directories), then the directory index, then the extension the page was
-    # actually written as.
-    try_files {path} {path}/ {path}.html
+    # The index INSIDE a directory is tried before the directory itself,
+    # because file_server answers a request for a directory with a 308 to its
+    # trailing-slash form. Naming index.html directly serves the page on the
+    # first request instead, which is what turns every internal link from two
+    # round trips into one.
+    #
+    # After that: the literal path, for assets; then the extension the page was
+    # actually written as, for a generator that emits `<slug>.html` rather than
+    # `<slug>/index.html`. Both shapes are served without a redirect, so the
+    # URLs do not depend on which generator produced the tree.
+    try_files {path}/index.html {path} {path}.html
     file_server
     # Quartz also generates a styled 404 page; without this Caddy answers with
     # its own empty one.

@@ -45,6 +45,9 @@ sudo nixos-rebuild switch --flake .#xps15
 
 # See the digital garden as it will be published, without publishing it
 nix run .#garden-preview
+
+# The same notes rendered by the candidate replacement for Quartz
+nix run .#garden-preview -- --generator hugo --port 8088
 ```
 
 `garden-preview` renders the published subset of the local Obsidian vault with the
@@ -52,6 +55,11 @@ same renderer and serves it with the same Caddy config the server uses, then
 re-renders whenever a note or `hosts/homelab01/digital-garden.scss` changes.
 Before it existed, seeing a CSS change meant a full PR -> gate -> merge -> promote
 -> upgrade round trip, which is minutes; the render itself is about five seconds.
+
+`--generator hugo` renders the same filtered notes with Hugo and Pagefind instead
+of Quartz, so the two can be run side by side on different ports and compared.
+Quartz is still what the server builds with — the Hugo path is a candidate under
+evaluation, not a second deployment target.
 
 `coryg@`, not `root@` — `cg.ssh-hardening` sets `PermitRootLogin = "no"` and `AllowUsers = [ "coryg" ]`, so root SSH is refused on both servers. `--elevate=sudo` is what then runs the activation as root, and `--ask-elevate-password` is needed because `wheelNeedsPassword` is on. That command is long enough to discourage the iteration it exists for, which is [item 6](docs/plans/deployment-hardening.md) of the hardening plan.
 

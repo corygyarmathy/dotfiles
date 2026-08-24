@@ -249,12 +249,30 @@
             inherit (nixpkgs) lib;
             quartz = self.packages.${system}.quartz;
           };
+          hugo = import ./modules/services/digital-garden/lib/hugo.nix {
+            inherit pkgs;
+            inherit (nixpkgs) lib;
+          };
+          hugoRenderer = hugo.mkRenderer {
+            inherit (garden) baseUrl siteTitle footerLinks;
+            styleSheet = ./modules/services/digital-garden/lib/hugo/assets/main.css;
+          };
           preview = import ./modules/services/digital-garden/lib/preview.nix {
             inherit pkgs site;
             inherit (nixpkgs) lib;
-            renderer = garden.renderer;
             filter = ./modules/services/digital-garden/publish-filter.py;
-            defaultStyleSheet = garden.styleSheet;
+            generators = {
+              quartz = {
+                renderer = garden.renderer;
+                styleSheet = garden.styleSheet;
+                workingTreeStyleSheet = "hosts/homelab01/digital-garden.scss";
+              };
+              hugo = {
+                renderer = hugoRenderer;
+                styleSheet = ./modules/services/digital-garden/lib/hugo/assets/main.css;
+                workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
+              };
+            };
           };
         in
         {

@@ -1,0 +1,7 @@
+{{ define "main" }}
+  <article data-pagefind-body>
+    <h1>{{ .Title }}</h1>
+    {{ partial "dateline.html" . }}
+    {{ .Content }}
+  </article>
+{{ end }}

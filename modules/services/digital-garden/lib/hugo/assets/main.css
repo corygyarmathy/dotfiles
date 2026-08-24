@@ -1,0 +1,323 @@
+/* Digital garden stylesheet.
+ *
+ * The palette is Quartz's own default, value for value, so that moving between
+ * the two generators is not also a redesign. The names are Quartz's too, which
+ * read oddly in dark mode — `--light` is the BACKGROUND in both themes, not a
+ * light colour — but keeping them means the two stylesheets can be compared
+ * without a translation table.
+ *
+ * Fonts are the system stack. Quartz's config asks for Schibsted Grotesk and
+ * Source Sans Pro with `fontOrigin: local`, which means it never ships them and
+ * every visitor already falls through to system-ui. Naming the fallback
+ * directly is the same result without the pretence.
+ */
+
+:root {
+  --light: #faf8f8;
+  --lightgray: #e5e5e5;
+  --gray: #b8b8b8;
+  --darkgray: #4e4e4e;
+  --dark: #2b2b2b;
+  --secondary: #284b63;
+  --tertiary: #84a59d;
+  --highlight: rgba(143, 159, 169, 0.15);
+
+  --body-font:
+    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  --measure: 40rem;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --light: #161618;
+  --lightgray: #393639;
+  --gray: #646464;
+  --darkgray: #d4d4d4;
+  --dark: #ebebec;
+  --secondary: #7b97aa;
+  --tertiary: #84a59d;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--light);
+  color: var(--darkgray);
+  font-family: var(--body-font);
+  font-size: 1rem;
+  line-height: 1.6;
+  /* Off by default in most browsers; the difference is visible in body text at
+   * this measure, in ligatures and in the spacing of numerals. */
+  text-rendering: optimizeLegibility;
+}
+
+/* One column, capped. "No sidebars" is not the same as "prose should span a 27
+ * inch monitor" — line length is a legibility function. */
+.page {
+  width: 100%;
+  /* The cap is on the TEXT, so the gutter has to be added to it rather than
+   * taken out of it - box-sizing: border-box would otherwise make the measure
+   * 3rem narrower than it says. */
+  max-width: calc(var(--measure) + 3rem);
+  margin: 0 auto;
+  padding: 4rem 1.5rem 3rem;
+}
+
+/* ── masthead ───────────────────────────────────────────────────────────── */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--lightgray);
+}
+
+.masthead-title {
+  flex-grow: 1;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.masthead-title:hover {
+  text-decoration: underline;
+}
+
+/* The controls are buttons, not boxes. Quartz drew search as a bordered field
+ * containing the word "Search", which reads as an input you can type into — it
+ * is not, it opens a dialog. */
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--darkgray);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--highlight);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+}
+
+:root[data-theme="dark"] .icon-sun,
+:root[data-theme="light"] .icon-moon {
+  display: none;
+}
+
+/* ── prose ──────────────────────────────────────────────────────────────── */
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--dark);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 2rem 0 0.75rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  margin-top: 0;
+}
+h2 {
+  font-size: 1.35rem;
+}
+h3 {
+  font-size: 1.15rem;
+}
+
+p,
+ul,
+ol,
+blockquote {
+  margin: 0 0 1rem;
+}
+
+.dateline {
+  margin: -0.25rem 0 1.5rem;
+  color: var(--gray);
+  font-size: 0.875rem;
+}
+
+a {
+  color: var(--secondary);
+  text-decoration: none;
+  /* Underlined on hover rather than always: at this link density a permanently
+   * underlined page is harder to read than an undecorated one. */
+  border-radius: 3px;
+  padding: 0 0.1em;
+  background: var(--highlight);
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Chrome, not prose: a highlight behind these reads as a stray box. */
+footer a,
+.masthead-title,
+a.footnote-backref,
+[role="doc-backlink"] {
+  background: none;
+  padding: 0;
+}
+
+/* An external link says so, rather than being discovered by following it.
+ * Marked in CSS on the protocol, so nothing has to annotate the markdown. */
+a[href^="http://"]::after,
+a[href^="https://"]::after {
+  content: "↗";
+  font-size: 0.8em;
+  margin-left: 0.15em;
+  vertical-align: baseline;
+}
+
+footer a::after {
+  content: none;
+}
+
+blockquote {
+  border-left: 3px solid var(--lightgray);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--gray);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 5px;
+  margin: 1rem 0;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--lightgray);
+  margin: 2rem 0 0;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--highlight);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: 5px;
+  background: var(--highlight);
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Wide content must scroll inside its own box rather than making the page
+ * scroll sideways. */
+.table-container {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--lightgray);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+/* ── footer ─────────────────────────────────────────────────────────────── */
+
+footer {
+  margin-top: 3rem;
+  color: var(--gray);
+  font-size: 0.875rem;
+}
+
+footer p {
+  margin: 1rem 0 0.25rem;
+}
+
+footer ul {
+  display: flex;
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── search ─────────────────────────────────────────────────────────────── */
+
+#search-dialog {
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: 70vh;
+  margin-top: 8vh;
+  padding: 1rem;
+  border: 1px solid var(--lightgray);
+  border-radius: 8px;
+  background: var(--light);
+  color: var(--darkgray);
+  overflow-y: auto;
+}
+
+#search-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* Pagefind ships its own stylesheet; these map its variables onto the palette
+ * above so the dialog does not arrive in someone else's colours. */
+#search-ui {
+  --pagefind-ui-primary: var(--dark);
+  --pagefind-ui-text: var(--darkgray);
+  --pagefind-ui-background: var(--light);
+  --pagefind-ui-border: var(--lightgray);
+  --pagefind-ui-tag: var(--highlight);
+  --pagefind-ui-border-width: 1px;
+  --pagefind-ui-border-radius: 5px;
+  --pagefind-ui-font: var(--body-font);
+}
+
+@media (max-width: 700px) {
+  .page {
+    padding-top: 1.5rem;
+  }
+}
+
+/* Pagefind's input takes the browser's default focus ring, which on a dark
+ * background is a stark white box. Matched to the one the masthead buttons
+ * use, so focus looks deliberate rather than like a rendering fault. */
+#search-ui input:focus-visible,
+#search-ui button:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+}
