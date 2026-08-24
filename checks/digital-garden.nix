@@ -185,6 +185,7 @@
     };
 
   testScript = ''
+    import datetime as dt
     import json
     import re
 
@@ -199,9 +200,10 @@
     with subtest("the builder runs to completion offline"):
         # Started explicitly rather than waited for: the unit is a
         # Type=oneshot without RemainAfterExit, so it reads inactive the
-        # moment it succeeds, and the minutely timer makes "has it run yet"
-        # a race. This also asserts a *second* run is clean, since the timer
-        # has almost certainly fired once already.
+        # moment it succeeds. The fallback timer is 15 minutes, and the watcher
+        # only fires on a change, so neither is a dependable first trigger here.
+        # This also asserts a *second* run is clean, since the watcher may have
+        # fired once already.
         machine.succeed("systemctl start digital-garden-build.service")
         # index.html, not the stylesheet: Hugo fingerprints its CSS, so the
         # stylesheet has no fixed name to test for. It is checked by URL below,
@@ -530,5 +532,32 @@
         # styled 404; without the handler Caddy answers with an empty one.
         machine.fail("curl -sf http://localhost:8086/no-such-note")
         assert len(machine.succeed("curl -s http://localhost:8086/no-such-note")) > 1000
+
+    with subtest("a change to the vault triggers a rebuild without the timer"):
+        # The inotify watcher, not a timer, is what publishes a change. A new
+        # published note must reach the served site with nobody starting the
+        # builder by hand: the watcher notices the write, the path unit fires
+        # the build, and the 5s debounce collapses the burst.
+        machine.wait_for_unit("digital-garden-watch.service")
+        # Give inotifywait a moment to have its recursive watches established
+        # before writing, so the event is not missed on a cold start.
+        machine.sleep(duration=dt.timedelta(seconds=2))
+
+        machine.succeed(
+            "cat > /var/lib/digital-garden/vault/essays/on-triggers.md <<'NOTE'\n"
+            "---\n"
+            "publish: true\n"
+            "thesis: A note that appears without a timer.\n"
+            "---\n\n"
+            "# On Triggers\n\n"
+            "MARKER-TRIGGERED-BODY\n"
+            "NOTE"
+        )
+
+        # 5s debounce + a couple of seconds to build; 60s is generous for a VM.
+        machine.wait_until_succeeds(
+            "curl -sf http://localhost:8086/on-triggers | grep -q MARKER-TRIGGERED-BODY",
+            timeout=dt.timedelta(seconds=60),
+        )
   '';
 }

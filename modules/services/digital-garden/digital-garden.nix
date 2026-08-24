@@ -6,8 +6,12 @@
 # - Static output served by Caddy, exposed like any other service
 #
 # Architecture:
-# - Timer -> oneshot builder. The builder obtains the vault, filters it down to
-#   published notes, then runs the site generator over the filtered tree.
+# - An inotify watcher (digital-garden-watch.service) watches the vault and, a
+#   few seconds after the last write, signals the builder through a trigger file
+#   and a path unit. A slow fallback timer stays as a safety net.
+# - The oneshot builder obtains the vault (fetching it only when source = "git"),
+#   filters it down to published notes, then runs the site generator over the
+#   filtered tree.
 # - Serving is plain HTTP on 127.0.0.1:<port>, which lets this slot into
 #   cg.service.reverse-proxy.services (TLS + LAN) and
 #   cg.service.cloudflare-tunnel.services (public) with no special casing.
@@ -20,12 +24,19 @@
 # Either way the whole vault lands on disk and is filtered afterwards, so the
 # publish boundary below is unchanged.
 #
-# The timer fires often (default: minutely) because a run is normally a no-op.
-# Two gates stand in front of the build: a stat-only walk of the vault, and a
-# content hash of the filtered tree. Editing a private note clears the first and
-# stops at the second; touching nothing stops at the first. Both fold in a hash
-# of the build inputs, so a Hugo upgrade or an option change still forces a
-# rebuild of an otherwise untouched vault.
+# The build is triggered by an inotify watcher (digital-garden-watch.service)
+# that watches the vault and, a few seconds after the last write, signals the
+# builder through a trigger file and a path unit. A path unit cannot watch
+# subdirectories recursively, which is why the watcher exists. The fallback
+# timer stays because inotify can drop events on queue overflow, and a change
+# that lands while a build is already running would otherwise be missed - the
+# timer's interval is the worst-case publish latency.
+#
+# A run is normally a no-op. Two gates stand in front of the build: a stat-only
+# walk of the vault, and a content hash of the filtered tree. Editing a private
+# note clears the first and stops at the second; touching nothing stops at the
+# first. Both fold in a hash of the build inputs, so a Hugo upgrade or an option
+# change still forces a rebuild of an otherwise untouched vault.
 #
 # ════════════════════════════════════════════════════════════════════════════
 # The publish boundary
@@ -231,6 +242,40 @@ let
       echo "$vault_id" > "$vault_stamp"
     '';
   };
+
+  watchScript = pkgs.writeShellApplication {
+    name = "digital-garden-watch";
+    runtimeInputs = [
+      pkgs.inotify-tools
+      pkgs.coreutils
+    ];
+    text = ''
+      set -euo pipefail
+
+      # The vault does not exist until digital-garden-vault-setup has run once
+      # and the sync service has fetched it; wait for it rather than fail.
+      while [ ! -d "${vaultDir}" ]; do
+        echo "digital-garden-watch: waiting for ${vaultDir}" >&2
+        sleep 10
+      done
+
+      # Watch the vault only - never the state directory, where the builder
+      # itself writes, or a build would trigger another build forever. Dotfiles
+      # are excluded to match publish-filter.py, so Obsidian's own churn in
+      # .obsidian does not rebuild the site continuously.
+      inotifywait -q -m -r -e modify,create,delete,move,close_write \
+        --exclude '/\.' "${vaultDir}" \
+        | while read -r _; do
+            # A single logical change arrives as several events, and Obsidian
+            # Sync delivers a burst over a few seconds. Wait for the burst to
+            # settle before signalling, so a multi-file edit is built once, not
+            # once per file. Writing a timestamp (rather than touching) makes
+            # sure the path unit's PathModified sees it.
+            while read -r -t 5 _; do :; done
+            date +%s > "${stateDir}/trigger"
+          done
+    '';
+  };
 in
 {
   options.cg.service.digital-garden = {
@@ -320,19 +365,20 @@ in
 
     schedule = lib.mkOption {
       type = lib.types.str;
-      default = "minutely";
+      default = "*:0/15";
       description = ''
-        systemd OnCalendar expression for rebuild checks.
+        systemd OnCalendar expression for the fallback rebuild timer.
 
-        This is a check, not a rebuild: a run whose vault is untouched does a
-        stat-only walk and exits, and one that changed only unpublished notes
-        stops after the filter. Hugo runs only when the published set actually
-        moved, so a short interval costs very little and caps publish latency at
-        roughly one interval.
+        The primary trigger is an inotify watcher (see digital-garden-watch),
+        which rebuilds within seconds of a change. This timer is the safety net
+        for what the watcher can miss: inotify events dropped on queue overflow,
+        and a change that lands while a build is already running. Its interval
+        is the worst case such a change waits to publish.
 
-        A systemd.path unit would be the obvious event-driven alternative, but
-        path units do not watch subdirectories recursively, which is useless for
-        a vault with folders in it.
+        With source = "git" there is no watcher - nothing writes the vault
+        between runs - so this timer is the trigger and its interval is publish
+        latency. Set it back to "minutely" there if you want sub-minute
+        publishing.
       '';
     };
 
@@ -413,7 +459,7 @@ in
 
     systemd.tmpfiles.rules = [
       "d ${stateDir} 0750 digital-garden digital-garden -"
-    ];
+    ] ++ lib.optional (cfg.source == "obsidian-sync") "f ${stateDir}/trigger 0644 digital-garden digital-garden -";
 
     systemd.services.digital-garden-build = {
       description = "Build the digital garden from published vault notes";
@@ -467,7 +513,7 @@ in
     };
 
     systemd.timers.digital-garden-build = {
-      description = "Rebuild the digital garden";
+      description = "Fallback rebuild trigger for the digital garden";
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnCalendar = cfg.schedule;
@@ -475,6 +521,58 @@ in
         # No RandomizedDelaySec: this is a cheap check that usually exits within
         # a second, and jitter here is just latency between writing a note and
         # seeing it published. There is nothing to spread the load of.
+      };
+    };
+
+    # ── Event-driven trigger (inotify) ──────────────────────────────────────
+    # A path unit cannot watch subdirectories recursively, which is useless for
+    # a vault with folders in it, so the watcher does the recursive part with
+    # inotify and the path unit only watches a single trigger file. The watcher
+    # is unprivileged and cannot start the builder itself; writing the trigger
+    # lets the (root-managed) path unit do that with no polkit rules.
+    systemd.services.digital-garden-watch = lib.mkIf (cfg.source == "obsidian-sync") {
+      description = "Watch the digital garden vault and trigger rebuilds";
+      after = [ "local-fs.target" ];
+      wantedBy = [ "multi-user.target" ];
+
+      serviceConfig = {
+        User = "digital-garden";
+        Group = "digital-garden";
+        StateDirectory = "digital-garden";
+        WorkingDirectory = stateDir;
+        ExecStart = lib.getExe watchScript;
+        Restart = "always";
+        RestartSec = 10;
+
+        # Same hardening as the builder: it reads a private vault, so it gets
+        # the filesystem and nothing else. It watches files and writes one
+        # trigger, so there is no network to allow at all.
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RestrictSUIDSGID = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        SystemCallFilter = [ "@system-service" ];
+        SystemCallArchitectures = "native";
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        ReadWritePaths = [ stateDir ];
+      };
+    };
+
+    systemd.paths.digital-garden-build = lib.mkIf (cfg.source == "obsidian-sync") {
+      description = "Trigger a digital garden build when the vault changes";
+      wantedBy = [ "paths.target" ];
+      pathConfig = {
+        PathModified = "${stateDir}/trigger";
+        Unit = "digital-garden-build.service";
       };
     };
 
