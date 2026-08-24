@@ -98,6 +98,19 @@ groups:
           summary: "Service unreachable"
           description: "{{ $labels.instance }} has been down for 5+ minutes"
 
+      # The blackbox probe keeps reading 200 while this is failing, because
+      # Caddy serves the last good build. A failed builder is otherwise
+      # invisible: the site silently ages. Distinct from the generic
+      # SystemdUnitFailed rule only so the message points at the right unit.
+      - alert: DigitalGardenBuildFailed
+        expr: node_systemd_unit_state{name="digital-garden-build.service", state="failed"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Digital garden build failed on {{ $labels.instance }}"
+          description: "digital-garden-build.service is in failed state, so the site is serving the last good build. Check with: journalctl -u digital-garden-build"
+
   - name: infrastructure
     rules:
       # Auto-upgrade failures
