@@ -46,6 +46,10 @@ in
       '';
 
   digital-garden = testLib.mkTest ./digital-garden.nix;
+  digital-garden-sync-health = import ./digital-garden-sync-health.nix {
+    inherit pkgs;
+    lib = pkgs.lib;
+  };
   monitoring = testLib.mkTest ./monitoring.nix;
   reverse-proxy = testLib.mkTest ./reverse-proxy.nix;
   upgrade-verify = testLib.mkTest ./upgrade-verify.nix;
