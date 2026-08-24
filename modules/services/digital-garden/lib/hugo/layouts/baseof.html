@@ -14,7 +14,6 @@
     {{ with site.Home.OutputFormats.Get "rss" }}
       <link rel="alternate" type="application/rss+xml" title="{{ site.Title }}" href="{{ .Permalink }}" />
     {{ end }}
-    <link rel="stylesheet" href="{{ "pagefind/pagefind-ui.css" | relURL }}" />
     {{/*
       Applied before first paint, so a reader who chose dark does not get a
       white flash on every navigation. Inline for the same reason: an external
@@ -65,17 +64,24 @@
     </div>
 
     {{/*
-      Hidden until asked for. Pagefind's own bundle is ~40KB of JS that nothing
-      on a reading page needs, so it is fetched on the first search rather than
-      on every page load.
+      Pagefind's Component UI. Empty on purpose: the element builds its own
+      <dialog> with an input, a result list and a footer of keyboard hints, and
+      owns Escape, backdrop clicks, focus and the top layer. That is the whole
+      reason it is here rather than a dialog of ours — those are the parts of a
+      modal that are easy to write and hard to write correctly.
+
+      Neither the script nor the stylesheet is referenced from <head>. They are
+      ~46KB gzipped that nothing on a reading page needs, so they are fetched on
+      the first search; until then this is an unknown element with no children
+      and no box. Both URLs are resolved by Hugo here rather than assembled in
+      the script, so a change to how the bundle is addressed is a template
+      change and not a string concatenation somewhere below.
     */}}
-    <dialog
+    <pagefind-modal
       id="search-dialog"
-      aria-label="Search"
-      data-pagefind-ui="{{ "pagefind/pagefind-ui.js" | relURL }}"
-    >
-      <div id="search-ui"></div>
-    </dialog>
+      data-js="{{ "pagefind/pagefind-component-ui.js" | relURL }}"
+      data-css="{{ "pagefind/pagefind-component-ui.css" | relURL }}"
+    ></pagefind-modal>
 
     <script>
       (function () {
@@ -88,28 +94,44 @@
           } catch (e) {}
         });
 
-        var dialog = document.getElementById("search-dialog");
-        var loaded = false;
+        // Everything below is deferred loading. Opening, closing, focus and
+        // the keyboard hints belong to <pagefind-modal>; the only thing left
+        // for this page to decide is when its bundle is worth fetching.
+        //
+        // The stylesheet is awaited alongside the script so the dialog is not
+        // painted before it is styled — it is the script that takes the time,
+        // but a first open that flashes unstyled is the failure this avoids.
+        var modal = document.getElementById("search-dialog");
+        var ready = null;
+        function load() {
+          if (ready) return ready;
+          var css = document.createElement("link");
+          css.rel = "stylesheet";
+          css.href = modal.dataset.css;
+          var js = document.createElement("script");
+          js.src = modal.dataset.js;
+          ready = Promise.all([
+            // Resolved on error too: a missing stylesheet should still leave a
+            // working search rather than a button that does nothing.
+            new Promise(function (done) {
+              css.onload = css.onerror = done;
+            }),
+            new Promise(function (done) {
+              js.onload = done;
+            }),
+          ]).then(function () {
+            // The element upgrades when the script defines it, and open() only
+            // exists after that.
+            return customElements.whenDefined("pagefind-modal");
+          });
+          document.head.appendChild(css);
+          document.body.appendChild(js);
+          return ready;
+        }
         function open() {
-          if (!loaded) {
-            loaded = true;
-            var s = document.createElement("script");
-            s.src = dialog.dataset.pagefindUi;
-            s.onload = function () {
-              new PagefindUI({
-                element: "#search-ui",
-                showImages: false,
-                showSubResults: true,
-                resetStyles: false,
-              });
-              var input = dialog.querySelector("input");
-              if (input) input.focus();
-            };
-            document.body.appendChild(s);
-          }
-          dialog.showModal();
-          var input = dialog.querySelector("input");
-          if (input) input.focus();
+          load().then(function () {
+            modal.open();
+          });
         }
         document.getElementById("search-open").addEventListener("click", open);
         document.addEventListener("keydown", function (e) {
@@ -117,10 +139,6 @@
             e.preventDefault();
             open();
           }
-        });
-        // A click on the backdrop lands on the dialog element itself.
-        dialog.addEventListener("click", function (e) {
-          if (e.target === dialog) dialog.close();
         });
       })();
     </script>

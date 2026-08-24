@@ -177,10 +177,10 @@ pkgs.writeShellApplication {
     inotifywait -q -m -r -e modify,create,delete,move,close_write \
       --exclude '/\.' --format '%w%f' "$vault/" "$cssdir/" \
       | while read -r changed; do
-        # The stylesheet's neighbours in hosts/ are watched only because they
-        # share its directory. Changing them means changing Nix, which this
-        # loop cannot pick up anyway, so re-rendering for them would only
-        # suggest it had.
+        # The watch is on the stylesheet's directory rather than the file (see
+        # above), so it also fires for the editor's own scratch files - swap
+        # files, backups, the numbered file vim writes to test the directory.
+        # Re-rendering for those would report work that did not happen.
         case "$changed" in
           "$css" | "$vault"/*) ;;
           *) continue ;;

@@ -37,17 +37,18 @@
 # default change can expose it.
 #
 # The builder then RE-CHECKS the marker on every staged note before rendering,
-# and refuses to build if one is missing. That second layer used to be Quartz's
-# explicit-publish plugin, and it earned its place: when the filter was once
-# broken deliberately, the plugin is what caught the leak. Hugo has no
-# equivalent, so the check lives in the builder now — which is a better home
-# anyway, because it no longer depends on which program renders the tree.
+# and refuses to build if one is missing. That second layer has already earned
+# its keep once: when the filter was deliberately broken to see what would
+# happen, it is what caught the leak. It lives in the builder rather than in
+# the generator so that it does not depend on which program renders the tree —
+# and rather than in publish-filter.py, because a check inside the thing being
+# checked is worth less.
 #
 # Known residual leak: a published note that writes [[Some Private Note]] in
 # prose still renders the words "Some Private Note" (as plain text, not a
 # link). Titles you type into published notes are published.
 #
-# The filter also FLATTENS published notes to the root, so a URL is /some-essay
+# The filter also FLATTENS published notes to the root, so a URL is /some-essay/
 # and stays that way when the vault is reorganised, and derives `published:`
 # dates from a ledger at ${stateDir}/dates.json rather than asking for them to
 # be written by hand. Both are explained in publish-filter.py.
@@ -149,9 +150,10 @@ let
       }
 
       # ---- 2. skip early if nothing could possibly have changed --------------
-      # Two gates, cheapest first. The render is no longer the expensive step -
-      # Hugo takes ~240ms where Quartz took ~3.8s - but the filter still walks
-      # the whole vault, and most vault changes touch unpublished notes.
+      # Two gates, cheapest first. The render itself is not the expensive step
+      # — Hugo and Pagefind finish the whole site in a few hundred milliseconds
+      # — but the filter walks the entire vault, and most vault changes touch
+      # unpublished notes.
       #
       # Gate one is a stat-only walk: no file is opened, so this stays cheap
       # enough to run every minute. Dotfiles are excluded to match the filter,
@@ -178,11 +180,9 @@ let
         "${stateDir}/dates.json"
 
       # Defence in depth, and the reason it is here rather than in the
-      # generator. Quartz had an explicit-publish plugin that re-checked the
-      # marker, and when publish-filter.py was once broken deliberately, that
-      # second layer is what held. Hugo has no equivalent and should not need
-      # one — so the check moves here, where it guards the staging tree itself
-      # and does not depend on which program renders it.
+      # generator: this guards the staging tree itself, so it holds no matter
+      # what renders it. The one time publish-filter.py was deliberately
+      # broken, a second layer like this is what stopped the leak.
       #
       # Cheap enough to be unconditional: the staging tree is the published
       # set, not the vault. If anything in it lost its marker on the way
@@ -421,8 +421,8 @@ in
         );
         ExecStart = lib.getExe buildScript;
 
-        # Hardening: this pulls a private repo and runs a Node build, so it gets
-        # network and nothing else.
+        # Hardening: this clones a private repo, so it gets network and
+        # nothing else.
         NoNewPrivileges = true;
         PrivateTmp = true;
         PrivateDevices = true;
@@ -435,7 +435,11 @@ in
         RestrictNamespaces = true;
         RestrictRealtime = true;
         LockPersonality = true;
-        MemoryDenyWriteExecute = false; # V8 JIT needs W^X off
+        # Nothing here JITs: the filter is CPython, and Hugo and Pagefind are
+        # a Go and a Rust binary. This was off when the site was rendered by a
+        # Node toolchain that needed writable-executable pages; that toolchain
+        # is gone and the exemption went with it.
+        MemoryDenyWriteExecute = true;
         SystemCallFilter = [ "@system-service" ];
         SystemCallArchitectures = "native";
         RestrictAddressFamilies = [

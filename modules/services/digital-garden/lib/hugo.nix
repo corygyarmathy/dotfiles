@@ -2,20 +2,19 @@
 #
 #   digital-garden-render-hugo <content-dir> <output-dir> [stylesheet]
 #
-# Why Hugo. The site was built with Quartz until 2026-08-24, which cost 562
-# lines of Nix and a tree of ~42 hash-pinned npm plugins, because Quartz v5
-# resolves its own plugins by cloning them at build time. The decisive problem
-# was not the size of that but that it could not be updated: a wrong bump
-# produces a build that SUCCEEDS and a site that is silently featureless, so
-# the version was pinned and stayed pinned. Hugo is one Go binary in nixpkgs
-# and Pagefind is one Rust binary; both ride flake.lock, and neither fetches
-# anything at build time or in the reader's browser.
+# The property to preserve here is that the whole toolchain is two static
+# binaries from nixpkgs — Hugo in Go, Pagefind in Rust — both riding
+# flake.lock, neither fetching anything at build time or in the reader's
+# browser. A generator that resolves plugins over the network at build time
+# fails in the one way a CI gate cannot see: the build succeeds and the site is
+# quietly missing features. Anything added below should be weighed against
+# that, not against convenience. See docs/adr/ for how this was arrived at.
 #
-# What made this cheap is that publish-filter.py already owns the hard parts.
-# The staging tree is plain CommonMark whose links carry finished URLs, so this
-# renderer does not have to understand Obsidian, resolve a wikilink, or decide
-# what a page is called. It supplies a layout and a stylesheet and gets out of
-# the way. Everything Hugo-specific is in this file and lib/hugo/.
+# What keeps this file short is that publish-filter.py already owns the hard
+# parts. The staging tree is plain CommonMark whose links carry finished URLs,
+# so this renderer does not have to understand Obsidian, resolve a wikilink, or
+# decide what a page is called. It supplies a layout and a stylesheet and gets
+# out of the way. Everything Hugo-specific is in this file and lib/hugo/.
 {
   pkgs,
   lib,

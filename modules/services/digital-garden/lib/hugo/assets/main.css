@@ -1,25 +1,25 @@
 /* Digital garden stylesheet — the whole design, with no theme underneath.
  *
- * The palette is inherited value-for-value from the site's previous generator,
- * so that changing how the site is built was not also a redesign. That is also
- * why `--light` names the BACKGROUND in both themes rather than a light colour:
- * the names came with the values, and renaming them later is a change worth
- * making on its own rather than smuggling into a migration.
+ * The tokens are named for the ROLE a colour plays, not for the colour it is,
+ * because the two themes disagree about the colour and agree about the role:
+ * `--bg` is the page behind the text in both, and `--text` is the text on it.
+ * The values are unchanged from what the site has always shipped; only the
+ * names are, and only so that the dark block below stops reading as a
+ * contradiction.
  *
- * Fonts are the system stack, which is what the site already rendered in — the
- * previous generator asked for Schibsted Grotesk and Source Sans Pro but never
- * shipped them, so every visitor fell through to system-ui anyway.
+ * Fonts are the system stack. Asking for a webfont and not shipping it is the
+ * same as this with extra steps, and shipping one is a request this site has
+ * no reason to make of a reader.
  */
 
 :root {
-  --light: #faf8f8;
-  --lightgray: #e5e5e5;
-  --gray: #b8b8b8;
-  --darkgray: #4e4e4e;
-  --dark: #2b2b2b;
-  --secondary: #284b63;
-  --tertiary: #84a59d;
-  --highlight: rgba(143, 159, 169, 0.15);
+  --bg: #faf8f8;
+  --surface: rgba(143, 159, 169, 0.15);
+  --border: #e5e5e5;
+  --muted: #b8b8b8;
+  --text: #4e4e4e;
+  --strong: #2b2b2b;
+  --accent: #284b63;
 
   --body-font:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
@@ -29,13 +29,14 @@
 }
 
 :root[data-theme="dark"] {
-  --light: #161618;
-  --lightgray: #393639;
-  --gray: #646464;
-  --darkgray: #d4d4d4;
-  --dark: #ebebec;
-  --secondary: #7b97aa;
-  --tertiary: #84a59d;
+  --bg: #161618;
+  --border: #393639;
+  --muted: #646464;
+  --text: #d4d4d4;
+  --strong: #ebebec;
+  --accent: #7b97aa;
+  /* --surface is deliberately not redefined: it is a translucent tint, so the
+   * one value reads correctly over either background. */
   color-scheme: dark;
 }
 
@@ -47,8 +48,8 @@
 
 body {
   margin: 0;
-  background: var(--light);
-  color: var(--darkgray);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--body-font);
   font-size: 1rem;
   line-height: 1.6;
@@ -77,14 +78,14 @@ body {
   gap: 0.5rem;
   padding-bottom: 0.75rem;
   margin-bottom: 2rem;
-  border-bottom: 1px solid var(--lightgray);
+  border-bottom: 1px solid var(--border);
 }
 
 .masthead-title {
   flex-grow: 1;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--secondary);
+  color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -93,9 +94,9 @@ body {
   text-decoration: underline;
 }
 
-/* The controls are buttons, not boxes. Quartz drew search as a bordered field
- * containing the word "Search", which reads as an input you can type into — it
- * is not, it opens a dialog. */
+/* The controls are buttons, not boxes. A bordered field containing the word
+ * "Search" reads as an input you can type into; this one is not, it opens a
+ * dialog, and an icon says so without claiming otherwise. */
 .icon-button {
   display: flex;
   align-items: center;
@@ -106,16 +107,16 @@ body {
   border: none;
   border-radius: 4px;
   background: none;
-  color: var(--darkgray);
+  color: var(--text);
   cursor: pointer;
 }
 
 .icon-button:hover {
-  background: var(--highlight);
+  background: var(--surface);
 }
 
 .icon-button:focus-visible {
-  outline: 2px solid var(--secondary);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -130,7 +131,7 @@ h1,
 h2,
 h3,
 h4 {
-  color: var(--dark);
+  color: var(--strong);
   font-weight: 600;
   line-height: 1.25;
   margin: 2rem 0 0.75rem;
@@ -156,18 +157,18 @@ blockquote {
 
 .dateline {
   margin: -0.25rem 0 1.5rem;
-  color: var(--gray);
+  color: var(--muted);
   font-size: 0.875rem;
 }
 
 a {
-  color: var(--secondary);
+  color: var(--accent);
   text-decoration: none;
   /* Underlined on hover rather than always: at this link density a permanently
    * underlined page is harder to read than an undecorated one. */
   border-radius: 3px;
   padding: 0 0.1em;
-  background: var(--highlight);
+  background: var(--surface);
 }
 
 a:hover {
@@ -198,10 +199,10 @@ footer a::after {
 }
 
 blockquote {
-  border-left: 3px solid var(--lightgray);
+  border-left: 3px solid var(--border);
   padding-left: 1rem;
   margin-left: 0;
-  color: var(--gray);
+  color: var(--muted);
 }
 
 img {
@@ -213,14 +214,14 @@ img {
 
 hr {
   border: none;
-  border-top: 1px solid var(--lightgray);
+  border-top: 1px solid var(--border);
   margin: 2rem 0 0;
 }
 
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;
-  background: var(--highlight);
+  background: var(--surface);
   border-radius: 3px;
   padding: 0.1em 0.3em;
 }
@@ -229,7 +230,7 @@ pre {
   overflow-x: auto;
   padding: 1rem;
   border-radius: 5px;
-  background: var(--highlight);
+  background: var(--surface);
 }
 
 pre code {
@@ -250,7 +251,7 @@ table {
 
 th,
 td {
-  border-bottom: 1px solid var(--lightgray);
+  border-bottom: 1px solid var(--border);
   padding: 0.4rem 0.6rem;
   text-align: left;
 }
@@ -259,7 +260,7 @@ td {
 
 footer {
   margin-top: 3rem;
-  color: var(--gray);
+  color: var(--muted);
   font-size: 0.875rem;
 }
 
@@ -277,46 +278,46 @@ footer ul {
 
 /* ── search ─────────────────────────────────────────────────────────────── */
 
-#search-dialog {
-  width: min(38rem, calc(100vw - 2rem));
-  max-height: 70vh;
-  margin-top: 8vh;
-  padding: 1rem;
-  border: 1px solid var(--lightgray);
-  border-radius: 8px;
-  background: var(--light);
-  color: var(--darkgray);
-  overflow-y: auto;
-}
-
-#search-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-/* Pagefind ships its own stylesheet; these map its variables onto the palette
- * above so the dialog does not arrive in someone else's colours. */
-#search-ui {
-  --pagefind-ui-primary: var(--dark);
-  --pagefind-ui-text: var(--darkgray);
-  --pagefind-ui-background: var(--light);
-  --pagefind-ui-border: var(--lightgray);
-  --pagefind-ui-tag: var(--highlight);
-  --pagefind-ui-border-width: 1px;
-  --pagefind-ui-border-radius: 5px;
-  --pagefind-ui-font: var(--body-font);
+/* The search dialog is Pagefind's Component UI, which arrives with a complete
+ * stylesheet of its own. Nothing here restyles it; this maps its tokens onto
+ * the palette above so it shows up in the site's colours rather than in its
+ * own, and follows the theme toggle for free because the values on the right
+ * are the ones that change.
+ *
+ * Declared on the element and not on :root, which matters: the Component UI
+ * defines its defaults on :root too, and its stylesheet is injected at first
+ * search — LATER in the cascade than this file, so an equally specific rule
+ * here would lose. A custom property set on a nearer ancestor wins regardless
+ * of where either rule was written, and everything Pagefind draws lives inside
+ * this element. ::backdrop inherits from the <dialog> in it, so the backdrop
+ * follows as well.
+ *
+ * Only the tokens the site actually has an opinion about are listed. The rest
+ * of Pagefind's defaults — spacing, shadows, the modal's geometry — are fine
+ * and are left alone. */
+pagefind-modal {
+  --pf-background: var(--bg);
+  --pf-text: var(--strong);
+  --pf-text-secondary: var(--text);
+  --pf-text-muted: var(--muted);
+  --pf-border: var(--border);
+  --pf-border-focus: var(--accent);
+  --pf-hover: var(--surface);
+  --pf-mark: var(--strong);
+  --pf-skeleton: var(--surface);
+  --pf-skeleton-shine: var(--border);
+  /* Matched to the masthead buttons, so focus looks deliberate rather than
+   * like a rendering fault. */
+  --pf-outline-focus: var(--accent);
+  --pf-font: var(--body-font);
+  /* Sized to the prose measure rather than to Pagefind's default, so the
+   * dialog reads as part of this page. */
+  --pf-modal-max-width: min(38rem, calc(100vw - 2rem));
+  --pf-modal-top: 8dvh;
 }
 
 @media (max-width: 700px) {
   .page {
     padding-top: 1.5rem;
   }
-}
-
-/* Pagefind's input takes the browser's default focus ring, which on a dark
- * background is a stark white box. Matched to the one the masthead buttons
- * use, so focus looks deliberate rather than like a rendering fault. */
-#search-ui input:focus-visible,
-#search-ui button:focus-visible {
-  outline: 2px solid var(--secondary);
-  outline-offset: 2px;
 }
