@@ -4,12 +4,12 @@
 # through PR -> CI gate -> merge -> promote `deploy` -> host auto-upgrade ->
 # wait for the build timer, because there was no way to see a rendered page
 # without deploying one. That loop is minutes long and it is the real reason
-# customising the garden felt expensive; the Quartz build itself is ~3 seconds.
+# customising the garden felt expensive; the render itself is well under a second.
 #
 # So this runs the SAME renderer and the SAME Caddy config as the service (see
-# lib/site.nix), against the real vault on this machine, and re-renders on save. A
-# preview that diverged from production would be worse than none at all: it
-# would let you tune CSS against a page the server will never emit.
+# lib/hugo.nix and lib/serve.nix), against the real vault on this machine, and
+# re-renders on save. A preview that diverged from production would be worse than
+# none at all: it would let you tune CSS against a page the server will never emit.
 #
 # It reads the vault, and writes only to a temp directory and a dates cache.
 # The publish boundary is the filter, exactly as in production — an unpublished
@@ -17,13 +17,14 @@
 {
   pkgs,
   lib,
-  site,
+  serve,
   filter,
-  # name -> { renderer; styleSheet; workingTreeStyleSheet; } for every generator
-  # this can preview. More than one exists so that a candidate replacement for
-  # Quartz can be looked at beside it rather than argued about.
-  generators,
-  defaultGenerator ? "quartz",
+  renderer,
+  styleSheet,
+  # Where the same stylesheet lives in the working tree. Preferred when the
+  # command is run from the repository root, so that editing it re-renders with
+  # no Nix evaluation in the loop.
+  workingTreeStyleSheet,
   defaultVault ? "$HOME/git/personal-notes",
 }:
 pkgs.writeShellApplication {
@@ -39,12 +40,10 @@ pkgs.writeShellApplication {
     port=8087
     once=false
     css=
-    generator=${defaultGenerator}
 
     while [ $# -gt 0 ]; do
       case $1 in
         --vault) vault=$2; shift 2 ;;
-        --generator) generator=$2; shift 2 ;;
         --css) css=$2; shift 2 ;;
         --port) port=$2; shift 2 ;;
         --once) once=true; shift ;;
@@ -54,10 +53,6 @@ pkgs.writeShellApplication {
 
       --vault PATH   Obsidian vault to publish from
                      (default: $GARDEN_VAULT, else ${defaultVault})
-      --generator G  which site generator to render with:
-                     ${lib.concatStringsSep ", " (lib.attrNames generators)}
-                     (default: ${defaultGenerator}). Run two at once on
-                     different ports to compare them.
       --css PATH     stylesheet to render with. Defaults to the working-tree
                      copy if you are sitting in the dotfiles repo, so that
                      editing it re-renders without a Nix evaluation.
@@ -73,30 +68,15 @@ pkgs.writeShellApplication {
       esac
     done
 
-    # Each generator has its own renderer and its own stylesheet; they are
-    # written against different markup and are not interchangeable.
-    case $generator in
-    ${lib.concatStringsSep "
-    " (
-      lib.mapAttrsToList (name: g: ''
-        ${name})
-            render_with=${lib.getExe g.renderer}
-            store_css=${g.styleSheet}
-            tree_css=${g.workingTreeStyleSheet}
-            ;;'') generators
-    )}
-      *) echo "unknown generator: $generator (have: ${lib.concatStringsSep ", " (lib.attrNames generators)})" >&2; exit 2 ;;
-    esac
-
     # Prefer the stylesheet in the working tree when there is one, because that
     # is the file you are about to edit. The store copy baked into the renderer
     # is only reachable through a fresh evaluation of the host, which is the
     # loop this command exists to avoid.
     if [ -z "$css" ]; then
-      if [ -f "$tree_css" ]; then
-        css=$tree_css
+      if [ -f ${workingTreeStyleSheet} ]; then
+        css=${workingTreeStyleSheet}
       else
-        css=$store_css
+        css=${styleSheet}
         echo "note: using the stylesheet baked into the renderer." >&2
         echo "      run from the dotfiles repo root, or pass --css, to edit it live." >&2
       fi
@@ -130,7 +110,7 @@ pkgs.writeShellApplication {
       started=$(date +%s%N)
       # Same filter, same arguments, same boundary as the service.
       python3 ${filter} "$vault" "$state/content" "$cache/dates.json" || return 1
-      "$render_with" "$state/content" "$state/public.new" "$css" \
+      ${lib.getExe renderer} "$state/content" "$state/public.new" "$css" \
         > "$state/render.log" 2>&1 || {
           echo "render failed:" >&2
           tail -30 "$state/render.log" >&2
@@ -168,7 +148,7 @@ pkgs.writeShellApplication {
       admin off
     }
     :{$GARDEN_PORT} {
-    ${site.caddyConfig "{$GARDEN_ROOT}"}
+    ${serve.caddyConfig "{$GARDEN_ROOT}"}
     }
     CADDY
 
@@ -179,7 +159,6 @@ pkgs.writeShellApplication {
 
     echo
     echo "  garden-preview  http://localhost:$port"
-    echo "  generator       $generator"
     echo "  vault           $vault"
     echo "  stylesheet      $css"
     echo "  watching for changes — ctrl-c to stop"

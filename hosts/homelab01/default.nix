@@ -171,76 +171,11 @@
       };
       source = "obsidian-sync";
 
-      # This is a collection of finished essays, not a published Zettelkasten.
-      # Every plugin below exists to help a reader browse a *cloud* of notes,
-      # and each one actively works against that: a graph of a dozen unrelated
-      # essays advertises how few there are, an explorer publishes the vault's
-      # private folder names, and automatic backlinks manufacture exactly the
-      # Wikipedia-ish adjacency that the writing is meant to avoid. Navigation
-      # is index.md and search, deliberately.
-      disabledPlugins = [
-        "latex" # needs @myriaddreamin/rehype-typst
-        "favicon" # needs sharp
-        "og-image" # needs sharp
-        "graph"
-        "explorer"
-        "backlinks"
-        "breadcrumbs" # everything is at the root; there is no trail to draw
-        "recent-notes"
-        "tag-list"
-        "tag-page"
-        "stacked-pages"
-        # Its entire job is hiding the sidebars for distraction-free reading.
-        # There are no sidebars, so the button was real and did nothing.
-        "reader-mode"
-      ];
-
-      pluginOptions = {
-        # note-properties has to stay ON — it is the frontmatter parser, and
-        # alias redirects for old URLs come out of it — but the Obsidian-style
-        # properties panel it draws on every page is scaffolding, not content.
-        note-properties.hidePropertiesView = true;
-        # Leaves the publication date, which publish-filter.py derives. A
-        # reading time on an essay that promises to be short is noise.
-        content-meta.showReadingTime = false;
-      };
-
-      # One column. With the browsing plugins gone the left sidebar held a
-      # title and three controls above a large empty space, which reads as
-      # unfinished rather than as restraint. The four survivors move to a
-      # masthead across the top and the column goes away.
-      # Note that "header" is not a position a plugin can be given — Quartz
-      # only routes entries to left, right, beforeBody and afterBody, and
-      # anything else is dropped without a word. The masthead is therefore the
-      # existing toolbar group moved to the top of beforeBody, which is what
-      # renders above the article title.
-      pluginLayout = {
-        page-title = {
-          position = "beforeBody";
-          group = "toolbar";
-          priority = 1; # leftmost in the row
-          # Takes up the slack in the row, which pushes everything after it to
-          # the right. Upstream puts this on search instead, which stretches
-          # the search control into a full-width bar.
-          groupOptions.grow = true;
-        };
-        search = {
-          position = "beforeBody";
-          groupOptions.grow = false; # a control, not a bar
-        };
-        darkmode.position = "beforeBody";
-      };
-
-      layoutConfig = {
-        # Ahead of article-title, which sits at 10.
-        groups.toolbar.priority = 1;
-        byPageType = {
-          content.template = "full-width";
-          "404".template = "full-width";
-        };
-      };
-
-      styleSheet = ./digital-garden.scss;
+      # The layout is one column with a masthead, and the stylesheet the
+      # templates are written against is the module's default. There is no
+      # theme to switch off: what used to be a dozen disabled plugins and a
+      # page of CSS undoing the rest is now just the four templates the site
+      # actually uses.
     };
 
     vikunja.enable = false; # Todo app

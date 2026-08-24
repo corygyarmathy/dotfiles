@@ -45,21 +45,14 @@ sudo nixos-rebuild switch --flake .#xps15
 
 # See the digital garden as it will be published, without publishing it
 nix run .#garden-preview
-
-# The same notes rendered by the candidate replacement for Quartz
-nix run .#garden-preview -- --generator hugo --port 8088
 ```
 
 `garden-preview` renders the published subset of the local Obsidian vault with the
 same renderer and serves it with the same Caddy config the server uses, then
-re-renders whenever a note or `hosts/homelab01/digital-garden.scss` changes.
-Before it existed, seeing a CSS change meant a full PR -> gate -> merge -> promote
--> upgrade round trip, which is minutes; the render itself is about five seconds.
-
-`--generator hugo` renders the same filtered notes with Hugo and Pagefind instead
-of Quartz, so the two can be run side by side on different ports and compared.
-Quartz is still what the server builds with — the Hugo path is a candidate under
-evaluation, not a second deployment target.
+re-renders whenever a note or the site's stylesheet
+(`modules/services/digital-garden/lib/hugo/assets/main.css`) changes. Before it
+existed, seeing a CSS change meant a full PR -> gate -> merge -> promote ->
+upgrade round trip, which is minutes; the render itself is under a second.
 
 `coryg@`, not `root@` — `cg.ssh-hardening` sets `PermitRootLogin = "no"` and `AllowUsers = [ "coryg" ]`, so root SSH is refused on both servers. `--elevate=sudo` is what then runs the activation as root, and `--ask-elevate-password` is needed because `wheelNeedsPassword` is on. That command is long enough to discourage the iteration it exists for, which is [item 6](docs/plans/deployment-hardening.md) of the hardening plan.
 
@@ -173,7 +166,7 @@ sops secrets/homelab.yaml                   # edit
 
 Stated plainly, because a pipeline whose limits are undocumented invites more trust than it has earned:
 
-- **Building is still most of the pre-deploy gate.** A package that compiles and then fails at runtime will auto-merge and deploy. NixOS VM tests in `checks/` now cover the monitoring stack, the reverse proxy and the digital garden — enough to catch a Prometheus config that will not load, a Caddyfile that will not parse, or a garden that builds successfully and serves an unstyled or leaking site — but the media stack is not covered, and that is where the failure history actually is. The alert rules still catch the rest afterwards.
+- **Building is still most of the pre-deploy gate.** A package that compiles and then fails at runtime will auto-merge and deploy. NixOS VM tests in `checks/` now cover the monitoring stack, the reverse proxy and the digital garden — enough to catch a Prometheus config that will not load, a Caddyfile that will not parse, or a garden that builds successfully and serves an incomplete or leaking site — but the media stack is not covered, and that is where the failure history actually is. The alert rules still catch the rest afterwards.
 - **Automated rollback covers only a generation that will not boot, and only on homelab01 so far.** systemd's boot assessment gives a new generation three attempts to reach `boot-complete.target`; one that never does is skipped in favour of an older entry, without anyone standing in front of the machine.
 - **A generation that boots and then comes up broken is detected but not yet reverted.** Both servers verify what they activated and alert if units are failing that were not failing before, but the rollback that check is wired to is deliberately switched off until there is evidence about its false-positive rate. Until then this is a faster, better-aimed alert, not a recovery.
 - **Nothing protects against a change that cuts the host off.** Verification runs on the host, so a machine that has lost its network still believes it is fine — and locally, it is. A bad firewall or sshd change still means a trip to the cupboard.

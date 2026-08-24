@@ -31,9 +31,6 @@ pkgs: {
   # Obsidian Sync headless CLI (`ob`)
   obsidian-headless = pkgs.callPackage ./obsidian-headless { };
 
-  # Static site generator for the digital garden
-  quartz = pkgs.callPackage ./quartz { };
-
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }

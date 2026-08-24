@@ -242,37 +242,18 @@
             config.allowUnfree = true;
           };
           garden = self.nixosConfigurations.homelab01.config.cg.service.digital-garden;
-          # caddyConfig takes no settings, so importing site.nix again for it
-          # duplicates no configuration - unlike the renderer above.
-          site = import ./modules/services/digital-garden/lib/site.nix {
-            inherit pkgs;
+          # caddyConfig takes no settings, so importing serve.nix again for it
+          # duplicates no configuration - unlike the renderer, which is read
+          # out of the host's own evaluated config below.
+          serve = import ./modules/services/digital-garden/lib/serve.nix {
             inherit (nixpkgs) lib;
-            quartz = self.packages.${system}.quartz;
-          };
-          hugo = import ./modules/services/digital-garden/lib/hugo.nix {
-            inherit pkgs;
-            inherit (nixpkgs) lib;
-          };
-          hugoRenderer = hugo.mkRenderer {
-            inherit (garden) baseUrl siteTitle footerLinks;
-            styleSheet = ./modules/services/digital-garden/lib/hugo/assets/main.css;
           };
           preview = import ./modules/services/digital-garden/lib/preview.nix {
-            inherit pkgs site;
+            inherit pkgs serve;
             inherit (nixpkgs) lib;
+            inherit (garden) renderer styleSheet;
             filter = ./modules/services/digital-garden/publish-filter.py;
-            generators = {
-              quartz = {
-                renderer = garden.renderer;
-                styleSheet = garden.styleSheet;
-                workingTreeStyleSheet = "hosts/homelab01/digital-garden.scss";
-              };
-              hugo = {
-                renderer = hugoRenderer;
-                styleSheet = ./modules/services/digital-garden/lib/hugo/assets/main.css;
-                workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
-              };
-            };
+            workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
           };
         in
         {

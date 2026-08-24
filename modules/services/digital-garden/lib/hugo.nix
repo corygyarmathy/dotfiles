@@ -1,13 +1,15 @@
-# Hugo renderer for the digital garden — an alternative to lib/site.nix's
-# Quartz one, offered on the same contract so the two can be compared:
+# How the digital garden is generated:
 #
-#   digital-garden-render <content-dir> <output-dir> [stylesheet]
+#   digital-garden-render-hugo <content-dir> <output-dir> [stylesheet]
 #
-# Why this exists. Packaging Quartz costs 562 lines of Nix and a pinned tree of
-# ~42 npm plugins, because Quartz v5 resolves its own plugins by cloning them
-# at build time and cannot be updated without risking a build that succeeds and
-# a site that is silently featureless. Hugo is one Go binary in nixpkgs, Pagefind
-# is one Rust binary, and neither fetches anything at build time or at runtime.
+# Why Hugo. The site was built with Quartz until 2026-08-24, which cost 562
+# lines of Nix and a tree of ~42 hash-pinned npm plugins, because Quartz v5
+# resolves its own plugins by cloning them at build time. The decisive problem
+# was not the size of that but that it could not be updated: a wrong bump
+# produces a build that SUCCEEDS and a site that is silently featureless, so
+# the version was pinned and stayed pinned. Hugo is one Go binary in nixpkgs
+# and Pagefind is one Rust binary; both ride flake.lock, and neither fetches
+# anything at build time or in the reader's browser.
 #
 # What made this cheap is that publish-filter.py already owns the hard parts.
 # The staging tree is plain CommonMark whose links carry finished URLs, so this

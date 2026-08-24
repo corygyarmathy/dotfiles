@@ -2,12 +2,17 @@
 """Copy ONLY notes marked `publish: true` out of the vault into a staging tree.
 
 This is the security boundary for the digital garden, and it is deliberately
-placed *before* the site generator rather than inside it. Quartz can filter on
-`publish` itself (the explicit-publish plugin), but that puts the safety
-property at the mercy of a config option that ships disabled by default and
-could be silently dropped by an upgrade. Here, an unmarked note is never copied,
-so it cannot be rendered, indexed, linked, or served no matter what the
-generator is told to do.
+placed *before* the site generator rather than inside it. A generator that can
+filter on `publish` itself puts the safety property at the mercy of a config
+option, which can ship disabled, be mistyped, or be dropped by an upgrade
+without anything failing. Here, an unmarked note is never copied, so it cannot
+be rendered, indexed, linked, or served no matter what the generator is told to
+do — or which generator it is.
+
+The builder re-checks the marker on the staging tree before rendering, and
+refuses to build if one is missing; see digital-garden.nix. That is the second
+layer, and it is deliberately not in this file: a check inside the thing being
+checked is worth less.
 
 Fail-closed rules, in order of importance:
   * publish defaults to false. Only a real YAML boolean true publishes.
@@ -42,8 +47,8 @@ and one page.
 
 Dates are derived, not written by hand. `<ledger>` records the first time each
 note appeared in the published set and the last time its text changed, and
-those are injected as `published:`/`modified:` frontmatter for Quartz to
-render. Frontmatter written by hand always wins, so the ledger is a default and
+those are injected as `published:`/`modified:` frontmatter for the
+generator to render. Frontmatter written by hand always wins, so the ledger is a default and
 not an authority — which also means losing the ledger costs you nothing that
 matters.
 
@@ -54,9 +59,9 @@ while each claim lives in exactly one place: the essay making it. It is
 optional; a note without one is reported, not withheld. Notes past
 LONG_NOTE_WORDS are reported on the same terms.
 
-A leading H1 is lifted out of the body and becomes the title. Quartz renders a
-title of its own, so a note written the ordinary way would otherwise show it
-twice.
+A leading H1 is lifted out of the body and becomes the title. The page template
+renders a title of its own, so a note written the ordinary way would otherwise
+show it twice.
 
 Usage: publish-filter.py <vault> <staging> <ledger>
 """
@@ -101,9 +106,10 @@ ATTACHMENT_SUFFIXES = {
 def slugify(name):
     """The URL path a note or attachment is published at.
 
-    Deliberately reproduces, character for character, what Quartz was already
-    doing to filenames — lowercase, spaces to hyphens, nothing else touched —
-    because those URLs are live and must not move. Runs of hyphens are NOT
+    Lowercase, spaces to hyphens, nothing else touched. That is not an
+    aesthetic choice: it reproduces character for character what the site's
+    original generator did to filenames, because those URLs were already live
+    when this moved here and must not move again. Runs of hyphens are NOT
     collapsed, so "A - B" stays "a---b" exactly as it is served today.
 
     Owning this here rather than leaving it to the generator is the point: it
@@ -293,8 +299,8 @@ def main(argv):
             continue
         front, body = split
 
-        # Markdown convention says the first H1 is the title, and Quartz renders
-        # a title of its own from the filename, so a note written the usual way
+        # Markdown convention says the first H1 is the title, and the page
+        # template renders a title of its own, so a note written the usual way
         # shows it twice. Take the H1 out and let it BE the title, which also
         # means a note can be titled differently from its filename without
         # anyone having to remember a frontmatter key.
@@ -316,7 +322,8 @@ def main(argv):
             if words > LONG_NOTE_WORDS:
                 overlong.append((rel, words))
             # As real YAML dates, so they match a hand-written `published:` and
-            # reach Quartz as dates rather than as strings that look like them.
+            # reach the generator as dates rather than as strings that look
+            # like them.
             front.setdefault("published", date.fromisoformat(entry["published"]))
             if entry["modified"] != entry["published"]:
                 front.setdefault("modified", date.fromisoformat(entry["modified"]))
