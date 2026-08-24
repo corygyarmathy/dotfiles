@@ -1,15 +1,14 @@
-/* Digital garden stylesheet.
+/* Digital garden stylesheet — the whole design, with no theme underneath.
  *
- * The palette is Quartz's own default, value for value, so that moving between
- * the two generators is not also a redesign. The names are Quartz's too, which
- * read oddly in dark mode — `--light` is the BACKGROUND in both themes, not a
- * light colour — but keeping them means the two stylesheets can be compared
- * without a translation table.
+ * The palette is inherited value-for-value from the site's previous generator,
+ * so that changing how the site is built was not also a redesign. That is also
+ * why `--light` names the BACKGROUND in both themes rather than a light colour:
+ * the names came with the values, and renaming them later is a change worth
+ * making on its own rather than smuggling into a migration.
  *
- * Fonts are the system stack. Quartz's config asks for Schibsted Grotesk and
- * Source Sans Pro with `fontOrigin: local`, which means it never ships them and
- * every visitor already falls through to system-ui. Naming the fallback
- * directly is the same result without the pretence.
+ * Fonts are the system stack, which is what the site already rendered in — the
+ * previous generator asked for Schibsted Grotesk and Source Sans Pro but never
+ * shipped them, so every visitor fell through to system-ui anyway.
  */
 
 :root {

@@ -305,7 +305,7 @@ The third is the most faithful and the most work. Start with the second and see 
 | ~~`data-safety`~~ | ~~a canary file in the shared download root survives service startup~~ | **struck** - the assertion is vacuous; see below                              | struck |
 | `reverse-proxy`  | Caddy starts, routes to a stub backend, serves 200                  | every public service depends on it; a routing regression is invisible to a build | **done** |
 | `monitoring`     | Prometheus starts, loads rules, scrapes a target                    | rule and config errors only surface at activation                                | **done** |
-| `digital-garden` | quartz builds a vault and the result is served                      | the failure mode is a _successful_ build and an empty site                       | **done** |
+| `digital-garden` | the generator builds a vault and the result is served                | the failure mode is a _successful_ build and an empty site                       | **done** |
 | `media-stack`    | the arr services reach their ports                                  | the largest module, and the one with the most moving parts                       | waiting on the move off containers |
 
 The original ordering put `data-safety` first, and ADR 0003 sharpened the case: the recent data loss was one root cause - LazyLibrarian's PostProcessor pointed at the shared download root - firing twice, two days apart, for 3.68 TiB, and ADR 0003 established that no arrangement of bind mounts can prevent a recurrence for the services that hardlink, because the kernel will not link across a mount boundary. The conclusion drawn from that - _therefore the test is the only thing that covers it_ - did not follow, and is corrected below. It is a good example of a real argument for needing something being mistaken for evidence that the proposed something works.
@@ -444,6 +444,27 @@ Two of those three build perfectly and would have merged, deployed and served.
 **Also worth recording:** `digital-garden.nix` adds a Caddy virtual host but never enables Caddy - on a host that arrives via `cg.service.reverse-proxy`. Enabling the garden alone on a host would build a site that nothing serves. Not changed here, since both servers run the proxy, but it is a coupling that is invisible until it bites.
 
 ---
+
+### `digital-garden` again, 2026-08-24: the generator changed underneath it
+
+The site moved from Quartz to Hugo, and the test had to be rewritten rather than adjusted - which is the interesting part, because it was the *assertions* that were generator-shaped, not the properties.
+
+**The failure mode the test guards against changed, and shrank.** Under Quartz it was a build that succeeded while producing a featureless site: a plugin that failed to instantiate left an undefined in the component list, and a plugin index regenerated without `dist/` yielded a site that was green all the way through and empty. Hugo removes most of that class - a template that does not resolve is a build error, and there are no plugins to resolve. What remains is narrower and still real: a *missing* template is not an error. Hugo skips the pages it would have rendered and reports success. The first Hugo build of this site emitted the home page and nothing else, and said `Total in 40 ms` while doing it. Every assertion that looked only at the home page passed.
+
+So the stylesheet assertions - `.flex-component`, `.desktop-only`, `.table-container`, chosen because they came from `base.scss` and nowhere else - were retired along with the file they were defending, and replaced by assertions that *every published note became a page*, plus that it is served on the first request rather than after a 308.
+
+**Three assertions were coupled to Quartz's output layout, not to anything the site promises.** `test -f public/index.css` (Hugo fingerprints its CSS, so there is no fixed name), `cat public/on-gates.html` (Hugo writes `on-gates/index.html`), and `url=../on-gates` in the alias redirect (Quartz wrote it relative, Hugo absolute). All three were checking the shape of the output tree, which is the generator's business, when what matters is what a reader receives. They now read the stylesheet URL off the page that links it, request pages over HTTP, and match the redirect target loosely.
+
+**The defence in depth had to be rebuilt, and this time it was tested.** The 2026-08-16 entry recorded an unplanned finding: breaking `publish-filter.py` did not leak the unpublished note, because Quartz's `explicit-publish` plugin caught what the filter no longer did. Hugo has no equivalent, so that layer left with Quartz. It now lives in the builder instead - a `grep` over the staging tree that refuses to build if any staged note is missing `publish: true` - which is a better home, because it no longer depends on which program renders the tree.
+
+Then it was actually broken, twice, to check it holds:
+
+- Making `is_published` return `True` for every note **did not** reach the new guard. The filter has its own pre-write re-check - it re-serialises the frontmatter and drops any note that does not still carry the marker - and that caught it first. Worth recording, because it means the filter is internally two layers, not one, and the obvious way to break it exercises the wrong one.
+- Removing that second check as well produced the intended result: `published 3 notes`, then `staged notes are missing 'publish: true'; refusing to build: rates-and-figures.md`, and the unit failed. The unpublished note never reached the generator, the served tree, or the search index.
+
+That is three independent layers between an unmarked note and a reader, and now two of them have been demonstrated rather than assumed.
+
+**A property the test never had, and now does.** Search is Pagefind, which indexes the rendered HTML rather than the markdown. That makes "the index covers the published set" checkable in a way it was not before: the test asserts a page count from `pagefind-entry.json` and that the published marker appears in the decompressed fragments. An index that exists but covers nothing is exactly what a build that skipped its pages leaves behind, and it would otherwise be served with a 200.
 
 ## 5. Service confinement _(moved out - see [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md))_
 

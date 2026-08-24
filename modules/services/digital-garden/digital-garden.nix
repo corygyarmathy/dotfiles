@@ -7,7 +7,7 @@
 #
 # Architecture:
 # - Timer -> oneshot builder. The builder obtains the vault, filters it down to
-#   published notes, then runs Quartz over the filtered tree.
+#   published notes, then runs the site generator over the filtered tree.
 # - Serving is plain HTTP on 127.0.0.1:<port>, which lets this slot into
 #   cg.service.reverse-proxy.services (TLS + LAN) and
 #   cg.service.cloudflare-tunnel.services (public) with no special casing.
@@ -21,21 +21,27 @@
 # publish boundary below is unchanged.
 #
 # The timer fires often (default: minutely) because a run is normally a no-op.
-# Two gates stand in front of the expensive Quartz pass: a stat-only walk of the
-# vault, and a content hash of the filtered tree. Editing a private note clears
-# the first and stops at the second; touching nothing stops at the first. Both
-# fold in a hash of the build inputs, so a Quartz upgrade or an option change
-# still forces a rebuild of an otherwise untouched vault.
+# Two gates stand in front of the build: a stat-only walk of the vault, and a
+# content hash of the filtered tree. Editing a private note clears the first and
+# stops at the second; touching nothing stops at the first. Both fold in a hash
+# of the build inputs, so a Hugo upgrade or an option change still forces a
+# rebuild of an otherwise untouched vault.
 #
 # ════════════════════════════════════════════════════════════════════════════
 # The publish boundary
 # ════════════════════════════════════════════════════════════════════════════
 # publish-filter.py copies ONLY notes containing a literal `publish: true` into
-# a staging tree, and Quartz is pointed at that staging tree — never at the
-# vault. An unmarked note is therefore not merely unrendered, it is not present
-# on disk for the generator to see, so no plugin misconfiguration or upstream
-# default change can expose it. Quartz's own explicit-publish plugin is ALSO
-# enabled below, but strictly as defence in depth; the filter is the boundary.
+# a staging tree, and the generator is pointed at that staging tree — never at
+# the vault. An unmarked note is therefore not merely unrendered, it is not
+# present on disk for the generator to see, so no template mistake or upstream
+# default change can expose it.
+#
+# The builder then RE-CHECKS the marker on every staged note before rendering,
+# and refuses to build if one is missing. That second layer used to be Quartz's
+# explicit-publish plugin, and it earned its place: when the filter was once
+# broken deliberately, the plugin is what caught the leak. Hugo has no
+# equivalent, so the check lives in the builder now — which is a better home
+# anyway, because it no longer depends on which program renders the tree.
 #
 # Known residual leak: a published note that writes [[Some Private Note]] in
 # prose still renders the words "Some Private Note" (as plain text, not a
@@ -64,23 +70,19 @@
 let
   cfg = config.cg.service.digital-garden;
 
-  quartz = self.packages.${pkgs.stdenv.hostPlatform.system}.quartz;
   obsidian-headless = self.packages.${pkgs.stdenv.hostPlatform.system}.obsidian-headless;
 
-  # Rendering and serving live in lib/site.nix so that the local preview runs the
-  # same code as this service does. See the header there.
-  site = import ./lib/site.nix { inherit pkgs lib quartz; };
+  # Rendering and serving live under ./lib so that the local preview runs the
+  # same code as this service does. See the headers there.
+  serve = import ./lib/serve.nix { inherit lib; };
+  hugo = import ./lib/hugo.nix { inherit pkgs lib; };
 
-  renderer = site.mkRenderer {
+  renderer = hugo.mkRenderer {
     inherit (cfg)
       baseUrl
       siteTitle
       styleSheet
       footerLinks
-      disabledPlugins
-      pluginOptions
-      pluginLayout
-      layoutConfig
       ;
   };
 
@@ -88,15 +90,15 @@ let
   vaultDir = "${stateDir}/vault";
 
   # Identifies everything that can change the generated site other than the
-  # notes themselves. Folded into the build stamp so that a Quartz upgrade or a
+  # notes themselves. Folded into the build stamp so that a Hugo upgrade or a
   # changed option rebuilds even when the vault is untouched — otherwise the
   # skip-if-unchanged check below would happily serve a stale site forever.
   buildInputsId = builtins.hashString "sha256" (
     builtins.toJSON {
-      # The renderer's store path already moves when Quartz, the config
-      # rewriter, the stylesheet or any rendering option does — that is the
-      # whole content of the derivation. Only the filter has to be named
-      # separately, because it runs before the renderer is reached.
+      # The renderer's store path already moves when Hugo, the templates, the
+      # stylesheet or any rendering option does — that is the whole content of
+      # the derivation. Only the filter has to be named separately, because it
+      # runs before the renderer is reached.
       renderer = toString renderer;
       filter = toString ./publish-filter.py;
     }
@@ -147,8 +149,9 @@ let
       }
 
       # ---- 2. skip early if nothing could possibly have changed --------------
-      # Two gates, cheapest first, because the Quartz pass below is by far the
-      # most expensive step and most vault changes touch unpublished notes.
+      # Two gates, cheapest first. The render is no longer the expensive step -
+      # Hugo takes ~240ms where Quartz took ~3.8s - but the filter still walks
+      # the whole vault, and most vault changes touch unpublished notes.
       #
       # Gate one is a stat-only walk: no file is opened, so this stays cheap
       # enough to run every minute. Dotfiles are excluded to match the filter,
@@ -174,6 +177,24 @@ let
       python3 ${./publish-filter.py} "${vaultDir}" "${stateDir}/content" \
         "${stateDir}/dates.json"
 
+      # Defence in depth, and the reason it is here rather than in the
+      # generator. Quartz had an explicit-publish plugin that re-checked the
+      # marker, and when publish-filter.py was once broken deliberately, that
+      # second layer is what held. Hugo has no equivalent and should not need
+      # one — so the check moves here, where it guards the staging tree itself
+      # and does not depend on which program renders it.
+      #
+      # Cheap enough to be unconditional: the staging tree is the published
+      # set, not the vault. If anything in it lost its marker on the way
+      # through the filter, refuse to build rather than serve it.
+      unmarked=$(grep -rLE '^publish:[[:space:]]*true[[:space:]]*(#.*)?$' \
+        --include='*.md' "${stateDir}/content" || true)
+      if [ -n "$unmarked" ]; then
+        echo "staged notes are missing 'publish: true'; refusing to build:" >&2
+        echo "$unmarked" >&2
+        exit 1
+      fi
+
       # Gate two: the vault moved, but did the PUBLISHED set? Editing a private
       # note changes vault_id and nothing else, and that is the common case.
       content_id=$(
@@ -190,9 +211,9 @@ let
       fi
 
       # ---- 4. build ---------------------------------------------------------
-      # Everything about how the site is generated lives in lib/site.nix, which the
-      # local preview calls the same way. Passing no stylesheet takes the one
-      # baked into the renderer, which is cfg.styleSheet.
+      # Everything about how the site is generated lives in lib/hugo.nix, which
+      # the local preview calls the same way. Passing no stylesheet takes the
+      # one baked into the renderer, which is cfg.styleSheet.
       ${lib.getExe renderer} "${stateDir}/content" "${stateDir}/public.new"
 
       # ---- 5. swap in atomically -------------------------------------------
@@ -273,7 +294,7 @@ in
     baseUrl = lib.mkOption {
       type = lib.types.str;
       default = "garden.gyarmathy.co";
-      description = "Public base URL, without scheme (Quartz wants it bare)";
+      description = "Public base URL, without scheme; the scheme is added by the renderer";
     };
 
     siteTitle = lib.mkOption {
@@ -290,7 +311,7 @@ in
 
         This is a check, not a rebuild: a run whose vault is untouched does a
         stat-only walk and exits, and one that changed only unpublished notes
-        stops after the filter. Quartz runs only when the published set actually
+        stops after the filter. Hugo runs only when the published set actually
         moved, so a short interval costs very little and caps publish latency at
         roughly one interval.
 
@@ -307,82 +328,8 @@ in
         GitHub = "https://github.com/corygyarmathy";
       };
       description = ''
-        Links shown in the site footer. Empty by default: upstream's default
-        config puts the Quartz project's own GitHub and Discord here, which
-        would otherwise be published as though they were yours.
-      '';
-    };
-
-    disabledPlugins = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [
-        "latex" # needs @myriaddreamin/rehype-typst
-        "favicon" # needs sharp
-        "og-image" # needs sharp
-      ];
-      description = ''
-        Quartz plugins to force off. The defaults are the ones whose own npm
-        dependencies are native and not vendored by the quartz package; leaving
-        any of them enabled aborts the build, because Quartz responds to a
-        plugin that fails to instantiate by putting undefined in the component
-        list rather than skipping it. Add to this list to switch off plugins
-        that work but are not wanted.
-
-        Note that note-properties looks like a presentation plugin and is not:
-        it is what parses frontmatter into aliases, tags and description.
-        Disabling it breaks alias redirects. To hide the properties panel it
-        renders, set its hidePropertiesView option in pluginOptions instead.
-      '';
-    };
-
-    pluginOptions = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
-      default = { };
-      example = {
-        content-meta.showReadingTime = false;
-      };
-      description = ''
-        Per-plugin options, merged over whatever upstream's default config sets
-        for that plugin. Keyed by plugin name, i.e. the last segment of its
-        `source:`.
-
-        Only the keys given are overridden, so this does not have to restate a
-        plugin's whole option set — which also means an upstream change to an
-        option left unmentioned here is picked up rather than pinned.
-      '';
-    };
-
-    pluginLayout = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
-      default = { };
-      example = {
-        search.position = "header";
-      };
-      description = ''
-        Where each component is placed on the page, merged over upstream's
-        default. Keyed by plugin name, same as pluginOptions.
-
-        This is the plugin entry's `layout:` block, which is a sibling of
-        `options:` and not part of it — hence the separate setting. Valid
-        positions are header, beforeBody, left, right and afterBody.
-      '';
-    };
-
-    layoutConfig = lib.mkOption {
-      type = lib.types.attrsOf lib.types.anything;
-      default = { };
-      example = {
-        byPageType.content.template = "full-width";
-      };
-      description = ''
-        Site-wide layout, deep-merged over upstream's top-level `layout:` block.
-        Holds component groups and per-page-type overrides.
-
-        `byPageType.<type>.template` picks the page frame: "default" (two
-        sidebars), "full-width" (none) or "minimal" (none, and no header or
-        footer chrome). `byPageType.<type>.positions.<pos> = []` clears a
-        position for that page type, and `.exclude` drops named components
-        from it.
+        Links shown in the site footer, as a name -> URL map. Empty by
+        default, which renders no list at all rather than an empty one.
       '';
     };
 
@@ -402,14 +349,16 @@ in
 
     styleSheet = lib.mkOption {
       type = lib.types.path;
-      default = pkgs.emptyFile;
+      default = ./lib/hugo/assets/main.css;
+      defaultText = lib.literalMD "the stylesheet the templates are written against";
       description = ''
-        A stylesheet appended to the generated site as
-        quartz/styles/custom.scss, which Quartz compiles into its stylesheet
-        AFTER base.scss. Rules here therefore win at equal specificity and do
-        not need !important.
+        The site's entire stylesheet, built as `assets/main.css`. Not an
+        override layered onto a theme — there is no theme underneath, so this
+        file and the templates in `lib/hugo/layouts` are the whole design and
+        are written against each other.
 
-        Scss, not plain css: nesting and the theme's variables are available.
+        Replacing it means restyling the site rather than adjusting it; to
+        change a colour or a margin, edit the default in place.
 
         A path rather than a block of inline lines, so that the preview can be
         pointed at the file in the working tree and re-render on save. Inline
@@ -620,7 +569,7 @@ in
     # supplied by cg.service.reverse-proxy / cloudflare-tunnel, same as every
     # other service — this just has no upstream process to proxy to.
     services.caddy.virtualHosts.":${toString cfg.port}".extraConfig =
-      site.caddyConfig "${stateDir}/public";
+      serve.caddyConfig "${stateDir}/public";
 
     # Caddy must be able to traverse into the generated site.
     users.users.caddy.extraGroups = [ "digital-garden" ];
