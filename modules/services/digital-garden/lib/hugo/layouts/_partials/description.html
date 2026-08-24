@@ -1,0 +1,11 @@
+{{/*
+  The one-line description of a page, resolved once so that <meta name>, the
+  social card and the feed cannot disagree about it.
+
+  For a note this is its `thesis`, which publish-filter.py already put in
+  `description`. The home page has no thesis - it is a table of contents, not
+  an argument - so it falls back to the site's own description. Nothing else
+  does: a note without a thesis gets no description rather than borrowing the
+  site's, which would describe the wrong thing on every page missing one.
+*/}}
+{{ return or .Description (cond .IsHome (site.Params.description | default "") "") }}

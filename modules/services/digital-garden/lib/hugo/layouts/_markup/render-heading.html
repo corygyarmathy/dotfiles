@@ -1,0 +1,22 @@
+{{/*
+  Every heading in a note is addressable, so a section of a long essay can be
+  linked to rather than described. LONG_NOTE_WORDS in publish-filter.py exists
+  because notes here do get long enough for that to matter.
+
+  The id is Hugo's `.Anchor`, deliberately not a slug computed here. Two
+  reasons: it de-duplicates, so two sections called "Notes" do not both claim
+  the same id and produce invalid HTML; and it is the value Hugo has always
+  emitted, so adopting this hook does not silently move every existing
+  fragment. publish-filter.py slugifies `[[Note#Some Heading]]` fragments with
+  its own rule, which agrees with this one for the headings Obsidian actually
+  produces and can diverge on punctuation - that caveat is recorded there and
+  is unchanged by this file.
+
+  The anchor is a real link with a real accessible name, not a decorative
+  character: it is hidden with opacity rather than display:none so that it
+  stays in the tab order and reachable by a screen reader.
+*/}}
+<h{{ .Level }} id="{{ .Anchor }}">
+  {{- .Text -}}
+  <a class="heading-anchor" href="#{{ .Anchor }}" aria-label="Link to this section">#</a>
+</h{{ .Level }}>

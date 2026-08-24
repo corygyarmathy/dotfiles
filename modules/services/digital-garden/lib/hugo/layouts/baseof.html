@@ -6,8 +6,9 @@
     <title>
       {{- if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} &middot; {{ site.Title }}{{ end -}}
     </title>
-    {{ with .Description }}<meta name="description" content="{{ . }}" />{{ end }}
+    {{ with partial "description.html" . }}<meta name="description" content="{{ . }}" />{{ end }}
     <link rel="canonical" href="{{ .Permalink }}" />
+    {{ partial "social.html" . }}
     {{ with resources.Get "main.css" | fingerprint }}
       <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" />
     {{ end }}

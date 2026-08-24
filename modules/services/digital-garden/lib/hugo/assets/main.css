@@ -178,6 +178,7 @@ a:hover {
 /* Chrome, not prose: a highlight behind these reads as a stray box. */
 footer a,
 .masthead-title,
+.heading-anchor,
 a.footnote-backref,
 [role="doc-backlink"] {
   background: none;
@@ -254,6 +255,68 @@ td {
   border-bottom: 1px solid var(--border);
   padding: 0.4rem 0.6rem;
   text-align: left;
+}
+
+/* ── heading anchors ────────────────────────────────────────────────────── */
+
+/* Hidden with opacity rather than display:none or visibility:hidden, so the
+ * link keeps its place in the tab order and its accessible name. A heading
+ * anchor nobody can reach by keyboard is decoration. */
+.heading-anchor {
+  margin-left: 0.3rem;
+  color: var(--muted);
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+}
+
+h2:hover > .heading-anchor,
+h3:hover > .heading-anchor,
+h4:hover > .heading-anchor,
+.heading-anchor:focus-visible {
+  opacity: 1;
+}
+
+/* Nothing hovers on a touch screen, so hiding it there hides it for good. */
+@media (hover: none) {
+  .heading-anchor {
+    opacity: 1;
+  }
+}
+
+/* ── backlinks ──────────────────────────────────────────────────────────── */
+
+/* Set apart from the essay rather than continuing it: these are other notes'
+ * words, and a reader who has reached the end of one piece should be able to
+ * see where the piece ends. */
+.backlinks {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.backlinks h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.backlinks ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.backlinks li {
+  margin-bottom: 0.35rem;
+}
+
+/* Same treatment the index gives an annotated link: the claim is secondary to
+ * the title it belongs to. */
+.backlink-thesis {
+  color: var(--muted);
 }
 
 /* ── footer ─────────────────────────────────────────────────────────────── */

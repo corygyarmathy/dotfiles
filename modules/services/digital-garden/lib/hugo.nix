@@ -27,6 +27,7 @@ in
     {
       baseUrl,
       siteTitle,
+      siteDescription ? "",
       styleSheet,
       footerLinks ? { },
       locale ? "en-au",
@@ -52,7 +53,14 @@ in
 
         [frontmatter]
         date = ['published', 'date']
-        lastmod = ['modified', 'lastmod']
+        # `date` last, so a note that was never edited reports its publication
+        # date as its last change rather than no date at all. Without it the
+        # feed's lastBuildDate and the sitemap's <lastmod> were empty, because
+        # publish-filter.py only writes `modified` when it differs from
+        # `published`. The dateline and the social card both compare the two
+        # and stay quiet when they are equal, so nothing starts claiming a note
+        # was updated on the day it was published.
+        lastmod = ['modified', 'lastmod', 'date']
 
         [markup.goldmark.renderer]
         # The vault contains no raw HTML, only autolinks — which are CommonMark
@@ -61,6 +69,7 @@ in
         unsafe = false
 
         [params]
+        description = ${builtins.toJSON siteDescription}
         footerLinks = [
         ${lib.concatStringsSep "\n" (
           lib.mapAttrsToList (

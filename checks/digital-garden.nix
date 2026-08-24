@@ -33,11 +33,11 @@
   nodes.machine =
     { pkgs, ... }:
     let
-      # Three notes: one published, one deliberately not, and one that fails to
-      # parse at all - because publish-filter.py's stated rules are that
-      # publish defaults to false AND that an unparseable note is skipped
-      # rather than published, and only the second of those is a fail-closed
-      # claim worth testing.
+      # Two published essays and a landing page; one note deliberately not
+      # published, and one that fails to parse at all - because
+      # publish-filter.py's stated rules are that publish defaults to false AND
+      # that an unparseable note is skipped rather than published, and only the
+      # second of those is a fail-closed claim worth testing.
       #
       # The published note links to the unpublished one, so the wikilink
       # rewriter is exercised rather than assumed.
@@ -74,6 +74,25 @@
         # On Boundaries
 
         MARKER-BOUNDARIES-BODY
+
+        ## A Heading, With Punctuation
+        NOTE
+
+        # A real landing page, because it is the one note whose handling is
+        # special: it is excluded as a backlink SOURCE. Without it here, the
+        # rule that keeps a table of contents from becoming every note's
+        # backlink would be asserted by its absence, which is no assertion.
+        cat > $out/index.md <<'NOTE'
+        ---
+        publish: true
+        ---
+
+        # Test Garden
+
+        MARKER-INDEX-BODY
+
+        - [[On Gates]]
+        - [[On Boundaries]]
         NOTE
 
         cat > $out/private/rates-and-figures.md <<'NOTE'
@@ -106,6 +125,7 @@
         enable = true;
         source = "obsidian-sync";
         siteTitle = "Test Garden";
+        siteDescription = "A test garden.";
         baseUrl = "garden.test.invalid";
       };
 
@@ -164,7 +184,7 @@
         # the URL, and a file staged under any other name would mean the
         # generator was deciding the address after all.
         staged = sorted(machine.succeed("ls /var/lib/digital-garden/content").split())
-        assert staged == ["on-boundaries.md", "on-gates.md"], staged
+        assert staged == ["index.md", "on-boundaries.md", "on-gates.md"], staged
 
     with subtest("no unpublished content reaches the served site"):
         # Deliberately the whole tree rather than the rendered page. A leak
@@ -306,8 +326,94 @@
         )
         assert "MARKER-PUBLISHED-BODY" in fragments, "the published note is not searchable"
 
-    with subtest("the feed and sitemap are generated"):
-        assert "on-gates" in served("/index.xml")
+    with subtest("a note shows what cites it, and the index is not a citation"):
+        # on-gates links to on-boundaries, so the backlink runs the other way.
+        page = served("/on-boundaries")
+        assert 'class="backlinks"' in page, "no backlinks section"
+        assert re.search(r'<a href="/on-gates/">On Gates</a>', page), page[-800:]
+        # With the source's thesis, so the list reads as claims.
+        assert "A gate that only builds proves the wrong thing." in page
+
+        # And the rule that needs a fixture to test at all: BOTH notes are
+        # linked from the landing page, and neither may count it. on-gates is
+        # cited by nothing else, so it must have no backlinks section - if the
+        # index were counted, every note on the site would carry the same
+        # entry and the feature would be noise.
+        assert 'class="backlinks"' not in served("/on-gates"), \
+            "the landing page was counted as a backlink source"
+
+        # Backlinks sit outside data-pagefind-body: they are another note's
+        # words, and indexing them here would make a search for a phrase
+        # return the essay that was cited rather than the one that said it.
+        fragments = machine.succeed(
+            f"for f in {SITE}/pagefind/fragment/*; do gunzip -c $f 2>/dev/null || cat $f; done"
+        )
+        assert "Linked from" not in fragments, "backlinks were indexed for search"
+
+    with subtest("headings are addressable"):
+        page = served("/on-boundaries")
+        # The id and the link have to agree; a heading with an id and no anchor
+        # is not reachable, and an anchor pointing at a missing id is worse.
+        m = re.search(r'<h2 id="([^"]+)">.*?<a class="heading-anchor" href="#([^"]+)"', page)
+        assert m, page[-800:]
+        assert m.group(1) == m.group(2), m.groups()
+        # Named, not decorative - the visible text is a single "#".
+        assert 'aria-label="Link to this section"' in page
+
+    with subtest("pages carry a social card built from the note's own claim"):
+        page = served("/on-gates")
+        assert '<meta property="og:type" content="article"' in page, page[:400]
+        assert '<meta property="og:url" content="https://garden.test.invalid/on-gates/"' in page
+
+        # The description is the note's own claim, not an extract of its prose.
+        assert 'content="A gate that only builds proves the wrong thing."' in page, \
+            "og:description is not the note's thesis"
+
+        # This next one is the assertion that actually guards something, and it
+        # is on the HOME page for a reason worth stating.
+        #
+        # Hugo ships an EMBEDDED opengraph partial. If _partials/social.html
+        # fails to reach the build - it once did, being untracked, and a flake
+        # only sees what git tracks - Hugo's version takes over silently. On an
+        # essay that substitution is nearly invisible, because Hugo reads the
+        # same `.Description` the filter wrote, so every assertion above still
+        # passes. The home page is where the two diverge: it has no thesis of
+        # its own, so it takes the site description, where Hugo's would
+        # summarise the body - which on a table of contents means scraping the
+        # link list. That is exactly what appeared the day this went wrong.
+        home = served("/")
+        assert '<meta property="og:type" content="website"' in home, home[:400]
+        assert 'og:description" content="A test garden."' in home, \
+            "the home page did not take the site description"
+        assert "MARKER-INDEX-BODY" not in home.split("</head>")[0], \
+            "the home page description was scraped from its body"
+
+    with subtest("the feed carries whole essays, not teasers"):
+        import xml.etree.ElementTree as ET
+
+        feed = served("/index.xml")
+        assert "on-gates" in feed
+        # Parsed rather than grepped: Hugo's built-in feed emitted a stray
+        # newline before the XML declaration once, which greps do not see and
+        # a reader's parser does.
+        channel = ET.fromstring(feed).find("channel")
+        assert channel is not None, "the feed has no channel"
+        assert channel.findtext("description") == "A test garden.", \
+            "the channel kept Hugo's 'Recent content on ...' boilerplate"
+        # Hugo printed "Mon, 01 Jan 0001" here until the frontmatter map fell
+        # through to the publication date.
+        built = channel.findtext("lastBuildDate") or ""
+        assert "0001" not in built, built
+
+        ns = {"content": "http://purl.org/rss/1.0/modules/content/"}
+        items = {i.findtext("title"): i for i in channel.findall("item")}
+        gates = items["On Gates"]
+        # Both fields, and they are not the same text: the summary is the
+        # thesis, the content is the essay.
+        assert gates.findtext("description") == "A gate that only builds proves the wrong thing."
+        body = gates.findtext("content:encoded", namespaces=ns) or ""
+        assert "MARKER-PUBLISHED-BODY" in body, "the feed does not carry the essay"
+
         assert "on-gates" in served("/sitemap.xml")
 
     with subtest("caddy serves the generated 404 rather than its own"):
