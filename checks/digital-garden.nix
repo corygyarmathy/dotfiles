@@ -1,18 +1,13 @@
 # The garden builds a real vault, publishes only what is marked, and serves it.
 #
-# The build gate is weak evidence here, and used to be actively misleading.
-# Under Quartz the failure mode was a build that *succeeded*: a plugin it could
-# not instantiate left an undefined in the component list, and a plugin index
-# regenerated without dist/ yielded a featureless site - green CI, clean
-# activation, service exits 0, and the site is empty or unstyled.
+# The build gate is weak evidence here. A template that does not resolve is a
+# build error and there are no plugins to resolve, so most of what could go
+# wrong does go loudly - but one thing does not: a *missing* template is not an
+# error. Hugo skips the pages it would have rendered and reports success. The
+# first Hugo build of this site emitted the home page and nothing else, and
+# said "Total in 40 ms" while doing it.
 #
-# Hugo removes most of that class. A template that does not resolve is a build
-# error, and there are no plugins to resolve at all. What remains is that a
-# *missing* template is not an error: Hugo skips the pages it would have
-# rendered and reports success. The first Hugo build of this site emitted the
-# home page and nothing else, and said "Total in 40 ms" while doing it.
-#
-# Two properties are therefore still worth more than "it built".
+# Two properties are therefore worth more than "it built".
 #
 # The publish boundary is the important one, and the only property in this
 # repository whose failure has consequences outside it. A test that only
@@ -128,11 +123,10 @@
         "C+ /var/lib/digital-garden/vault 0755 digital-garden digital-garden - ${vault}"
       ];
 
-      # The 4096/8192 this used to ask for was sized for a Quartz build: an
-      # esbuild pass over a ~19MB Node tree. Hugo and Pagefind are two static
-      # binaries rendering sixteen notes, so the headroom went with the reason
-      # for it. Still above what the run needs, because a test that fails by
-      # running out of memory does not say so clearly.
+      # Hugo and Pagefind are two static binaries rendering a handful of
+      # notes, so this needs very little. Still well above what the run uses,
+      # because a test that fails by running out of memory does not say so
+      # clearly.
       virtualisation.memorySize = 2048;
       virtualisation.diskSize = 4096;
     };
@@ -164,7 +158,7 @@
     with subtest("only published notes are in the staging tree"):
         # The boundary is publish-filter.py, and it works by never copying an
         # unpublished note - so the check that matches the design is on what
-        # the staging tree Quartz is pointed at contains, not on what renders.
+        # the staging tree contains, not on what renders.
         #
         # The names are the slugs, not the vault's filenames: the filter owns
         # the URL, and a file staged under any other name would mean the
@@ -174,7 +168,7 @@
 
     with subtest("no unpublished content reaches the served site"):
         # Deliberately the whole tree rather than the rendered page. A leak
-        # would most plausibly surface in static/contentIndex.json (the search
+        # would most plausibly surface in the Pagefind fragments (the search
         # index) or index.xml (the feed), neither of which anyone looks at.
         for marker in ["MARKER-PRIVATE-BODY", "MARKER-UNPARSEABLE-BODY"]:
             machine.fail(f"grep -r --quiet {marker} {SITE}")
@@ -194,11 +188,13 @@
 
     with subtest("a link to a published note is a real link"):
         page = served("/on-gates")
-        # Matched loosely on the form of the href, because whether it comes out
-        # absolute or relative is the generator's business; that it is a link
-        # to the right page is not.
-        assert re.search(r'href="\.?/on-boundaries/?"', page), \
-            "published link did not survive as a link"
+        # The trailing slash is asserted, not tolerated. Both forms are served
+        # directly, so this is not about reachability - it is that the filter
+        # writes links in the same string Hugo publishes in rel=canonical, the
+        # sitemap and the feed, and a page addressed two ways is a page that
+        # gets counted, cached and linked two ways.
+        assert re.search(r'href="\.?/on-boundaries/"', page), \
+            "published link did not survive as a link, with its trailing slash"
         # The alias is what the reader sees, not the filename.
         assert "the boundary essay" in page
 
@@ -225,11 +221,21 @@
         # reorganising the vault cannot break a URL, and injects an alias for
         # the old path. Both halves matter: the flat URL is the address, and
         # the vault-shaped one still resolves.
-        # The redirect target is matched loosely: Quartz wrote it relative and
-        # Hugo writes it absolute against baseURL. Which one is not the point;
-        # that the old address still leads to the new one is.
+        # The redirect target is matched loosely - absolute or relative is the
+        # generator's business. That the old address still leads to the new one
+        # is not.
         redirect = served("/essays/on-gates")
-        assert re.search(r"url=\S*/on-gates", redirect), redirect[:300]
+        assert re.search(r"url=\S*/on-gates/", redirect), redirect[:300]
+
+        # The alias has to be the URL that was SERVED, not the vault path it
+        # was derived from. "essays/On Boundaries.md" was reachable at
+        # /essays/on-boundaries; an alias built from the raw path instead
+        # publishes /essays/On%20Boundaries and leaves the real old address a
+        # 404 - which is the whole promise of flattening, broken silently.
+        # This fixture is named with a space and a capital for exactly this.
+        redirect = served("/essays/on-boundaries")
+        assert re.search(r"url=\S*/on-boundaries/", redirect), redirect[:300]
+        machine.fail("curl -sf 'http://localhost:8086/essays/On%20Boundaries'")
 
     with subtest("every published note became a page"):
         # The silent-failure mode this test now exists for. A missing template
@@ -262,8 +268,26 @@
         href = re.search(r'href="([^"]*main\.[^"]*\.css)"', served("/"))
         assert href, "no fingerprinted stylesheet linked from the home page"
         css = served(href.group(1))
-        for selector in [".masthead", ".page", "--pagefind-ui-border"]:
+        for selector in [".masthead", ".page", "--pf-border"]:
             assert selector in css, f"{selector} missing from the stylesheet"
+
+    with subtest("search costs a reading page nothing until it is asked for"):
+        # The bundle is ~46KB gzipped that a reader who never searches never
+        # needs, so the page carries its URLs and fetches it on first use. The
+        # failure this guards is a template edit that quietly puts either file
+        # back into <head>, which nothing else would notice.
+        page = served("/on-gates")
+        assert not re.search(r'<script[^>]*\bsrc="[^"]*pagefind', page), \
+            "the pagefind bundle is loaded on every page again"
+        assert not re.search(r'<link[^>]*\bhref="[^"]*pagefind', page), \
+            "the pagefind stylesheet is loaded on every page again"
+        # And the other half: the URLs the page defers to have to be real, or
+        # the search button is a button that does nothing.
+        assert 'data-js="/pagefind/pagefind-component-ui.js"' in page, page[:400]
+        for asset in ["pagefind-component-ui.js", "pagefind-component-ui.css"]:
+            machine.succeed(
+                f"curl -sf -o /dev/null http://localhost:8086/pagefind/{asset}"
+            )
 
     with subtest("search is built and covers the published set"):
         # Pagefind indexes the rendered HTML, so an index that exists but is

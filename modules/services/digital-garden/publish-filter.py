@@ -33,11 +33,20 @@ served as, pointing at each other by those names, so swapping one generator for
 another cannot silently move a page. See `slugify`.
 
 Published notes are FLATTENED to the root of the staging tree, so the site's
-URLs are `/some-essay` rather than `/whatever-folder/some-essay`. The vault's
+URLs are `/some-essay/` rather than `/whatever-folder/some-essay/`. The vault's
 folder names are private working vocabulary, and reorganising the vault must
 not break a published URL. A note that moves keeps its address; a note's old
-address keeps working via an injected `aliases:` entry, which the
-alias-redirects plugin turns into a redirect page.
+address keeps working via an injected `aliases:` entry, which the generator
+turns into a redirect page. That entry is slugified segment by segment, because
+the address being kept alive is the one that was *served*, not the vault path
+it was derived from — `essays/On Boundaries.md` was reachable at
+`/essays/on-boundaries/`, and an alias naming the raw path publishes a URL with
+a space in it while leaving the real old address a 404.
+
+Links carry a trailing slash, which is the form the generator itself publishes
+in `rel=canonical`, the sitemap, the feed and the search index. Both forms are
+served directly, so this is not about reachability: it is so that one page is
+one string everywhere it is written down.
 
 Flattening makes filenames the global namespace, which the link rewriter below
 already assumed (it resolves wikilinks by stem). Two published notes sharing a
@@ -87,8 +96,9 @@ LEADING_H1 = re.compile(r"\A\s*#[ \t]+(.+?)[ \t]*\n+")
 # A list item that is nothing but a link to another published note — the shape
 # an index or hub entry takes before its thesis is filled in. Matched after the
 # wikilinks have already become Markdown links, so there is one link syntax to
-# recognise here rather than two.
-BARE_LINK_ITEM = re.compile(r"^([ \t]*[-*+][ \t]+)\[([^\]]*)\]\(/([^)#]*)[^)]*\)[ \t]*$", re.M)
+# recognise here rather than two. The trailing slash is captured OUTSIDE the
+# slug so that the lookup key matches the one `theses` is built with.
+BARE_LINK_ITEM = re.compile(r"^([ \t]*[-*+][ \t]+)\[([^\]]*)\]\(/([^)#/]*)/?[^)]*\)[ \t]*$", re.M)
 # Unreserved URL characters (RFC 3986). Anything else is dropped rather than
 # percent-escaped: an escape in a path is not something anyone wants to read,
 # type, or see in a browser's address bar.
@@ -266,7 +276,7 @@ def main(argv):
             # which is right for the headings Obsidian produces and would need
             # revisiting for one containing punctuation a generator strips.
             anchor = f"#{slugify(heading[1:])}" if heading else ""
-            return f"[{alias or target}](/{slugify(published[key][0].stem)}{anchor})"
+            return f"[{alias or target}](/{slugify(published[key][0].stem)}/{anchor})"
         return alias or target                  # link to an unpublished note
 
     # ---- pass 4: derive dates, then write a flat tree and swap it in --------
@@ -352,8 +362,11 @@ def main(argv):
         body = BARE_LINK_ITEM.sub(annotate, body)
 
         # Everything published lives at the root, so anything that used to live
-        # in a folder needs its old address kept alive.
-        old_url = str(rel.with_suffix(""))
+        # in a folder needs its old address kept alive. Slugified segment by
+        # segment: the address to keep alive is the one that was served, and
+        # the vault path it came from is not that string — "essays/On
+        # Boundaries" was served at /essays/on-boundaries/.
+        old_url = "/".join(slugify(part) for part in rel.with_suffix("").parts)
         if rel.parent != Path("."):
             aliases = coalesce_aliases(front)
             if old_url not in aliases:

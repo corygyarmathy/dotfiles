@@ -1,33 +1,35 @@
 # How a generated site is served, shared by the NixOS service and the local
 # preview so that a routing fix lands in both.
 #
-# This was lib/site.nix, which also held the Quartz rendering pass; that half
-# left with Quartz, and rendering now lives in lib/hugo.nix. Serving stays
-# separate from it because it is a property of the output tree, not of the
-# program that produced the tree — which is exactly what let the two generators
-# be compared under identical routing while the choice was open.
+# Kept apart from lib/hugo.nix on purpose: serving is a property of the output
+# tree, not of the program that produced it. A site that has been rendered to
+# HTML has no remaining opinion about who rendered it, and routing that has to
+# be reasoned about alongside a generator's internals is routing nobody can
+# check.
 { lib }:
 {
   # Serving config for a generated site rooted at `root`.
   #
-  # The try_files line is not boilerplate. Hugo emits `<slug>/index.html` and
-  # links to `<slug>`, so getting this wrong either 404s every internal link or
-  # spends a redirect on each one.
+  # The try_files line is not boilerplate. Hugo emits `<slug>/index.html`, and
+  # getting this wrong spends a redirect on requests that should be answered
+  # directly.
   caddyConfig = root: ''
     root * ${root}
     encode gzip zstd
     # The index INSIDE a directory is tried before the directory itself,
-    # because file_server answers a request for a directory with a 308 to its
-    # trailing-slash form. Naming index.html directly serves the page on the
-    # first request instead, which is what turns every internal link from two
-    # round trips into one.
+    # because file_server answers a request for a bare directory with a 308 to
+    # its trailing-slash form. Naming index.html directly serves the page on
+    # the first request instead.
     #
-    # After that: the literal path, for assets; then the same slug with a .html
-    # extension, which is the shape a generator that emits `<slug>.html` rather
-    # than `<slug>/index.html` produces. Keeping that third case costs nothing
-    # and means the served URLs do not depend on which generator built the
-    # tree.
-    try_files {path}/index.html {path} {path}.html
+    # The site's own links carry the slash (publish-filter.py writes them that
+    # way, to match what Hugo puts in rel=canonical), so this is not what makes
+    # the common case fast — it is what keeps the SLASHLESS form a first-class
+    # address rather than a redirect. Old links and typed URLs take that form,
+    # and they are the ones with nothing to fall back on.
+    #
+    # Then the literal path, which is how every asset — the stylesheet, the
+    # feed, the search bundle — is answered.
+    try_files {path}/index.html {path}
     file_server
     # Hugo generates a styled 404 page; without this Caddy answers with its own
     # empty one.
