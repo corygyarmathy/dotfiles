@@ -1,0 +1,37 @@
+{{/*
+  Two kinds of blockquote reach here, and Hugo's parser has already told them
+  apart: an "alert" is the callout syntax Obsidian shares with GitHub -
+  `> [!type]`, an optional `+`/`-` fold sign, an optional title on the same
+  line - and anything else is an ordinary quotation, rendered exactly as it
+  always has been.
+
+  Folding follows Obsidian: no sign means the callout does not fold, `+`
+  means it folds and starts open, `-` means it starts closed. <details>
+  gives all three with no JavaScript, and its content is still plain HTML, so
+  the search index sees a folded callout the same as an open one.
+
+  An untitled callout takes its type as the title, as in Obsidian, so
+  `> [!note]` on its own needs nothing more.
+
+  The type is not validated against a list - Obsidian lets a vault define its
+  own callout types, and an unknown one simply gets the default accent from
+  the stylesheet, with its own name on it.
+*/}}
+{{ if eq .Type "alert" }}
+  {{ $title := .AlertTitle | default (title .AlertType) }}
+  {{ if eq .AlertSign "" }}
+    <div class="callout callout-{{ .AlertType }}">
+      <p class="callout-title">{{ $title }}</p>
+      {{ .Text }}
+    </div>
+  {{ else }}
+    <details class="callout callout-{{ .AlertType }}"{{ if eq .AlertSign "+" }} open{{ end }}>
+      <summary class="callout-title">{{ $title }}</summary>
+      {{ .Text }}
+    </details>
+  {{ end }}
+{{ else }}
+  <blockquote>
+    {{ .Text }}
+  </blockquote>
+{{ end }}

@@ -25,12 +25,21 @@ Fail-closed rules, in order of importance:
   * The staging tree is built fresh and swapped in, so a removed `publish: true`
     always disappears from the next build.
 
-Nothing Obsidian-specific reaches the generator. Wikilinks become ordinary
-Markdown links and embeds become ordinary images, so the staging tree is plain
-CommonMark whose links already carry the finished URL. That is what keeps the
-generator replaceable: it is handed files already named what they will be
-served as, pointing at each other by those names, so swapping one generator for
-another cannot silently move a page. See `slugify`.
+Nothing Obsidian-specific reaches the generator except two things Hugo's own
+parser understands, chosen so any CommonMark renderer degrades them
+gracefully: callouts (> [!type], a blockquote either way) and $...$ maths
+(captured by the passthrough extension). Everything else is rewritten here.
+Wikilinks become ordinary Markdown links and embeds become ordinary images,
+so the staging tree's links already carry the finished URL. That is what
+keeps the generator replaceable: it is handed files already named what they
+will be served as, pointing at each other by those names, so swapping one
+generator for another cannot silently move a page. See `slugify`.
+
+Obsidian's internal-only syntax is stripped rather than rendered: %% comments
+and ^block identifiers never leave the vault. A link to a block
+([[Note#^id]]) drops its fragment, because the id it names does not survive;
+a link to a heading in the same note ([[#Heading]]) is rewritten to an
+ordinary fragment link. See OBSIDIAN_INTERNAL and `rewrite`.
 
 Published notes are FLATTENED to the root of the staging tree, so the site's
 URLs are `/some-essay/` rather than `/whatever-folder/some-essay/`. The vault's
@@ -99,10 +108,25 @@ from pathlib import Path
 import yaml
 
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
-# (?!\() rejects [[1]](url) — pasted Wikipedia prose is full of these
-LINK = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]*))?\]\](?!\()")
+# (?!\() rejects [[1]](url) — pasted Wikipedia prose is full of these.
+# The target may be empty, which is Obsidian's same-note link: [[#Heading]].
+LINK = re.compile(r"(!?)\[\[([^\]|#]*)(#[^\]|]*)?(?:\|([^\]]*))?\]\](?!\()")
 # deliberately not a YAML parser: we accept exactly one literal spelling
 PUBLISH_TRUE = re.compile(r"^publish:\s*true\s*(?:#.*)?$", re.M | re.I)
+# Obsidian's internal annotations, matched in one alternation so that code
+# wins over everything: a fenced block or an inline span is kept whole, while
+# a %% comment or a trailing ^block-id is dropped. The comment pattern needs
+# its closing %% — an unclosed marker is left alone, because Obsidian's
+# comment-to-end-of-file rule would let one stray keystroke delete half a
+# published note. Fences are backtick-only; tilde fences are rare enough that
+# treating their contents as prose is the acceptable failure.
+OBSIDIAN_INTERNAL = re.compile(
+    r"(^`{3,}[^\n]*\n.*?^`{3,}[ \t]*$)"  # fenced code block — kept
+    r"|(`+[^`\n]*`+)"  # inline code span — kept
+    r"|%%.*?%%"  # comment — dropped
+    r"| ?\^[A-Za-z0-9-]+[ \t]*$",  # block identifier — dropped
+    re.M | re.S,
+)
 # The first thing in the body, if it is an ATX H1. Setext underlining is not
 # matched: Obsidian does not produce it and guessing costs more than it saves.
 LEADING_H1 = re.compile(r"\A\s*#[ \t]+(.+?)[ \t]*\n+")
@@ -375,10 +399,25 @@ def main(argv):
                 return alias or target          # embed of something not shipping
             used_attachments[hit] = True
             return f"![{alias or ''}](/{ATTACHMENTS}/{slugify(hit.name)})"
-        if key in published:
+        # A fragment naming a block rather than a heading points at an id
+        # that is stripped below, so the link drops it rather than landing
+        # nowhere.
+        anchor = ""
+        if heading and not heading[1:].startswith("^"):
             # A heading fragment follows the generator's rule, not ours - see
             # `anchorize` for why those are two different things.
-            anchor = f"#{anchorize(heading[1:])}" if heading else ""
+            anchor = f"#{anchorize(heading[1:])}"
+        if not key:
+            # [[#Heading]] - Obsidian resolves an empty target against the
+            # note holding the link, and a bare fragment does the same here.
+            # A block reference in the same note has nothing left to point
+            # at, so it becomes plain text like any other unshippable target.
+            if not heading:
+                return m.group(0)               # [[]] - not a link at all
+            if anchor:
+                return f"[{alias or heading[1:]}]({anchor})"
+            return alias or heading[1:].lstrip("^")
+        if key in published:
             return f"[{alias or target}](/{slugify(published[key][0].stem)}/{anchor})"
         return alias or target                  # link to an unpublished note
 
@@ -446,6 +485,12 @@ def main(argv):
         heading = LEADING_H1.match(body)
         if heading:
             body = body[heading.end() :]
+
+        # Obsidian's internal annotations - %% comments and ^block ids -
+        # never leave the vault. One pass, so that code (fenced or inline) is
+        # never touched by it.
+        body = OBSIDIAN_INTERNAL.sub(lambda m: m.group(1) or m.group(2) or "", body)
+
         # Always explicit, because the file is about to be renamed to its slug
         # and a generator falling back to the filename for a title would then
         # show "building-capability" where it used to show "Building
