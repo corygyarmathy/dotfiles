@@ -1,0 +1,25 @@
+{{/*
+  The notes that cite this one. Derived by publish-filter.py, which is the only
+  place the link graph exists in resolved form - see its docstring for why, and
+  for why the home page is not counted as a source.
+
+  Rendered OUTSIDE the <article data-pagefind-body> in page.html, on purpose.
+  These are other notes' words; indexing them here would make a search for a
+  phrase return the essay that was cited rather than the one that said it.
+
+  Each entry carries the source's thesis where it has one, so this list reads
+  as claims, exactly as a hand-written index does.
+*/}}
+{{ with .Params.backlinks }}
+  <nav class="backlinks" aria-labelledby="backlinks-title">
+    <h2 id="backlinks-title">Linked from</h2>
+    <ul>
+      {{ range . }}
+        <li>
+          <a href="{{ .url }}">{{ .title }}</a>
+          {{- with .thesis }} <span class="backlink-thesis">— {{ . }}</span>{{ end -}}
+        </li>
+      {{ end }}
+    </ul>
+  </nav>
+{{ end }}

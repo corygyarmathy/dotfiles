@@ -82,6 +82,7 @@ let
     inherit (cfg)
       baseUrl
       siteTitle
+      siteDescription
       styleSheet
       footerLinks
       ;
@@ -301,6 +302,20 @@ in
       type = lib.types.str;
       default = "Cory Gyarmathy";
       description = "Site title shown in the header";
+    };
+
+    siteDescription = lib.mkOption {
+      type = lib.types.str;
+      default = "Notes and essays, published from a private vault.";
+      description = ''
+        One sentence describing the site.
+
+        Used for the home page only - its `<meta name="description">`, its
+        social card, and the feed's channel description, which Hugo otherwise
+        fills with "Recent content on <title>". Every other page describes
+        itself with its own `thesis`, and a note that has none gets no
+        description rather than borrowing this one.
+      '';
     };
 
     schedule = lib.mkOption {

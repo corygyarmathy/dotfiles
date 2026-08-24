@@ -72,6 +72,18 @@ A leading H1 is lifted out of the body and becomes the title. The page template
 renders a title of its own, so a note written the ordinary way would otherwise
 show it twice.
 
+Backlinks are derived here rather than in the generator, for the same reason
+the URLs are: this is the only place that knows the link graph. By the time the
+generator sees a page, a link is an opaque href; here it is still a wikilink
+resolved against the published set. That also makes the safety property free
+rather than argued - a backlink source can only be a note already in
+`published`, so an unpublished note cannot appear as one, and the publish
+boundary needs no second look.
+
+The home page is excluded as a SOURCE. It is a table of contents that links to
+everything, so counting it would give every note the same backlink and tell a
+reader nothing they did not get by arriving from it.
+
 Usage: publish-filter.py <vault> <staging> <ledger>
 """
 
@@ -127,6 +139,26 @@ def slugify(name):
     whatever renders it.
     """
     return SLUG_DROP.sub("", name.lower().replace(" ", "-"))
+
+
+def resolve_title(front, body, rel):
+    """The title a note is published under.
+
+    Frontmatter wins, then a leading H1, then the filename. Computed before
+    anything is written because backlinks need every note's title while the
+    first note is still being rendered - and having one definition of this is
+    worth more than the pass it saves.
+
+    Wikilinks in a title are flattened to their own text. A title is prose, not
+    a place to put a link, and the alternative is a Markdown link embedded in a
+    <title> tag and an og:title.
+    """
+    if front.get("title"):
+        return str(front["title"])
+    heading = LEADING_H1.match(body)
+    if heading:
+        return LINK.sub(lambda m: m.group(4) or m.group(2), heading.group(1)).strip()
+    return rel.stem
 
 
 def is_published(text):
@@ -243,6 +275,7 @@ def main(argv):
     #              written and an unusable note is dropped before it is linked -
     fronts = {}   # stem(lower) -> (frontmatter mapping, body)
     theses = {}   # slug -> one-line claim, since a rewritten link carries a slug
+    titles = {}   # slug -> display title, for backlinks and for the write loop
     for key, (rel, text) in sorted(published.items()):
         split = split_frontmatter(text)
         if split is None:
@@ -250,6 +283,7 @@ def main(argv):
             skipped += 1
             continue
         fronts[key] = split
+        titles[slugify(rel.stem)] = resolve_title(split[0], split[1], rel)
         thesis = split[0].get("thesis")
         if thesis:
             theses[slugify(rel.stem)] = " ".join(str(thesis).split())
@@ -279,7 +313,33 @@ def main(argv):
             return f"[{alias or target}](/{slugify(published[key][0].stem)}/{anchor})"
         return alias or target                  # link to an unpublished note
 
-    # ---- pass 4: derive dates, then write a flat tree and swap it in --------
+    # ---- pass 4: the backlink graph ----------------------------------------
+    # Whole-graph, and therefore its own pass: a note's backlinks depend on the
+    # bodies of notes that have not been written yet, so this cannot be folded
+    # into the loop below.
+    #
+    # Resolution deliberately mirrors `rewrite` above - same key, same lookup
+    # in `published` - because a backlink that does not agree with the forward
+    # link it came from is worse than no backlink at all.
+    backlinks = {}   # target slug -> {source slug}
+    for key, (rel, text) in sorted(published.items()):
+        if rel.name.lower() == "index.md":
+            continue                            # see the module docstring
+        source = slugify(rel.stem)
+        for m in LINK.finditer(text):
+            embed, target, _heading, _alias = m.groups()
+            if embed:
+                continue                        # an image is not a citation
+            hit = published.get(target.strip().lower())
+            if hit is None:
+                continue                        # unpublished, or not a note
+            dest = slugify(hit[0].stem)
+            if dest == source:
+                continue                        # a note does not cite itself
+            # A set, so a note that links to another five times is one entry.
+            backlinks.setdefault(dest, set()).add(source)
+
+    # ---- pass 5: derive dates, then write a flat tree and swap it in --------
     try:
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         if not isinstance(ledger, dict):
@@ -316,13 +376,13 @@ def main(argv):
         # anyone having to remember a frontmatter key.
         heading = LEADING_H1.match(body)
         if heading:
-            front.setdefault("title", heading.group(1).strip())
             body = body[heading.end() :]
         # Always explicit, because the file is about to be renamed to its slug
         # and a generator falling back to the filename for a title would then
         # show "building-capability" where it used to show "Building
-        # Capability".
-        front.setdefault("title", rel.stem)
+        # Capability". The value comes from resolve_title, which pass 2 already
+        # ran - the H1 is stripped here, but it is not decided here.
+        front["title"] = titles[slug]
 
         entry = update_ledger(ledger, key, text, today)
         # The landing page is a table of contents, not an essay: it has no
@@ -360,6 +420,18 @@ def main(argv):
             return f"{m.group(0).rstrip()} — {thesis}"
 
         body = BARE_LINK_ITEM.sub(annotate, body)
+
+        # Sorted by title rather than by date. Which note happened to be
+        # written first is not a fact about the note being read, and ordering
+        # by it would quietly make an edit look like a change in relevance.
+        if slug in backlinks:
+            front["backlinks"] = [
+                dict(
+                    [("title", titles[src]), ("url", f"/{src}/")]
+                    + ([("thesis", theses[src])] if src in theses else [])
+                )
+                for src in sorted(backlinks[slug], key=lambda s: titles[s].casefold())
+            ]
 
         # Everything published lives at the root, so anything that used to live
         # in a folder needs its old address kept alive. Slugified segment by

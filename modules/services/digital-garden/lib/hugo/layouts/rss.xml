@@ -1,0 +1,49 @@
+{{- /*
+  A full-text feed, replacing Hugo's built-in one.
+
+  The built-in emits `.Summary` in <description>, which is the first 70 words
+  and a hard stop - measured on a 200-word note, the last paragraph was simply
+  absent. For a site that is nothing but essays, that turns a feed into an
+  advertisement for itself.
+
+  Both fields are used rather than one, because both exist honestly here:
+  <description> is the note's `thesis`, a real one-sentence claim written by
+  hand, and content:encoded is the essay. A reader gets a summary worth reading
+  in a list view and the whole piece when they open it, and neither is a
+  truncation of the other.
+
+  Escaped rather than wrapped in CDATA. CDATA needs a `]]>` in the content to
+  be handled, and a note about XML would contain one.
+*/ -}}
+{{ printf "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>" | safeHTML }}
+<rss version="2.0"
+     xmlns:atom="http://www.w3.org/2005/Atom"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>{{ site.Title }}</title>
+    <link>{{ .Permalink }}</link>
+    {{ with partial "description.html" . }}<description>{{ . }}</description>{{ end }}
+    <generator>Hugo</generator>
+    <language>{{ site.Language.LanguageCode | default site.Language.Lang }}</language>
+    {{/*
+      Hugo's built-in printed "Mon, 01 Jan 0001" here, because the frontmatter
+      map sends `lastmod` to `modified`, which most notes do not carry. The map
+      now falls through to the publication date, so this is the real date of
+      the most recent change and the sitemap gets one too.
+    */}}
+    {{ with site.Lastmod }}
+      <lastBuildDate>{{ .Format "Mon, 02 Jan 2006 15:04:05 -0700" | safeHTML }}</lastBuildDate>
+    {{ end }}
+    <atom:link href="{{ .Permalink }}index.xml" rel="self" type="application/rss+xml" />
+    {{ range site.RegularPages }}
+      <item>
+        <title>{{ .Title }}</title>
+        <link>{{ .Permalink }}</link>
+        {{ with .Date }}<pubDate>{{ .Format "Mon, 02 Jan 2006 15:04:05 -0700" | safeHTML }}</pubDate>{{ end }}
+        <guid>{{ .Permalink }}</guid>
+        {{ with .Description }}<description>{{ . }}</description>{{ end }}
+        <content:encoded>{{ .Content | transform.XMLEscape | safeHTML }}</content:encoded>
+      </item>
+    {{ end }}
+  </channel>
+</rss>

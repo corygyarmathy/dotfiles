@@ -1,0 +1,57 @@
+{{/*
+  Cards for the places a link gets pasted.
+
+  Named `social` and not `opengraph` on purpose. Hugo ships an embedded
+  `_partials/opengraph.html`, so a file of that name here is an OVERRIDE - and
+  if it ever fails to reach the build, `partial "opengraph.html"` silently
+  resolves to Hugo's version instead of failing. That happened once already
+  (the file was untracked, and a flake only sees what git tracks), and the
+  output looked plausible enough to miss: right tags, wrong content, a home
+  page described by scraping its own link list. Under this name a missing file
+  is a build error, which is what it should have been the first time. Everything here is already known to
+  the page - nothing new is asked of a note, and nothing is invented when a
+  note has not supplied it.
+
+  The description comes from _partials/description.html, so this card, the
+  <meta name="description"> tag and the feed cannot disagree. For a note that
+  is its `thesis` - a better summary than any extraction from the prose,
+  because it is the claim the essay was written to make.
+
+  No og:image. This site has no images of its own to offer and a generated card
+  would be a whole pipeline - a font, a renderer, a build step - for something
+  no reader ever looks at directly. Without one, `summary` is the honest card
+  type; `summary_large_image` would reserve space for a picture that is not
+  coming.
+
+  Dates go out as bare dates rather than as timestamps. The ledger records the
+  day a note appeared and nothing finer, and formatting that as midnight UTC
+  would invent a precision it does not have - the same lie that `buildFuture`
+  in lib/hugo.nix exists to undo. A date is valid ISO 8601 and reads as what it
+  is.
+*/}}
+{{/*
+  Open Graph wants `language_TERRITORY`, which is not the tag Hugo holds: it
+  keeps `en-au` and the card wants `en_AU`.
+*/}}
+{{- $parts := split (site.Language.Locale | default "en") "-" -}}
+{{- $ogLocale := index $parts 0 -}}
+{{- if gt (len $parts) 1 -}}
+  {{- $ogLocale = printf "%s_%s" $ogLocale (upper (index $parts 1)) -}}
+{{- end -}}
+<meta property="og:type" content="{{ if .IsPage }}article{{ else }}website{{ end }}" />
+<meta property="og:title" content="{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }}{{ end }}" />
+<meta property="og:url" content="{{ .Permalink }}" />
+<meta property="og:site_name" content="{{ site.Title }}" />
+<meta property="og:locale" content="{{ $ogLocale }}" />
+{{- with partial "description.html" . }}
+<meta property="og:description" content="{{ . }}" />
+{{- end }}
+{{- if .IsPage }}
+  {{- if not .Date.IsZero }}
+<meta property="article:published_time" content="{{ .Date.Format "2006-01-02" }}" />
+  {{- end }}
+  {{- if and (not .Lastmod.IsZero) (ne (.Lastmod.Format "2006-01-02") (.Date.Format "2006-01-02")) }}
+<meta property="article:modified_time" content="{{ .Lastmod.Format "2006-01-02" }}" />
+  {{- end }}
+{{- end }}
+<meta name="twitter:card" content="summary" />

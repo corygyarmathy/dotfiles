@@ -1,10 +1,10 @@
 # Plan: hardening the deployment pipeline
 
-Status: revised 2026-08-16 to follow [ADR 0002](../adr/0002-protect-at-activation-not-in-the-rollout.md), which retires the staged rollout and moves protection to activation time. Supersedes the earlier version of this plan, whose "health-gate the canary promotion" item is dropped along with the canary itself.
+Status: extended 2026-08-24 with items 8 and 9, neither of which is new work so much as work item 4 named and did not do. Revised 2026-08-16 to follow [ADR 0002](../adr/0002-protect-at-activation-not-in-the-rollout.md), which retires the staged rollout and moves protection to activation time. Supersedes the earlier version of this plan, whose "health-gate the canary promotion" item is dropped along with the canary itself.
 
 Already in place, and assumed by everything below: the deployment metrics in `modules/services/monitoring/deploy-metrics.nix` and the `NixosDeployFailed` / `NixosDeployStale` / `NixosRebootPending` rules in `modules/services/monitoring/alert-rules.yml`. No new monitoring work is required to start.
 
-Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md). The first two are small and independent; the rest can proceed in any order once they are in.
+Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md), plus two added on 2026-08-24. The first two are small and independent; the rest can proceed in any order once they are in.
 
 | #   | Item                      | Size    | Status                                                   |
 | --- | ------------------------- | ------- | -------------------------------------------------------- |
@@ -14,6 +14,8 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 | 4   | Behaviour tests           | large   | **harness + 3 tests landed** - `media-stack` waits on the container move |
 | 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
 | 6   | `deploy-rs` interactively | small   | not started - one prerequisite removed                   |
+| 8   | Download-root canary      | small   | not started - the replacement item 4 named and skipped   |
+| 9   | Reachability from outside | small   | not started - the last gap whose recovery is physical    |
 
 ### Where this stands, 2026-08-16
 
@@ -546,3 +548,57 @@ Both cost real time, and both look identical from the outside - a branch that wi
 - `trusted-users = root` meant `nixos-rebuild --target-host` only ever worked for a closure already in Cachix - i.e. only for changes that had been through CI, which is the opposite of what iterating is for. The failure surfaces as `lacks a signature by a trusted key`, several lines above a cascade of unrelated I/O errors that read like the real problem.
 - The `README`'s documented deploy command used `root@`, which `cg.ssh-hardening` has always refused. Nobody had run it.
 - Both of these argue item 6 is less optional than its "small" sizing suggests.
+
+---
+
+## 8. The download-root canary
+
+_Added 2026-08-24, reviewing item 4 rather than adding to it._
+
+### The problem
+
+Item 4 struck the `data-safety` test and named two things to have instead: a static assertion over the evaluated configuration that no service's output or post-processing directory is equal to, or a parent of, `${dataPath}/downloads`; and a periodic canary in the download root, alerting through the existing textfile metrics if it disappears.
+
+**Neither was built.** The only `assertions` in `modules/services/media-stack/` are the boilerplate `requires media-stack to be enabled`, and nothing in `modules/` or `checks/` mentions a canary. So the outcome of striking `data-safety` was not "one test replaced by two cheaper things", it was "one test removed". Worth recording plainly, because that is a very easy way for a well-argued deletion to become a regression: the argument for striking the test was correct, and the replacements it was traded for were never delivered.
+
+### The ranking in item 4 is wrong, by item 4's own evidence
+
+Item 4 lists the static assertion first, on the grounds that it is "the invariant that was violated, it is checkable statically". Two paragraphs earlier the same section establishes that LazyLibrarian's PostProcessor path lived **in a service-managed SQLite database, not in Nix**.
+
+Both cannot be true. An assertion over the evaluated configuration cannot read a value Nix never sees, so it would not have fired on 07-25 or on 07-27. It catches a real but different class - a module declaring an output path that overlaps the download root - and it is cheap enough to be worth having on that basis alone. It is simply not covered by the incident being used to justify it.
+
+This is the same shape of error item 4 already calls out in itself: a real argument for needing something, mistaken for evidence that the proposed something works. It is recorded here rather than edited into item 4 so that the correction is dated.
+
+### Approach
+
+Take the canary first, and size the assertion honestly as the smaller thing it is.
+
+The canary does not care where the destructive setting lives, which is the whole point: it covers all sixteen `oci-containers` services, the in-app configuration no Nix-level check can see, and anything added later. It rides `cg.service.monitoring.textfileCollector`, which is already enabled on both servers, so this is a sentinel file, a timer that stats it, one metric and one alert rule.
+
+Detection rather than prevention, and it should be described that way wherever it is documented. The reason to accept that is not that prevention was ruled out in general - it is that ADR 0003 ruled out confinement, item 4 ruled out the test, and the honest remaining position is that the download root is a shared mutable directory which several services are configured, in their own databases, to write to. What can be promised is that it will not be quietly empty for two days.
+
+### Done when
+
+A sentinel file exists in the download root on both servers, its absence raises an alert through the existing rules, and deleting it by hand fires that alert.
+
+---
+
+## 9. Reachability from outside the host
+
+_Added 2026-08-24, from the README's own gaps list._
+
+### The problem
+
+`blackbox-http` runs on the host it is probing. A change that cuts a host off from the network therefore leaves every probe green, because locally everything is fine - which is precisely what the README already says: "Verification runs on the host, so a machine that has lost its network still believes it is fine."
+
+Of the gaps still listed, this is the only one whose recovery cost is physical. Item 3 does not cover it, because a host that has lost its network still activates a generation successfully. Item 6 covers it only for a deploy done by hand from the laptop with `deploy-rs`, not for the nightly automatic upgrade, which is when it would actually happen.
+
+### Approach
+
+Deliberately unspecified, because the useful property is "not on the host" and almost anything satisfies it. The cheapest thing that fails loudly when the tunnel stops answering is enough; this does not need to be a second monitoring stack, and should not become one.
+
+Worth noting the interaction with item 6: `magicRollback` reverts a change that breaks the deployer's own connection, which covers the hand-deploy case well. This item exists for the other one - a nightly promotion that lands a bad firewall rule at 04:00 with nobody connected to notice.
+
+### Done when
+
+Something not running on the affected host notices that the host has stopped answering, and says so somewhere a person will see.
