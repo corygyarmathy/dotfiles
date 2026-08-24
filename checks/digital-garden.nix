@@ -59,6 +59,9 @@
         This links to [[Rates And Figures]], which is not published, and to
         [[On Boundaries|the boundary essay]], which is.
 
+        And to a heading inside it:
+        [[On Boundaries#A Heading, With Punctuation -- and More]].
+
         - [[On Boundaries]]
         NOTE
 
@@ -75,7 +78,7 @@
 
         MARKER-BOUNDARIES-BODY
 
-        ## A Heading, With Punctuation
+        ## A Heading, With Punctuation -- and More
         NOTE
 
         # A real landing page, because it is the one note whose handling is
@@ -359,6 +362,25 @@
         assert m.group(1) == m.group(2), m.groups()
         # Named, not decorative - the visible text is a single "#".
         assert 'aria-label="Link to this section"' in page
+
+    with subtest("a wikilink to a heading lands on that heading"):
+        # Two different programs compute this string: publish-filter.py writes
+        # the fragment when it rewrites the wikilink, and Hugo writes the id
+        # when it renders the heading. They used to disagree the moment a
+        # heading contained punctuation - `a-section--with-punctuation` against
+        # `a-section-with-punctuation` - and the link silently landed nowhere.
+        #
+        # Asserted by comparing the two sides rather than by naming the
+        # expected string, so this stays true if Hugo ever changes its rule:
+        # what matters is that they agree, not what they agree on. The fixture
+        # heading carries a comma and a `--`, which Goldmark's typographer
+        # turns into an en dash before the id is computed.
+        source = served("/on-gates")
+        m = re.search(r'href="/on-boundaries/#([^"]+)"', source)
+        assert m, "the heading wikilink did not survive as a fragment link"
+        fragment = m.group(1)
+        assert f'id="{fragment}"' in served("/on-boundaries"), \
+            f"fragment #{fragment} matches no id on the target page"
 
     with subtest("pages carry a social card built from the note's own claim"):
         page = served("/on-gates")

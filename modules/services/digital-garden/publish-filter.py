@@ -92,6 +92,7 @@ import json
 import re
 import shutil
 import sys
+import unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -115,6 +116,14 @@ BARE_LINK_ITEM = re.compile(r"^([ \t]*[-*+][ \t]+)\[([^\]]*)\]\(/([^)#/]*)/?[^)]
 # percent-escaped: an escape in a path is not something anyone wants to read,
 # type, or see in a browser's address bar.
 SLUG_DROP = re.compile(r"[^a-z0-9._~-]")
+# Runs of two or more hyphens, which Goldmark's typographer turns into dashes
+# before a heading id is computed. See `anchorize`.
+DASH_RUN = re.compile(r"-{2,}")
+# `_emphasis_`, but not the underscore inside `under_score`. CommonMark refuses
+# to open or close emphasis on an underscore flanked by alphanumerics, which is
+# exactly the distinction here: [^\W_] is "alphanumeric", spelt so that the
+# underscore itself does not count as one.
+UNDERSCORE_EMPHASIS = re.compile(r"(?<![^\W_])_([^_]+)_(?![^\W_])")
 # Not a limit, just the point past which a note is worth another look.
 LONG_NOTE_WORDS = 500
 # Where embedded files are staged, and the first segment of their URL.
@@ -159,6 +168,67 @@ def resolve_title(front, body, rel):
     if heading:
         return LINK.sub(lambda m: m.group(4) or m.group(2), heading.group(1)).strip()
     return rel.stem
+
+
+def anchorize(text):
+    """The id the generator gives a heading, for `[[Note#Some Heading]]`.
+
+    Deliberately NOT `slugify`. The two rules genuinely differ, and the reason
+    is that they answer to different authorities: a note's URL is ours to
+    define, and a heading's id is Hugo's, because Hugo is what writes it into
+    the page. A fragment we compute by our own rule points at nothing.
+
+    They agree on the headings people usually write and diverge on punctuation,
+    which is what made this worth fixing rather than documenting: `slugify`
+    keeps `.` `_` `~` and preserves runs of hyphens, so "A Section, With
+    Punctuation" came out `a-section--with-punctuation` against Hugo's
+    `a-section-with-punctuation`, and the link landed nowhere.
+
+    Reproduces Hugo's `github` autoHeadingIDType, derived by rendering a corpus
+    of adversarial headings through the pinned Hugo and reading back the ids
+    rather than from anyone's memory of the algorithm:
+
+      * a Unicode letter or decimal digit is kept, lowercased - so `Über
+        Straße` keeps its accents and `日本語` survives intact;
+      * a space or a hyphen becomes a hyphen, and runs are NOT collapsed:
+        "a  b" is `a--b`;
+      * an underscore is kept, which is why `under_score` is not `underscore`;
+      * everything else is dropped.
+
+    Duplicate headings get `-1`, `-2` from Hugo. Not reproduced, and not a gap:
+    a wikilink naming a heading by text means the first one, which is the id
+    with no suffix.
+
+    Inline markup in the heading is handled where it can occur. Asterisks and
+    backticks need no special case - they are dropped as punctuation, which
+    leaves `**bold**` and `` `code` `` reading correctly by themselves. Only the
+    underscore needs a rule, because it is the one marker this function would
+    otherwise KEEP. A Markdown link needs none either: `[[Note#a [b](c)]]` does
+    not parse as a wikilink at all, because the syntax forbids `]` inside, so
+    that heading is unreachable from a fragment by construction.
+
+    Verified against Hugo itself rather than against this description: a corpus
+    of adversarial headings is rendered by the pinned Hugo and the ids read
+    back, and every case that a fragment can express agrees.
+    """
+    # Goldmark's typographer runs before ids are computed, and it is the one
+    # thing that changes a character this rule would otherwise KEEP. `---` is
+    # an em dash and `--` an en dash, both punctuation and both dropped, while
+    # a lone hyphen stays a hyphen - so `co-operative` keeps its hyphen and
+    # `a --- b` does not. Longest first, which is why four hyphens leave one
+    # behind (em + hyphen) and five leave none (em + en).
+    text = DASH_RUN.sub(lambda m: "-" if len(m.group(0)) % 3 == 1 else "", text.strip())
+    text = UNDERSCORE_EMPHASIS.sub(r"\1", text)
+    out = []
+    for ch in text:
+        category = unicodedata.category(ch)
+        if category[0] == "L" or category == "Nd":
+            out.append(ch.lower())
+        elif ch in "- ":
+            out.append("-")
+        elif ch == "_":
+            out.append("_")
+    return "".join(out)
 
 
 def is_published(text):
@@ -306,10 +376,9 @@ def main(argv):
             used_attachments[hit] = True
             return f"![{alias or ''}](/{ATTACHMENTS}/{slugify(hit.name)})"
         if key in published:
-            # The heading fragment is slugified the same way a filename is,
-            # which is right for the headings Obsidian produces and would need
-            # revisiting for one containing punctuation a generator strips.
-            anchor = f"#{slugify(heading[1:])}" if heading else ""
+            # A heading fragment follows the generator's rule, not ours - see
+            # `anchorize` for why those are two different things.
+            anchor = f"#{anchorize(heading[1:])}" if heading else ""
             return f"[{alias or target}](/{slugify(published[key][0].stem)}/{anchor})"
         return alias or target                  # link to an unpublished note
 
