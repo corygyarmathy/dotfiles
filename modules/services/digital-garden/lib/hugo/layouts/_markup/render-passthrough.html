@@ -1,0 +1,20 @@
+{{/*
+  Maths, captured by the passthrough extension ($...$ inline, $$...$$ block)
+  and rendered to HTML at build time by Hugo's embedded KaTeX instance. No
+  JavaScript reaches the reader: htmlAndMathml needs the KaTeX stylesheet,
+  which baseof.html links only on pages where this hook ran - the "hasMath"
+  flag below is what tells it.
+
+  An expression KaTeX cannot parse fails the build rather than printing an
+  error into the page: the last good build keeps serving until the note is
+  fixed, which is the failure posture of the rest of this toolchain.
+*/}}
+{{- $opts := dict "output" "htmlAndMathml" "displayMode" (eq .Type "block") }}
+{{- with try (transform.ToMath .Inner $opts) }}
+  {{- with .Err }}
+    {{- errorf "KaTeX could not render this expression: %s: see %s" . $.Position }}
+  {{- else }}
+    {{- .Value }}
+    {{- $.Page.Store.Set "hasMath" true }}
+  {{- end }}
+{{- end -}}

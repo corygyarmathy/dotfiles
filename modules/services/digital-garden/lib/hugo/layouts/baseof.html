@@ -12,6 +12,17 @@
     {{ with resources.Get "main.css" | fingerprint }}
       <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" />
     {{ end }}
+    {{/*
+      KaTeX's stylesheet, only where an equation was rendered. .WordCount is
+      the documented noop: it forces the content - and with it the
+      render-passthrough hook that sets hasMath - to be evaluated before this
+      test, since the head is emitted before the body. Vendored rather than
+      fingerprinted because its font URLs are relative to its own location.
+    */}}
+    {{ $noop := .WordCount }}
+    {{ if .Page.Store.Get "hasMath" }}
+      <link rel="stylesheet" href="{{ "katex/katex.min.css" | relURL }}" />
+    {{ end }}
     {{ with site.Home.OutputFormats.Get "rss" }}
       <link rel="alternate" type="application/rss+xml" title="{{ site.Title }}" href="{{ .Permalink }}" />
     {{ end }}

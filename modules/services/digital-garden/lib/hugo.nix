@@ -11,10 +11,19 @@
 # that, not against convenience. See docs/adr/ for how this was arrived at.
 #
 # What keeps this file short is that publish-filter.py already owns the hard
-# parts. The staging tree is plain CommonMark whose links carry finished URLs,
-# so this renderer does not have to understand Obsidian, resolve a wikilink, or
-# decide what a page is called. It supplies a layout and a stylesheet and gets
-# out of the way. Everything Hugo-specific is in this file and lib/hugo/.
+# parts. The staging tree's links carry finished URLs and its files are named
+# what they will be served as, so this renderer does not have to resolve a
+# wikilink or decide what a page is called. It supplies a layout and a
+# stylesheet and gets out of the way. Everything Hugo-specific is in this
+# file and lib/hugo/.
+#
+# Two Obsidian-isms DO reach the renderer, both deliberately, because Hugo's
+# parser understands them natively and any CommonMark renderer degrades them
+# gracefully: callouts (> [!type], rendered by _markup/render-blockquote.html)
+# and $...$ maths (captured by the passthrough extension and rendered to HTML
+# at build time by _markup/render-passthrough.html). KaTeX's stylesheet and
+# fonts are vendored from nixpkgs below, so a page with equations still needs
+# no JavaScript and nothing fetched from anyone else's server.
 {
   pkgs,
   lib,
@@ -68,6 +77,23 @@ in
         # script, onto a public page.
         unsafe = false
 
+        [markup.goldmark.extensions.extras.mark]
+        # Obsidian's ==highlights==. Off by default; without this the markers
+        # render as literal text.
+        enable = true
+
+        [markup.goldmark.extensions.passthrough]
+        # Captures $...$ and $$...$$ verbatim so _markup/render-passthrough.html
+        # can hand them to Hugo's embedded KaTeX instance. The delimiters are
+        # Obsidian's, which is the point: a note reads the same in both places.
+        # The cost of the inline one is Obsidian's too — a literal $ in prose
+        # between two $s is maths to both — so this changes nothing about how
+        # notes are written.
+        enable = true
+        [markup.goldmark.extensions.passthrough.delimiters]
+        block = [['$$', '$$']]
+        inline = [['$', '$']]
+
         [params]
         description = ${builtins.toJSON siteDescription}
         footerLinks = [
@@ -114,6 +140,19 @@ in
         cp "$css" "$work/assets/main.css"
         cp ${config} "$work/hugo.toml"
         chmod -R u+w "$work"
+
+        # KaTeX's stylesheet and fonts, vendored from nixpkgs and served as
+        # ordinary static files. Pages with equations render maths to HTML at
+        # build time (see _markup/render-passthrough.html), so this is ALL the
+        # reader's browser ever sees of KaTeX - no script. baseof.html links
+        # the stylesheet only on pages that used maths, so a reading page
+        # never pays for it.
+        mkdir -p "$work/static/katex"
+        cp ${pkgs.katex}/lib/node_modules/katex/dist/katex.min.css "$work/static/katex/"
+        cp -r ${pkgs.katex}/lib/node_modules/katex/dist/fonts "$work/static/katex/fonts"
+        # Store paths copy out read-only, and the exit trap's rm -rf cannot
+        # remove a read-only directory's contents.
+        chmod -R u+w "$work/static"
 
         mkdir -p "$work/content"
         cp -r "$content/." "$work/content/"

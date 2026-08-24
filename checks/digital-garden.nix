@@ -63,6 +63,36 @@
         [[On Boundaries#A Heading, With Punctuation -- and More]].
 
         - [[On Boundaries]]
+
+        > [!warning] Watch the gate
+        > MARKER-CALLOUT-BODY
+
+        > [!note]- Folded away
+        > MARKER-CALLOUT-FOLDED
+
+        > [!tip]+
+        > MARKER-CALLOUT-OPEN
+
+        > [!question] A type with no GitHub equivalent
+        > MARKER-CALLOUT-QUESTION
+
+        Some ==MARKER-HIGHLIGHT== prose.
+
+        %% MARKER-COMMENT-SECRET %%
+
+        A paragraph carrying a block id. ^markerblockid
+
+        A same-note link to [[#Some Section]], and a block-ref to
+        [[On Boundaries#^someblock|the boundary block]].
+
+        ## Some Section
+
+        Euler's identity: $e^{i\pi} + 1 = 0$.
+
+        ```python
+        # %% MARKER-IN-CODE %% - inside a fence, %% is code, not a comment
+        x = 1
+        ```
         NOTE
 
         # Named as Obsidian names things - spaces and capitals - because a
@@ -381,6 +411,63 @@
         fragment = m.group(1)
         assert f'id="{fragment}"' in served("/on-boundaries"), \
             f"fragment #{fragment} matches no id on the target page"
+
+    with subtest("callouts render as callouts, folds and all"):
+        page = served("/on-gates")
+
+        # Title and body survive, and the [!type] marker is gone rather than
+        # left as visible text inside a plain blockquote - which is the way
+        # this was broken, with a build that stayed green throughout.
+        assert 'class="callout callout-warning"' in page, page[:2000]
+        assert "Watch the gate" in page
+        assert "MARKER-CALLOUT-BODY" in page
+        assert "[!" not in page, "a callout marker was left as visible text"
+
+        # Folding follows the sign: '-' starts closed, '+' starts open, and
+        # both are <details> - collapsed in the HTML itself, not by a script.
+        # An untitled callout takes its type as the title, as in Obsidian.
+        assert re.search(r'<details class="callout callout-note">', page), \
+            "the folded callout did not start closed"
+        assert re.search(r'<details class="callout callout-tip" open>', page), \
+            "the open callout lost its open state"
+        assert ">Tip</summary>" in page
+
+        # Obsidian lets a vault define its own types; one Hugo has never heard
+        # of still renders as a callout, under its own name.
+        assert 'class="callout callout-question"' in page
+        assert "A type with no GitHub equivalent" in page
+
+    with subtest("obsidian's internal-only syntax never leaves the vault"):
+        page = served("/on-gates")
+        # %% comments are stripped before staging. Checked on the staging tree
+        # as well as the served site: this is the publish boundary, not
+        # styling, and the place to discover an aside survived is here.
+        machine.fail("grep -rq MARKER-COMMENT-SECRET /var/lib/digital-garden/content")
+        machine.fail(f"grep -rq MARKER-COMMENT-SECRET {SITE}")
+        # But %% inside a code fence is code, not a comment, and survives.
+        assert "MARKER-IN-CODE" in page, "the comment stripper reached into a code fence"
+        # Block ids are stripped with them; a survivor would be a stray
+        # caret on the page.
+        assert "markerblockid" not in page
+
+        # ==highlights== and $...$ maths render as what they mean.
+        assert "<mark>MARKER-HIGHLIGHT</mark>" in page
+        assert 'class="katex"' in page, "inline maths was not rendered"
+
+        # A same-note heading link keeps working, and a block reference drops
+        # the fragment that cannot exist rather than linking nowhere.
+        assert 'href="#some-section"' in page, "same-note heading link was not rewritten"
+        assert "the boundary block" in page
+        assert "#someblock" not in page
+
+    with subtest("maths costs a reading page nothing"):
+        # KaTeX renders at build time, so the only per-page asset is the
+        # stylesheet, and it is linked only where an equation was rendered.
+        assert "katex.min.css" in served("/on-gates"), \
+            "a page with maths did not get the KaTeX stylesheet"
+        assert "katex.min.css" not in served("/"), \
+            "the home page links KaTeX with no maths on it"
+        machine.succeed("curl -sf -o /dev/null http://localhost:8086/katex/katex.min.css")
 
     with subtest("pages carry a social card built from the note's own claim"):
         page = served("/on-gates")

@@ -206,6 +206,93 @@ blockquote {
   color: var(--muted);
 }
 
+/* ── callouts ───────────────────────────────────────────────────────────── */
+
+/* Obsidian's callout syntax (> [!type], with an optional +/- fold sign and
+ * title) is rendered by layouts/_markup/render-blockquote.html. The shape is
+ * the same for every type — tinted surface, border and label in one hue —
+ * and only the hue changes, which keeps the set readable without turning the
+ * page into a patchwork. Types Obsidian treats as aliases of each other
+ * share a hue; a type this file does not know gets --accent, not an error.
+ *
+ * light-dark() keys off color-scheme, which the theme toggle sets, so each
+ * hue is named once per theme rather than remapped in a separate block. */
+.callout {
+  --callout-accent: var(--accent);
+  margin: 0 0 1rem;
+  padding: 0.6rem 1rem;
+  border-left: 3px solid var(--callout-accent);
+  border-radius: 0 5px 5px 0;
+  background: color-mix(in srgb, var(--callout-accent) 8%, transparent);
+}
+
+.callout-note,
+.callout-info,
+.callout-todo {
+  --callout-accent: light-dark(#38688c, #82a9c9);
+}
+.callout-abstract,
+.callout-summary,
+.callout-tldr {
+  --callout-accent: light-dark(#2f7a72, #6fb3aa);
+}
+.callout-tip,
+.callout-hint,
+.callout-success,
+.callout-check,
+.callout-done {
+  --callout-accent: light-dark(#3d7a44, #7fb383);
+}
+.callout-important,
+.callout-example {
+  --callout-accent: light-dark(#6c5a94, #ab9bce);
+}
+.callout-question,
+.callout-help,
+.callout-faq {
+  --callout-accent: light-dark(#8a6d2f, #c4a55f);
+}
+.callout-warning,
+.callout-caution,
+.callout-attention {
+  --callout-accent: light-dark(#a35a20, #d08a4a);
+}
+.callout-failure,
+.callout-fail,
+.callout-missing,
+.callout-danger,
+.callout-error,
+.callout-bug {
+  --callout-accent: light-dark(#a84040, #cf7a7a);
+}
+.callout-quote,
+.callout-cite {
+  --callout-accent: var(--muted);
+}
+
+/* A padded box, so the paragraph margin that would separate it from a
+ * following element is on the box instead. */
+.callout > :last-child {
+  margin-bottom: 0;
+}
+
+.callout-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--callout-accent);
+}
+
+/* Foldable callouts are <details>: the title row is the disclosure control. */
+summary.callout-title {
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+details[open] > summary.callout-title {
+  margin-bottom: 0.25rem;
+}
+
 img {
   max-width: 100%;
   height: auto;
@@ -239,10 +326,25 @@ pre code {
   padding: 0;
 }
 
+/* Obsidian's ==highlight==, rendered by Goldmark's extras.mark extension. */
+mark {
+  padding: 0 0.1em;
+  border-radius: 2px;
+  background: light-dark(#f9e9a8, #77661f);
+  color: inherit;
+}
+
 /* Wide content must scroll inside its own box rather than making the page
  * scroll sideways. */
 .table-container {
   overflow-x: auto;
+}
+
+/* The same rule, for a display-mode equation wider than the measure. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2rem 0;
 }
 
 table {
