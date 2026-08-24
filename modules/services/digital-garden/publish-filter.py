@@ -107,6 +107,15 @@ from pathlib import Path
 
 import yaml
 
+# The libyaml-backed loader when it is available, the pure-Python one otherwise.
+# Both implement the SafeLoader schema, so this is a speed choice with no
+# semantic difference - the filter must not get faster at the cost of reading a
+# different YAML than before.
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:  # pragma: no cover
+    from yaml import SafeLoader
+
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 # (?!\() rejects [[1]](url) — pasted Wikipedia prose is full of these.
 # The target may be empty, which is Obsidian's same-note link: [[#Heading]].
@@ -270,7 +279,7 @@ def split_frontmatter(text):
     if not m:
         return None
     try:
-        front = yaml.safe_load(m.group(1))
+        front = yaml.load(m.group(1), Loader=SafeLoader)
     except yaml.YAMLError:
         return None
     if not isinstance(front, dict):
