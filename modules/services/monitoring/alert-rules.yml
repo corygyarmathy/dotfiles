@@ -111,6 +111,21 @@ groups:
           summary: "Digital garden build failed on {{ $labels.instance }}"
           description: "digital-garden-build.service is in failed state, so the site is serving the last good build. Check with: journalctl -u digital-garden-build"
 
+      # A sync that quietly stops delivering leaves the service running and the
+      # site silently ageing: the builder keeps exiting 0 ("nothing to do") and
+      # the probe keeps reading 200. This is the positive signal for it -
+      # obsidian-headless logs "Fully synced" on every completed cycle (see
+      # digital-garden-sync-health), and its absence for 6 hours means sync is
+      # no longer completing, whatever the author has or has not written.
+      - alert: DigitalGardenSyncStale
+        expr: time() - digital_garden_sync_last_ok_timestamp_seconds > 21600
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Obsidian Sync has not completed a cycle on {{ $labels.host }}"
+          description: "digital-garden-sync has not logged a completed sync in over 6 hours; the garden is serving its last good build. Check: journalctl -u digital-garden-sync"
+
   - name: infrastructure
     rules:
       # Auto-upgrade failures

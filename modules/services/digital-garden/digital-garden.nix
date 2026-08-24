@@ -102,6 +102,14 @@ let
   stateDir = "/var/lib/digital-garden";
   vaultDir = "${stateDir}/vault";
 
+  # Exports the "is Obsidian Sync still completing cycles?" positive signal for
+  # Prometheus. Lives under ./lib so the check in checks/ can run the same
+  # script against a fixture. See lib/sync-health.nix.
+  syncHealth = import ./lib/sync-health.nix {
+    inherit pkgs lib stateDir;
+    hostName = config.networking.hostName;
+  };
+
   # Identifies everything that can change the generated site other than the
   # notes themselves. Folded into the build stamp so that a Hugo upgrade or a
   # changed option rebuilds even when the vault is untouched — otherwise the
@@ -459,7 +467,8 @@ in
 
     systemd.tmpfiles.rules = [
       "d ${stateDir} 0750 digital-garden digital-garden -"
-    ] ++ lib.optional (cfg.source == "obsidian-sync") "f ${stateDir}/trigger 0644 digital-garden digital-garden -";
+    ] ++ lib.optional (cfg.source == "obsidian-sync") "f ${stateDir}/trigger 0644 digital-garden digital-garden -"
+      ++ lib.optional (cfg.source == "obsidian-sync") "d /var/lib/prometheus-node-exporter 0755 root root -";
 
     systemd.services.digital-garden-build = {
       description = "Build the digital garden from published vault notes";
@@ -573,6 +582,32 @@ in
       pathConfig = {
         PathModified = "${stateDir}/trigger";
         Unit = "digital-garden-build.service";
+      };
+    };
+
+    # ── Sync health for Prometheus ───────────────────────────────────────────
+    # The builder failing is caught by DigitalGardenBuildFailed, but a sync that
+    # quietly stops delivering (expired token, deleted remote) leaves the
+    # service running and the site silently ageing, invisible to both the
+    # builder and the HTTP probe. This exports the age of the last completed
+    # sync cycle as a textfile metric, so DigitalGardenSyncStale can alert on
+    # its absence. Runs as root like every other exporter in this fleet; the
+    # metric is only scraped when cg.service.monitoring is enabled.
+    systemd.services.digital-garden-sync-health = lib.mkIf (cfg.source == "obsidian-sync") {
+      description = "Export Obsidian Sync health for Prometheus";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = lib.getExe syncHealth;
+      };
+    };
+
+    systemd.timers.digital-garden-sync-health = lib.mkIf (cfg.source == "obsidian-sync") {
+      description = "Timer for Obsidian Sync health export";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "2min";
+        OnUnitActiveSec = "15min";
+        Unit = "digital-garden-sync-health.service";
       };
     };
 
