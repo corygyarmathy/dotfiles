@@ -116,6 +116,12 @@
         "/var/lib/postgresql"
         "/var/lib/kavita"
         "/var/lib/recyclarr"
+
+        # Digital garden publication dates. The vault, staging and built site
+        # all regenerate from Obsidian Sync / the filter, but dates.json records
+        # the first day each note was published and exists nowhere else. Back up
+        # only this file: the deploy-key and sync state must not leave the host.
+        "/var/lib/digital-garden/dates.json"
       ];
 
       extraExclude = [
