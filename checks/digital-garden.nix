@@ -33,7 +33,7 @@
   nodes.machine =
     { pkgs, ... }:
     let
-      # Two published essays and a landing page; one note deliberately not
+      # Three published essays and a landing page; one note deliberately not
       # published, and one that fails to parse at all - because
       # publish-filter.py's stated rules are that publish defaults to false AND
       # that an unparseable note is skipped rather than published, and only the
@@ -109,6 +109,26 @@
         MARKER-BOUNDARIES-BODY
 
         ## A Heading, With Punctuation -- and More
+        NOTE
+
+        # Prose about money, which is the shape that took publishing down on
+        # 2026-08-25: two unrelated dollar amounts in one paragraph read as an
+        # inline maths span as far as the $...$ passthrough delimiters are
+        # concerned, and KaTeX strict mode treated the en-dash inside it -
+        # "Unrecognized Unicode character" - as a build-breaking error. It is
+        # in the initial fixture rather than added later so that the very first
+        # build has to survive it.
+        cat > $out/essays/on-money.md <<'NOTE'
+        ---
+        publish: true
+        thesis: Prose about money is not maths.
+        ---
+
+        # On Money
+
+        MARKER-MONEY-BODY
+
+        Roughly $80k on fixtures that last 5–7 years is a better position than ~$400k on fixtures that last 10+ years, because the second option locks you into decade-old technology you can no longer afford to replace.
         NOTE
 
         # A real landing page, because it is the one note whose handling is
@@ -219,7 +239,7 @@
         # the URL, and a file staged under any other name would mean the
         # generator was deciding the address after all.
         staged = sorted(machine.succeed("ls /var/lib/digital-garden/content").split())
-        assert staged == ["index.md", "on-boundaries.md", "on-gates.md"], staged
+        assert staged == ["index.md", "on-boundaries.md", "on-gates.md", "on-money.md"], staged
 
     with subtest("no unpublished content reaches the served site"):
         # Deliberately the whole tree rather than the rendered page. A leak
@@ -303,6 +323,7 @@
         for slug, marker in [
             ("on-gates", "MARKER-PUBLISHED-BODY"),
             ("on-boundaries", "MARKER-BOUNDARIES-BODY"),
+            ("on-money", "MARKER-MONEY-BODY"),
         ]:
             assert marker in served(f"/{slug}"), f"{slug} was not rendered"
 
@@ -470,6 +491,22 @@
         assert "katex.min.css" not in served("/"), \
             "the home page links KaTeX with no maths on it"
         machine.succeed("curl -sf -o /dev/null http://localhost:8086/katex/katex.min.css")
+
+    with subtest("a dollar-sign pair in prose does not fail the build"):
+        # The 2026-08-25 outage: two unrelated amounts of money in one
+        # paragraph are an inline maths span to the $...$ passthrough
+        # delimiters, and KaTeX strict mode escalated the en-dash inside it to
+        # a build error - so an ordinary sentence about cost took publishing
+        # down. strict=warn keeps genuine parse errors fatal while letting this
+        # render best-effort, which is what Obsidian shows for it too.
+        #
+        # Asserted on the note being served rather than merely the build
+        # exiting zero, because a build that skipped its pages also exits zero.
+        page = served("/on-money")
+        assert "MARKER-MONEY-BODY" in page
+        assert 'class="katex"' in page, \
+            "the accidental maths span was not rendered as maths"
+        assert "decade-old technology" in page
 
     with subtest("pages carry a social card built from the note's own claim"):
         page = served("/on-gates")
