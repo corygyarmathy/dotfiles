@@ -29,24 +29,63 @@
 #       templates."caddy-cloudflare-env" = "CF_API_TOKEN=not-a-real-token\n";
 #     })
 #   ];
+#
+# Secrets named in `private` are installed differently: copied to
+# /run/stub-secrets/<name> with the owner, group and mode each secret
+# declares (sops-nix's defaults being root:root 0400), which is what
+# production gets. Use this for secrets a non-root service reads directly,
+# so the test fails the way production would if the module forgot to
+# declare an owner - store fixtures are world-readable and mask exactly
+# that bug class.
 {
   secrets ? { },
   templates ? { },
+  private ? [ ],
 }:
-{ lib, pkgs, ... }:
+{
+  lib,
+  pkgs,
+  config,
+  ...
+}:
 let
   # The name is a sops key path, so it contains slashes; only the last segment
   # is usable as a store path name.
   fixture = name: content: toString (pkgs.writeText "stub-${baseNameOf name}" content);
+
+  privateInstall =
+    name:
+    let
+      s = config.sops.secrets.${name};
+      # This pinned sops-nix leaves owner/group null and installs as
+      # uid/gid 0 when unset; resolve them the way its installer would.
+      owner = if s.owner != null then s.owner else "root";
+      group = if s.group != null then s.group else config.users.users.${owner}.group or "root";
+    in
+    ''
+      mkdir -p "/run/stub-secrets/$(dirname "${name}")"
+      install -m ${s.mode} -o ${owner} -g ${group} "${fixture name secrets.${name}}" "/run/stub-secrets/${name}"
+    '';
 in
 {
   sops.secrets = lib.mapAttrs (name: content: {
-    path = lib.mkForce (fixture name content);
+    path =
+      if lib.elem name private then
+        lib.mkForce "/run/stub-secrets/${name}"
+      else
+        lib.mkForce (fixture name content);
   }) secrets;
 
   sops.templates = lib.mapAttrs (name: content: {
     path = lib.mkForce (fixture name content);
   }) templates;
+
+  # Installs the `private` fixtures under their declared ownership.
+  # Runs in activation, so the files exist before any service starts; /run
+  # is tmpfs, and activation runs on every boot for exactly this reason.
+  system.activationScripts.stubPrivateSecrets = lib.mkIf (private != [ ]) (
+    lib.stringAfter [ "etc" ] (lib.concatMapStringsSep "\n" privateInstall private)
+  );
 
   # Satisfies sops-nix's "no key source configured" assertion, which fires as
   # soon as any secret is declared. Nothing reads the path, because the unit
