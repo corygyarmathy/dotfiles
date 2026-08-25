@@ -160,6 +160,10 @@
       alertmanager = {
         enable = true;
         clusterPeers = [ "homelab01" ];
+        # Push lane. The ntfy server itself lives on homelab01; this host runs
+        # only the local alertmanager-ntfy bridge, so either host can still
+        # deliver on its own if the other is down.
+        ntfy.enable = true;
         email = {
           to = "cory@gyarmathy.co";
           from = "alerts@gyarmathy.co";

@@ -3,7 +3,7 @@ groups:
     rules:
       # Disk space alerts
       - alert: DiskSpaceLow
-        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10 and (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 >= 5
         for: 5m
         labels:
           severity: warning
@@ -51,8 +51,12 @@ groups:
           description: 'Memory usage is {{ printf "%.1f" $value }}%'
 
       - alert: HighCpuUsage
-        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
-        for: 15m
+        # 90% was chronic on hosts that transcode: an evening of Jellyfin
+        # streaming is legitimate sustained load, and a warning that fires
+        # every night trains you to ignore warnings. 95% for half an hour
+        # still catches runaway processes while riding out normal transcoding.
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 30m
         labels:
           severity: warning
         annotations:
@@ -139,11 +143,17 @@ groups:
           description: "The nixos-upgrade service has failed - check logs with: journalctl -u nixos-upgrade"
 
       # Unexpected reboot detection
+      #
+      # The excluded window must match the rebootWindow in hosts/*/default.nix
+      # (04:00-05:00, enforced by nixos-upgrade itself): a scheduled kernel
+      # reboot inside it is expected maintenance, not an incident. This used
+      # to exclude 20:00-20:59 from an older upgrade schedule and paged for
+      # every planned nightly reboot until it was noticed.
       - alert: UnexpectedReboot
         expr: |
           (time() - node_boot_time_seconds) < 600 
           and changes(node_boot_time_seconds[1h]) > 0
-          and (hour() < 20 or hour() >= 21)
+          and (hour() < 4 or hour() >= 5)
         for: 1m
         labels:
           severity: info
@@ -153,9 +163,12 @@ groups:
 
   - name: zfs
     rules:
-      # ZFS pool health - fires if pool is not ONLINE
+      # ZFS pool health - fires if pool is not ONLINE. DEGRADED and FAULTED
+      # are excluded here because they have their own, more specific alerts
+      # below; without the exclusion a single degraded disk fired two alerts
+      # describing the same condition.
       - alert: ZfsPoolUnhealthy
-        expr: zfs_pool_health == 0
+        expr: zfs_pool_health == 0 unless on(instance, pool) zfs_pool_state{state=~"DEGRADED|FAULTED"} == 1
         for: 1m
         labels:
           severity: critical
