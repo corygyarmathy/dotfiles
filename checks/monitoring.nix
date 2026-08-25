@@ -51,14 +51,23 @@
         # Plaintext stand-ins for the three credentials the alerting path
         # reads: the SMTP token (never exercised - the sandbox has no network,
         # so the archive lane's sends fail and are ignored by these asserts),
-        # the ntfy access token, and the shared webhook password.
+        # the ntfy access token, and the shared webhook password. All three
+        # are listed as private, so they land root-owned 0400 like sops-nix's
+        # production defaults instead of world-readable store paths - the
+        # webhook password is read by Alertmanager itself, and a missing
+        # owner declaration must fail here the way it failed on homelab01.
         (import ./stub-secrets.nix {
+          private = [
+            "monitoring/proton_smtp_token"
+            "monitoring/ntfy/alerts-token"
+            "monitoring/ntfy/webhook-password"
+          ];
           secrets."monitoring/proton_smtp_token" = "test-smtp-token";
           secrets."monitoring/ntfy/alerts-token" = "test-ntfy-token";
           secrets."monitoring/ntfy/webhook-password" = "test-webhook-password";
           templates."monitoring/ntfy/alertmanager-ntfy-auth" = ''
             http:
-              basic:
+              auth:
                 username: alertmanager
                 password: "test-webhook-password"
             ntfy:
@@ -274,6 +283,29 @@
         machine.wait_for_unit("ntfy-sh.service")
         machine.wait_until_succeeds("curl -sf http://localhost:9093/-/ready", timeout=60)
         machine.wait_until_succeeds("curl -sf http://localhost:2586/v1/health", timeout=60)
+
+        # The 2026-08-25 Grafana page died here: Alertmanager could not read
+        # its own webhook password because the secret was declared without an
+        # owner and landed root:root 0400. The private fixtures reproduce
+        # those production permissions, so this is the assertion that turns a
+        # silent delivery failure into a red test.
+        machine.succeed("runuser -u alertmanager -- test -r /run/stub-secrets/monitoring/ntfy/webhook-password")
+
+        # alertmanager-ntfy ignores unknown config keys, so a wrong key in the
+        # auth file (http.basic instead of http.auth) disables /hook auth with
+        # nothing but a startup warning to show for it.
+        bridge_log = machine.succeed("journalctl -u alertmanager-ntfy -b --no-pager")
+        assert "Basic auth is disabled" not in bridge_log, (
+            "the bridge started without incoming authentication; "
+            "the auth template's keys do not match what alertmanager-ntfy reads"
+        )
+
+        # And behaviourally, from the outside: no credentials, no entry.
+        unauth = machine.succeed(
+            "curl -s -o /dev/null -w '%{http_code}' -XPOST -H 'Content-Type: application/json' "
+            "-d '{\"alerts\":[]}' http://127.0.0.1:8000/hook || true"
+        ).strip()
+        assert unauth == "401", f"unauthenticated webhook post was not rejected: {unauth}"
 
         def post_alerts(alerts):
             body = json.dumps(

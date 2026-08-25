@@ -732,17 +732,34 @@ in
       # Alertmanager's cluster deduplicates the result exactly as it does
       # for email.
       (lib.mkIf (cfg.alertmanager.enable && cfg.alertmanager.ntfy.enable) {
+        # Only ever consumed through the rendered template below, which
+        # sops-nix writes as root; nothing reads this file directly.
         sops.secrets.${cfg.alertmanager.ntfy.tokenSecret} = { };
-        sops.secrets.${cfg.alertmanager.ntfy.webhookPasswordSecret} = { };
+
+        # Alertmanager reads this one itself when delivering to the local
+        # bridge's /hook endpoint, so it must be readable by the service
+        # user. The root:root 0400 default made every push delivery fail
+        # with "permission denied" while the behaviour test stayed green -
+        # its fixtures are world-readable store paths, so ownership bugs
+        # cannot reproduce there. Same shape as proton_smtp_token above.
+        sops.secrets.${cfg.alertmanager.ntfy.webhookPasswordSecret} = {
+          owner = "alertmanager";
+          group = "alertmanager";
+        };
 
         # Merged over the plain-text settings at runtime so neither
         # credential ever lands in the store. The bridge reads these via
         # systemd LoadCredential, which PID1 opens before dropping
         # privileges, so the file's owner does not matter - 0400 root.
+        #
+        # The incoming-auth block must be `http.auth`, not `http.basic`:
+        # alertmanager-ntfy (as of 1.2.1) silently ignores unknown keys, so
+        # a `basic:` there disables /hook authentication entirely and the
+        # only symptom is a startup warning in the journal.
         sops.templates."monitoring/ntfy/alertmanager-ntfy-auth" = {
           content = ''
             http:
-              basic:
+              auth:
                 username: alertmanager
                 password: "${config.sops.placeholder.${cfg.alertmanager.ntfy.webhookPasswordSecret}}"
             ntfy:
