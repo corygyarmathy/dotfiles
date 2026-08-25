@@ -839,9 +839,14 @@ in
               {
                 name = "Prometheus";
                 type = "prometheus";
-                uid = "prometheus";
                 url = "http://localhost:9090";
                 isDefault = true;
+                # Deliberately no `uid`: this host already has this datasource
+                # with its auto-generated one, and re-provisioning it under a
+                # different uid sends Grafana 13's provisioning into a fatal
+                # "data source not found" crash loop on startup. Panels in the
+                # provisioned dashboards reference the default datasource
+                # rather than a pinned uid for the same reason.
               }
             ];
 
