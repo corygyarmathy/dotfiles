@@ -157,6 +157,14 @@ in
     systemd.services.nixos-upgrade-apply = {
       description = "Apply the built NixOS configuration";
 
+      # This unit's ExecStart *is* the switch. If a promoted change touches
+      # this unit (e.g. a nixpkgs bump rewrites every ExecStart path), the
+      # switch stops it and SIGTERMs itself, aborting activation partway
+      # through and leaving stopped units down. Upstream marks its own
+      # nixos-upgrade service the same way.
+      restartIfChanged = false;
+      unitConfig.X-StopOnRemoval = false;
+
       serviceConfig = {
         Type = "oneshot";
         TimeoutStartSec = "1h";
