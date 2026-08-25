@@ -45,6 +45,32 @@ in
         touch $out
       '';
 
+  # Unit tests for the rules' logic against synthetic series - the two-branch
+  # join behind the journal-tail enrichment and the templates that render it.
+  # Static validity cannot catch a join that silently drops its fallback
+  # branch, which would turn every enrichment gap into a missed page, and
+  # waiting out SystemdUnitFailed's 5m hold-down in a VM just to read one
+  # annotation would be the slow way to learn the same thing.
+  #
+  # The @RULES@ placeholder becomes the rule file's store path, realised as a
+  # writeText input rather than passAsFile: promtool resolves rule_files
+  # relative to its working directory, which here is an empty build
+  # directory, so the test file needs the absolute path baked in either way.
+  alert-rules-unit =
+    let
+      testYml = pkgs.writeText "alert-rules.test.yml"
+        (builtins.replaceStrings
+          [ "@RULES@" ]
+          [ "${../modules/services/monitoring/alert-rules.yml}" ]
+          (builtins.readFile ./alert-rules.test.yml));
+    in
+    pkgs.runCommand "check-alert-rules-unit"
+      { nativeBuildInputs = [ pkgs.prometheus.cli ]; }
+      ''
+        promtool test rules ${testYml}
+        touch $out
+      '';
+
   # Same idea for the Alertmanager side: routing, inhibition and muting are
   # assembled by monitoring.nix from options, and a structural mistake there
   # surfaces only when alertmanager refuses to start - on the machines whose

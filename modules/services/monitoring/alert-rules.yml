@@ -33,16 +33,46 @@ groups:
           summary: "SMART health check failed"
           description: "Disk {{ $labels.device }} on {{ $labels.instance }} is reporting unhealthy"
 
+      # Failed units enriched with the journal tail captured by
+      # journal-tail-exporter (textfile metric systemd_unit_journal_tail_info,
+      # see journal-tail.nix).
+      #
+      # Two branches, so enrichment can never gate alerting: units WITH a
+      # captured tail get it attached (the arithmetic join is the only vector
+      # operation that copies labels across), units WITHOUT one - exporter has
+      # not run yet, or the unit logged nothing this boot - fall through the
+      # `unless` untouched. and/unless bind tighter than or, so this parses as
+      # (failed unless tail) or (failed joined with tail): disjoint halves of
+      # the failed set, never duplicates.
+      #
+      # The comparisons carry their own parentheses because * binds tighter
+      # than == in PromQL; unparenthesised, the match clause attaches to the
+      # scalar side and the parser rejects it outright - which is how this was
+      # caught, by the unit test below rather than on a host.
+      - record: systemd_unit_failed_with_journal_tail
+        expr: |
+          (
+            node_systemd_unit_state{state="failed"} == 1
+          )
+          unless on (instance, name) systemd_unit_journal_tail_info
+          or
+          (
+            (
+              node_systemd_unit_state{state="failed"} == 1
+            )
+            * on (instance, name) group_left (tail) systemd_unit_journal_tail_info
+          )
+
       # Systemd unit failures (catches NFS mount failures too)
       - alert: SystemdUnitFailed
-        expr: node_systemd_unit_state{state="failed"} == 1
+        expr: systemd_unit_failed_with_journal_tail == 1
         for: 5m
         labels:
           severity: warning
         annotations:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#systemdunitfailed"
           summary: "Systemd unit failed on {{ $labels.instance }}"
-          description: "Unit {{ $labels.name }} has been in failed state for 5+ minutes"
+          description: "Unit {{ $labels.name }} has been in failed state for 5+ minutes.{{ if $labels.tail }}\n\nRecent journal output:\n{{ $labels.tail }}{{ else }} No journal output was captured - check journalctl -u {{ $labels.name }}.{{ end }}"
 
       # High memory usage
       - alert: HighMemoryUsage
@@ -117,14 +147,14 @@ groups:
       # invisible: the site silently ages. Distinct from the generic
       # SystemdUnitFailed rule only so the message points at the right unit.
       - alert: DigitalGardenBuildFailed
-        expr: node_systemd_unit_state{name="digital-garden-build.service", state="failed"} == 1
+        expr: systemd_unit_failed_with_journal_tail{name="digital-garden-build.service"} == 1
         for: 15m
         labels:
           severity: warning
         annotations:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/digital-garden#digitalgardenbuildfailed"
           summary: "Digital garden build failed on {{ $labels.instance }}"
-          description: "digital-garden-build.service is in failed state, so the site is serving the last good build. Check with: journalctl -u digital-garden-build"
+          description: "digital-garden-build.service is in failed state, so the site is serving the last good build.{{ if $labels.tail }}\n\nRecent build output:\n{{ $labels.tail }}{{ else }} Check: journalctl -u digital-garden-build{{ end }}"
 
       # A sync that quietly stops delivering leaves the service running and the
       # site silently ageing: the builder keeps exiting 0 ("nothing to do") and
@@ -146,14 +176,14 @@ groups:
     rules:
       # Auto-upgrade failures
       - alert: NixosUpgradeFailed
-        expr: node_systemd_unit_state{name="nixos-upgrade.service", state="failed"} == 1
+        expr: systemd_unit_failed_with_journal_tail{name="nixos-upgrade.service"} == 1
         for: 5m
         labels:
           severity: warning
         annotations:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosupgradefailed"
           summary: "NixOS upgrade failed on {{ $labels.instance }}"
-          description: "The nixos-upgrade service has failed - check logs with: journalctl -u nixos-upgrade"
+          description: "The nixos-upgrade service has failed{{ if $labels.tail }}.\n\nRecent upgrade output:\n{{ $labels.tail }}{{ else }} - check logs with: journalctl -u nixos-upgrade.{{ end }}"
 
       # Unexpected reboot detection
       #
@@ -305,14 +335,14 @@ groups:
 
       # Systemd service failure
       - alert: CloudflareTunnelServiceFailed
-        expr: node_systemd_unit_state{name="cloudflared-tunnel.service", state="failed"} == 1
+        expr: systemd_unit_failed_with_journal_tail{name="cloudflared-tunnel.service"} == 1
         for: 1m
         labels:
           severity: critical
         annotations:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#cloudflaretunnelservicefailed"
           summary: "cloudflared-tunnel.service has failed"
-          description: "The systemd service is in failed state - check logs with: journalctl -u cloudflared-tunnel"
+          description: "The systemd service is in failed state{{ if $labels.tail }}.\n\nRecent tunnel output:\n{{ $labels.tail }}{{ else }} - check logs with: journalctl -u cloudflared-tunnel.{{ end }}"
 
       # Service restarting frequently (crash loop)
       - alert: CloudflareTunnelCrashLoop
