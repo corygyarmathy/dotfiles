@@ -1,0 +1,97 @@
+# promtool unit tests for the journal-tail enrichment in alert-rules.yml.
+#
+# checks/default.nix substitutes @RULES@ with the store path of the rule
+# file, because promtool resolves rule_files relative to its working
+# directory and this check runs from an empty build directory.
+#
+# What static `promtool check rules` cannot see and these fixtures pin down:
+#
+#   - the two-branch join behind systemd_unit_failed_with_journal_tail must
+#     return BOTH halves - a failed unit with a captured tail carrying the
+#     tail label, and a failed unit without one still selected. Losing the
+#     fallback branch would silently stop unit-failure alerting for exactly
+#     the units whose journals are quiet.
+#   - no duplicates: the enriched copy of a unit must not appear alongside
+#     its unenriched self.
+#   - the annotation templates render the tail into the notification, and
+#     degrade to the journalctl pointer when there is no tail.
+rule_files:
+  - @RULES@
+
+evaluation_interval: 1m
+
+tests:
+  # The generic SystemdUnitFailed alert against both branches at once.
+  - interval: 1m
+    input_series:
+      - series: 'node_systemd_unit_state{job="node",instance="homelab01:9100",name="broken.service",state="failed"}'
+        values: "1+0x20"
+      # Captured tail for the first host's unit only.
+      - series: 'systemd_unit_journal_tail_info{job="node",instance="homelab01:9100",name="broken.service",tail="2026-08-26T04:00:01 started\n2026-08-26T04:00:02 exited, code=exited/1"}'
+        values: "1+0x20"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab02:9100",name="silent.service",state="failed"}'
+        values: "1+0x20"
+
+    promql_expr_test:
+      # Exactly one sample per failed unit - the enriched one for
+      # broken.service, the bare fallback for silent.service.
+      - expr: systemd_unit_failed_with_journal_tail == 1
+        eval_time: 5m
+        exp_samples:
+          - labels: 'systemd_unit_failed_with_journal_tail{job="node",instance="homelab01:9100",name="broken.service",state="failed",tail="2026-08-26T04:00:01 started\n2026-08-26T04:00:02 exited, code=exited/1"}'
+            value: 1
+          - labels: 'systemd_unit_failed_with_journal_tail{job="node",instance="homelab02:9100",name="silent.service",state="failed"}'
+            value: 1
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SystemdUnitFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: homelab01:9100
+              name: broken.service
+              state: failed
+              tail: "2026-08-26T04:00:01 started\n2026-08-26T04:00:02 exited, code=exited/1"
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#systemdunitfailed"
+              summary: "Systemd unit failed on homelab01:9100"
+              description: "Unit broken.service has been in failed state for 5+ minutes.\n\nRecent journal output:\n2026-08-26T04:00:01 started\n2026-08-26T04:00:02 exited, code=exited/1"
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: homelab02:9100
+              name: silent.service
+              state: failed
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#systemdunitfailed"
+              summary: "Systemd unit failed on homelab02:9100"
+              description: "Unit silent.service has been in failed state for 5+ minutes. No journal output was captured - check journalctl -u silent.service."
+
+  # A name-filtered consumer of the same recording rule: NixosUpgradeFailed
+  # must select only nixos-upgrade.service out of the enriched set.
+  - interval: 1m
+    input_series:
+      - series: 'node_systemd_unit_state{job="node",instance="homelab02:9100",name="nixos-upgrade.service",state="failed"}'
+        values: "1+0x20"
+      - series: 'systemd_unit_journal_tail_info{job="node",instance="homelab02:9100",name="nixos-upgrade.service",tail="error: hash mismatch in fixed-output derivation"}'
+        values: "1+0x20"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab02:9100",name="something-else.service",state="failed"}'
+        values: "1+0x20"
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: NixosUpgradeFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: homelab02:9100
+              name: nixos-upgrade.service
+              state: failed
+              tail: "error: hash mismatch in fixed-output derivation"
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosupgradefailed"
+              summary: "NixOS upgrade failed on homelab02:9100"
+              description: "The nixos-upgrade service has failed.\n\nRecent upgrade output:\nerror: hash mismatch in fixed-output derivation"

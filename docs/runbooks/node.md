@@ -39,7 +39,13 @@ state for 5+ minutes. The unit name is in the notification.
 
 ### Do now
 
-- `ssh <host> systemctl status <unit>` then `journalctl -u <unit> -n 100`.
+- The notification carries the unit's last few journal lines when the
+  journal-tail exporter managed to capture them - obvious failures (a
+  traceback, a non-zero exit line) often need nothing more than reading the
+  alert.
+- For full history: `ssh <host> journalctl -u <unit> -n 100` (and
+  `systemctl status <unit>` for restart counts). Capture is best-effort: if
+  the alert says no output was captured, the unit logged nothing this boot.
 - Oneshot units (backups, exporters, garden builds) failing is normal noise;
   long-running services failing is the real signal. The unit name tells you
   which kind.

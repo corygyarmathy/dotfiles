@@ -42,11 +42,12 @@
   globalTimeout = 1200;
 
   nodes.machine =
-    { lib, ... }:
+    { lib, pkgs, ... }:
     {
       imports = [
         ../modules/services/monitoring/monitoring.nix
         ../modules/services/monitoring/deploy-metrics.nix
+        ../modules/services/monitoring/journal-tail.nix
 
         # Plaintext stand-ins for the three credentials the alerting path
         # reads: the SMTP token (never exercised - the sandbox has no network,
@@ -119,6 +120,22 @@
             # sink runs right here.
             baseUrl = "http://127.0.0.1:2586";
           };
+        };
+      };
+
+      # A unit that fails loudly, leaving a distinctive line in its journal
+      # and itself in failed state, so the journal-tail exporter (on by
+      # default wherever monitoring is enabled) has something to capture.
+      # Reset once asserted: a permanently failed unit would otherwise mature
+      # into SystemdUnitFailed and wander into the push-lane assertions below.
+      systemd.services.journal-tail-canary = {
+        description = "Deliberately failing unit used to exercise journal tail capture";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "journal-tail-canary" ''
+            echo "JOURNAL-TAIL-CANARY: the canary failed, as designed"
+            exit 1
+          '';
         };
       };
 
@@ -227,6 +244,36 @@
             return bool(query("nixos_deploy_revision_info"))
 
         retry(revision_exported, timeout=timedelta(seconds=180))
+
+    with subtest("a failed unit's journal tail reaches the textfile collector"):
+        # The canary exits 1 after printing its marker; `start` therefore
+        # reports failure and must not fail the test itself.
+        machine.succeed("systemctl start journal-tail-canary.service || true")
+
+        # Deterministic capture: run the exporter now rather than waiting for
+        # the timer. First the file it writes...
+        machine.succeed("systemctl start journal-tail-exporter.service")
+        machine.succeed(
+            "grep -q JOURNAL-TAIL-CANARY /var/lib/prometheus-node-exporter/journal_tail.prom"
+        )
+
+        # ...then that node_exporter serves it - the wiring step
+        # journal-tail.nix has to override a mkDefault to get.
+        machine.wait_until_succeeds(
+            "curl -sf -o /tmp/node-metrics http://localhost:9100/metrics "
+            "&& grep -q systemd_unit_journal_tail_info /tmp/node-metrics",
+            timeout=60,
+        )
+
+        # Prometheus-side presence is not asserted here: the file-to-scraper
+        # chain is generic and already proven by the deployment metrics
+        # subtest above, while firing SystemdUnitFailed end-to-end would mean
+        # waiting out its 5m hold-down for one annotation string. The join
+        # and templates are pinned exactly by the alert-rules-unit check.
+        #
+        # Clear the failed state so the canary can never leak into the
+        # push-lane assertions below as a real SystemdUnitFailed.
+        machine.succeed("systemctl reset-failed journal-tail-canary.service")
 
     with subtest("the staged timestamp tracks the generation, not the last rebuild"):
         # Read off the file rather than out of Prometheus: this is about what
