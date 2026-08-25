@@ -99,6 +99,7 @@ in
     inherit pkgs;
     lib = pkgs.lib;
   };
+  grafana = testLib.mkTest ./grafana.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
   reverse-proxy = testLib.mkTest ./reverse-proxy.nix;
   upgrade-verify = testLib.mkTest ./upgrade-verify.nix;

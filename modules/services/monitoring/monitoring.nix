@@ -858,7 +858,20 @@ in
               {
                 name = "fleet";
                 type = "file";
-                options.path = toString ./dashboards;
+                # Realized as its own store path rather than `toString
+                # ./dashboards`: a bare flake-source path is baked into the
+                # provider YAML without string context, so the directory is
+                # only ever present if something unrelated happens to pull the
+                # whole source tree into the system closure. On homelab01 that
+                # something was the home-manager manifests; in the behaviour
+                # test's minimal VM nothing did, provisioning logged
+                # "Cannot read directory" at warn level, and Grafana came up
+                # serving zero dashboards. See checks/grafana.nix.
+                options.path =
+                  toString (builtins.path {
+                    name = "grafana-dashboards";
+                    path = ./dashboards;
+                  });
               }
             ];
           };
