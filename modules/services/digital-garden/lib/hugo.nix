@@ -164,13 +164,16 @@ in
           mv "$work/content/index.md" "$work/content/_index.md"
         fi
 
-        hugo --quiet --source "$work" --destination "$outdir"
+        # Not --quiet: this runs inside a oneshot service whose journal is the
+        # only place a failure surfaces. A quiet hugo turned "KaTeX could not
+        # render this expression" into two silent seconds and exit 1.
+        hugo --source "$work" --destination "$outdir"
 
         # Search index, built from the rendered HTML rather than from the
         # markdown, so what is searchable is exactly what is readable. Runs
         # here rather than as a separate step because a site whose index does
         # not match its pages is worse than one with no search at all.
-        pagefind --site "$outdir" --quiet
+        pagefind --site "$outdir"
       '';
     };
 }

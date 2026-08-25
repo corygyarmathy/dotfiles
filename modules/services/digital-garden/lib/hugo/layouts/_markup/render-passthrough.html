@@ -8,8 +8,17 @@
   An expression KaTeX cannot parse fails the build rather than printing an
   error into the page: the last good build keeps serving until the note is
   fixed, which is the failure posture of the rest of this toolchain.
+
+  strict=warn narrows that to genuine parse errors. The default (error) also
+  fails the build on lint-level complaints, and the one that bit was prose
+  about money: "costs $80k ... than ~$400k" is an inline maths span as far as
+  the passthrough delimiters are concerned, and the en-dash inside it is an
+  "unrecognized Unicode character" that took publishing down for a sentence
+  no one ever meant as maths. Obsidian renders such a span best-effort too,
+  so warn keeps the note reading the same in both places; a malformed
+  expression still returns .Err and still fails the build.
 */}}
-{{- $opts := dict "output" "htmlAndMathml" "displayMode" (eq .Type "block") }}
+{{- $opts := dict "output" "htmlAndMathml" "displayMode" (eq .Type "block") "strict" "warn" }}
 {{- with try (transform.ToMath .Inner $opts) }}
   {{- with .Err }}
     {{- errorf "KaTeX could not render this expression: %s: see %s" . $.Position }}
