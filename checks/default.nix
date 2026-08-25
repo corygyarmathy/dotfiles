@@ -45,6 +45,55 @@ in
         touch $out
       '';
 
+  # Same idea for the Alertmanager side: routing, inhibition and muting are
+  # assembled by monitoring.nix from options, and a structural mistake there
+  # surfaces only when alertmanager refuses to start - on the machines whose
+  # job is to notice that everything else stopped. This evaluates the
+  # configuration exactly as a production host would receive it (every
+  # routing feature switched on) and hands it to amtool. JSON is valid YAML,
+  # which saves generating YAML by hand; the sops secret *paths* embedded in
+  # the config are checked structurally, never read.
+  alertmanager-config =
+    let
+      eval = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          inputs.sops-nix.nixosModules.sops
+          ../modules/services/monitoring/monitoring.nix
+          (
+            { ... }:
+            {
+              cg.service.monitoring = {
+                enable = true;
+                alertmanager = {
+                  enable = true;
+                  ntfy.enable = true;
+                  email = {
+                    to = "root@example.com";
+                    from = "alerts@example.com";
+                    authUsername = "alerts";
+                  };
+                };
+                scrapeTargets = [ "localhost:9100" ];
+                cloudflaredTarget = "localhost:20241";
+              };
+            }
+          )
+        ];
+      };
+    in
+    pkgs.runCommand "check-alertmanager-config"
+      {
+        nativeBuildInputs = [ pkgs.prometheus-alertmanager ];
+        passAsFile = [ "amConfig" ];
+        amConfig = builtins.toJSON eval.config.services.prometheus.alertmanager.configuration;
+      }
+      ''
+        amtool check-config "$amConfigPath" | tee amtool.out
+        grep -q SUCCESS amtool.out
+        mkdir $out
+      '';
+
   digital-garden = testLib.mkTest ./digital-garden.nix;
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;

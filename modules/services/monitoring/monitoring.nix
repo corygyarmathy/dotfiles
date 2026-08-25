@@ -215,6 +215,81 @@ in
         };
       };
 
+      # Push notifications through a self-hosted ntfy server, via the
+      # alertmanager-ntfy bridge running next to Alertmanager on this host.
+      # Critical alerts buzz the phone; warnings arrive silently; everything
+      # keeps flowing to email as the archive lane regardless of severity.
+      # See the receiver/route/inhibition design in the config section below.
+      ntfy = {
+        enable = lib.mkEnableOption "ntfy push routing for Alertmanager";
+
+        bridgeUrl = lib.mkOption {
+          type = lib.types.str;
+          default = "http://127.0.0.1:8000/hook";
+          description = "URL of the local alertmanager-ntfy webhook endpoint (/hook)";
+        };
+
+        baseUrl = lib.mkOption {
+          type = lib.types.str;
+          default = "https://ntfy.gyarmathy.co";
+          description = "Base URL of the ntfy server the bridge publishes to";
+        };
+
+        topic = lib.mkOption {
+          type = lib.types.str;
+          default = "alerts";
+          description = "ntfy topic alerts are published to";
+        };
+
+        tokenSecret = lib.mkOption {
+          type = lib.types.str;
+          default = "monitoring/ntfy/alerts-token";
+          description = "Sops secret holding the ntfy access token used by the bridge";
+        };
+
+        webhookPasswordSecret = lib.mkOption {
+          type = lib.types.str;
+          default = "monitoring/ntfy/webhook-password";
+          description = ''
+            Sops secret holding the basic-auth password shared by every
+            Alertmanager in the fleet and the bridges they deliver to. Use
+            URL-safe characters (letters, digits, - _ ~ .); it is embedded
+            in a YAML file verbatim.
+          '';
+        };
+      };
+
+      # Warning-severity push notifications are suppressed between these
+      # times so a failing timer at 04:15 is read at breakfast rather than
+      # buzzing then. Criticals ignore quiet hours by design. Applies to the
+      # ntfy lane only; email is never muted.
+      quietHours = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Mute warning-severity push notifications outside waking hours";
+        };
+        start = lib.mkOption {
+          type = lib.types.strMatching "[0-9]{2}:[0-9]{2}";
+          default = "22:00";
+          description = "Start of the quiet window (local time)";
+        };
+        end = lib.mkOption {
+          type = lib.types.strMatching "[0-9]{2}:[0-9]{2}";
+          default = "07:00";
+          description = "End of the quiet window (local time)";
+        };
+        timeZone = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          # time.timeZone is null when unset; the consumer falls back to UTC,
+          # which only ever matters for test/standalone evaluations - both
+          # hosts set it explicitly.
+          default = config.time.timeZone;
+          defaultText = lib.literalExpression "config.time.timeZone";
+          description = "IANA timezone the quiet window is evaluated in";
+        };
+      };
+
     };
 
     # ZFS monitoring
@@ -478,21 +553,141 @@ in
           group = "alertmanager";
         };
 
+        # ==========================================================
+        # Routing design
+        #
+        # Two lanes, deliberately unequal:
+        #
+        #   push  - ntfy on the phone. Criticals buzz (priority urgent),
+        #           warnings arrive silently (priority low) and are muted
+        #           overnight. Resolutions follow their alert's route, so a
+        #           resolved critical lands as an ordinary-priority all-clear.
+        #   email - the archive lane. Everything reaches it (the severity
+        #           routes `continue` past the push receiver into this one),
+        #           grouped by alertname so a fan-out of related alerts is
+        #           one message, repeating no more often than daily.
+        #
+        # Inhibition keeps one root cause from fanning out into many
+        # notifications: an unreachable host suppresses every alert sourced
+        # from its exporters, a downed tunnel suppresses the probe failures
+        # it would otherwise cause in bulk, and a pool-level ZFS failure
+        # supersedes the per-symptom alerts describing the same disks.
+        # ==========================================================
+
         services.prometheus.alertmanager = {
           enable = true;
 
           clusterPeers = cfg.alertmanager.clusterPeers;
           configuration = {
+            global.resolve_timeout = "5m";
+
             route = {
               receiver = "email";
-              group_by = [
-                "alertname"
-                "instance"
-              ];
+              group_by = [ "alertname" ];
               group_wait = "30s";
-              group_interval = "5m";
-              repeat_interval = "4h";
+              group_interval = "10m";
+              repeat_interval = "24h";
+
+              routes = lib.optionals cfg.alertmanager.ntfy.enable [
+                {
+                  receiver = "push";
+                  continue = true; # email still archives it
+                  matchers = [ "severity = \"critical\"" ];
+                  group_by = [
+                    "alertname"
+                    "instance"
+                  ];
+                  group_wait = "30s";
+                  repeat_interval = "4h";
+                }
+                {
+                  receiver = "push";
+                  continue = true;
+                  matchers = [ "severity = \"warning\"" ];
+                  group_by = [
+                    "alertname"
+                    "instance"
+                  ];
+                  # Warnings get a longer grace period before the first
+                  # notification: most clear themselves.
+                  group_wait = "5m";
+                  repeat_interval = "24h";
+                  mute_time_intervals = lib.optionals cfg.alertmanager.quietHours.enable [ "overnight" ];
+                }
+              ];
             };
+
+            mute_time_intervals = lib.optionals (cfg.alertmanager.ntfy.enable && cfg.alertmanager.quietHours.enable) [
+              {
+                name = "overnight";
+                time_intervals = [
+                  {
+                    times = [
+                      {
+                        start_time = cfg.alertmanager.quietHours.start;
+                        end_time = "23:59";
+                      }
+                      {
+                        start_time = "00:00";
+                        end_time = cfg.alertmanager.quietHours.end;
+                      }
+                    ];
+                    location = if cfg.alertmanager.quietHours.timeZone != null then cfg.alertmanager.quietHours.timeZone else "UTC";
+                  }
+                ];
+              }
+            ];
+
+            inhibit_rules =
+              let
+                # Alerts that describe symptoms of a degraded ZFS pool rather
+                # than the pool's state itself.
+                zfsSymptoms = "Zfs(ChecksumErrors|IOErrors|ScrubErrors|ScrubOverdue)";
+              in
+              [
+                # When Prometheus cannot reach a host's node_exporter, every
+                # other metric sourced from that host is stale, and each of
+                # those alerts firing separately is noise around the one real
+                # problem. Textfile-derived alerts (restic, deploy, gluetun,
+                # garden) carry instance too, so they are covered as well.
+                {
+                  source_matchers = [ "alertname = TargetDown" ];
+                  target_matchers = [ "severity =~ warning|critical" ];
+                  equal = [ "instance" ];
+                }
+
+                # A dead tunnel breaks every published service at once; the
+                # dozen resulting probe failures say nothing the tunnel alert
+                # does not. Probes that fail while the tunnel is healthy are
+                # unaffected and still page normally.
+                {
+                  source_matchers = [
+                    "alertname =~ CloudflareTunnel(Down|ServiceFailed|NoConnections)"
+                  ];
+                  target_matchers = [ "alertname = ServiceDown" ];
+                }
+
+                # A degraded or faulted pool already says what checksum/IO
+                # errors and overdue scrubs would say, with more urgency.
+                {
+                  source_matchers = [ "alertname =~ ZfsPool(Degraded|Faulted)" ];
+                  target_matchers = [ "alertname =~ ${zfsSymptoms}" ];
+                  equal = [
+                    "instance"
+                    "pool"
+                  ];
+                }
+
+                # Critical disk pressure makes the warning redundant.
+                {
+                  source_matchers = [ "alertname = DiskSpaceCritical" ];
+                  target_matchers = [ "alertname = DiskSpaceLow" ];
+                  equal = [
+                    "instance"
+                    "mountpoint"
+                  ];
+                }
+              ];
 
             receivers = [
               {
@@ -508,10 +703,88 @@ in
                   }
                 ];
               }
+            ] ++ lib.optionals cfg.alertmanager.ntfy.enable [
+              {
+                name = "push";
+                webhook_configs = [
+                  {
+                    url = cfg.alertmanager.ntfy.bridgeUrl;
+                    send_resolved = true;
+                    http_config.basic_auth = {
+                      username = "alertmanager";
+                      password_file = config.sops.secrets.${cfg.alertmanager.ntfy.webhookPasswordSecret}.path;
+                    };
+                  }
+                ];
+              }
             ];
           };
         };
         networking.firewall.allowedTCPPorts = [ 9094 ]; # gossip
+      })
+
+      # ============================================================
+      # ntfy bridge: Alertmanager webhooks -> self-hosted ntfy
+      # ============================================================
+      # One bridge per host, next to that host's Alertmanager, so push
+      # delivery does not depend on either host being the sole survivor -
+      # both bridges publish to the same ntfy server over HTTPS and
+      # Alertmanager's cluster deduplicates the result exactly as it does
+      # for email.
+      (lib.mkIf (cfg.alertmanager.enable && cfg.alertmanager.ntfy.enable) {
+        sops.secrets.${cfg.alertmanager.ntfy.tokenSecret} = { };
+        sops.secrets.${cfg.alertmanager.ntfy.webhookPasswordSecret} = { };
+
+        # Merged over the plain-text settings at runtime so neither
+        # credential ever lands in the store. The bridge reads these via
+        # systemd LoadCredential, which PID1 opens before dropping
+        # privileges, so the file's owner does not matter - 0400 root.
+        sops.templates."monitoring/ntfy/alertmanager-ntfy-auth" = {
+          content = ''
+            http:
+              basic:
+                username: alertmanager
+                password: "${config.sops.placeholder.${cfg.alertmanager.ntfy.webhookPasswordSecret}}"
+            ntfy:
+              auth:
+                token: "${config.sops.placeholder.${cfg.alertmanager.ntfy.tokenSecret}}"
+          '';
+          mode = "0400";
+        };
+
+        services.prometheus.alertmanager-ntfy = {
+          enable = true;
+          settings = {
+            http.addr = "127.0.0.1:8000";
+            ntfy = {
+              baseurl = cfg.alertmanager.ntfy.baseUrl;
+              notification = {
+                topic = cfg.alertmanager.ntfy.topic;
+                # Per-alert gval expression over the alert's own fields:
+                # critical firing buzzes, warnings stay silent, resolutions
+                # land at ordinary priority regardless of severity.
+                priority = ''
+                  status == "firing" ? (labels["severity"] == "critical" ? "urgent" : "low") : "default"
+                '';
+                tags = [
+                  {
+                    tag = "rotating_light";
+                    condition = ''status == "firing" && labels["severity"] == "critical"'';
+                  }
+                  {
+                    tag = "red_circle";
+                    condition = ''status == "firing" && labels["severity"] == "warning"'';
+                  }
+                  {
+                    tag = "green_circle";
+                    condition = ''status == "resolved"'';
+                  }
+                ];
+              };
+            };
+          };
+          extraConfigFiles = [ config.sops.templates."monitoring/ntfy/alertmanager-ntfy-auth".path ];
+        };
       })
 
       # ============================================================
@@ -568,6 +841,24 @@ in
                 type = "prometheus";
                 url = "http://localhost:9090";
                 isDefault = true;
+                # Deliberately no `uid`: this host already has this datasource
+                # with its auto-generated one, and re-provisioning it under a
+                # different uid sends Grafana 13's provisioning into a fatal
+                # "data source not found" crash loop on startup. Panels in the
+                # provisioned dashboards reference the default datasource
+                # rather than a pinned uid for the same reason.
+              }
+            ];
+
+            # The fleet overview is the answer to "is anything wrong right
+            # now" - firing alerts, unreachable targets, backup and upgrade
+            # verdicts, per-host vitals - kept in code so it survives
+            # reinstatement of /var/lib/grafana and cannot drift between hosts.
+            dashboards.settings.providers = [
+              {
+                name = "fleet";
+                type = "file";
+                options.path = toString ./dashboards;
               }
             ];
           };

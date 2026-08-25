@@ -260,6 +260,21 @@
           localOnly = true;
         };
 
+        # Monitoring internals. LAN-only like the other admin UIs - remote
+        # access stays ssh-tunnelled. The Alertmanager UI is where silences
+        # live and Prometheus' graph view backs every alert expression, so
+        # both are one click from Grafana instead of an ssh port-forward.
+        prometheus-ui = {
+          subdomain = "prometheus";
+          port = 9090;
+          localOnly = true;
+        };
+        alertmanager-ui = {
+          subdomain = "alertmanager";
+          port = 9093;
+          localOnly = true;
+        };
+
         # RSS
         rss = {
           subdomain = "rss";
@@ -319,6 +334,7 @@
       alertmanager = {
         enable = true;
         clusterPeers = [ "homelab02" ];
+        ntfy.enable = true;
         email = {
           to = "cory@gyarmathy.co";
           from = "alerts@gyarmathy.co";
@@ -413,6 +429,14 @@
         }
       ];
     };
+
+    # -------------------------------------------------------------------------
+    # Push notifications (ntfy)
+    # -------------------------------------------------------------------------
+    # Carries the alerting stack's page channel; the Alertmanager routing and
+    # bridge live in modules/services/monitoring/monitoring.nix. First-deploy
+    # bootstrap steps are documented in modules/services/ntfy.nix.
+    ntfy.enable = true;
 
     # -------------------------------------------------------------------------
     # DNS (AdGuard Home)
