@@ -8,6 +8,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#diskspacelow"
           summary: "Low disk space on {{ $labels.instance }}"
           description: 'Filesystem {{ $labels.mountpoint }} has {{ printf "%.1f" $value }}% free space'
 
@@ -17,6 +18,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#diskspacecritical"
           summary: "Critical disk space on {{ $labels.instance }}"
           description: 'Filesystem {{ $labels.mountpoint }} has {{ printf "%.1f" $value }}% free space'
 
@@ -27,6 +29,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#disksmartunhealthy"
           summary: "SMART health check failed"
           description: "Disk {{ $labels.device }} on {{ $labels.instance }} is reporting unhealthy"
 
@@ -37,6 +40,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#systemdunitfailed"
           summary: "Systemd unit failed on {{ $labels.instance }}"
           description: "Unit {{ $labels.name }} has been in failed state for 5+ minutes"
 
@@ -47,6 +51,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highmemoryusage"
           summary: "High memory usage on {{ $labels.instance }}"
           description: 'Memory usage is {{ printf "%.1f" $value }}%'
 
@@ -60,6 +65,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highcpuusage"
           summary: "High CPU usage on {{ $labels.instance }}"
           description: 'CPU usage is {{ printf "%.1f" $value }}%'
 
@@ -69,6 +75,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highdrivetemperature"
           summary: "Drive {{ $labels.device }} running hot on {{ $labels.instance }}"
           description: 'Temperature is {{ printf "%.0f" $value }}°C (threshold: 55°C)'
 
@@ -78,6 +85,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highsystemtemperature"
           summary: "High system temperature on {{ $labels.instance }}"
           description: 'Sensor {{ $labels.sensor }} reading {{ printf "%.0f" $value }}°C'
 
@@ -87,6 +95,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#targetdown"
           summary: "Scrape target {{ $labels.job }}/{{ $labels.instance }} is down"
           description: "Prometheus cannot reach {{ $labels.instance }} for job {{ $labels.job }}"
 
@@ -99,6 +108,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#servicedown"
           summary: "Service unreachable"
           description: "{{ $labels.instance }} has been down for 5+ minutes"
 
@@ -112,6 +122,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/digital-garden#digitalgardenbuildfailed"
           summary: "Digital garden build failed on {{ $labels.instance }}"
           description: "digital-garden-build.service is in failed state, so the site is serving the last good build. Check with: journalctl -u digital-garden-build"
 
@@ -127,6 +138,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/digital-garden#digitalgardensyncstale"
           summary: "Obsidian Sync has not completed a cycle on {{ $labels.host }}"
           description: "digital-garden-sync has not logged a completed sync in over 6 hours; the garden is serving its last good build. Check: journalctl -u digital-garden-sync"
 
@@ -139,6 +151,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosupgradefailed"
           summary: "NixOS upgrade failed on {{ $labels.instance }}"
           description: "The nixos-upgrade service has failed - check logs with: journalctl -u nixos-upgrade"
 
@@ -158,6 +171,7 @@ groups:
         labels:
           severity: info
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#unexpectedreboot"
           summary: "{{ $labels.instance }} rebooted unexpectedly"
           description: 'System booted {{ printf "%.0f" $value }} seconds ago (outside maintenance window)'
 
@@ -173,6 +187,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/zfs#zfspoolunhealthy"
           summary: "ZFS pool {{ $labels.pool }} is unhealthy on {{ $labels.instance }}"
           description: "Pool {{ $labels.pool }} is in {{ $labels.state }} state - investigate immediately"
 
@@ -183,6 +198,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/zfs#zfspooldegraded"
           summary: "ZFS pool {{ $labels.pool }} is DEGRADED on {{ $labels.instance }}"
           description: "Pool {{ $labels.pool }} is degraded - one or more devices have failed. Check 'zpool status {{ $labels.pool }}' for details."
 
@@ -193,6 +209,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/zfs#zfspoolfaulted"
           summary: "ZFS pool {{ $labels.pool }} is FAULTED on {{ $labels.instance }}"
           description: "Pool {{ $labels.pool }} is faulted - DATA LOSS MAY HAVE OCCURRED. Immediate action required!"
 
@@ -203,6 +220,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/zfs#zfschecksumerrors"
           summary: "ZFS checksum errors on pool {{ $labels.pool }}"
           description: 'Pool {{ $labels.pool }} on {{ $labels.instance }} has {{ $value }} checksum errors - run "zpool scrub {{ $labels.pool }}" and check disk health'
 
@@ -213,6 +231,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/zfs#zfsioerrors"
           summary: "ZFS I/O errors on pool {{ $labels.pool }}"
           description: "Pool {{ $labels.pool }} on {{ $labels.instance }} has I/O errors (read: {{ $value }}) - check disk health"
 
@@ -223,6 +242,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/zfs#zfsscruberrors"
           summary: "ZFS scrub found errors on pool {{ $labels.pool }}"
           description: 'Last scrub of {{ $labels.pool }} on {{ $labels.instance }} found {{ $value }} errors - check "zpool status {{ $labels.pool }}" for details'
 
@@ -233,6 +253,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/zfs#zfsscruboverdue"
           summary: "ZFS scrub overdue on pool {{ $labels.pool }}"
           description: 'Pool {{ $labels.pool }} on {{ $labels.instance }} has not been scrubbed in {{ $value | humanizeDuration }} - run "zpool scrub {{ $labels.pool }}"'
   - name: cloudflare_tunnel
@@ -244,6 +265,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#cloudflaretunneldown"
           summary: "Cloudflare Tunnel is down on {{ $labels.instance }}"
           description: "The cloudflared service is not responding - public services are unreachable"
 
@@ -254,6 +276,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#cloudflaretunnelnoconnections"
           summary: "Cloudflare Tunnel has no active connections"
           description: "Tunnel has {{ $value }} connections (expected 4) - public services may be unreachable"
 
@@ -264,6 +287,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#cloudflaretunneldegraded"
           summary: "Cloudflare Tunnel connection count low"
           description: "Tunnel has only {{ $value }} connections out of 4 - performance may be degraded"
 
@@ -275,6 +299,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#cloudflaretunnelhigherrorrate"
           summary: "High error rate through Cloudflare Tunnel"
           description: "Tunnel is seeing {{ $value | humanizePercentage }} errors - check service health and logs"
 
@@ -285,6 +310,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#cloudflaretunnelservicefailed"
           summary: "cloudflared-tunnel.service has failed"
           description: "The systemd service is in failed state - check logs with: journalctl -u cloudflared-tunnel"
 
@@ -295,6 +321,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#cloudflaretunnelcrashloop"
           summary: "Cloudflare Tunnel is restarting frequently"
           description: "The tunnel has restarted {{ $value }} times in the last 15 minutes - check for stability issues"
   - name: backups
@@ -305,6 +332,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/backups#resticbackupfailed"
           summary: "Restic backup {{ $labels.job }} failed on {{ $labels.host }}"
       - alert: ResticBackupStale
         expr: time() - restic_backup_last_run_timestamp_seconds > 93600
@@ -312,6 +340,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/backups#resticbackupstale"
           summary: "Restic backup {{ $labels.job }} on {{ $labels.host }} hasn't run in over 26 hours"
   - name: deploy
     rules:
@@ -328,6 +357,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosdeployfailed"
           summary: "NixOS auto-upgrade failed on {{ $labels.host }}"
           description: "The last nixos-upgrade run exited non-zero. Check `readlink /run/current-system` against `journalctl -u nixos-upgrade` before assuming anything: activation may have completed and then tripped the post-activation check for failed units. Either way the host has stopped tracking the promoted ref."
 
@@ -340,6 +370,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosdeploystale"
           summary: "NixOS auto-upgrade has not run on {{ $labels.host }} in over 48 hours"
           description: "Neither a success nor a failure has been recorded. The timer, the network, the flake ref or the host itself has stopped."
 
@@ -361,6 +392,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosrebootpending"
           summary: "{{ $labels.host }} has a generation staged but not activated for over 26 hours"
           description: "A new kernel is staged and waiting for a reboot that has not happened — most likely the build ran past the configured reboot window, which nixos-upgrade reports as success."
 
@@ -381,6 +413,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosverifyfailed"
           summary: "{{ $labels.host }} activated a generation that did not come up healthy"
           description: "Verification found units failing that were not failing before the upgrade. If nixos_verify_manual_generation is 1 this generation was applied by hand and will not be rolled back automatically — it is yours to fix or revert. Check: journalctl -u nixos-upgrade-verify.service"
 
@@ -397,6 +430,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosrollbackfailed"
           summary: "{{ $labels.host }} attempted a rollback that did not fully take effect"
           description: "Verification decided to revert this generation and could not finish the job. If nixos_verify_rolled_back is 0 the failed generation is still running and needs hands on it now; if it is 1 the services reverted but the bootloader did not, so the next reboot returns to the failed generation. Check: journalctl -u nixos-upgrade-verify.service"
 
@@ -442,6 +476,7 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosverifystale"
           summary: "{{ $labels.host }} is running a generation that activation verification never checked"
           description: "A generation was activated over 6 hours ago and nixos-upgrade-verify has not recorded a result since. Either it is not running, or the generation was applied by hand. Check: systemctl status nixos-upgrade-verify.timer"
 
@@ -454,6 +489,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosrolledback"
           summary: "{{ $labels.host }} rolled itself back to its previous generation"
           description: "Activation verification failed and the host reverted. It is running an older revision than the one deploy points at, and will be offered the same revision again tonight. Fix forward."
 
@@ -465,6 +501,7 @@ groups:
         labels:
           severity: critical
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/vpn#gluetunvpndisconnected"
           summary: "Gluetun VPN is disconnected on {{ $labels.instance }}"
           description: "WireGuard tunnel is down — qBittorrent has no internet access"
 
@@ -474,5 +511,6 @@ groups:
         labels:
           severity: warning
         annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/vpn#gluetunportnotforwarded"
           summary: "Gluetun has no forwarded port on {{ $labels.instance }}"
           description: "VPN is connected but port forwarding returned 0 — qBittorrent will show as firewalled"
