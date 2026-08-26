@@ -423,6 +423,12 @@ Which answers the auto-merge question the risks section raised: the tests do not
 
 **One thing to fix before the next test lands:** the per-test timeout is nixpkgs' default of 3600s. Against measured runtimes of under 90 seconds that turns a hung VM into an hour-long job. `digital-garden` is the first candidate with a plausible reason to hang - a Quartz build is real work, not a service waiting on a port - so it should arrive with a tighter timeout. Done: `mkTest` now sets `globalTimeout` to 600s for every test, as a `mkDefault` so a test with a real reason to be slower can raise it and say why.
 
+### The gate outgrew the build, 2026-08-26
+
+The prediction at #422 ("the number to watch is `flake-check` overtaking `build xps15`") came true. The alerting subtests landed after this section was written, and one of them waits out the warning route's production `group_wait` of five minutes to prove delivery, which took `monitoring` from **71s to ~383s** and pushed `flake check` from **3m18s to ~8m30s**.
+
+The fix distinguishes two things the test was conflating. A VM test should prove that a warning-severity alert *routes* to push with the right priority and survives inhibition - not that it waits the production five minutes. The `5m` value is structural config, and it is already pinned by the `amtool` check (`alertmanager-config`), which evaluates the assembled Alertmanager config with the default. So `group_wait` became an option, `cg.service.monitoring.alertmanager.ntfy.warningGroupWait` (default `5m`), the `monitoring` test sets it to `5s`, and production is unchanged. `ci.yml` also passes `--max-jobs 5` to `nix flake check` so all five VM tests boot concurrently instead of four-plus-one. Result: `flake-check` is bounded by `upgrade-verify` (~2.5m), comfortably back inside the host build.
+
 ### `digital-garden`, 2026-08-16
 
 Landed, passing in 28 seconds. `source = "obsidian-sync"` reads the vault from disk instead of cloning it, so the builder runs entirely offline; the sync service that would normally fill that directory is disabled and the vault is staged from a three-note fixture - one published, one not, and one with no frontmatter at all.
