@@ -80,8 +80,12 @@ reports success while the new kernel waits for the next reboot.
 ## NixosVerifyFailed
 
 **Severity:** critical (buzzes) · **Fires when:** activation verification
-found critical units failing that were not failing before the upgrade - the
-new generation came up broken.
+found units failing that were not failing before the upgrade - the new
+generation came up broken. "Failing" includes units stuck in
+`activating (auto-restart)`, which never reach the terminal failed state; and
+it excludes the upgrade machinery itself (`nixos-upgrade`,
+`nixos-upgrade-verify`), whose failures are [NixosDeployFailed](#nixosdeployfailed)'s
+business, so a name in the journal is a genuine symptom.
 
 ### Do now
 
