@@ -269,6 +269,19 @@ in
             in a YAML file verbatim.
           '';
         };
+
+        # Grace period before a warning-severity alert first notifies.
+        # Warnings wait longer than criticals because most clear themselves
+        # before they are worth reading. Exposed as an option so the VM test
+        # can shorten it: the test proves a warning routes to push with the
+        # right priority, not that it waits the production five minutes, and
+        # the production value is still pinned structurally by the amtool
+        # check (checks/default.nix).
+        warningGroupWait = lib.mkOption {
+          type = lib.types.str;
+          default = "5m";
+          description = "Grace period before a warning-severity alert first notifies";
+        };
       };
 
       # Warning-severity push notifications are suppressed between these
@@ -622,7 +635,7 @@ in
                   ];
                   # Warnings get a longer grace period before the first
                   # notification: most clear themselves.
-                  group_wait = "5m";
+                  group_wait = cfg.alertmanager.ntfy.warningGroupWait;
                   repeat_interval = "24h";
                   mute_time_intervals = lib.optionals cfg.alertmanager.quietHours.enable [ "overnight" ];
                 }

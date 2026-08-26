@@ -93,8 +93,13 @@ jobs:
             echo "::warning::/dev/kvm absent - NixOS tests fall back to TCG emulation"
           fi
 
+      # --max-jobs 5 lets the five NixOS VM tests in ./checks boot
+      # concurrently (nix defaults to one job per CPU core, which is 4 on the
+      # runner, so one test would otherwise wait for another to finish). The
+      # tests spend most of their time waiting on boot and services, not CPU,
+      # so oversubscribing the 4 cores is cheap. See docs/plans/deployment-hardening.md.
       - name: Check flake
-        run: nix flake check --print-build-logs
+        run: nix flake check --print-build-logs --max-jobs 5
 
   build:
     name: build ${{ matrix.host }}

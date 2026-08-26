@@ -31,15 +31,13 @@
 # Alertmanager API - bypassing rule evaluation, which the promtool/rule-loading
 # checks already cover - and asserted against what lands in ntfy's cache.
 #
-# This test raises globalTimeout because the warning-severity route carries a
-# deliberate 5m group_wait: most warnings clear themselves before they are
-# worth reading, and asserting delivery means waiting out that grace period.
+# The warning-severity route's production group_wait is 5m, but the test does
+# not wait that out: `warningGroupWait` is shortened in the machine below, so
+# this test proves warnings *route* to push with the right priority rather
+# than that they wait five minutes. The 5m value is pinned structurally by the
+# amtool check next door, which evaluates with the default.
 {
   name = "monitoring";
-
-  # See header. Default is 600 (checks/lib.nix). Boot, the scrape subtests'
-  # worst-case waits and both lanes' grace periods fit in twenty minutes.
-  globalTimeout = 1200;
 
   nodes.machine =
     { lib, pkgs, ... }:
@@ -119,6 +117,11 @@
             # The real deployment publishes through Caddy; in the sandbox the
             # sink runs right here.
             baseUrl = "http://127.0.0.1:2586";
+            # The warning route's production group_wait is 5m; the test does
+            # not need to wait out that grace period to prove the warning
+            # routes to push with the right priority. The 5m value itself is
+            # structural config pinned by the amtool check next door.
+            warningGroupWait = "5s";
           };
         };
       };
@@ -434,14 +437,15 @@
 
         retry(critical_arrived, timeout=timedelta(seconds=120))
 
-        # Warning lane: its group_wait is deliberately 5m. The retry window
-        # starts after the critical lane's assertions, so it only needs to
-        # cover the remaining grace period plus polling slack - but keep a
-        # full 7m so a slow run cannot flake against the deadline.
+        # Warning lane: its group_wait is shortened to 5s in this machine
+        # (see the warningGroupWait override above), so it arrives almost
+        # immediately. The retry window starts after the critical lane's
+        # assertions, so a minute is generous for the remaining grace period
+        # plus polling slack.
         def warning_arrived(_):
             return any("TestWarning" in t for t in titles(messages()))
 
-        retry(warning_arrived, timeout=timedelta(seconds=420))
+        retry(warning_arrived, timeout=timedelta(seconds=60))
 
         msgs = messages()
         crit = [m for m in msgs if "TestCritical" in m.get("title", "")]
