@@ -223,10 +223,22 @@ in
       ntfy = {
         enable = lib.mkEnableOption "ntfy push routing for Alertmanager";
 
-        bridgeUrl = lib.mkOption {
-          type = lib.types.str;
-          default = "http://127.0.0.1:8000/hook";
-          description = "URL of the local alertmanager-ntfy webhook endpoint (/hook)";
+        # Loopback port the local bridge listens on, and the one port
+        # Alertmanager delivers to. Configurable because 8000 is already taken
+        # by convention wherever the media stack runs: gluetun's HTTP control
+        # server is published there (qbittorrent.nix), and gluetun coexists
+        # with this bridge precisely on storage hosts. When the bridge landed
+        # on homelab02 with the shared literal below it lost that race on
+        # every start, crash-looped all night, and the switch that activated
+        # it reported failed units. Anything loopback and free will do;
+        # there is nothing to match on either side.
+        port = lib.mkOption {
+          type = lib.types.port;
+          default = 8000;
+          description = ''
+            Loopback port for the local alertmanager-ntfy bridge. Move off
+            8000 on any host whose gluetun control server is published there.
+          '';
         };
 
         baseUrl = lib.mkOption {
@@ -708,7 +720,9 @@ in
                 name = "push";
                 webhook_configs = [
                   {
-                    url = cfg.alertmanager.ntfy.bridgeUrl;
+                    # Derived from the bridge's port so there is one literal,
+                    # not two that can drift apart.
+                    url = "http://127.0.0.1:${toString cfg.alertmanager.ntfy.port}/hook";
                     send_resolved = true;
                     http_config.basic_auth = {
                       username = "alertmanager";
@@ -772,7 +786,7 @@ in
         services.prometheus.alertmanager-ntfy = {
           enable = true;
           settings = {
-            http.addr = "127.0.0.1:8000";
+            http.addr = "127.0.0.1:${toString cfg.alertmanager.ntfy.port}";
             ntfy = {
               baseurl = cfg.alertmanager.ntfy.baseUrl;
               notification = {

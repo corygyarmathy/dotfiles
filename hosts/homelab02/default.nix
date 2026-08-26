@@ -163,7 +163,15 @@
         # Push lane. The ntfy server itself lives on homelab01; this host runs
         # only the local alertmanager-ntfy bridge, so either host can still
         # deliver on its own if the other is down.
-        ntfy.enable = true;
+        #
+        # Off 8000 because gluetun's control server is published there
+        # (qbittorrent.nix) - with the shared default the bridge lost the bind
+        # race on every start, and the 2026-08-26 upgrade that introduced it
+        # was marked failed by its own activation.
+        ntfy = {
+          enable = true;
+          port = 8015;
+        };
         email = {
           to = "cory@gyarmathy.co";
           from = "alerts@gyarmathy.co";
