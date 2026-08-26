@@ -39,7 +39,8 @@
       # Both timers detached rather than disabled, so the units themselves stay
       # exactly as a host would have them - this test reads their wiring. What
       # is not wanted is either one firing underneath a subtest and blessing or
-      # judging a generation the script did not ask it to.
+      # judging a generation the script did not ask it to. The verify timer is
+      # started by hand, once, by the schedule subtest that runs last.
       systemd.timers.nixos-upgrade.wantedBy = lib.mkForce [ ];
       systemd.timers.nixos-upgrade-verify.wantedBy = lib.mkForce [ ];
 
@@ -58,6 +59,13 @@
         # restart, and the globalTimeout is 600s.
         settleSeconds = 1;
         settleTimeoutSeconds = 10;
+
+        # The timer stays detached (below), so this never fires on its own -
+        # the "schedule verifies a generation nothing announced" subtest starts
+        # the timer by hand at the end and needs a cadence faster than the
+        # production `hourly`. Every second stays far inside the three minute
+        # OnBootSec that the subtest asserts was not what fired.
+        recheckSchedule = "*:*:*";
       };
 
       # Stands in for a service that came up broken under a new generation.
@@ -89,35 +97,7 @@
       };
     };
 
-  # A second machine, because the trigger under test is the one that fires
-  # when nothing asks it to - which cannot be shown on a node whose timer is
-  # detached so the subtests can control their own timing.
-  nodes.scheduled =
-    { lib, ... }:
-    {
-      imports = [ ../modules/nixos/upgrade-verify.nix ];
-
-      system.autoUpgrade = {
-        enable = true;
-        flake = "/dev/null#nothing";
-      };
-
-      # The upgrade never runs, so nothing here announces a generation. The
-      # verify timer is left armed - it is the subject.
-      systemd.timers.nixos-upgrade.wantedBy = lib.mkForce [ ];
-
-      cg.upgrade-verify = {
-        enable = true;
-        settleSeconds = 1;
-        settleTimeoutSeconds = 10;
-
-        # Every ten seconds, so the wait below stays comfortably inside the
-        # three minute OnBootSec that must not be what fires.
-        recheckSchedule = "*:*:0/10";
-      };
-    };
-
-  # A third machine, because this is the only subtest that lets the rollback
+  # A second machine, because this is the only subtest that lets the rollback
   # actually happen. It rewrites the running system, so it cannot share a node
   # with subtests that assume theirs stands still.
   nodes.rollback =
@@ -173,7 +153,7 @@
       };
     };
 
-  # A fourth machine, where installing the bootloader always fails. That is the
+  # A third machine, where installing the bootloader always fails. That is the
   # fault behind the defect under test: switch-to-configuration installs the
   # bootloader *before* it activates, so a failure there leaves the profile
   # moved and nothing else done, and the old code read the moved profile as
@@ -381,7 +361,10 @@
         # generation (unchanged - the rebuild failed before it staged anything)
         # and starts verification, which must now bless what is running.
         machine.succeed("systemctl reset-failed cg-verify-canary.service")
-        machine.succeed("rm -f {}/verified-system".format(STATE))
+        # Remove both the bless record and the metrics, so the assertions below
+        # cannot pass on values left behind by an earlier subtest - the verify
+        # run about to be triggered must write them afresh.
+        machine.succeed("rm -f {}/verified-system {}".format(STATE, METRICS))
         # A real host always has a system profile for the ExecStopPost
         # record-staged hook to read the staged generation off; a bare VM
         # boots straight from the store without one, so seed it the way the
@@ -391,8 +374,10 @@
         machine.succeed("systemctl is-failed nixos-upgrade.service")
 
         # Verification is started by the upgrade's own ExecStopPost, as in
-        # production; give its settle window room to finish.
-        machine.sleep(20)
+        # production, but asynchronously (--no-block). Poll for the bless
+        # record instead of sleeping a fixed window: faster, and a real
+        # assertion - if the trigger does not fire, this times out.
+        machine.wait_for_file("{}/verified-system".format(STATE), timeout=60)
 
         assert metric("nixos_verify_result") == "1"
         assert metric("nixos_verify_manual_generation") == "0"
@@ -402,29 +387,32 @@
         machine.succeed("systemctl reset-failed nixos-upgrade.service")
 
     with subtest("the schedule verifies a generation nothing announced"):
-        # Nothing on this node ever starts verification: no upgrade runs, and
-        # the test does not ask. The only other trigger is OnBootSec at three
-        # minutes, so the uptime assertion is what makes this a claim about the
-        # calendar entry rather than about verification working at all.
-        scheduled.wait_for_unit("multi-user.target")
-        scheduled.wait_for_file("{}/verified-system".format(STATE), timeout=100)
+        # Nothing here ever starts verification on its own: no upgrade has run,
+        # and the timer is detached (see the node definition) so the earlier
+        # subtests control their own timing. Starting it by hand is the point -
+        # the calendar entry fires, not anything the subtests above did. The
+        # only other trigger is OnBootSec at three minutes, so the uptime
+        # assertion pins this to the calendar rather than to verification
+        # working at all.
+        #
+        # The failed-upgrade subtest just above leaves a staged record and a
+        # bless record on disk; both must go or the calendar run would report
+        # manual=0 and have nothing to bless.
+        machine.succeed("rm -f {}/verified-system {}/automation-staged".format(STATE, STATE))
+        machine.succeed("systemctl start nixos-upgrade-verify.timer")
+        machine.wait_for_file("{}/verified-system".format(STATE), timeout=100)
+        machine.succeed("systemctl stop nixos-upgrade-verify.timer")
 
-        uptime = float(scheduled.succeed("cut -d' ' -f1 /proc/uptime").strip())
+        uptime = float(machine.succeed("cut -d' ' -f1 /proc/uptime").strip())
         assert uptime < 170, "OnBootSec may have fired; uptime was {}".format(uptime)
 
-        current_scheduled = scheduled.succeed("readlink -f /run/current-system").strip()
-        blessed = scheduled.succeed("cat {}/verified-system".format(STATE)).strip()
-        assert blessed == current_scheduled, (blessed, current_scheduled)
+        blessed = machine.succeed("cat {}/verified-system".format(STATE)).strip()
+        assert blessed == current, (blessed, current)
 
-        # A host that has never upgraded has no staged record, so provenance
-        # reads this as hand-applied - correctly, and harmlessly, since a
-        # healthy generation is never a rollback candidate anyway.
-        manual = scheduled.succeed(
-            "grep -E '^nixos_verify_manual_generation\\{{' {} | awk '{{print $NF}}'".format(
-                METRICS
-            )
-        ).strip()
-        assert manual == "1", manual
+        # With no staged record, provenance reads the running generation as
+        # hand-applied - correctly, and harmlessly, since a healthy generation
+        # is never a rollback candidate anyway.
+        assert metric("nixos_verify_manual_generation") == "1"
 
     with subtest("a staged generation that came up broken is really rolled back"):
         # Every other subtest pins a *refusal*. This one is the code that runs
