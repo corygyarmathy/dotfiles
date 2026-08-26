@@ -70,6 +70,23 @@
           ExecStart = "${pkgs.coreutils}/bin/false";
         };
       };
+
+      # A second kind of broken: Restart= keeps re-offering a unit that keeps
+      # dying. With restarts slower than the start limit this never reaches
+      # the terminal "failed" state - it sits in "activating (auto-restart)",
+      # which is exactly why it needs its own subtest. RestartSec is long so
+      # the state is deterministic: verification always finds it mid-wait,
+      # never mid-crash and never start-limit-tripped into failed. Not
+      # Type=oneshot: systemd refuses to combine that with Restart=.
+      systemd.services.cg-verify-crashlooper = {
+        description = "Unit stuck in systemd's auto-restart state";
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = "${pkgs.coreutils}/bin/false";
+          Restart = "always";
+          RestartSec = "30s";
+        };
+      };
     };
 
   # A second machine, because the trigger under test is the one that fires
@@ -302,8 +319,36 @@
         assert metric("nixos_verify_result") == "0"
         assert metric("nixos_verify_rolled_back") == "0"
 
-    with subtest("a healthy staged generation is blessed"):
+    with subtest("a unit stuck restarting counts even though systemd calls it activating"):
+        # Regression guard for 2026-08-26: alertmanager-ntfy crash-looped all
+        # night in "activating (auto-restart)", invisible to list-units
+        # --failed, so verification judged the generation on the wrong
+        # evidence. The canary is cleared first so the crashlooper is the only
+        # thing wrong and the attribution in the journal is exact.
         machine.succeed("systemctl reset-failed cg-verify-canary.service")
+        # Unlike the oneshot canary above, a simple service's start job
+        # completes when the process is spawned; the failure and the restart
+        # are systemd's business afterwards.
+        machine.succeed("systemctl start cg-verify-crashlooper.service")
+        sub = machine.succeed(
+            "systemctl show cg-verify-crashlooper -p SubState --value"
+        ).strip()
+        assert sub == "auto-restart", (
+            "fixture is not exercising the auto-restart state: {}".format(sub)
+        )
+
+        journal = arm(staged=current, rolled_back_ago=60)
+
+        assert "cg-verify-crashlooper" in journal, journal
+        assert metric("nixos_verify_result") == "0"
+
+        machine.succeed("systemctl stop cg-verify-crashlooper.service")
+        # No reset-failed here: a unit stopped out of auto-restart goes
+        # inactive, never through failed, so there is nothing to reset.
+
+    with subtest("a healthy staged generation is blessed"):
+        # The crashlooper subtest above already cleared the canary, so
+        # everything is clean here by construction.
         machine.succeed("systemctl start nixos-upgrade-verify.service")
 
         assert metric("nixos_verify_result") == "1"
@@ -325,6 +370,36 @@
         machine.succeed("systemctl start nixos-upgrade-verify.service")
         journal = machine.succeed("journalctl -u nixos-upgrade-verify.service --no-pager")
         assert "already verified" in journal, journal
+
+    with subtest("a failed upgrade run does not itself condemn the generation"):
+        # Regression guard for 2026-08-26: the switch failed, nixos-upgrade
+        # entered the failed state before its ExecStopPost triggered
+        # verification, and verification counted the trigger unit as the new
+        # failure - a healthy generation reported as broken. Starting
+        # nixos-upgrade here reproduces exactly that: its flake ref is
+        # /dev/null, so the run fails, and ExecStopPost both records the staged
+        # generation (unchanged - the rebuild failed before it staged anything)
+        # and starts verification, which must now bless what is running.
+        machine.succeed("systemctl reset-failed cg-verify-canary.service")
+        machine.succeed("rm -f {}/verified-system".format(STATE))
+        # A real host always has a system profile for the ExecStopPost
+        # record-staged hook to read the staged generation off; a bare VM
+        # boots straight from the store without one, so seed it the way the
+        # rollback subtest does.
+        machine.succeed("nix-env -p /nix/var/nix/profiles/system --set {}".format(current))
+        machine.fail("systemctl start nixos-upgrade.service")
+        machine.succeed("systemctl is-failed nixos-upgrade.service")
+
+        # Verification is started by the upgrade's own ExecStopPost, as in
+        # production; give its settle window room to finish.
+        machine.sleep(20)
+
+        assert metric("nixos_verify_result") == "1"
+        assert metric("nixos_verify_manual_generation") == "0"
+        assert (
+            machine.succeed("cat {}/verified-system".format(STATE)).strip() == current
+        )
+        machine.succeed("systemctl reset-failed nixos-upgrade.service")
 
     with subtest("the schedule verifies a generation nothing announced"):
         # Nothing on this node ever starts verification: no upgrade runs, and

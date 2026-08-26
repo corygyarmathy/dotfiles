@@ -70,6 +70,22 @@
 #     that keeps being re-offered flaps once a night rather than in a loop.
 #   - no rollback if the profile has no previous generation to return to.
 #
+# Two more things count, or do not count, as failure - both learned from the
+# night of 2026-08-26, when an upgrade introduced alertmanager-ntfy onto a
+# port gluetun already held and every guard misfired at once:
+#
+#   - A unit stuck in "activating (auto-restart)" counts as failing. One with
+#     Restart= configured whose restarts stay slower than its start limit
+#     never reaches the terminal "failed" state, so it is invisible to
+#     list-units --failed forever; that unit looped six thousand times while
+#     verification looked straight through it.
+#   - The machinery's own units do not count against the generation.
+#     nixos-upgrade enters the failed state before the ExecStopPost that
+#     triggers verification whenever the run fails for any reason, so counting
+#     it let a plumbing failure (the switch reporting the crash-looping bridge)
+#     be diagnosed as "the new generation came up broken" - the wrong unit
+#     named, and on a rollback-armed host a healthy generation reverted.
+#
 # `rollback.enable` is off by default. The failure mode of this module is
 # reverting a healthy server, and the honest way to find that out is to watch
 # it decide for a few weeks before letting it act.
@@ -226,14 +242,41 @@ let
     echo "systemd reports: ''${state:-unknown}"
 
     now="$(date +%s)"
-    ${failedUnits} | ${pkgs.gawk}/bin/awk '{print $1}' | sort -u > "${stateDir}/failed-units-now"
+
+    # Failed units, plus anything stuck restarting. A unit with Restart=
+    # configured that keeps losing the race against its own start limit sits
+    # in "activating (auto-restart)" indefinitely and never reaches "failed":
+    # alertmanager-ntfy crash-looped six thousand times overnight on
+    # 2026-08-26 while every check that read only list-units --failed saw a
+    # clean host. A service that is being restarted because it keeps dying is
+    # failing, whatever systemd's terminal-state vocabulary says.
+    {
+      ${failedUnits} | ${pkgs.gawk}/bin/awk '{print $1}'
+      # Columns of list-units are UNIT LOAD ACTIVE SUB: auto-restart is a
+      # substate, hence $4.
+      ${pkgs.systemd}/bin/systemctl list-units --state=activating --plain --no-legend --no-pager \
+        | ${pkgs.gawk}/bin/awk '$4 == "auto-restart" {print $1}'
+    } | sort -u > "${stateDir}/failed-units-now"
+
+    # Units owned by this machinery rather than by the generation being
+    # judged. nixos-upgrade enters the failed state *before* its ExecStopPost
+    # triggers verification whenever the run fails for any reason - including
+    # reasons that say nothing about the generation, like a switch returning
+    # non-zero for a unit that has since recovered. Counting it makes every
+    # plumbing failure read as "the new generation came up broken", which is
+    # both the wrong diagnosis at 04:00 and, on a host where rollback is ever
+    # armed, a healthy generation reverted. Its failures are NixosDeployFailed
+    # and NixosUpgradeFailed's business. nixos-upgrade-verify is excluded for
+    # the symmetric reason - it fails as a consequence of its own verdict -
+    # and excluding it masks nothing, since each run judges afresh.
+    machinery_re='^(nixos-upgrade|nixos-upgrade-verify)\.service$'
 
     # Only units that were not already broken before the upgrade started.
     if [ -r "${baselineFile}" ]; then
-      new_failures="$(comm -23 "${stateDir}/failed-units-now" "${baselineFile}" | tr '\n' ' ')"
+      new_failures="$({ comm -23 "${stateDir}/failed-units-now" "${baselineFile}" | grep -Ev -e "$machinery_re"; } | tr '\n' ' ')"
       baseline_age="$(( now - $(stat -c %Y "${baselineFile}") ))"
     else
-      new_failures="$(tr '\n' ' ' < "${stateDir}/failed-units-now")"
+      new_failures="$(grep -Ev -e "$machinery_re" "${stateDir}/failed-units-now" | tr '\n' ' ')"
       baseline_age=-1
     fi
 
@@ -547,6 +590,7 @@ in
       };
       path = [
         pkgs.coreutils # comm, sort, stat, timeout, tr
+        pkgs.gnugrep # machinery-unit exclusion from the new-failure set
         pkgs.gnused
       ];
     };
