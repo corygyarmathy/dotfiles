@@ -30,44 +30,6 @@
 }:
 let
   theme = ./hugo;
-
-  # The heading face, vendored on exactly the terms KaTeX is: taken from a
-  # package that rides flake.lock, reduced here, and served as an ordinary
-  # static file. Nothing is fetched at build time and nothing is fetched by the
-  # reader's browser — which is the property this whole file exists to hold, and
-  # the reason a webfont is affordable at all. A CDN link would have been one
-  # line and would have made every reader's page load depend on Google.
-  #
-  # Noto Serif ships as a 1.9MB variable TTF: every weight from 100 to 900, and
-  # a glyph for very nearly every language Noto covers. Two reductions get that
-  # to ~29KB, which is the budget the plan set.
-  #
-  #   1. Instance the variable axes at the ONE weight the headings use. This is
-  #      the big one: `gvar`, the table describing how every glyph deforms
-  #      across the weight axis, is two thirds of the file and it goes entirely.
-  #   2. Subset the glyphs to Latin plus the punctuation these notes contain.
-  #      The range is Google Fonts' own `latin` subset, which is what a heading
-  #      in English with an em dash and a curly quote in it needs.
-  #
-  # If a note ever takes a heading outside this range, the browser falls back to
-  # the body stack for that heading rather than showing tofu — the same
-  # degradation the site had before the face existed.
-  headingFont =
-    pkgs.runCommand "noto-serif-latin-600.woff2"
-      {
-        nativeBuildInputs = [
-          pkgs.python3Packages.fonttools
-          pkgs.woff2
-        ];
-      }
-      ''
-        fonttools varLib.instancer -o instance.ttf \
-          ${pkgs.noto-fonts}/share/fonts/noto/NotoSerif.ttf wght=600
-        pyftsubset instance.ttf --output-file=subset.ttf --no-hinting \
-          --unicodes='U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2190-2193,U+2212,U+2215,U+FEFF,U+FFFD'
-        woff2_compress subset.ttf
-        cp subset.woff2 $out
-      '';
 in
 {
   mkRenderer =
@@ -199,12 +161,6 @@ in
         mkdir -p "$work/static/katex"
         cp ${pkgs.katex}/lib/node_modules/katex/dist/katex.min.css "$work/static/katex/"
         cp -r ${pkgs.katex}/lib/node_modules/katex/dist/fonts "$work/static/katex/fonts"
-
-        # The heading face, subset above. One file, one weight, on every page:
-        # unlike KaTeX there is no test for "did this page use it", because
-        # every page has a title.
-        mkdir -p "$work/static/fonts"
-        cp ${headingFont} "$work/static/fonts/noto-serif-latin.woff2"
 
         # Store paths copy out read-only, and the exit trap's rm -rf cannot
         # remove a read-only directory's contents.
