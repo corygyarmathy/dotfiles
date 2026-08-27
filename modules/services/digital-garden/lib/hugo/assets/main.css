@@ -206,28 +206,45 @@ blockquote {
   font-size: 0.875rem;
 }
 
+/* An underline, not a tinted box. The box was a legible affordance and a bad
+ * one: at the link density of these notes — and especially at footnote density,
+ * where every reference took one too — a page of them reads as prose somebody
+ * else has been through with a highlighter.
+ *
+ * The line is set in --muted rather than in the link's own colour, so the
+ * affordance is present without being the loudest thing in the paragraph, and
+ * it takes the accent on hover. The offset clears the descenders; without it an
+ * underline at this size cuts through every g and y on the page. */
 a {
   color: var(--accent);
-  text-decoration: none;
-  /* Underlined on hover rather than always: at this link density a permanently
-   * underlined page is harder to read than an undecorated one. */
-  border-radius: 3px;
-  padding: 0 0.1em;
-  background: var(--surface);
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+  text-underline-offset: 0.15em;
 }
 
 a:hover {
-  text-decoration: underline;
+  text-decoration-color: var(--accent);
 }
 
-/* Chrome, not prose: a highlight behind these reads as a stray box. */
+/* Chrome, not prose. These are navigation and machinery — the site title, a
+ * heading's own anchor, the two ends of a footnote — and a rule under each one
+ * marks a page that is mostly links as a page that is mostly underlined. A
+ * superscript numeral is the worst of them: the line lands in the gap above the
+ * following line of text.
+ *
+ * The hover underline is restored below for the two that are ordinary
+ * destinations; the anchor and the footnote pair are already unmistakable at
+ * the moment you are pointing at them. */
 footer a,
 .masthead-title,
 .heading-anchor,
-a.footnote-backref,
-[role="doc-backlink"] {
-  background: none;
-  padding: 0;
+.footnote-ref,
+.footnote-backref {
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
 }
 
 /* An external link says so, rather than being discovered by following it.
@@ -349,6 +366,21 @@ img {
   height: auto;
   border-radius: 5px;
   margin: 1rem 0;
+}
+
+/* Most diagrams in this vault are light-background scans and exports, and on
+ * sumiInk3 a white rectangle is a torch. A mat rather than a filter: dimming
+ * the image would dim the photographs too, and there are photographs. This
+ * puts the diagram on paper instead — the light theme's own ground, which is
+ * where the thing was drawn to be seen — and leaves what is inside the frame
+ * exactly as its author exported it.
+ *
+ * A photograph gets a few pixels of cream around it, which reads as a mount.
+ * That is the trade, and it is the right way round: a border on a photograph
+ * is a decision, a glare in the middle of a dark page is a fault. */
+:root[data-theme="dark"] img {
+  background: #f9f6e1; /* the light theme's --bg: lotusWhite3, lightened */
+  padding: 0.5rem;
 }
 
 hr {
@@ -667,14 +699,12 @@ h4:hover > .heading-anchor,
    * between a list of links and a sense of place. */
   .rail a {
     display: block;
-    padding: 0;
-    background: none;
     color: var(--muted);
+    text-decoration: none;
   }
 
   .rail a:hover {
     color: var(--text);
-    text-decoration: none;
   }
 
   .rail a.current {

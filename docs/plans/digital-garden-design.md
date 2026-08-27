@@ -8,7 +8,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | 2   | Kanagawa palette                    | medium | 1          | **done** 2026-08-27 |
 | 3   | An index of everything published    | small  | -          | not started |
 | 4   | Right-hand rail: contents, backlinks| medium | 1          | **done** 2026-08-27 |
-| 5   | Link and image treatment            | small  | 2          | not started |
+| 5   | Link and image treatment            | small  | 2          | **done** 2026-08-27 |
 | 6   | Typography                          | small  | 2          | **agreed, not scheduled** |
 | 7   | Wikilink hover previews             | medium | -          | optional    |
 | 8   | Footnotes as sidenotes              | large  | 4          | optional    |
@@ -177,9 +177,17 @@ For links: drop the tint and use an underline with `text-underline-offset: 0.15e
 
 For images: a paper-coloured mat behind them in dark mode — a few pixels of padding in a colour near the light theme's background — rather than a `filter: brightness()`, which would also dim the photographs, and there are photographs.
 
+### What shipped, and the two things worth recording
+
+**The chrome exclusion list was the whole of the work.** Dropping the tint is one declaration; deciding which links are prose and which are machinery is the rest. Footnote references are the case the problem statement named, and they turn out to be the case an underline is worst for as well: the line under a superscript numeral lands in the gap above the next line of text rather than under anything. So the reference and the backref both keep `text-decoration: none`, alongside the site title, the footer links and the heading anchors. The footer's hover underline is restored explicitly, because `a:hover` no longer sets a line for it to inherit.
+
+That list also had a redundant pair in it — `a.footnote-backref` and `[role="doc-backlink"]` are the same element, Hugo emits both — which was invisible while the rule only removed a background. It is one selector now.
+
+**The mat frames the glare rather than removing it,** and that is the trade the plan chose when it ruled out a filter. A white diagram on paper is still white; what changes is that it reads as a page rather than as a hole cut in a dark one. The fixture's SVG is white to its own edges, so what the mat shows is a cream ring — which is the honest picture of what this does to a real Lighting diagram. Photographs get the same ring, which reads as a mount.
+
 ### Cost and risk
 
-An hour. Reversible in one commit.
+An hour, and it took about that. Reversible in one commit.
 
 ## 6. Typography
 
