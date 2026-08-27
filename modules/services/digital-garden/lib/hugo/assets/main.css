@@ -200,9 +200,23 @@ footer {
   outline-offset: 2px;
 }
 
+/* The glyph is the state, not the action: whichever of the three the page is
+ * currently in. The system glyph is hidden by default and the two theme
+ * glyphs are hidden when it is showing, so the rules stay in the order the
+ * script sets the attributes in. */
 :root[data-theme="dark"] .icon-sun,
-:root[data-theme="light"] .icon-moon {
+:root[data-theme="light"] .icon-moon,
+.icon-system {
   display: none;
+}
+
+:root[data-theme-source="system"] .icon-sun,
+:root[data-theme-source="system"] .icon-moon {
+  display: none;
+}
+
+:root[data-theme-source="system"] .icon-system {
+  display: block;
 }
 
 /* ── prose ──────────────────────────────────────────────────────────────── */
@@ -820,5 +834,123 @@ pagefind-modal {
 @media (max-width: 700px) {
   .page {
     padding-top: 1.5rem;
+  }
+}
+
+/* ── motion ─────────────────────────────────────────────────────────────── */
+
+/* This file has one transition in it, on the heading anchors, and it would be
+ * cheaper to name it than to write this. The blanket is deliberate anyway,
+ * because it is the only rule here that can reach Pagefind's stylesheet: the
+ * Component UI ships a shimmering skeleton while a search runs, that sheet is
+ * injected AFTER this one, and `!important` is what wins across that boundary
+ * regardless of order. A reader who has asked their system for less motion has
+ * asked the search dialog too.
+ *
+ * A very short duration rather than `none`, so that anything listening for
+ * transitionend still hears it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ── print ──────────────────────────────────────────────────────────────── */
+
+/* These are essays, and people print essays.
+ *
+ * The palette override is not a nicety. Browsers do not print background
+ * colours by default, so a page printed from the dark theme loses the ground
+ * and keeps the text: fujiWhite on white paper, which is a blank sheet with a
+ * toner bill. Both token blocks are overridden here, so the sheet is the same
+ * whichever theme the reader happened to be in.
+ *
+ * Paper is white rather than Lotus's cream for the same reason - the cream is
+ * a background colour that will not print, and designing against a ground that
+ * is not there produces contrast ratios that are not there either. */
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    --bg: #fff;
+    --surface: #fff;
+    --border: #999;
+    --code-bg: #fff;
+    --muted: #444;
+    --text: #000;
+    --strong: #000;
+    /* Black links. On paper the colour is not an affordance, and the
+     * destination is printed after the link instead. */
+    --accent: #000;
+    color-scheme: light;
+  }
+
+  /* A search button and a theme toggle on a sheet of paper are icons that do
+   * nothing; the heading anchors are a hover affordance for a hover that
+   * cannot happen; and the arrow back to a footnote's reference is a jump on a
+   * page that is already in the reader's hand. */
+  .icon-button,
+  .heading-anchor,
+  .footnote-backref {
+    display: none;
+  }
+
+  /* The mat exists because the page is dark. Here it is not, and the tokens
+   * above have already said so - but that rule keys off data-theme, which is
+   * still "dark" for a reader who printed from the dark theme, so it has to be
+   * turned off by hand rather than by the palette. */
+  :root[data-theme="dark"] img {
+    background: none;
+    padding: 0;
+  }
+
+  /* The rail is already in its narrow layout here - print media is about 794px
+   * wide, well under the 80rem the grid needs - so the contents list is hidden
+   * and the backlinks follow the essay, which is right on both counts: a list
+   * of same-page anchors is useless on paper, and the notes that cite this one
+   * are worth having. This unsticks it explicitly anyway, because `sticky` in a
+   * paged medium either repeats on every sheet or pins to the first depending
+   * on the browser, and neither is what the rule meant. */
+  .rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* Where an external link went, since it cannot be followed. Scoped to the
+   * article: the footer's two links are chrome, and the masthead's is the page
+   * you are holding. */
+  article a[href^="http://"]::after,
+  article a[href^="https://"]::after {
+    content: " <" attr(href) ">";
+    font-size: 0.85em;
+    /* A URL is one unbreakable word and the measure is narrow. */
+    word-break: break-all;
+  }
+
+  /* ==highlight== is a background, so it does not print either; underlined
+   * instead, which is the same mark made with ink. */
+  mark {
+    text-decoration: underline;
+  }
+
+  /* Breaks that a page has no way to scroll past. A heading at the foot of a
+   * sheet is the worst of them, because the section it names is overleaf. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+  }
+
+  pre,
+  blockquote,
+  table,
+  img,
+  .callout {
+    break-inside: avoid;
   }
 }

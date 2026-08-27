@@ -1,6 +1,6 @@
 # Plan: theme and navigation for the digital garden
 
-Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below. Items 1, 2 and 4 are the agreed first pass. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
+Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 3 is the only one left that fixes something broken today. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
 
 | #   | Item                                | Size   | Depends on | Status      |
 | --- | ----------------------------------- | ------ | ---------- | ----------- |
@@ -13,7 +13,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | 7   | Wikilink hover previews             | medium | -          | optional    |
 | 8   | Footnotes as sidenotes              | large  | 4          | optional    |
 | 9   | Reading time in the dateline        | small  | -          | optional    |
-| 10  | Polish: print, selection, motion    | small  | 2          | optional    |
+| 10  | Polish: print, selection, motion    | small  | 2          | **done** 2026-08-27 |
 | -   | Graph view                          | -      | -          | **rejected**, see below |
 
 ## Decisions, 2026-08-27
@@ -236,9 +236,33 @@ Once the grid from item 4 exists, footnotes can be moved into the right margin b
 
 `publish-filter.py` already counts words for `LONG_NOTE_WORDS`. Surfacing an estimate next to the date is a few lines. Given that half the notes are under 500 words, this may say more about the garden than is flattering, which is either a reason not to do it or the honest thing about a slip box.
 
-## 10. Polish (optional)
+## 10. Polish
 
 A print stylesheet — these are essays, and people print essays; hide the masthead controls, unstick the rail, print link targets after external links. `prefers-reduced-motion` around the two transitions. A "follow system" third state on the theme toggle, which currently has no way back to the OS preference once a reader has chosen. Each is minutes; none is interesting; together they are the difference between finished and nearly finished.
+
+Selection was the fourth item in the title and it was taken in item 2, where the palette had the Kanagawa values to hand.
+
+### The print stylesheet was not a nicety
+
+Printing from the dark theme produced **a blank sheet**. Browsers do not print background colours by default, so the ground goes and the text stays: fujiWhite on white paper. The fix is to override both token blocks inside `@media print` — paper is white and the ink is black, whichever theme the reader was in — and it is the reason this item stopped being optional.
+
+Two smaller consequences of the same fact. `==highlight==` is a background and so does not print; it takes an underline instead, which is the same mark made with ink. And the dark theme's image mat from item 5 keys off `data-theme`, which is still `"dark"` for someone printing from it, so it has to be switched off by hand rather than by the palette.
+
+The rest went as described. External destinations print after the link, scoped to the article so the footer's chrome does not; `break-after: avoid` on headings and `break-inside: avoid` on the blocks that cannot be scrolled past; the rail needs no unsticking in practice, because print media is about 794px wide and the grid needs 1280, but it is unstuck explicitly since `sticky` in a paged medium is browser-dependent and none of the answers are a table of contents.
+
+### The toggle: three states, and no dead click
+
+A literal three-way cycle — system, light, dark — has a click in it that does nothing. Leaving "system" for the theme the system was already showing changes no pixel, and a control that appears not to work is worse than one that cannot reach a state.
+
+So the button flips the theme every time, and "follow the system" is where the flip lands when the result agrees with the system preference. Two clicks back to it from anywhere, and every click changes the page. `data-theme` stays what the page is painted in; a second attribute, `data-theme-source`, carries whether that was chosen, which is what the third glyph and the button's label read.
+
+The state that this buys, beyond a way back: a reader who has not chosen now follows the system **while the page is open**, not merely as it was at load.
+
+Verified by driving headless Chrome over the DevTools protocol — click the button four times at each system preference and read back the attribute, the stored value, which glyph is displayed and the computed background — because this is behaviour, and a screenshot cannot press a button. `Emulation.setEmulatedMedia` is what sets the system preference for that: `--blink-settings=preferredColorScheme` works for a plain screenshot but does not reach `matchMedia` once devtools is attached.
+
+### Cost and risk
+
+Two hours, most of it in the printing. No risk taken: every rule here is inside a media query or behind an attribute the page already sets.
 
 ## Rejected: a graph view
 
@@ -248,6 +272,10 @@ The canonical Quartz feature, and it should not be built here. Nineteen nodes wi
 
 Item 1 first, because everything after it is judged by looking. Then item 2, the largest visible change, which wants the fixture page to land against. Then item 4. Then 5 and 6 as taste passes over a palette that has settled.
 
-Item 3 is out of the first pass by choice, not by dependency; it can be taken at any point, including between the others, since it touches no file the rest of them touch. Items 7 through 10 are likewise independent of each other and of the rest.
+Items 5, 6 and 10 were taken together on 2026-08-27, in that order, which is the order the plan gives them: the link treatment and the face are both judged against the palette, and the polish is judged against both.
+
+Item 3 is out of the first pass by choice, not by dependency; it can be taken at any point, including between the others, since it touches no file the rest of them touch. Items 7 through 9 are likewise independent of each other and of the rest.
 
 Each item is its own PR, per the usual gate. Item 2 will not change the VM test's assertions — the test looks for a stylesheet, not for its contents — which is worth stating explicitly, because it means the gate is not evidence for any of this and the screenshots are.
+
+That held for items 2, 4 and 5 and stopped holding at item 6, which added two. A webfont is not a colour: the file either is served from this site or it is not, and if it is not, nothing fails — every reader silently gets their own serif. That is a fact about the output tree and it belongs in the check, alongside the assertion that the stylesheet names no font CDN. The rest of the judgement is still the screenshots'.
