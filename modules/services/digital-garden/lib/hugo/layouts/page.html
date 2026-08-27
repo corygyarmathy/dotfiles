@@ -1,8 +1,9 @@
 {{ define "main" }}
   {{/*
     article and rail are siblings in one grid, so that the rail can occupy the
-    empty right margin at wide widths and fall back beneath the article at
-    narrow ones without a second copy of the markup. See _partials/rail.html.
+    empty left margin at wide widths (the sidenotes take the right) and fall
+    back beneath the article at narrow ones without a second copy of the
+    markup. See _partials/rail.html.
   */}}
   <div class="layout">
     <article data-pagefind-body>

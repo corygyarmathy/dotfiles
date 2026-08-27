@@ -617,8 +617,9 @@ h4:hover > .heading-anchor,
 /* ── the rail ───────────────────────────────────────────────────────────── */
 
 /* Where you are in this note, and what else points at it. One piece of markup
- * with two layouts: beneath the article by default, and in the right margin
- * once there is a margin to put it in. See layouts/_partials/rail.html.
+ * with two layouts: beneath the article by default, and in the left margin
+ * once there is a margin to put it in (the sidenotes claim the right). See
+ * layouts/_partials/rail.html.
  *
  * The default is the narrow one, so the layout the site served before the rail
  * existed is the one that needs no media query to produce. Set apart from the
@@ -681,10 +682,18 @@ h4:hover > .heading-anchor,
 
   .layout > article {
     grid-column: 2;
+    /* Row 1 is fixed explicitly, so the rail (also row 1, column 1) sits at
+     * the TOP of the prose rather than auto-placing into the next row after
+     * the tall article. Without it the grid builds two rows and the rail
+     * floats below the whole essay. */
+    grid-row: 1;
   }
 
   .rail {
-    grid-column: 3;
+    grid-column: 1;
+    /* See the article's note above: row 1 keeps the rail at the top, beside
+     * the prose it annotates, instead of below the essay. */
+    grid-row: 1;
     /* Aligned to the top of the prose, not stretched down the page: `start`
      * on the grid keeps it the height of its own content, which is what
      * sticky needs. */
@@ -736,6 +745,74 @@ h4:hover > .heading-anchor,
   }
 
   .rail .backlink-thesis {
+    display: none;
+  }
+}
+
+/* ── sidenotes ───────────────────────────────────────────────────────────── */
+
+/* Footnotes, in the right margin beside the paragraph that cites them. The
+ * generation is untouched -- Hugo still emits the endnote list, and the script
+ * in baseof.html lifts its entries into the margin on the wide layout. The
+ * narrow layout is the endnote one, so a reader on a phone, and a reader with
+ * JavaScript disabled, both get the foot-of-page notes the site has always
+ * had.
+ *
+ * The right margin is the grid's third column, which on a page with no rail
+ * would otherwise be empty -- the rail has moved to the first (left) column.
+ * So sidenotes render whether or not a rail exists: the prose stays centred
+ * in column two and each margin note is absolutely positioned at the top of
+ * the paragraph that cites it.
+ *
+ * The script measures and sets each note's `top` inline; this block supplies
+ * the box, the border that separates note from prose, and the small numeral.
+ */
+
+/* Hidden by default (the narrow layout): the notes are placed by the script
+ * only when the wide grid is active, and this is what keeps a pre-placement
+ * flash from showing absolutely-positioned notes at the layout's origin. */
+.sidenote {
+  display: none;
+}
+
+@media (min-width: 80rem) {
+  .layout {
+    /* Sidenotes are absolutely positioned against it, so it is the containing
+     * block their `top` is measured in. */
+    position: relative;
+  }
+
+  .sidenote {
+    display: block;
+    position: absolute;
+    right: 0;
+    /* The margin is at least this wide at every width the grid builds at
+     * (>80rem), so the note never collides with the prose. */
+    width: min(14rem, 100%);
+    border-left: 1px solid var(--border);
+    padding-left: 1rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  /* The other end of the superscript in the prose: a small numeral (the id
+   * Hugo gave the definition) that marks the note without repeating the
+   * prose's own number. */
+  .sidenote-num {
+    vertical-align: super;
+    font-size: 0.7em;
+    color: var(--accent);
+    margin-right: 0.35rem;
+  }
+
+  .sidenote p {
+    margin: 0 0 0.25rem;
+  }
+
+  .sidenote .footnote-backref {
+    /* The in-paragraph reference already lands on the note; the way back is a
+     * second link to the same two places and reads as noise in the margin. */
     display: none;
   }
 }
@@ -873,7 +950,13 @@ pagefind-modal {
    * of same-page anchors is useless on paper, and the notes that cite this one
    * are worth having. This unsticks it explicitly anyway, because `sticky` in a
    * paged medium either repeats on every sheet or pins to the first depending
-   * on the browser, and neither is what the rule meant. */
+   * on the browser, and neither is what the rule meant.
+   *
+   * Footnotes are the same story told from the other end: rolling the sidenote
+   * margin back to the endnote list happens in the script's beforeprint
+   * handler, because the DOM cannot hold a sidenote and its endnote under the
+   * same id at once. This block styles that restored list - nothing further is
+   * needed here, which is the point of print reusing the narrow state. */
   .rail {
     position: static;
     max-height: none;

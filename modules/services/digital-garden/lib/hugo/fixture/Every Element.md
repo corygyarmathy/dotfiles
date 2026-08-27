@@ -7,7 +7,11 @@ thesis: Every element the theme styles, on one page, so a stylesheet change can 
 
 The opening paragraph, which exists to be read at the measure the stylesheet caps prose to. It carries _emphasis_, **strong emphasis**, `inline code`, an ==Obsidian highlight==, a [link to another note](/another-note/), a [wikilink](/a-long-note/), and an [external link](https://gohugo.io) that should be marked as leaving the site. It also carries a footnote.[^1]
 
-A second paragraph, so that the spacing between two paragraphs is visible and not inferred from the spacing between a paragraph and something else.
+A second paragraph, so that the spacing between two paragraphs is visible and not inferred from the spacing between a paragraph and something else, and so that a footnote here is far enough from a footnote above it for the margin placement to be judged rather than assumed.[^2]
+
+## Sidenotes
+
+Footnotes move into the right margin beside the paragraph that cites them, and this whole section exists so that there are enough of them in enough places to see whether that placement holds together — one at the top of the page, one mid-page, and one at the foot of a long section.[^3] A note with more than one footnote in a single paragraph is the stress case, because the margin then has to separate the notes without overlapping.[^4] And a second note in the same paragraph confirms it.[^5] A single note can be cited more than once, and it must still appear once — not once for every citation.[^3]
 
 ## A heading, and under it the shortest possible section
 
@@ -136,3 +140,11 @@ A paragraph mentioning two amounts, $80 and $400, because that shape once read a
 A horizontal rule sits above this line.
 
 [^1]: The footnote itself, which renders in a list at the foot of the page with a link back to the reference.
+
+[^2]: A second footnote, near the top of the page but below the first, so the vertical gap between two sidenotes is a thing that is looked at.
+
+[^3]: A footnote in the middle of the note, on its own section, so sidenotes are seen against headings rather than only against a wall of prose.
+
+[^4]: The first of two footnotes in one paragraph. Multiple notes in the same paragraph are the hardest case for a sidenote margin, because they must stack without overlapping.
+
+[^5]: The second footnote in the same paragraph as the fourth, which is how a column of sidenotes has to separate its entries.
