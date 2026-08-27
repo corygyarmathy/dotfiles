@@ -8,8 +8,8 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | 2   | Kanagawa palette                    | medium | 1          | **done** 2026-08-27 |
 | 3   | An index of everything published    | small  | -          | not started |
 | 4   | Right-hand rail: contents, backlinks| medium | 1          | **done** 2026-08-27 |
-| 5   | Link and image treatment            | small  | 2          | **done** 2026-08-27 |
-| 6   | Typography                          | small  | 2          | **done** 2026-08-27 |
+| 5   | Link and image treatment            | small  | 2          | **done** 2026-08-27; the image mat reverted the same day |
+| 6   | Typography                          | small  | 2          | built and **reverted** 2026-08-27 |
 | 7   | Wikilink hover previews             | medium | -          | optional    |
 | 8   | Footnotes as sidenotes              | large  | 4          | optional    |
 | 9   | Reading time in the dateline        | small  | -          | optional    |
@@ -23,7 +23,7 @@ Taken against the rendered comparisons rather than the swatches, which is the po
 - **The light theme is Lotus, lightened.** `#f2ecbc` mixed 45% toward white, `#f9f6e1`, with the surface, border and code-well tokens lightened to match. Option 1 of the three below. Lotus as specified is out: rendered at full width it is a buttery yellow that the Lighting notes' white-background diagrams have to fight.
 - **Headings stay neutral.** `fujiWhite` in dark, `lotusInk2` in light. No `carpYellow`.
 - **The first pass is items 1, 2 and 4.** The fixture, the palette, the rail. Item 3 is not dropped — it is still the only item that fixes something broken today — but it is not in this pass.
-- **Typography goes serif for headings and stays on the system sans for body.** One vendored face, and the body text keeps matching the editor. Item 6 is agreed in direction; it is sequenced after item 2 rather than scheduled now, because a face chosen against the old palette would be chosen twice.
+- **Typography goes serif for headings and stays on the system sans for body.** One vendored face, and the body text keeps matching the editor. Item 6 is agreed in direction; it is sequenced after item 2 rather than scheduled now, because a face chosen against the old palette would be chosen twice. **Reversed the same day, on the rendered pages** — see item 6. The direction was agreed in the abstract and did not survive being looked at; the site is back on the system stack throughout.
 
 ## What the site actually contains, 2026-08-27
 
@@ -185,11 +185,23 @@ That list also had a redundant pair in it — `a.footnote-backref` and `[role="d
 
 **The mat frames the glare rather than removing it,** and that is the trade the plan chose when it ruled out a filter. A white diagram on paper is still white; what changes is that it reads as a page rather than as a hole cut in a dark one. The fixture's SVG is white to its own edges, so what the mat shows is a cream ring — which is the honest picture of what this does to a real Lighting diagram. Photographs get the same ring, which reads as a mount.
 
+### The mat is reverted, 2026-08-27
+
+**It was judged on the fixture's SVG and the fixture's SVG is not the vault.** Two things showed up against real images, and each of them is a case the paragraph above assumed away.
+
+On a photograph the ring does not read as a mount. It reads as a white rectangle drawn around the picture — the plan called it "a decision" and accepted it as the price of the diagrams, and looked at, it is not a decision, it is an artefact.
+
+The diagrams are worse, and they are the reverse of the problem the mat was built for. Not every diagram in the vault is a light-background scan: some were drawn **for** a dark background, and the mat puts cream behind a figure whose own strokes are pale, so it takes parts of the drawing from readable to invisible. A treatment that damages the case it was meant to help is not a trade, and there is nothing to tune here — the mat cannot know which kind of image it is behind.
+
+So images render as their author exported them, in both themes, which is where this started. The glare is real and it remains unsolved; the honest position is that it is the image's problem and belongs upstream in the vault — a diagram exported with a transparent or dark ground fixes it for every reader and every theme, and no stylesheet rule can. The link half of this item stands unchanged.
+
 ### Cost and risk
 
-An hour, and it took about that. Reversible in one commit.
+An hour, and it took about that. Reversible in one commit, which is what happened.
 
 ## 6. Typography
+
+**Built and reverted on 2026-08-27.** The sections below are the reasoning as it stood, kept because the build is worth reading and the finding in it is worth keeping; _Reverted_ near the end is what happened when it was looked at. The site is on the system stack, headings included.
 
 ### The problem
 
@@ -220,9 +232,19 @@ The check that does work is to rename the family to something nobody has and scr
 
 The same fact settles a question the plan did not ask. Adding `local("Noto Serif")` to the `src` would let those readers skip the download, but the installed face at that name is Regular, and claiming it as the 600 weight would render headings light on exactly the machines that have it. One URL, one weight, the same face for everyone.
 
+### Reverted, 2026-08-27: the headings look better in the sans
+
+The face was correct on every measure the plan set for it — vendored, 29KB, preloaded, no CDN, no DNS lookup to anyone else — and the page reads better without it. A serif heading over sans body text gives the page a voice the page did not need; the type scale was already doing the work, and one face throughout is quieter and closer to what the notes look like in Obsidian, which is the property this item's own reasoning kept coming back to.
+
+That is a taste call and it was made the way item 1 exists to have it made: by looking at the rendered pages, at both themes, rather than at the argument. The argument was good, which is why it was built at all.
+
+What came out: the `@font-face` and `--heading-font` from the stylesheet, the `varLib.instancer`/`pyftsubset`/`woff2_compress` derivation from `lib/hugo.nix`, the static copy, the preload from `baseof.html`, and the VM subtest that asserted the file was served. One assertion outlives the face and stays, moved into the "the site is styled" subtest: **the stylesheet names no font CDN**. That guard is about the offline property, not about this face, and it is the line that would be cheapest to undo by accident.
+
+What is kept in this document rather than in the code is the finding, because it will be true for whoever tries this next: **you cannot check a webfont by looking at it** on a machine that has the family installed. That section stands above.
+
 ### Cost and risk
 
-Two hours, and it took about that. The risk was page weight, and the answer is above: 29KB, preloaded, on every page.
+Two hours to build and ten minutes to remove. The risk taken was page weight and it was not the one that bit — the plan had no way to sequence "does this look right" before "does this work", because the answer to the first needs the second in front of it.
 
 ## 7. Wikilink hover previews (optional)
 
@@ -246,7 +268,7 @@ Selection was the fourth item in the title and it was taken in item 2, where the
 
 Printing from the dark theme produced **a blank sheet**. Browsers do not print background colours by default, so the ground goes and the text stays: fujiWhite on white paper. The fix is to override both token blocks inside `@media print` — paper is white and the ink is black, whichever theme the reader was in — and it is the reason this item stopped being optional.
 
-Two smaller consequences of the same fact. `==highlight==` is a background and so does not print; it takes an underline instead, which is the same mark made with ink. And the dark theme's image mat from item 5 keys off `data-theme`, which is still `"dark"` for someone printing from it, so it has to be switched off by hand rather than by the palette.
+One smaller consequence of the same fact: `==highlight==` is a background and so does not print; it takes an underline instead, which is the same mark made with ink. (A second rule rode along here — the dark theme's image mat from item 5, which keyed off `data-theme` and so was still on for someone printing from the dark theme — and it went when the mat did.)
 
 The rest went as described. External destinations print after the link, scoped to the article so the footer's chrome does not; `break-after: avoid` on headings and `break-inside: avoid` on the blocks that cannot be scrolled past; the rail needs no unsticking in practice, because print media is about 794px wide and the grid needs 1280, but it is unstuck explicitly since `sticky` in a paged medium is browser-dependent and none of the answers are a table of contents.
 
@@ -278,4 +300,4 @@ Item 3 is out of the first pass by choice, not by dependency; it can be taken at
 
 Each item is its own PR, per the usual gate. Item 2 will not change the VM test's assertions — the test looks for a stylesheet, not for its contents — which is worth stating explicitly, because it means the gate is not evidence for any of this and the screenshots are.
 
-That held for items 2, 4 and 5 and stopped holding at item 6, which added two. A webfont is not a colour: the file either is served from this site or it is not, and if it is not, nothing fails — every reader silently gets their own serif. That is a fact about the output tree and it belongs in the check, alongside the assertion that the stylesheet names no font CDN. The rest of the judgement is still the screenshots'.
+That held for items 2, 4 and 5, and stopped holding at item 6, which added two assertions: a webfont is not a colour — the file either is served from this site or it is not, and if it is not, nothing fails, every reader silently gets their own serif. When the face was reverted one of the two went with it and one stayed, which is the useful line between them. The file being served was a fact about a decision that got reversed; **the stylesheet naming no font CDN** is a fact about the property this whole toolchain exists to hold, and it holds whether or not there is ever a webfont again. The rest of the judgement is still the screenshots'.

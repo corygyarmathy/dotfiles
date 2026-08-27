@@ -346,6 +346,12 @@
         css = served(href.group(1))
         for selector in [".masthead", ".page", "--pf-border"]:
             assert selector in css, f"{selector} missing from the stylesheet"
+        # And it asks nobody else for anything. The whole toolchain is offline
+        # by construction; an @import or a font CDN named here undoes that in
+        # one line, and it would still render perfectly on a machine with a
+        # network, so nothing else would notice.
+        assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css, \
+            "the stylesheet fetches a font from a CDN"
 
     with subtest("search costs a reading page nothing until it is asked for"):
         # The bundle is ~46KB gzipped that a reader who never searches never
@@ -491,28 +497,6 @@
         assert "katex.min.css" not in served("/"), \
             "the home page links KaTeX with no maths on it"
         machine.succeed("curl -sf -o /dev/null http://localhost:8086/katex/katex.min.css")
-
-    with subtest("the heading face is vendored, not requested from anyone"):
-        # The same shape as KaTeX above and asserted for the same reason: a
-        # webfont whose file is missing does not fail a build or a page, it
-        # silently leaves every reader on their own serif. Worse here than for
-        # KaTeX, because this machine HAS Noto Serif installed and a browser
-        # keeps a family's installed faces alongside the ones @font-face adds,
-        # so the page looks correct to whoever is looking at it.
-        page = served("/")
-        assert "/fonts/noto-serif-latin.woff2" in page, \
-            "the heading face is not preloaded from the page"
-        machine.succeed(
-            "curl -sf -o /dev/null http://localhost:8086/fonts/noto-serif-latin.woff2"
-        )
-        # And it is OURS. The whole toolchain is offline by construction; a
-        # stylesheet that names someone else's host undoes that in one line,
-        # and it would still render perfectly on a machine with a network.
-        href = re.search(r'href="([^"]*main\.[^"]*\.css)"', page)
-        assert href, "no fingerprinted stylesheet linked from the home page"
-        css = served(href.group(1))
-        assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css, \
-            "the stylesheet fetches a font from a CDN"
 
     with subtest("a dollar-sign pair in prose does not fail the build"):
         # The 2026-08-25 outage: two unrelated amounts of money in one
