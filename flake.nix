@@ -226,10 +226,17 @@
       # Local preview for the digital garden:
       #
       #   nix run .#garden-preview
+      #   nix run .#garden-preview -- --fixture
       #
-      # Renders the published subset of the vault with the same renderer and
-      # serves it with the same Caddy config the server uses, and re-renders on
-      # save. See modules/services/digital-garden/lib/preview.nix for why.
+      # The first renders the published subset of the vault with the same
+      # renderer and serves it with the same Caddy config the server uses,
+      # re-rendering on save. See modules/services/digital-garden/lib/preview.nix
+      # for why.
+      #
+      # The second renders the theme's own fixture instead: every element the
+      # stylesheet styles, on three pages, which is what a visual change is
+      # judged against - the vault is a poor test of a stylesheet, because it
+      # contains whatever it happens to contain.
       #
       # The renderer comes out of homelab01's own evaluated config rather than
       # being rebuilt here, so the preview cannot drift from what is deployed.
@@ -254,6 +261,8 @@
             inherit (garden) renderer styleSheet;
             filter = ./modules/services/digital-garden/publish-filter.py;
             workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
+            fixture = ./modules/services/digital-garden/lib/hugo/fixture;
+            workingTreeFixture = "modules/services/digital-garden/lib/hugo/fixture";
           };
         in
         {
