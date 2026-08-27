@@ -48,6 +48,16 @@
       Applied before first paint, so a reader who chose dark does not get a
       white flash on every navigation. Inline for the same reason: an external
       file would be fetched after the document starts rendering.
+
+      TWO attributes, not one. data-theme is what the page is painted in and is
+      always "dark" or "light"; data-theme-source says whether that was chosen
+      or inherited from the operating system. Only the first is needed to draw
+      the page - the second exists because the control has to be able to show
+      "following your system" as a state, and because a reader following the
+      system should keep following it when the system changes under them.
+
+      Anything other than the two words is read as no choice at all, which is
+      also how a cleared localStorage reads.
     */}}
     <script>
       (function () {
@@ -55,10 +65,16 @@
         try {
           saved = localStorage.getItem("theme");
         } catch (e) {}
-        var dark = saved
-          ? saved === "dark"
-          : window.matchMedia("(prefers-color-scheme: dark)").matches;
-        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        var chosen = saved === "dark" || saved === "light";
+        var root = document.documentElement;
+        root.dataset.themeSource = chosen ? "user" : "system";
+        root.dataset.theme = (
+          chosen
+            ? saved === "dark"
+            : window.matchMedia("(prefers-color-scheme: dark)").matches
+        )
+          ? "dark"
+          : "light";
       })();
     </script>
   </head>
@@ -74,7 +90,11 @@
         >
           {{ partial "icon-search.html" . }}
         </button>
-        <button class="icon-button" id="theme-toggle" aria-label="Toggle dark mode">
+        {{/* The label is rewritten by the script below, which is the only
+             thing that knows which of the three states the page is in. This
+             one is what a reader with no JavaScript gets, where the button
+             does nothing anyway. */}}
+        <button class="icon-button" id="theme-toggle" aria-label="Change theme">
           {{ partial "icon-theme.html" . }}
         </button>
       </header>
@@ -116,12 +136,53 @@
     <script>
       (function () {
         var root = document.documentElement;
-        document.getElementById("theme-toggle").addEventListener("click", function () {
-          var next = root.dataset.theme === "dark" ? "light" : "dark";
-          root.dataset.theme = next;
+        var button = document.getElementById("theme-toggle");
+        var media = window.matchMedia("(prefers-color-scheme: dark)");
+
+        // Three states, and still one button that always changes the page.
+        //
+        // A literal three-way cycle - system, light, dark - has a dead click
+        // in it: leaving "system" for the theme the system was already showing
+        // does nothing visible, and a control that appears not to work is worse
+        // than one that cannot reach a state. So the button flips the theme,
+        // every time, and the way back to "follow the system" is the flip that
+        // happens to land on what the system was asking for anyway. Two clicks
+        // from anywhere, and each one does something.
+        function apply(theme, source) {
+          root.dataset.theme = theme;
+          root.dataset.themeSource = source;
           try {
-            localStorage.setItem("theme", next);
+            if (source === "system") localStorage.removeItem("theme");
+            else localStorage.setItem("theme", theme);
           } catch (e) {}
+          label();
+        }
+
+        // The button's name is the action; the state goes in brackets after it,
+        // because "following your system" is not visible from the glyph alone
+        // if you cannot see the glyph.
+        function label() {
+          var state =
+            root.dataset.themeSource === "system"
+              ? "following your system"
+              : root.dataset.theme;
+          var name = "Change theme (currently " + state + ")";
+          button.setAttribute("aria-label", name);
+          button.title = name;
+        }
+        label();
+
+        button.addEventListener("click", function () {
+          var next = root.dataset.theme === "dark" ? "light" : "dark";
+          apply(next, next === (media.matches ? "dark" : "light") ? "system" : "user");
+        });
+
+        // The point of the third state: a reader who has not chosen follows the
+        // system, including when it changes while the page is open. Without
+        // this, "follow the system" means "follow it as it was at page load".
+        media.addEventListener("change", function (e) {
+          if (root.dataset.themeSource !== "system") return;
+          apply(e.matches ? "dark" : "light", "system");
         });
 
         // Everything below is deferred loading. Opening, closing, focus and
