@@ -14,7 +14,11 @@
 # Assertions, in increasing order of what they are worth:
 #
 #   - the unit comes up and /api/health answers. A process that exits during
-#     startup never answers; this alone would have caught the incident.
+#     startup never answers; this alone would have caught the incident. The
+#     wait for it watches the unit rather than a clock - see
+#     wait_until_healthy - because a deadline makes the verdict depend on how
+#     loaded the runner is, and that is how this test failed the gate on an
+#     unrelated PR on 2026-08-27.
 #   - it stays up: after a settle pass NRestarts must still be zero, because
 #     one good poll does not rule out a crash that lands after listening.
 #   - the Prometheus datasource exists exactly once and is the default -
@@ -85,6 +89,71 @@
       import json
       import time
 
+      # Long enough that a slow boot is not a failure. Grafana's startup here
+      # is migrations, ngalert and provisioning before it listens; on a
+      # contended CI runner on 2026-08-27 that took ~145s against a 120s wait,
+      # and the test failed with the process healthy and still starting. The
+      # ceiling is not the assertion - the loop below is - so it only has to
+      # sit above any honest start and below lib.nix's 600s globalTimeout, so
+      # that a hang reports which wait hung rather than that the test did.
+      HEALTH_TIMEOUT = 300
+
+      def unit_prop(name):
+          return machine.succeed(
+              "systemctl show -p {} --value grafana.service".format(name)
+          ).strip()
+
+      def wait_until_healthy(context):
+          """Wait for /api/health, and stop the moment grafana dies instead.
+
+          The property under test is that the Grafana PROCESS serves health:
+          a crash loop that exits during startup - the shape of the incident
+          this file exists for - never answers, no matter how patiently
+          systemd restarts it. A deadline alone expresses that only by
+          running out, which makes the test's verdict a race between how
+          slowly Grafana starts and how loaded the runner is.
+
+          So the wait watches the unit instead of the clock. Every poll asks
+          whether Grafana has restarted or failed since this wait began, and
+          either one ends it immediately: those are the states a process that
+          exits during startup passes through, and neither becomes true for a
+          Grafana that is merely slow. The deadline stays as a backstop for
+          the third case - alive, never restarted, never listening - which no
+          unit property reports.
+
+          The incident shape now fails in about a second, with the restart
+          count in the message, rather than after a two-minute wait that says
+          only that nothing answered.
+          """
+          restarts_before = int(unit_prop("NRestarts"))
+          deadline = time.monotonic() + HEALTH_TIMEOUT
+          while True:
+              if machine.execute(
+                  "curl -sf -o /dev/null http://127.0.0.1:3000/api/health"
+              )[0] == 0:
+                  return
+
+              restarts = int(unit_prop("NRestarts"))
+              if restarts > restarts_before:
+                  raise Exception(
+                      "{}: grafana restarted before it answered health "
+                      "(NRestarts {} -> {}), so it is exiting during "
+                      "startup".format(context, restarts_before, restarts)
+                  )
+              state = unit_prop("ActiveState")
+              if state == "failed":
+                  raise Exception(
+                      "{}: grafana.service failed before answering health "
+                      "({})".format(context, unit_prop("Result"))
+                  )
+              if time.monotonic() >= deadline:
+                  raise Exception(
+                      "{}: grafana has not answered health in {}s and has "
+                      "neither restarted nor failed - it is up and not "
+                      "listening".format(context, HEALTH_TIMEOUT)
+                  )
+              time.sleep(1)
+
       def admin_get(path):
           return json.loads(machine.succeed(
               "curl -sf -u admin:test-admin-password http://127.0.0.1:3000/{}".format(path)
@@ -93,12 +162,7 @@
       machine.wait_for_unit("grafana.service")
 
       with subtest("grafana comes up"):
-          # The health endpoint is served by the Grafana process itself, so a
-          # crash loop that exits during startup - the shape of the incident -
-          # never answers here, no matter how patiently systemd restarts it.
-          machine.wait_until_succeeds(
-              "curl -sf http://127.0.0.1:3000/api/health", timeout=120
-          )
+          wait_until_healthy("first boot")
 
       with subtest("grafana stays up"):
           # One successful poll does not rule out a crash that lands after
@@ -151,9 +215,10 @@
       with subtest("re-provisioning against the populated database stays healthy"):
           machine.succeed("systemctl restart grafana.service")
           machine.wait_for_unit("grafana.service")
-          machine.wait_until_succeeds(
-              "curl -sf http://127.0.0.1:3000/api/health", timeout=120
-          )
+          # Same wait, and its restart baseline is taken here rather than at
+          # boot, so the restart this subtest just asked for is not read as
+          # the crash it is watching for.
+          wait_until_healthy("after a restart")
 
           datasources = admin_get("api/datasources")
           prometheus = [d for d in datasources if d["name"] == "Prometheus"]
