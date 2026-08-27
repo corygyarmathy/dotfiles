@@ -9,7 +9,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | 3   | An index of everything published    | small  | -          | not started |
 | 4   | Right-hand rail: contents, backlinks| medium | 1          | **done** 2026-08-27 |
 | 5   | Link and image treatment            | small  | 2          | **done** 2026-08-27 |
-| 6   | Typography                          | small  | 2          | **agreed, not scheduled** |
+| 6   | Typography                          | small  | 2          | **done** 2026-08-27 |
 | 7   | Wikilink hover previews             | medium | -          | optional    |
 | 8   | Footnotes as sidenotes              | large  | 4          | optional    |
 | 9   | Reading time in the dateline        | small  | -          | optional    |
@@ -201,9 +201,28 @@ Vendor a face from nixpkgs exactly as `lib/hugo.nix` already vendors KaTeX: copy
 
 Whether to use a serif was the real question, and it is decided: **a serif for headings, the system sans for body**. A serif body suits an essay site and is what most gardens reach for, but it breaks the what-you-see-is-what-you-get property with Obsidian that the current layout was built around. Headings alone give the page a voice and leave the reading experience matching the editor.
 
+### What it took to hit the weight budget
+
+nixpkgs does not ship a woff2. `noto-fonts` carries `NotoSerif.ttf`, a **1.9MB variable font**: every weight from 100 to 900, and very nearly every glyph Noto covers. Shipping that, or a naive woff2 of it, would have been forty times the budget.
+
+Two reductions, both at build time in `lib/hugo.nix`, both from packages already on `flake.lock`:
+
+1. `fonttools varLib.instancer` pins the weight axis at 600 — the weight the headings already used. This is the big one. `gvar`, the table describing how each glyph deforms across the axis, is two thirds of the file, and instancing removes it outright.
+2. `pyftsubset` cuts the glyphs to Google's own `latin` range plus the punctuation these notes use.
+
+`woff2_compress` does the rest. The result is **28,952 bytes**, inside the 20-40KB the plan asked for. A heading that ever needs a glyph outside the range falls back to the body stack for that heading, which is the degradation the site already had.
+
+### The finding: you cannot check this by looking at it
+
+A browser keeps the faces **installed** under a family name in that family, alongside the ones `@font-face` adds. This machine has Noto Serif in fontconfig, and so does every Android phone. So a `src` pointing at a URL that 404s still renders a serif heading here, taken from the system, and the screenshot is indistinguishable from the working one — verified, twice, at zero differing pixels.
+
+The check that does work is to rename the family to something nobody has and screenshot that: the heading is still a serif, so the woff2 was fetched, parsed and used. That is now a comment in the stylesheet, and the VM test asserts the file is served at all — which is the same class of silent failure as item 2's inline Chroma colours, and the same reason for testing it.
+
+The same fact settles a question the plan did not ask. Adding `local("Noto Serif")` to the `src` would let those readers skip the download, but the installed face at that name is Regular, and claiming it as the 600 weight would render headings light on exactly the machines that have it. One URL, one weight, the same face for everyone.
+
 ### Cost and risk
 
-Two hours. The risk is page weight — one weight of one face is 20-40KB, which is on the same order as everything else the page loads, and it is worth being deliberate about rather than adding four weights.
+Two hours, and it took about that. The risk was page weight, and the answer is above: 29KB, preloaded, on every page.
 
 ## 7. Wikilink hover previews (optional)
 

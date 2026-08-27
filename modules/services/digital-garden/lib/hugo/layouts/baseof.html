@@ -9,6 +9,24 @@
     {{ with partial "description.html" . }}<meta name="description" content="{{ . }}" />{{ end }}
     <link rel="canonical" href="{{ .Permalink }}" />
     {{ partial "social.html" . }}
+    {{/*
+      The heading face, before the stylesheet that asks for it. A font
+      referenced from CSS is not discovered until the stylesheet has been
+      fetched AND parsed AND matched to an element, which for the <h1> at the
+      top of every page here is one round trip too late; this starts it with
+      the stylesheet instead. `crossorigin` is not optional even though the
+      file is same-origin: fonts are fetched in CORS mode, and a preload
+      without it is a second, unused download.
+
+      Unconditional, unlike KaTeX below, because every page has a title.
+    */}}
+    <link
+      rel="preload"
+      href="{{ "fonts/noto-serif-latin.woff2" | relURL }}"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     {{ with resources.Get "main.css" | fingerprint }}
       <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" />
     {{ end }}
