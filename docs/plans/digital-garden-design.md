@@ -5,7 +5,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | #   | Item                                | Size   | Depends on | Status      |
 | --- | ----------------------------------- | ------ | ---------- | ----------- |
 | 1   | Rendering fixture + screenshot loop | small  | -          | **done** 2026-08-27 |
-| 2   | Kanagawa palette                    | medium | 1          | **first pass** |
+| 2   | Kanagawa palette                    | medium | 1          | **done** 2026-08-27 |
 | 3   | An index of everything published    | small  | -          | not started |
 | 4   | Right-hand rail: contents, backlinks| medium | 1          | **first pass** |
 | 5   | Link and image treatment            | small  | 2          | not started |
@@ -105,9 +105,17 @@ Three ways out, in order of preference. **Option 1 was taken**; the other two ar
 
 A second, smaller decision, also taken: headings stay neutral (`fujiWhite` / `lotusInk2`) rather than taking a hue. The writeup has twenty-nine headings and a yellow one every screen is a lot.
 
+### What the fixture caught, which this plan did not know about
+
+Fenced code blocks were never themed at all. Chroma writes its colours **inline** by default — `style="color:#f8f8f2;background-color:#272822"` on the `<code>` element and a `style` on every span — so every code block on the site shipped Monokai regardless of the reader's theme, and no stylesheet could override it and no toggle could reach it. Against a near-black page that passed for deliberate. Against warm paper it is a black box in the middle of the page.
+
+The fix is `noClasses = false` in `lib/hugo.nix` plus a Chroma section in the stylesheet, grouped by what a token means rather than one rule per class, in Kanagawa's syntax hues with the same `light-dark()` pairs as everything else. Anything unlisted inherits the block's colour, which is the right default: an unstyled token should look like code, not like an error.
+
+This is the argument for item 1 in one finding. The bug was two years old, visible on every page with a code block, and invisible until something rendered one next to a page that had changed colour.
+
 ### Cost and risk
 
-Half a day including the screenshot pass. The risk is that colour choices read differently at page scale than at swatch scale, which is what item 1 exists to catch, and it already caught this one.
+Half a day including the screenshot pass and the Chroma work. The risk was that colour choices read differently at page scale than at swatch scale — which is what item 1 exists to catch, and it caught both this and the Lotus background.
 
 ## 3. An index of everything published
 

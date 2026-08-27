@@ -3,9 +3,28 @@
  * The tokens are named for the ROLE a colour plays, not for the colour it is,
  * because the two themes disagree about the colour and agree about the role:
  * `--bg` is the page behind the text in both, and `--text` is the text on it.
- * The values are unchanged from what the site has always shipped; only the
- * names are, and only so that the dark block below stops reading as a
- * contradiction.
+ * That naming is what made the palette below a change of values and not a
+ * rewrite.
+ *
+ * The palette is Kanagawa — Wave for dark, Lotus for light — which is the
+ * theme this vault is written in, so the site reads as part of the same system
+ * as the editor. Every hex here is from `lua/kanagawa/colors.lua` in
+ * `pkgs.vimPlugins.kanagawa-nvim`, which rides flake.lock: the values were
+ * copied from a pinned source rather than from a screenshot, and nothing is
+ * fetched to render them. Each is commented with the name it has there, so a
+ * value can be traced back without a colour picker.
+ *
+ * Two deliberate departures from Kanagawa as specified, both recorded in
+ * docs/plans/digital-garden-design.md:
+ *
+ *   Lotus's own background is #f2ecbc. In a Neovim window that is a warm
+ *   cream; across a browser page at 1440px it is a buttery yellow that the
+ *   light-background diagrams in these notes have to fight. The light grounds
+ *   below are Lotus's, lightened toward white — warm paper, same family.
+ *
+ *   Headings take no hue. Kanagawa's own markdown treatment colours them, and
+ *   the longest note here has twenty-nine; a coloured heading every screen is
+ *   more page than it is emphasis.
  *
  * Fonts are the system stack. Asking for a webfont and not shipping it is the
  * same as this with extra steps, and shipping one is a request this site has
@@ -13,13 +32,16 @@
  */
 
 :root {
-  --bg: #faf8f8;
-  --surface: rgba(143, 159, 169, 0.15);
-  --border: #e5e5e5;
-  --muted: #b8b8b8;
-  --text: #4e4e4e;
-  --strong: #2b2b2b;
-  --accent: #284b63;
+  /* Lotus. The three grounds are lotusWhite3/2/0 lightened toward white; the
+   * ink and the accent are Lotus's own. */
+  --bg: #f9f6e1;       /* lotusWhite3 #f2ecbc, lightened */
+  --surface: #f2eed8;  /* lotusWhite2 #e5ddb0, lightened */
+  --border: #e6e2c8;   /* lotusWhite0 #d5cea3, lightened */
+  --code-bg: #ece8d1;  /* lotusWhite1 #dcd5ac, lightened */
+  --muted: #716e61;    /* lotusGray2 */
+  --text: #545464;     /* lotusInk1  */
+  --strong: #43436c;   /* lotusInk2  */
+  --accent: #4d699b;   /* lotusBlue4 */
 
   --body-font:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
@@ -29,15 +51,30 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #161618;
-  --border: #393639;
-  --muted: #646464;
-  --text: #d4d4d4;
-  --strong: #ebebec;
-  --accent: #7b97aa;
-  /* --surface is deliberately not redefined: it is a translucent tint, so the
-   * one value reads correctly over either background. */
+  /* Wave, unmodified: the dark half needed no departures. */
+  --bg: #1f1f28;       /* sumiInk3  */
+  --surface: #2a2a37;  /* sumiInk4  */
+  --border: #363646;   /* sumiInk5  */
+  --code-bg: #16161d;  /* sumiInk0 — the code well goes DARKER than the page
+                        * here and lighter than it in Lotus, because in both
+                        * directions that is away from the reading surface. */
+  --muted: #727169;    /* fujiGray  */
+  --text: #dcd7ba;     /* fujiWhite */
+  /* Deliberately the same as --text. fujiWhite is the brightest foreground
+   * Wave has, so a heading cannot be brighter than the prose without leaving
+   * the palette; size and weight carry the hierarchy instead. Lotus has the
+   * headroom and uses it, which is why the two blocks disagree here. */
+  --strong: #dcd7ba;   /* fujiWhite */
+  --accent: #7e9cd8;   /* crystalBlue */
   color-scheme: dark;
+}
+
+/* Both grounds are warm, and text selected on a warm ground reads better in a
+ * cool one than in a brighter version of the same hue. Kanagawa's own
+ * selection colours, and the only place the blues appear as a surface: as a
+ * tint under body text they would drop a link below 4.5:1 against them. */
+::selection {
+  background: light-dark(#b5cbd2, #2d4f67); /* lotusBlue2 / waveBlue2 */
 }
 
 *,
@@ -226,44 +263,50 @@ blockquote {
   background: color-mix(in srgb, var(--callout-accent) 8%, transparent);
 }
 
+/* Kanagawa names a hue for each of these meanings already, which is why the
+ * set maps one-for-one rather than being matched by eye. The hue carries the
+ * border, the label and the tint, so each pair has to hold up as text on the
+ * page ground as well as at 8% behind it. */
 .callout-note,
 .callout-info,
 .callout-todo {
-  --callout-accent: light-dark(#38688c, #82a9c9);
+  --callout-accent: light-dark(#4d699b, #7e9cd8); /* lotusBlue4 / crystalBlue */
 }
 .callout-abstract,
 .callout-summary,
 .callout-tldr {
-  --callout-accent: light-dark(#2f7a72, #6fb3aa);
+  --callout-accent: light-dark(#597b75, #7aa89f); /* lotusAqua / waveAqua2 */
 }
 .callout-tip,
 .callout-hint,
 .callout-success,
 .callout-check,
 .callout-done {
-  --callout-accent: light-dark(#3d7a44, #7fb383);
+  --callout-accent: light-dark(#6f894e, #98bb6c); /* lotusGreen / springGreen */
 }
 .callout-important,
 .callout-example {
-  --callout-accent: light-dark(#6c5a94, #ab9bce);
+  --callout-accent: light-dark(#624c83, #957fb8); /* lotusViolet4 / oniViolet */
 }
 .callout-question,
 .callout-help,
 .callout-faq {
-  --callout-accent: light-dark(#8a6d2f, #c4a55f);
+  --callout-accent: light-dark(#77713f, #e6c384); /* lotusYellow / carpYellow */
 }
 .callout-warning,
 .callout-caution,
 .callout-attention {
-  --callout-accent: light-dark(#a35a20, #d08a4a);
+  --callout-accent: light-dark(#cc6d00, #ff9e3b); /* lotusOrange / roninYellow */
 }
+/* waveRed, not autumnRed: autumnRed is Wave's diff colour and is dark enough
+ * on sumiInk3 that the label stops reading as a label. */
 .callout-failure,
 .callout-fail,
 .callout-missing,
 .callout-danger,
 .callout-error,
 .callout-bug {
-  --callout-accent: light-dark(#a84040, #cf7a7a);
+  --callout-accent: light-dark(#c84053, #e46876); /* lotusRed / waveRed */
 }
 .callout-quote,
 .callout-cite {
@@ -309,7 +352,7 @@ hr {
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;
-  background: var(--surface);
+  background: var(--code-bg);
   border-radius: 3px;
   padding: 0.1em 0.3em;
 }
@@ -318,7 +361,7 @@ pre {
   overflow-x: auto;
   padding: 1rem;
   border-radius: 5px;
-  background: var(--surface);
+  background: var(--code-bg);
 }
 
 pre code {
@@ -326,11 +369,135 @@ pre code {
   padding: 0;
 }
 
+/* ── syntax highlighting ────────────────────────────────────────────────── */
+
+/* Chroma's token classes, in Kanagawa's syntax colours. `noClasses = false`
+ * in lib/hugo.nix is what makes these reachable; before it, Chroma inlined
+ * Monokai's colours on every span and its ground on the block, which no
+ * stylesheet could override and no theme toggle could reach.
+ *
+ * Grouped by what a token MEANS rather than one rule per class, because
+ * Chroma's class list is long and its distinctions are finer than any of
+ * these notes need: `.s`, `.s1`, `.s2`, `.sb` and `.sh` are all a string
+ * here. Anything unlisted inherits the block's own colour, which is the right
+ * default - an unstyled token should look like code, not like an error.
+ *
+ * Contrast is lower here than in prose, deliberately. Highlighting is a
+ * reading aid for structure, not a set of eight things each shouting; the
+ * comment colour in particular is Kanagawa's own and sits where a comment
+ * should, below the code it annotates. */
+
+/* comments */
+.chroma .c,
+.chroma .ch,
+.chroma .cm,
+.chroma .c1,
+.chroma .cs,
+.chroma .cp,
+.chroma .cpf {
+  color: light-dark(#716e61, #727169); /* lotusGray2 / fujiGray */
+  font-style: italic;
+}
+
+/* keywords */
+.chroma .k,
+.chroma .kc,
+.chroma .kd,
+.chroma .kn,
+.chroma .kp,
+.chroma .kr {
+  color: light-dark(#624c83, #957fb8); /* lotusViolet4 / oniViolet */
+}
+
+/* types, classes, built-ins */
+.chroma .kt,
+.chroma .nc,
+.chroma .nn,
+.chroma .ne,
+.chroma .nb,
+.chroma .bp {
+  color: light-dark(#597b75, #7aa89f); /* lotusAqua / waveAqua2 */
+}
+
+/* functions and tags */
+.chroma .nf,
+.chroma .fm,
+.chroma .nt {
+  color: light-dark(#4d699b, #7e9cd8); /* lotusBlue4 / crystalBlue */
+}
+
+/* strings, in every flavour Chroma distinguishes */
+.chroma .s,
+.chroma .sa,
+.chroma .sb,
+.chroma .sc,
+.chroma .dl,
+.chroma .sd,
+.chroma .s2,
+.chroma .sh,
+.chroma .si,
+.chroma .sx,
+.chroma .s1,
+.chroma .ss,
+.chroma .sr,
+.chroma .se {
+  color: light-dark(#6f894e, #98bb6c); /* lotusGreen / springGreen */
+}
+
+/* numbers and constants */
+.chroma .m,
+.chroma .mb,
+.chroma .mf,
+.chroma .mh,
+.chroma .mi,
+.chroma .mo,
+.chroma .il,
+.chroma .no,
+.chroma .l,
+.chroma .ld {
+  color: light-dark(#c84053, #d27e99); /* lotusRed / sakuraPink */
+}
+
+/* operators */
+.chroma .o,
+.chroma .ow {
+  color: light-dark(#836f4a, #c0a36e); /* lotusYellow2 / boatYellow2 */
+}
+
+/* Something Chroma could not lex. Marked, because a highlighter that has lost
+ * its place is worth seeing rather than hiding. */
+.chroma .err {
+  color: light-dark(#c84053, #e46876); /* lotusRed / waveRed */
+}
+
+/* Diff hunks in a fenced ```diff block: the ground carries the meaning, so
+ * these are the only tokens here that get one. */
+.chroma .gd {
+  background: light-dark(#f2d5cf, #43242b); /* / winterRed */
+}
+.chroma .gi {
+  background: light-dark(#dbe5cb, #2b3328); /* / winterGreen */
+}
+.chroma .gh,
+.chroma .gu {
+  color: light-dark(#4d699b, #7e9cd8);
+  font-weight: 600;
+}
+.chroma .ge {
+  font-style: italic;
+}
+.chroma .gs {
+  font-weight: 600;
+}
+
 /* Obsidian's ==highlight==, rendered by Goldmark's extras.mark extension. */
 mark {
   padding: 0 0.1em;
   border-radius: 2px;
-  background: light-dark(#f9e9a8, #77661f);
+  /* Kanagawa's own search-highlight grounds. Muted rather than luminous on
+   * purpose: a highlight marks a phrase for the reader who wrote it, and it
+   * should not outrank the heading above it. */
+  background: light-dark(#f9d791, #49443c); /* lotusYellow4 / winterYellow */
   color: inherit;
 }
 
