@@ -154,5 +154,66 @@
         });
       })();
     </script>
+
+    {{/*
+      Marks the section the reader is in. The contents list works without this
+      - it is a list of links either way - so everything here is guarded and
+      anything missing simply leaves it as one.
+
+      The observation band is the top fifth of the viewport, which is where a
+      reader's eye is when they have just arrived at a section, rather than the
+      whole window: with a full-height root every heading on a short page is
+      "visible" at once and the highlight never moves. When nothing is in the
+      band - mid-section, which is most of the time - the current section is
+      the last heading that has passed above the viewport.
+    */}}
+    <script>
+      (function () {
+        var nav = document.querySelector(".rail-nav");
+        if (!nav || !window.IntersectionObserver) return;
+
+        var links = {};
+        var headings = [];
+        nav.querySelectorAll("a[href^='#']").forEach(function (a) {
+          var id = decodeURIComponent(a.hash.slice(1));
+          var heading = document.getElementById(id);
+          if (!heading) return;
+          links[id] = a;
+          headings.push(heading);
+        });
+        if (!headings.length) return;
+
+        var current = null;
+        function mark(id) {
+          var next = id ? links[id] : null;
+          if (next === current) return;
+          if (current) current.classList.remove("current");
+          if (next) next.classList.add("current");
+          current = next;
+        }
+
+        var inBand = {};
+        var observer = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (e) {
+              inBand[e.target.id] = e.isIntersecting;
+            });
+            for (var i = 0; i < headings.length; i++) {
+              if (inBand[headings[i].id]) return mark(headings[i].id);
+            }
+            for (var j = headings.length - 1; j >= 0; j--) {
+              if (headings[j].getBoundingClientRect().top < 0) {
+                return mark(headings[j].id);
+              }
+            }
+            mark(null);
+          },
+          { rootMargin: "0px 0px -80% 0px" }
+        );
+        headings.forEach(function (h) {
+          observer.observe(h);
+        });
+      })();
+    </script>
   </body>
 </html>

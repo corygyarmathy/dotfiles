@@ -7,7 +7,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | 1   | Rendering fixture + screenshot loop | small  | -          | **done** 2026-08-27 |
 | 2   | Kanagawa palette                    | medium | 1          | **done** 2026-08-27 |
 | 3   | An index of everything published    | small  | -          | not started |
-| 4   | Right-hand rail: contents, backlinks| medium | 1          | **first pass** |
+| 4   | Right-hand rail: contents, backlinks| medium | 1          | **done** 2026-08-27 |
 | 5   | Link and image treatment            | small  | 2          | not started |
 | 6   | Typography                          | small  | 2          | **agreed, not scheduled** |
 | 7   | Wikilink hover previews             | medium | -          | optional    |
@@ -151,9 +151,19 @@ An optional twenty lines of `IntersectionObserver` highlights the section curren
 
 The finicky part is alignment: the masthead and footer must line up with the prose column and not with the full page width, or the rule under the masthead extends past the text it belongs to. The prototype got this subtly wrong and it was visible immediately.
 
+### What it cost that the plan did not price in
+
+**Hugo wraps the heading tree in a synthetic root.** `.Fragments.Headings` returns one entry — `Level` 0, empty `Title` — whenever a page's headings do not start at H1, which here is *always*, because `publish-filter.py` lifts a note's leading H1 out of the body to become the title. So the count is one on every page, the threshold of three is never met, and the contents list silently renders nowhere. Nothing errors. It was found by a page with twelve visible sections reporting one, and it is now a comment in `rail.html` rather than a fact to rediscover.
+
+**A nil frontmatter key is not a zero-length one.** `len .Params.backlinks` errors on a note with no backlinks — `reflect: call of reflect.Value.Type on zero Value` — which is a build failure and not a missing rail. The truthiness of the value is the right test.
+
+### What it actually ships, on the real vault
+
+Six of nineteen pages get a rail: the five Lighting notes and Work-Life Balance. Three of those get a contents list. The other thirteen render no `<aside>` at all, which is what the plan asked for and what the numbers predicted.
+
 ### Cost and risk
 
-Half a day, most of it in the alignment and the narrow-width fallback. The risk is the one in the findings section: on thirteen of nineteen pages this ships nothing. The mitigation is the render-when-non-empty rule, and the reason to build it anyway is that the pages where it does appear — the Lighting set — are the ones people are actually sent to.
+Half a day, most of it in the two findings above rather than in the alignment. The risk is the one in the findings section: on thirteen of nineteen pages this ships nothing. The mitigation is the render-when-non-empty rule, and the reason to build it anyway is that the pages where it does appear — the Lighting set — are the ones people are actually sent to.
 
 ## 5. Link and image treatment
 

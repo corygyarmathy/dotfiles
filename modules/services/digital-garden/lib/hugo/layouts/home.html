@@ -4,8 +4,12 @@
     publish-filter.py has already annotated each bare link with the target's
     thesis, so what is authored is what should be shown.
   */}}
-  <article data-pagefind-body>
-    <h1>{{ .Title }}</h1>
-    {{ .Content }}
-  </article>
+  {{/* .layout carries the measure cap; it is a grid only where there is a
+       rail to put in it, and the landing page has none. */}}
+  <div class="layout">
+    <article data-pagefind-body>
+      <h1>{{ .Title }}</h1>
+      {{ .Content }}
+    </article>
+  </div>
 {{ end }}

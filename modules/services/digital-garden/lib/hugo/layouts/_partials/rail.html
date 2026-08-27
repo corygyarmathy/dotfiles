@@ -1,0 +1,64 @@
+{{/*
+  The right-hand rail: where a reader is in this note, and what else points at
+  it. Both belong beside the prose rather than beneath it — a reader who wants
+  to know what cites a note wants it while reading, not four screens below
+  where they stopped.
+
+  Rendered as a sibling of <article> in the same grid, and NOT inside it, for
+  the same reason backlinks.html always sat outside: these are other notes'
+  words and a list of this one's own headings, and indexing either would make a
+  search for a phrase return the page that listed it rather than the page that
+  said it.
+
+  The whole element is skipped when it would be empty, which today is most
+  pages: of nineteen published notes, ten have no `##` at all and five carry a
+  backlink. An empty box in the margin is worse than an empty margin.
+
+  There is exactly one copy of this markup. Below the breakpoint the grid
+  collapses and this falls back into the flow beneath the article, which is the
+  layout the site served before the rail existed - so the narrow case is CSS,
+  not a second partial that has to be kept in step.
+*/}}
+{{ $page := . }}
+{{/*
+  Top-level sections only - `##`, never `###`. The longest note in the vault
+  has twenty-nine headings and thirteen sections: the sections fit a viewport
+  and the headings do not, and a rail that scrolls inside itself is a
+  compromise rather than a design. Three is the threshold, because a contents
+  list of one or two entries restates the page rather than offering a way
+  around it.
+
+  The descent below is not decoration. Hugo wraps the heading tree in a
+  SYNTHETIC root - Level 0, empty Title - whenever a page's headings do not
+  start at H1, which here is always: publish-filter.py lifts a note's leading
+  H1 out of the body to become the title, so every note's markdown begins at
+  `##`. Without it .Fragments.Headings is a slice of one on every page, the
+  count is never three, and the contents list silently never renders anywhere -
+  which is exactly what it did until a page with twelve visible sections
+  reported one.
+*/}}
+{{ $sections := .Fragments.Headings }}
+{{ if and $sections (eq (index $sections 0).Level 0) }}
+  {{ $sections = (index $sections 0).Headings }}
+{{ end }}
+{{ $showToc := ge (len $sections) 3 }}
+{{/* Truthiness rather than a length: a note with no backlinks has no
+     `backlinks` key at all, and `len` on the missing value is an error and not
+     a zero. */}}
+{{ $showBacklinks := .Params.backlinks }}
+
+{{ if or $showToc $showBacklinks }}
+  <aside class="rail">
+    {{ if $showToc }}
+      <nav class="rail-nav" aria-labelledby="rail-toc-title">
+        <h2 id="rail-toc-title">On this page</h2>
+        <ul>
+          {{ range $sections }}
+            <li><a href="#{{ .ID }}">{{ .Title }}</a></li>
+          {{ end }}
+        </ul>
+      </nav>
+    {{ end }}
+    {{ with $page }}{{ partial "backlinks.html" . }}{{ end }}
+  </aside>
+{{ end }}
