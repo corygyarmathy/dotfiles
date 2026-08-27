@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 260" width="640" height="260" role="img" aria-label="The page grid: an empty left track, the prose column, and the rail track">
+  <!-- A deliberately light background. Most diagrams in the vault are
+       light-background exports, and how they sit on a dark page is a thing
+       the theme has to decide rather than inherit. -->
+  <rect width="640" height="260" fill="#ffffff"/>
+  <g font-family="system-ui, sans-serif" font-size="12" fill="#5a5a66">
+    <rect x="24" y="40" width="150" height="180" fill="#f1f1f4" stroke="#d8d8de"/>
+    <text x="99" y="135" text-anchor="middle">1fr</text>
+    <rect x="190" y="40" width="240" height="180" fill="#e4e9f2" stroke="#b9c4d8"/>
+    <text x="310" y="128" text-anchor="middle" font-size="13" fill="#3f4a5e">minmax(0, 40rem)</text>
+    <text x="310" y="146" text-anchor="middle" fill="#6a7488">the prose, unmoved</text>
+    <rect x="446" y="40" width="96" height="180" fill="#eef0e8" stroke="#ccd2c0"/>
+    <text x="494" y="135" text-anchor="middle">rail</text>
+    <rect x="558" y="40" width="58" height="180" fill="#f1f1f4" stroke="#d8d8de"/>
+    <text x="587" y="135" text-anchor="middle">1fr</text>
+    <text x="320" y="24" text-anchor="middle" font-size="13" fill="#3f4a5e">The three-track grid</text>
+    <text x="320" y="246" text-anchor="middle" fill="#8a8a96">the rail occupies space that is empty today</text>
+  </g>
+</svg>

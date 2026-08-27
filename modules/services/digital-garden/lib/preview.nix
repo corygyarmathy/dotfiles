@@ -14,6 +14,14 @@
 # It reads the vault, and writes only to a temp directory and a dates cache.
 # The publish boundary is the filter, exactly as in production — an unpublished
 # note is not copied, so it is not rendered and not served here either.
+#
+# `--fixture` swaps the vault for lib/hugo/fixture, which exists because the
+# vault is a poor thing to judge a stylesheet against: it contains whatever it
+# happens to contain, which today is nineteen notes of which ten have no
+# heading at all and five carry a single backlink. The fixture puts every
+# element the theme styles onto three pages, so a visual change is checked by
+# looking at those rather than by remembering which real note has a table in
+# it. It has its own dates ledger, so rendering it never touches the vault's.
 {
   pkgs,
   lib,
@@ -25,6 +33,13 @@
   # command is run from the repository root, so that editing it re-renders with
   # no Nix evaluation in the loop.
   workingTreeStyleSheet,
+  # The rendering fixture: a vault whose only job is to put every element the
+  # theme styles onto as few pages as possible, so that a stylesheet change can
+  # be judged by looking at two screenshots rather than nine. Same
+  # working-tree-first treatment as the stylesheet, and for the same reason -
+  # the fixture is edited about as often as the CSS it exists to exercise.
+  fixture,
+  workingTreeFixture,
   defaultVault ? "$HOME/git/personal-notes",
 }:
 pkgs.writeShellApplication {
@@ -40,6 +55,7 @@ pkgs.writeShellApplication {
     port=8087
     once=false
     css=
+    use_fixture=false
 
     while [ $# -gt 0 ]; do
       case $1 in
@@ -47,6 +63,7 @@ pkgs.writeShellApplication {
         --css) css=$2; shift 2 ;;
         --port) port=$2; shift 2 ;;
         --once) once=true; shift ;;
+        --fixture) use_fixture=true; shift ;;
         -h|--help)
           cat <<'USAGE'
     garden-preview [options]
@@ -58,6 +75,8 @@ pkgs.writeShellApplication {
                      editing it re-renders without a Nix evaluation.
       --port N       port to serve on (default 8087)
       --once         render once and exit; do not serve or watch
+      --fixture      render the theme's own fixture vault instead of yours:
+                     every element the stylesheet styles, on three pages
 
     Renders the published subset of the vault exactly as the server does and
     serves it locally, re-rendering whenever the vault or the stylesheet
@@ -79,6 +98,20 @@ pkgs.writeShellApplication {
         css=${styleSheet}
         echo "note: using the stylesheet baked into the renderer." >&2
         echo "      run from the dotfiles repo root, or pass --css, to edit it live." >&2
+      fi
+    fi
+
+    # The fixture wins over --vault and over $GARDEN_VAULT: it is not a vault
+    # you might have meant, it is a request for a specific one.
+    ledger=dates.json
+    if [ "$use_fixture" = true ]; then
+      ledger=fixture-dates.json
+      if [ -d ${workingTreeFixture} ]; then
+        vault=${workingTreeFixture}
+      else
+        vault=${fixture}
+        echo "note: using the fixture baked into this command." >&2
+        echo "      run from the dotfiles repo root to edit it live." >&2
       fi
     fi
 
@@ -109,7 +142,7 @@ pkgs.writeShellApplication {
       local started
       started=$(date +%s%N)
       # Same filter, same arguments, same boundary as the service.
-      python3 ${filter} "$vault" "$state/content" "$cache/dates.json" || return 1
+      python3 ${filter} "$vault" "$state/content" "$cache/$ledger" || return 1
       ${lib.getExe renderer} "$state/content" "$state/public.new" "$css" \
         > "$state/render.log" 2>&1 || {
           echo "render failed:" >&2
