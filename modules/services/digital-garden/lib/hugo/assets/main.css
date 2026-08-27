@@ -26,10 +26,40 @@
  *   the longest note here has twenty-nine; a coloured heading every screen is
  *   more page than it is emphasis.
  *
- * Fonts are the system stack. Asking for a webfont and not shipping it is the
- * same as this with extra steps, and shipping one is a request this site has
- * no reason to make of a reader.
+ * Fonts are a serif for headings and the system stack for body text. The
+ * reasoning for each is at the @font-face below.
  */
+
+/* Noto Serif, subset to Latin at one weight by lib/hugo.nix and served from
+ * this site. The earlier version of this file used the system stack throughout
+ * and argued that asking for a webfont without shipping it is the worst of both
+ * — which is right, and is why this one IS shipped: vendored from nixpkgs at
+ * build time exactly as KaTeX is, no CDN, no DNS lookup to anyone else.
+ *
+ * Headings only. A serif body would suit an essay site and is what most gardens
+ * reach for, but these notes are written in Obsidian in the system sans, and a
+ * page that reads the same in the editor and in the browser is worth more here
+ * than a page that reads like a book. Headings alone give it a voice.
+ *
+ * One weight, 600, which is the weight the headings already had. A second would
+ * double the payload for a distinction the type scale is already making with
+ * size. `swap` because the fallback below is a real typeface and not a
+ * placeholder: showing a heading in it immediately beats showing nothing.
+ *
+ * A trap for whoever checks this by looking. A browser keeps the faces INSTALLED
+ * under a family name in the family alongside the ones @font-face adds, so on
+ * any machine with Noto Serif in fontconfig — this one, and every Android phone
+ * — a broken `src` still renders a serif heading, taken from the system. A
+ * screenshot here therefore cannot tell you whether this file was fetched at
+ * all. Rename the family to something nobody has and screenshot that: if the
+ * heading is still a serif, the woff2 loaded. */
+@font-face {
+  font-family: "Noto Serif";
+  src: url("/fonts/noto-serif-latin.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* Lotus. The three grounds are lotusWhite3/2/0 lightened toward white; the
@@ -46,6 +76,11 @@
   --body-font:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji";
+  /* The fallbacks are the serifs a reader is most likely to already have, in
+   * rough order of how close they sit to Noto Serif's proportions, so a heading
+   * shown before the file arrives is not a different shape from the one that
+   * replaces it. */
+  --heading-font: "Noto Serif", Georgia, "Times New Roman", Times, serif;
   --measure: 40rem;
   color-scheme: light;
 }
@@ -177,6 +212,7 @@ h2,
 h3,
 h4 {
   color: var(--strong);
+  font-family: var(--heading-font);
   font-weight: 600;
   line-height: 1.25;
   margin: 2rem 0 0.75rem;
@@ -610,8 +646,13 @@ h4:hover > .heading-anchor,
   border-top: 1px solid var(--border);
 }
 
+/* Back to the body stack. These two are <h2> for the outline and for the
+ * `aria-labelledby` on each nav, not because they are headings in the essay:
+ * they are 0.8rem uppercase labels, and a serif at that size and spacing is
+ * the one place the face looks like a mistake. */
 .rail h2 {
   margin: 0 0 0.75rem;
+  font-family: var(--body-font);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.06em;
