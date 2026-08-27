@@ -307,14 +307,18 @@
         # thing wrong and the attribution in the journal is exact.
         machine.succeed("systemctl reset-failed cg-verify-canary.service")
         # Unlike the oneshot canary above, a simple service's start job
-        # completes when the process is spawned; the failure and the restart
-        # are systemd's business afterwards.
+        # completes when the process is SPAWNED - so `systemctl start` returns
+        # while the fixture is still "running", and systemd only moves it to
+        # auto-restart once it reaps the child and schedules the restart.
+        # Reading SubState once, straight after start, is therefore a race:
+        # it usually wins on an idle machine and lost in CI on 2026-08-27,
+        # reporting "running" and failing a test about the state after that.
+        # Waiting for the state asserts the same property without the race -
+        # the fixture must be in auto-restart before verification looks at it.
         machine.succeed("systemctl start cg-verify-crashlooper.service")
-        sub = machine.succeed(
+        machine.wait_until_succeeds(
             "systemctl show cg-verify-crashlooper -p SubState --value"
-        ).strip()
-        assert sub == "auto-restart", (
-            "fixture is not exercising the auto-restart state: {}".format(sub)
+            " | grep -qx auto-restart"
         )
 
         journal = arm(staged=current, rolled_back_ago=60)
