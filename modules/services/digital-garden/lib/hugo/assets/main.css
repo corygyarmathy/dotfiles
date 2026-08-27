@@ -96,15 +96,23 @@ body {
 }
 
 /* One column, capped. "No sidebars" is not the same as "prose should span a 27
- * inch monitor" — line length is a legibility function. */
+ * inch monitor" — line length is a legibility function.
+ *
+ * The cap moved off .page and onto the three things inside it, so that .page
+ * can be full width for the grid below while the masthead, the prose and the
+ * footer stay exactly where they have always been. All three are capped at the
+ * measure and centred in the same padded box, so they agree with each other by
+ * construction rather than by three numbers that have to be kept equal. */
 .page {
   width: 100%;
-  /* The cap is on the TEXT, so the gutter has to be added to it rather than
-   * taken out of it - box-sizing: border-box would otherwise make the measure
-   * 3rem narrower than it says. */
-  max-width: calc(var(--measure) + 3rem);
-  margin: 0 auto;
   padding: 4rem 1.5rem 3rem;
+}
+
+.masthead,
+.layout,
+footer {
+  max-width: var(--measure);
+  margin-inline: auto;
 }
 
 /* ── masthead ───────────────────────────────────────────────────────────── */
@@ -553,18 +561,24 @@ h4:hover > .heading-anchor,
   }
 }
 
-/* ── backlinks ──────────────────────────────────────────────────────────── */
+/* ── the rail ───────────────────────────────────────────────────────────── */
 
-/* Set apart from the essay rather than continuing it: these are other notes'
- * words, and a reader who has reached the end of one piece should be able to
- * see where the piece ends. */
-.backlinks {
+/* Where you are in this note, and what else points at it. One piece of markup
+ * with two layouts: beneath the article by default, and in the right margin
+ * once there is a margin to put it in. See layouts/_partials/rail.html.
+ *
+ * The default is the narrow one, so the layout the site served before the rail
+ * existed is the one that needs no media query to produce. Set apart from the
+ * essay rather than continuing it: these are other notes' words and a list of
+ * this one's parts, and a reader who has reached the end of a piece should be
+ * able to see where the piece ends. */
+.rail {
   margin-top: 3rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
 }
 
-.backlinks h2 {
+.rail h2 {
   margin: 0 0 0.75rem;
   font-size: 0.8rem;
   font-weight: 600;
@@ -573,19 +587,103 @@ h4:hover > .heading-anchor,
   color: var(--muted);
 }
 
-.backlinks ul {
+.rail ul {
   margin: 0;
   padding-left: 1.25rem;
 }
 
-.backlinks li {
+.rail li {
   margin-bottom: 0.35rem;
+}
+
+/* A contents list of the page you are already on is navigation, not reading,
+ * and duplicating the page's own headings beneath it is the one thing the
+ * narrow layout should NOT do. Backlinks are different: they are the only
+ * place those notes appear. */
+.rail-nav {
+  display: none;
 }
 
 /* Same treatment the index gives an annotated link: the claim is secondary to
  * the title it belongs to. */
 .backlink-thesis {
   color: var(--muted);
+}
+
+/* Wide enough for a rail that is a full 15rem AND leaves the prose centred:
+ * the two outer tracks are equal, so the article sits exactly where it does at
+ * every narrower width and the rail fills space that was empty. Below this the
+ * whole block above applies unchanged and nothing has moved. */
+@media (min-width: 80rem) {
+  .layout {
+    max-width: none;
+    display: grid;
+    /* minmax(0, …) on the centre track rather than a bare value: a wide table
+     * or a long code line inside the article would otherwise widen the track
+     * past the measure and push the rail off the page. */
+    grid-template-columns: 1fr minmax(0, var(--measure)) 1fr;
+    column-gap: 3rem;
+    align-items: start;
+  }
+
+  .layout > article {
+    grid-column: 2;
+  }
+
+  .rail {
+    grid-column: 3;
+    /* Aligned to the top of the prose, not stretched down the page: `start`
+     * on the grid keeps it the height of its own content, which is what
+     * sticky needs. */
+    width: min(15rem, 100%);
+    position: sticky;
+    top: 2rem;
+    /* A rail longer than the window scrolls inside itself. A nested scrollbar
+     * is a compromise rather than a design, and `##`-only exists so that it is
+     * rarely reached. */
+    max-height: calc(100dvh - 4rem);
+    overflow-y: auto;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+
+  .rail-nav {
+    display: block;
+    margin-bottom: 2rem;
+  }
+
+  /* No bullets and no indent out here: the rail is a column of its own and the
+   * markers were doing work that the margin now does. */
+  .rail ul {
+    padding-left: 0;
+    list-style: none;
+  }
+
+  /* Rail links are navigation, not prose. The accent is spent on the section
+   * you are in rather than on all of them at once, which is the difference
+   * between a list of links and a sense of place. */
+  .rail a {
+    display: block;
+    padding: 0;
+    background: none;
+    color: var(--muted);
+  }
+
+  .rail a:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .rail a.current {
+    color: var(--accent);
+  }
+
+  .rail .backlink-thesis {
+    display: none;
+  }
 }
 
 /* ── footer ─────────────────────────────────────────────────────────────── */

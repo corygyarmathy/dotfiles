@@ -1,8 +1,15 @@
 {{ define "main" }}
-  <article data-pagefind-body>
-    <h1>{{ .Title }}</h1>
-    {{ partial "dateline.html" . }}
-    {{ .Content }}
-  </article>
-  {{ partial "backlinks.html" . }}
+  {{/*
+    article and rail are siblings in one grid, so that the rail can occupy the
+    empty right margin at wide widths and fall back beneath the article at
+    narrow ones without a second copy of the markup. See _partials/rail.html.
+  */}}
+  <div class="layout">
+    <article data-pagefind-body>
+      <h1>{{ .Title }}</h1>
+      {{ partial "dateline.html" . }}
+      {{ .Content }}
+    </article>
+    {{ partial "rail.html" . }}
+  </div>
 {{ end }}
