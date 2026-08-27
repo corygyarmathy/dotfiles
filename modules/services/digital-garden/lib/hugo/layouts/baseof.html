@@ -276,5 +276,214 @@
         });
       })();
     </script>
+
+    {{/*
+      Sidenotes in the right margin. Hugo emits every footnote as a single
+      list at the foot of the note -- `[^1]` becomes an endnote, which is the
+      render it has always had and deliberately unchanged here. Moving them
+      does NOT touch generation or the markup Hugo emits; this script lifts the
+      notes out of that list and places each one in the right margin, beside
+      the paragraph that cites it, on the reader's machine.
+
+      That is the whole design of this feature and the reason it stays small:
+      nothing in lib/hugo.nix, publish-filter.py or the render hooks changes,
+      and a reader with JavaScript disabled gets exactly the endnote page the
+      site shipped before this script existed -- and a reader on a narrow
+      screen gets it too.
+
+      The width decides the layout, and it can change while the page is open.
+      There are two states, toggled whenever the viewport crosses the 80rem
+      breakpoint:
+
+      Wide. The layout is a three-column grid: 1fr minmax(0, 40rem) 1fr. The
+      prose is the centred second column and never moves. The rail occupies
+      the first (left) column. The sidenotes fill the third (right) column,
+      each absolutely positioned at the top of the paragraph that cites it --
+      the Tufte margin note. Placing them in the third column means a page
+      with no rail still gets its margin notes: the rail is beside the prose
+      on the left, the notes beside it on the right, and neither needs the
+      other to exist. That is why they are not gated on the rail.
+
+      Narrow. No margin to put a note in, so the margin is torn down and the
+      original endnote list is restored to the foot of the essay, where Hugo
+      put it -- the same place the backlinks sit at the foot of the page.
+
+      Positioning a wide note needs the vertical offset of its paragraph
+      inside the grid, so each note is placed at the top of the ancestor of
+      its citation that is a direct child of the article (a paragraph, an li,
+      a blockquote). Notes cited from the same block stack beneath one
+      another, each measured against the one before it, so two notes in one
+      paragraph never overlap. The notes are inserted into .layout rather than
+      the article, so pagefind -- which indexes the article marked
+      data-pagefind-body -- does not index the note text.
+
+      A note can be cited more than once (the same source can come up in many
+      paragraphs). One note is built per definition, anchored to its FIRST
+      citation, so a repeated citation does not stack a second copy of the
+      same margin note; the citation in prose still scrolls to the one note.
+      Each note keeps the id Hugo gave its definition, so every citation's
+      href="#fn:N" lands on the margin note and only there.
+    */}}
+    <script>
+      (function () {
+        var article = document.querySelector("article");
+        var list = document.querySelector(".footnotes");
+        if (!article || !list) return;
+
+        var layout = document.querySelector(".layout");
+        if (!layout) return;
+
+        // Where the endnote list belongs when it is restored at the foot of
+        // the essay (narrow width). Kept, not guessed: the margin is torn down
+        // and rebuilt as the width crosses the breakpoint, and the list has to
+        // come back exactly where it started.
+        var host = list.parentNode;
+        var nextSibling = list.nextSibling;
+
+        // One entry per footnote definition -- the <li id="fn:N"> entries Hugo
+        // emitted at the foot of the page -- keyed by id, NOT one per citation.
+        // A note can be cited many times over and each citation is a separate
+        // reference; the footnote itself is one thing and belongs once.
+        var defs = {};
+        list.querySelectorAll("li[id]").forEach(function (li) {
+          defs[li.id] = li;
+        });
+        var ids = Object.keys(defs);
+        if (!ids.length) return;
+
+        var mql = window.matchMedia("(min-width: 80rem)");
+        var notes = [];
+
+        // The topmost ancestor of a citation that is a direct child of the
+        // article -- the box whose top the margin note aligns to.
+        function anchorBlock(ref) {
+          var node = ref;
+          while (node && node.parentNode && node.parentNode !== article) {
+            node = node.parentNode;
+          }
+          return node && node.parentNode === article ? node : null;
+        }
+
+        // Place the notes once the margin is laid out. Several notes in one
+        // paragraph would all align to the same paragraph top and stack on
+        // top of each other, so notes are tracked per block: the first is
+        // anchored to its paragraph's top, and each later one in that
+        // paragraph sits one pixel below the previous note's bottom.
+        // `lastTopByBlock` holds that running bottom.
+        function place() {
+          var layoutTop = layout.getBoundingClientRect().top;
+          var lastTopByBlock = {};
+          notes.forEach(function (note) {
+            var key = note.block;
+            var top =
+              key in lastTopByBlock
+                ? lastTopByBlock[key] + 1
+                : note.block.getBoundingClientRect().top - layoutTop;
+            note.aside.style.top = top + "px";
+            lastTopByBlock[key] = top + note.aside.offsetHeight;
+          });
+        }
+
+        // The wide state: build a margin note per definition, remove the
+        // endnote list (the two would be the same words twice, and two
+        // elements with one id is broken HTML), and position the notes.
+        function showSidenotes() {
+          // Tear down any previous margin first, so re-crossing the
+          // breakpoint builds fresh notes instead of duplicating the old ones.
+          notes.forEach(function (note) {
+            note.aside.remove();
+          });
+          notes = [];
+          var placed = {};
+
+          ids.forEach(function (id) {
+            var ref = article.querySelector('.footnote-ref[href="#' + id + '"]');
+            if (!ref) return;
+            var block = anchorBlock(ref);
+            if (!block) return;
+            // First citation wins: a repeated citation must not place a second
+            // copy of the same note.
+            if (placed[id]) return;
+            placed[id] = true;
+
+            // The number is the other end of the superscript in the prose;
+            // Hugo numbers its definitions fn:1, fn:2, ... in order.
+            var aside = document.createElement("aside");
+            aside.className = "sidenote";
+            aside.id = id;
+            aside.setAttribute("role", "doc-footnote");
+            var num = document.createElement("span");
+            num.className = "sidenote-num";
+            num.textContent = id.slice(3);
+            aside.appendChild(num);
+            var clone = defs[id].cloneNode(true);
+            // Every citation produces a "way back" ↩ link in the definition,
+            // so a single note can carry many of them. Strip them all: the
+            // in-paragraph reference already lands on the note.
+            Array.prototype.forEach.call(
+              clone.querySelectorAll(".footnote-backref"),
+              function (backref) {
+                backref.remove();
+              }
+            );
+            // The <p> Hugo gives each definition is the aside's body.
+            while (clone.firstChild) aside.appendChild(clone.firstChild);
+
+            layout.appendChild(aside);
+            notes.push({ aside: aside, block: block });
+          });
+
+          // Nothing to place (no citations on the page): keep the endnotes.
+          if (!notes.length) {
+            if (!list.parentNode) host.insertBefore(list, nextSibling);
+            return;
+          }
+
+          // The medium is the margin now, so drop the foot-of-page list.
+          if (list.parentNode) list.remove();
+
+          // rAF waits for the grid to resolve; forcing layout (the offsetHeight
+          // read inside place) makes the measurement accurate on first run.
+          requestAnimationFrame(place);
+        }
+
+        // The narrow state: the margin is gone, so the notes are removed and
+        // the endnote list comes back at the foot of the essay.
+        function showEndnotes() {
+          notes.forEach(function (note) {
+            note.aside.remove();
+          });
+          notes = [];
+          if (!list.parentNode) host.insertBefore(list, nextSibling);
+        }
+
+        function sync() {
+          if (mql.matches) showSidenotes();
+          else showEndnotes();
+        }
+        // Rebuild both when the width crosses the breakpoint either way, so a
+        // reader who resizes the window is never left without footnotes.
+        if (mql.addEventListener) mql.addEventListener("change", sync);
+        else mql.addListener(sync);
+        sync();
+
+        // While wide, a resize can move every citation's line, so re-measure.
+        window.addEventListener("resize", function () {
+          if (mql.matches && notes.length) requestAnimationFrame(place);
+        });
+
+        // On paper there is no right margin - a sheet is about 794px wide,
+        // whatever the window is - so the footnotes are printed the way they
+        // started: as endnotes at the foot of the essay, which is exactly the
+        // narrow state the print stylesheet already styles for. Swap to it
+        // while the sheet is being composed, and back to the margin after.
+        window.addEventListener("beforeprint", function () {
+          if (mql.matches) showEndnotes();
+        });
+        window.addEventListener("afterprint", function () {
+          if (mql.matches) showSidenotes();
+        });
+      })();
+    </script>
   </body>
 </html>
