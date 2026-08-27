@@ -45,6 +45,12 @@
   --text: #545464;     /* lotusInk1  */
   --strong: #43436c;   /* lotusInk2  */
   --accent: #4d699b;   /* lotusBlue4 */
+  /* The site title. Kanagawa's statement/keyword hue — the role an
+   * identifier-with-emphasis plays in the editor — and this repository's own
+   * secondary accent (rofi's accent2, waybar's secondary). One brand title,
+   * not a prose heading: the "headings stay neutral" decision was made for
+   * notes with twenty-nine of them, not for a single masthead. */
+  --brand: #624c83;    /* lotusViolet4 */
 
   --body-font:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
@@ -69,6 +75,7 @@
    * headroom and uses it, which is why the two blocks disagree here. */
   --strong: #dcd7ba;   /* fujiWhite */
   --accent: #7e9cd8;   /* crystalBlue */
+  --brand: #957fb8;    /* oniViolet — the statement/keyword role, see Lotus above */
   color-scheme: dark;
 }
 
@@ -133,7 +140,7 @@ footer {
   flex-grow: 1;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--brand);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -309,10 +316,14 @@ blockquote {
  * set maps one-for-one rather than being matched by eye. The hue carries the
  * border, the label and the tint, so each pair has to hold up as text on the
  * page ground as well as at 8% behind it. */
+/* "note" is the default callout type, so keeping it in Kanagawa's own info
+ * hue matters more than the tint does. The official diag table names info
+ * dragonBlue/lotusTeal3 — a teal, not the crystalBlue of links — so the
+ * commonest callout reads as its own colour rather than as "another link". */
 .callout-note,
 .callout-info,
 .callout-todo {
-  --callout-accent: light-dark(#4d699b, #7e9cd8); /* lotusBlue4 / crystalBlue */
+  --callout-accent: light-dark(#5a7785, #658594); /* lotusTeal3 / dragonBlue */
 }
 .callout-abstract,
 .callout-summary,
@@ -704,21 +715,24 @@ h4:hover > .heading-anchor,
     list-style: none;
   }
 
-  /* Rail links are navigation, not prose. The accent is spent on the section
-   * you are in rather than on all of them at once, which is the difference
-   * between a list of links and a sense of place. */
+  /* Rail links are navigation, not prose. "You are here" is the one place the
+   * accent is deliberately spent: the section being read is blue. But a
+   * pointer overrides the state — a section that is merely pointed at goes to
+   * the text colour whether it is active or not, so hover never claims to
+   * mark the section being read. The `:hover` rule comes after `.current`,
+   * and the two selectors are equally specific, so hover wins the tie. */
   .rail a {
     display: block;
     color: var(--muted);
     text-decoration: none;
   }
 
-  .rail a:hover {
-    color: var(--text);
-  }
-
   .rail a.current {
     color: var(--accent);
+  }
+
+  .rail a:hover {
+    color: var(--text);
   }
 
   .rail .backlink-thesis {
