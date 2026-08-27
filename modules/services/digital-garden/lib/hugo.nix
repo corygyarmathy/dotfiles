@@ -71,6 +71,17 @@ in
         # was updated on the day it was published.
         lastmod = ['modified', 'lastmod', 'date']
 
+        # Chroma writes its colours inline by default, which hard-codes one
+        # theme into the markup: every fenced block shipped Monokai's #272822
+        # ground and #f8f8f2 text regardless of what the reader had chosen.
+        # That was invisible while the site's dark theme was near-black, and
+        # became a black box in the middle of a warm page the moment the light
+        # theme stopped being white. Classes instead, so the stylesheet colours
+        # code the same way it colours everything else - and so the theme
+        # toggle reaches it, which inline styles never allowed.
+        [markup.highlight]
+        noClasses = false
+
         [markup.goldmark.renderer]
         # The vault contains no raw HTML, only autolinks — which are CommonMark
         # and unaffected by this. Left off so a note cannot put markup, or a
