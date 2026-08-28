@@ -1,0 +1,21 @@
+{
+  // OpenCode TUI config. Sourced into ~/.config/opencode by home-manager.
+  // Schema: https://opencode.ai/tui.json
+  "$schema": "https://opencode.ai/tui.json",
+
+  // Match the Ghostty "Kanagawa Wave" terminal theme.
+  "theme": "kanagawa",
+
+  // Request attention when a session is waiting on input (questions,
+  // permission prompts, errors, completed sessions).
+  //
+  // Notifications are terminal-mediated (Ghostty OSC 9 -> dunst) and are only
+  // requested when the terminal is blurred, so no popup appears while the
+  // opencode window is focused. Sounds play on trigger regardless.
+  "attention": {
+    "enabled": true,
+    "notifications": true,
+    "sound": true,
+    "volume": 0.4
+  }
+}

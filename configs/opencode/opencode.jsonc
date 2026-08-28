@@ -1,0 +1,117 @@
+{
+  // OpenCode server/runtime config. Sourced into ~/.config/opencode by home-manager.
+  // Schema: https://opencode.ai/config.json (note: opencode.ai now serves the V2
+  // schema; this host pins opencode 1.18.21 / V1 config, whose keys are a subset -
+  // cosmetic only, editor hints may drift until the pinned version is bumped).
+  "$schema": "https://opencode.ai/config.json",
+
+  // On NixOS opencode is installed/pinned by the flake (nixpkgs), so never
+  // self-update; surface a notice when a new release exists instead.
+  "autoupdate": "notify",
+
+  // Cheap Go-plan model for lightweight tasks (e.g. session title generation)
+  // so the main model budget is reserved for real work.
+  "small_model": "opencode-go/mimo-v2.5",
+
+  // Baseline guardrails: default allow, explicit deny/ask for catastrophic or
+  // repo-policy-violating operations. Rules are matched top-to-bottom with
+  // the LAST match winning, so the "*" catch-all comes first, and the
+  // `--force-with-lease` asks come AFTER the `--force*`/`--delete*` denies
+  // they carve out.
+  //
+  // These are defense-in-depth, not a hard guarantee: variants can bypass a
+  // given pattern, and an "ask" can always be approved. In particular, an
+  // "always, don't ask again" approval in one prompt appends a session-wide
+  // wildcard rule AFTER the config rules (last match wins), which would
+  // re-allow everything below it. Do not click "always" on git push / rm /
+  // dd / mkfs / shutdown-family commands.
+  "permission": {
+    "bash": {
+      "*": "allow",
+
+      // Force-pushing violates the deploy branch protections (AGENTS.md).
+      // Plain --force / -f stay denied; only --force-with-lease may be asked.
+      // Both flag-first (`git push --force-with-lease ...`) and flag-after-
+      // remote (`git push origin --force-with-lease`) forms are covered.
+      "git push --force*": "deny",
+      "git push * --force*": "deny",
+      "git push --force-with-lease*": "ask", // safe force-push on feature branches still prompts
+      "git push * --force-with-lease*": "ask",
+      "git push -f*": "deny",
+
+      // Removing the `deploy` ref (either spelling) would delete the
+      // deployment; the pipeline owns that branch.
+      "git push --delete*": "deny",
+      "git push * --delete*": "deny",
+      "git push *:deploy*": "deny",
+
+      // Remote activation: repo policy forbids changing a host without
+      // explicit operator confirmation (AGENTS.md).
+      "* --target-host*": "ask",
+
+      // Destructive / irreversible operations, with and without sudo. Kept
+      // broad even though it also matches benign cases (e.g. `rm -rf /tmp/...`):
+      // an agent running these is far worse than the rare legitimate need.
+      // Host stop/reboot is likewise denied - scheduled maintenance runs via
+      // the fleet's timers, not through opencode.
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf / *": "deny",
+      "rm -rf --no-preserve-root*": "deny",
+      "sudo rm -rf *": "deny",
+      "dd *": "deny",
+      "sudo dd *": "deny",
+      "mkfs*": "deny",
+      "sudo mkfs*": "deny",
+      "shutdown*": "deny",
+      "sudo shutdown*": "deny",
+      "poweroff*": "deny",
+      "sudo poweroff*": "deny",
+      "reboot*": "deny",
+      "sudo reboot*": "deny"
+    }
+  },
+
+  // Format every file after it is written/edited. The built-in registry runs
+  // the binaries the nvim module already installs (nixfmt, gofmt, shfmt, ...)
+  // alongside project-local configs, so output matches the editor. Object form
+  // keeps built-ins enabled; only the Python pair and markdown are customized.
+  "formatter": {
+    // The host formats Python with black (installed in nvim.nix; conform's
+    // default). Disable the built-in ruff/uv formatters so only black runs:
+    // ruff requires a config file and its formatting can disagree with black.
+    "ruff": { "disabled": true },
+    "uv": { "disabled": true },
+    "black": {
+      "command": ["black", "--quiet", "$FILE"],
+      "extensions": [".py", ".pyi"]
+    },
+
+    // Same markdownlint-cli2 the editor runs (eliminates --fix diff churn).
+    // Project-local config (.markdownlint-cli2.yaml up the tree) is
+    // auto-discovered; absent one, default rules apply in both tools.
+    "markdownlint-cli2": {
+      "command": ["markdownlint-cli2", "--fix", "$FILE"],
+      "extensions": [".md"]
+    }
+  },
+
+  // LSP diagnostics fed back to the agent while it works. opencode starts its
+  // own server instances (only diagnostics are exposed, no navigation/shared
+  // session with the editor) from PATH, so built-ins reuse what nvim.nix
+  // installs: gopls (Go), nixd (Nix), bash-language-server, yaml-language-server,
+  // lua-language-server, ... Auto-downloads of uninstalled servers are
+  // disabled via OPENCODE_DISABLE_LSP_DOWNLOAD (see opencode.nix), so the
+  // fleet only ever runs nixpkgs-pinned servers.
+  "lsp": {
+    // The host ships the basedpyright fork of Pyright; its language server is
+    // the distinct `basedpyright-langserver` binary. Disable the built-in
+    // pyright (which would otherwise npm-download and start vanilla pyright
+    // alongside it), and wire the installed fork explicitly.
+    "pyright": { "disabled": true },
+    "basedpyright": {
+      "command": ["basedpyright-langserver"],
+      "extensions": [".py", ".pyi"]
+    }
+  }
+}
