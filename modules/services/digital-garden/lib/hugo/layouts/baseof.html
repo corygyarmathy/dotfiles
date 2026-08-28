@@ -8,6 +8,28 @@
     </title>
     {{ with partial "description.html" . }}<meta name="description" content="{{ . }}" />{{ end }}
     <link rel="canonical" href="{{ .Permalink }}" />
+    {{/*
+      Declaring an icon is also what stops the browser asking for /favicon.ico
+      on every visit and getting a 404 for it. One SVG and no raster fallback:
+      every browser that has shipped since 2020 takes an SVG icon, the file is
+      under a kilobyte, and it carries its own light/dark rule - see the
+      comment inside it. Fingerprinted like the stylesheet, so it can be cached
+      forever and still change when it changes.
+    */}}
+    {{ with resources.Get "icon.svg" | fingerprint }}
+      <link rel="icon" type="image/svg+xml" href="{{ .RelPermalink }}" />
+    {{ end }}
+    {{/*
+      The colour a mobile browser paints its own chrome - the address bar and
+      the status bar - so a dark page does not sit under a white strip. The
+      obvious spelling is a pair of these tags with prefers-color-scheme media
+      attributes, but that follows the OS, and this site's theme is a toggle
+      that a reader can move off the OS. So one tag with no media, set from the
+      same script that decides `data-theme`, which is the only thing that knows
+      the answer. The value here is the light ground, matching what :root paints
+      when no script has run.
+    */}}
+    <meta name="theme-color" id="theme-color" content="#f9f6e1" />
     {{ partial "social.html" . }}
     {{ with resources.Get "main.css" | fingerprint }}
       <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" />
@@ -40,6 +62,12 @@
 
       Anything other than the two words is read as no choice at all, which is
       also how a cleared localStorage reads.
+
+      The <meta name="theme-color"> above is set from the same decision, and
+      the two grounds are repeated here as literals rather than read back from
+      the stylesheet: getComputedStyle before first paint is exactly the work
+      this block exists to avoid, and these are the one pair of values in the
+      palette that a second file is allowed to know.
     */}}
     <script>
       (function () {
@@ -57,6 +85,14 @@
         )
           ? "dark"
           : "light";
+        window.__paintChrome = function () {
+          var meta = document.getElementById("theme-color");
+          if (meta) {
+            meta.content =
+              root.dataset.theme === "dark" ? "#1f1f28" : "#f9f6e1";
+          }
+        };
+        window.__paintChrome();
       })();
     </script>
   </head>
@@ -137,6 +173,10 @@
             if (source === "system") localStorage.removeItem("theme");
             else localStorage.setItem("theme", theme);
           } catch (e) {}
+          // The browser's own chrome follows the page, on every one of the
+          // three ways the theme can change: the button, the OS moving under a
+          // reader who is following it, and the first paint above.
+          if (window.__paintChrome) window.__paintChrome();
           label();
         }
 
