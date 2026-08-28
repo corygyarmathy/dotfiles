@@ -4,8 +4,10 @@
     publish-filter.py has already annotated each bare link with the target's
     thesis, so what is authored is what should be shown.
   */}}
-  {{/* .layout carries the measure cap; it is a grid only where there is a
-       rail to put in it, and the landing page has none. */}}
+  {{/* Same wrapper as a note, with nothing in the margins to put there. The
+       wide grid builds either way and the article is always its centre
+       column, so the landing page's prose lands exactly where every note's
+       prose lands - which is the point of using the same wrapper. */}}
   <div class="layout">
     <article data-pagefind-body>
       <h1>{{ .Title }}</h1>
