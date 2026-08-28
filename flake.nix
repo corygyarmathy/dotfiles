@@ -223,8 +223,12 @@
       # judged against - the vault is a poor test of a stylesheet, because it
       # contains whatever it happens to contain.
       #
-      # The renderer comes out of homelab01's own evaluated config rather than
-      # being rebuilt here, so the preview cannot drift from what is deployed.
+      # The renderer comes out of the serving host's own evaluated config
+      # rather than being rebuilt here, so the preview cannot drift from what
+      # is deployed. That host is the gateway: the garden is published to the
+      # internet, and the gateway is the machine that owns the tunnel
+      # everything public goes through. Item 2 of docs/plans/structural-
+      # cleanup.md replaces this with a lookup by publication.
       apps = forAllSystems (
         system:
         let
@@ -233,7 +237,7 @@
             overlays = builtins.attrValues self.overlays;
             config.allowUnfree = true;
           };
-          garden = self.nixosConfigurations.homelab01.config.cg.service.digital-garden;
+          garden = self.nixosConfigurations.${fleet.roles.gateway}.config.cg.service.digital-garden;
           # caddyConfig takes no settings, so importing serve.nix again for it
           # duplicates no configuration - unlike the renderer, which is read
           # out of the host's own evaluated config below.

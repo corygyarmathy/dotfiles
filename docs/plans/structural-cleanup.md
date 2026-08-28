@@ -1,15 +1,15 @@
 # Plan: structural cleanup
 
-Status: drafted 2026-08-28. Item 0 landed the same day; nothing else started.
+Status: drafted 2026-08-28. Items 0 and 1 landed the same day; nothing else started.
 
-This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines.
+This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines. Item 1 is marked `minor`: it changed two lines of generated configuration, neither of which a running host can tell apart, and both are listed under what it landed.
 
 The pipeline, the checks harness and the documentation are in good shape and are not the subject here. What has not kept up is the boundary between a host and a module: hosts transcribe facts that modules already know, modules hardcode facts about specific hosts, and the same value is written down in three places with nothing to notice when the copies diverge. Every item below is an instance of that one problem.
 
 | #   | Item                              | Size   | Changes behaviour | Depends on | Status                |
 | --- | --------------------------------- | ------ | ----------------- | ---------- | --------------------- |
 | 0   | Gate hygiene and budget           | small  | no                | —          | **done** 2026-08-28   |
-| 1   | A fleet source of truth           | medium | no                | —          | not started           |
+| 1   | A fleet source of truth           | medium | minor             | —          | **done** 2026-08-28   |
 | 2   | Services publish themselves       | large  | no                | 1          | not started           |
 | 3   | Hosts become profiles + toggles   | medium | no                | 2          | not started           |
 | 4   | Per-host secret scoping           | large  | **yes**           | 1          | not started           |
@@ -142,6 +142,33 @@ No `.nix` file outside `fleet/` contains a literal fleet IP address, host name o
 ### Risks
 
 The temptation to make `fleet/` the place where everything is declared, at which point the host files are empty and the interesting content has just moved. The `Done when` above is deliberately narrow for that reason: it is about literals, not about volume.
+
+### What landed
+
+`fleet/default.nix` holds the domain, the LAN (CIDR and gateway), every host (`kind`, `system`, and an `address` for the two that have a reservation), and a two-entry `roles` map. `modules/nixos/fleet.nix` declares `cg.fleet` with that file as its default, `types.raw`, not `readOnly` — for the reasons the approach gives, both of which are written into that file rather than left here.
+
+**Three things the approach did not anticipate.**
+
+_`nixosConfigurations` is generated from `fleet.hosts`._ It had to be: the `Done when` forbids a literal host name in a `.nix` file, and `mkHost { hostname = "homelab01"; … }` is one. `mkHost` now takes a name and that host's fleet entry, and `nixpkgs.lib.mapAttrs mkHost fleet.hosts` is the whole `nixosConfigurations` output. The `extraModules` argument went with it: the nixos-hardware modules a machine needs are a property of that machine, so each `hosts/<name>/default.nix` imports its own. Adding a host is now an entry in `fleet/` and a directory beside it. The build matrix in `ci.yml` still names hosts explicitly, deliberately — a host that stops being built is exactly what the gate is for.
+
+_A module that reads the fleet imports the declaration itself._ Putting the data in the option's default gets a fleet into every module-system evaluation, but only where the option is *declared*, and the checks import single module files rather than `modules/nixos`. So the sixteen modules that read `config.cg.fleet` each carry `imports = [ ../nixos/fleet.nix ]`. Importing one path from several modules costs nothing — the module system keys on it — and it means a check instantiating one module gets the fleet with it, which is what kept `checks/lib.nix` from having to learn anything.
+
+_The override is exercised, not just left possible._ `checks/reverse-proxy.nix` now sets `cg.fleet` to a fleet that is not this one (`example.test`, a `10.0.0.0/24` LAN, no hosts) and asserts against `internal.example.test`. That is the reason the option is not `readOnly` stated as a passing test rather than as a comment, and it took the last of the domain literals out of `checks/`.
+
+**Two things fell out of the rewrite** and are behaviour changes, both small:
+
+- Root's SSH config for backups was `Host 10.20.2.*`. It is now the fleet's own addresses, one at a time. A glob offers the backup key to whatever else answers on the LAN; the addresses are ones this flake already knows.
+- The `cloudflared` scrape job is emitted only when `cloudflaredTarget` is set, which is what the option's `null to disable` always claimed — it used to emit `targets = [ null ]` and fail the type check. Its `instance` label is now taken from the target rather than hardcoded, so the peer scraping the tunnel host no longer labels the series with its own name.
+
+### Verified, 2026-08-28
+
+**Inert, not assumed.** For homelab01 and homelab02, every entry in the generated `/etc` was compared against the same host built from `43102b0` (the revision this branched from), and every systemd unit within it. One entry differs on each host: `ssh/ssh_config`, the deliberate change above. Caddy's config file, Prometheus' scrape config, AdGuard's settings, the NFS export and all four restic units are byte-identical.
+
+Five other derivations move — `system-path`, `dbus-1`, `user-units`, and the `nixos-upgrade`, `nixos-deploy-metrics`, `digital-garden-build`, `dbus-broker` and `polkit` units. Those are not this change: comparing `43102b0` against its own parent, a documentation-only commit, moves exactly the same set. They carry `system.configurationRevision`, directly or through `nixos-version` in the system path, so any commit moves them. Worth chasing down rather than waving at, because "some unrelated things also changed" is how a real difference gets missed.
+
+All ten checks pass, including the three VM tests that instantiate a module which now reads the fleet. `nix fmt -- --ci` is clean, and `devShells`, `packages` and `apps` — the three outputs the `lint` job evaluates by hand — still evaluate; `garden-preview` resolves to the same store path it did before, which is the check that the gateway lookup replacing `nixosConfigurations.homelab01` picks the same host.
+
+The `Done when` was checked by script rather than by eye. Four occurrences remain, all of them the host name inside an SSH public key's own comment field (`… coryg@xps15`). That is key material, not a transcribed fleet fact: editing it would change the key.
 
 ---
 
@@ -340,14 +367,14 @@ The in-app configuration is the part no check can cover — the same limitation 
 
 ### The problem
 
-Reusable modules carry knowledge of this specific installation, which is what makes them not reusable:
+Reusable modules carry knowledge of this specific installation, which is what makes them not reusable. Item 1 took the literals out; what it did not do is make the defaults right for a machine outside this fleet.
 
-- `modules/services/adguard-home.nix:32-33` — a literal map of host names to addresses.
-- `modules/services/adguard-home.nix:394` — `10.20.2.1` as a PTR upstream, commented "Your router".
-- `modules/services/media-stack/cross-seed.nix:198` — `prowlarrUrl` defaults to `http://10.20.2.85:9696`, i.e. the module defaults to another host in this fleet.
-- `modules/services/monitoring/monitoring.nix:330-341` — `scrapeTargets` defaults naming `homelab01` and `homelab02`.
+- `modules/services/adguard-home.nix` — the literal host-to-address map is gone, but the module now *requires* `cg.fleet.roles.gateway` and `.storage` to name real hosts, and its `gatewaySubdomains` / `storageSubdomains` lists are still this installation's service map living in a general-purpose DNS module. That is item 2's to move; what belongs here is that the module should say so rather than failing on a missing attribute.
+- `modules/services/media-stack/cross-seed.nix` — `prowlarrUrl` still defaults to the gateway host's address, i.e. the module still defaults to another machine in this fleet.
 - `modules/services/immich.nix:111` — `DB_PASSWORD=changeme-use-sops-for-real-deployment`. The service is disabled everywhere, so this is not live, but a literal password in a module is the kind of thing that survives being enabled.
 - `modules/services/digital-garden/digital-garden.nix` — adds a Caddy virtual host without enabling Caddy. Already noted in the hardening plan as "a coupling that is invisible until it bites"; it should be an assertion.
+
+Two entries the draft listed are already closed: `adguard-home`'s `10.20.2.1` PTR upstream is `cg.fleet.lan.gateway`, and `monitoring.nix`'s `scrapeTargets` and `smartctlTargets` already defaulted to `[ ]` with the fleet's names only as an `example`.
 
 ### Approach
 
