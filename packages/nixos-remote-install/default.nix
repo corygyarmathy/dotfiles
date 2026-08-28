@@ -63,13 +63,13 @@ python3Packages.buildPythonApplication rec {
     description = "Automated NixOS remote installation with nixos-anywhere and sops-nix support";
     longDescription = ''
       A tool that automates NixOS installation on remote machines using nixos-anywhere.
-      
+
       Features:
       - Handles sops-nix key bootstrapping (the chicken-and-egg problem)
       - Pre-generates SSH host keys and derives age keys
       - Updates .sops.yaml and re-encrypts secrets
       - Runs nixos-anywhere with correct configuration
-      
+
       Usage:
         nixos-remote-install homelab02 192.168.1.100 --disk /dev/nvme0n1
     '';

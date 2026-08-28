@@ -74,16 +74,16 @@
     let
       # What provisioning is supposed to produce, read from the same JSON the
       # dashboard provider ships. JSON objects are valid Python literals.
-      dashboards = map
-        (file:
-          let
-            d = builtins.fromJSON (builtins.readFile (../modules/services/monitoring/dashboards + "/${file}"));
-          in
-          {
-            title = d.title;
-            uid = d.uid;
-          })
-        (builtins.attrNames (builtins.readDir ../modules/services/monitoring/dashboards));
+      dashboards = map (
+        file:
+        let
+          d = builtins.fromJSON (builtins.readFile (../modules/services/monitoring/dashboards + "/${file}"));
+        in
+        {
+          title = d.title;
+          uid = d.uid;
+        }
+      ) (builtins.attrNames (builtins.readDir ../modules/services/monitoring/dashboards));
     in
     ''
       import json

@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.direnv;
-in {
+in
+{
   options.cg.home.direnv.enable = lib.mkEnableOption "Direnv";
 
   config = lib.mkIf cfg.enable {

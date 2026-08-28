@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.spotify-player;
-in {
+in
+{
   options.cg.home.spotify-player.enable = lib.mkEnableOption "Spotify player";
 
   config = lib.mkIf cfg.enable {
@@ -17,7 +19,7 @@ in {
         playback_window_position = "Top";
         copy_command = {
           command = "wl-copy";
-          args = [];
+          args = [ ];
         };
         device = {
           audio_cache = true;

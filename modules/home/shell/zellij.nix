@@ -4,7 +4,8 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.zellij;
 
   zellij-switch-version = "0.2.1";
@@ -13,13 +14,17 @@
   zellij-sessioniser = pkgs.writeShellScriptBin "zellij-sessioniser" ''
     #!/usr/bin/env bash
 
-    SEARCH_PATHS=(${lib.concatStringsSep " " [
-      "$HOME/git"
-      "$HOME/projects"
-    ]})
-    SPECIFIC_PATHS=(${lib.concatStringsSep " " [
-      "$HOME/.dotfiles"
-    ]})
+    SEARCH_PATHS=(${
+      lib.concatStringsSep " " [
+        "$HOME/git"
+        "$HOME/projects"
+      ]
+    })
+    SPECIFIC_PATHS=(${
+      lib.concatStringsSep " " [
+        "$HOME/.dotfiles"
+      ]
+    })
 
     # Path to the locally installed plugin
     ZELLIJ_SWITCH_PLUGIN="file:$HOME/.config/zellij/plugins/zellij-switch.wasm"
@@ -312,7 +317,8 @@
       zellij attach "$session_name" --create
     fi
   '';
-in {
+in
+{
   options.cg.home.zellij.enable = lib.mkEnableOption "Zellij terminal multiplexer";
 
   config = lib.mkIf cfg.enable {

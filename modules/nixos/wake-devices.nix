@@ -33,13 +33,13 @@ in
 
     bluetooth = lib.mkOption {
       type = lib.types.bool;
-      default = false;  # Changed to false - Bluetooth often causes spurious wakes
+      default = false; # Changed to false - Bluetooth often causes spurious wakes
       description = "Enable Bluetooth device wake (Warning: may cause immediate wake from suspend)";
     };
 
     disableBluetoothWake = lib.mkOption {
       type = lib.types.bool;
-      default = true;  # Explicitly disable Bluetooth wake to prevent spurious wakes
+      default = true; # Explicitly disable Bluetooth wake to prevent spurious wakes
       description = "Explicitly disable Bluetooth wake to prevent spurious wakeups";
     };
 
@@ -50,7 +50,7 @@ in
         Force S3 (deep) sleep instead of s2idle (modern standby).
         S3 has better USB wake support but may have compatibility issues.
         Set to true if USB wake doesn't work with s2idle.
-        
+
         Note: If using Nvidia, you should disable NVreg_EnableS0ixPowerManagement
         in your nvidia.nix module for S3 to work properly with USB wake.
       '';
@@ -59,30 +59,26 @@ in
 
   config = lib.mkIf cfg.enable {
     # Warnings about Nvidia conflicts
-    warnings = 
-      lib.optional 
-        (cfg.forceS3Sleep && config.cg.nvidia.enable)
-        ''
-          wake-devices: You've enabled S3 sleep with Nvidia GPU.
-          
-          USB wake is working, but Nvidia may prevent proper suspend.
-          
-          If you see "NVRM: PreserveVideoMemoryAllocations" errors in dmesg,
-          you need to enable Nvidia power management in nvidia.nix:
-          
-            hardware.nvidia.powerManagement.enable = true;
-          
-          You may also want to remove the S0ix parameter:
-            # "nvidia.NVreg_EnableS0ixPowerManagement=1"
-        ''
-      ++ lib.optional
-        (!cfg.forceS3Sleep && config.cg.nvidia.enable)
-        ''
-          wake-devices: USB wake with s2idle may not work reliably with Nvidia.
-          
-          If USB wake doesn't work, try:
-            cg.wake-devices.forceS3Sleep = true;
-        '';
+    warnings =
+      lib.optional (cfg.forceS3Sleep && config.cg.nvidia.enable) ''
+        wake-devices: You've enabled S3 sleep with Nvidia GPU.
+
+        USB wake is working, but Nvidia may prevent proper suspend.
+
+        If you see "NVRM: PreserveVideoMemoryAllocations" errors in dmesg,
+        you need to enable Nvidia power management in nvidia.nix:
+
+          hardware.nvidia.powerManagement.enable = true;
+
+        You may also want to remove the S0ix parameter:
+          # "nvidia.NVreg_EnableS0ixPowerManagement=1"
+      ''
+      ++ lib.optional (!cfg.forceS3Sleep && config.cg.nvidia.enable) ''
+        wake-devices: USB wake with s2idle may not work reliably with Nvidia.
+
+        If USB wake doesn't work, try:
+          cg.wake-devices.forceS3Sleep = true;
+      '';
 
     # Force S3 sleep if requested
     boot.kernelParams = lib.optionals cfg.forceS3Sleep [
@@ -94,7 +90,7 @@ in
       description = "Enable USB device wake from suspend";
       wantedBy = [ "multi-user.target" ];
       after = [ "multi-user.target" ];
-      
+
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -127,7 +123,7 @@ in
         ${lib.optionalString cfg.keyboard ''
           # Find keyboard by looking for known vendors or HID keyboard devices
           echo "=== Looking for keyboards ==="
-          
+
           # Method 1: Find by product description
           for device in /sys/bus/usb/devices/*/product; do
             product=$(cat "$device" 2>/dev/null | tr '[:upper:]' '[:lower:]')
@@ -137,7 +133,7 @@ in
               enable_wake_recursive "$device_path" "Keyboard ($product)"
             fi
           done
-          
+
           # Method 2: Find by manufacturer
           for device in /sys/bus/usb/devices/*/manufacturer; do
             manufacturer=$(cat "$device" 2>/dev/null | tr '[:upper:]' '[:lower:]')
@@ -148,7 +144,7 @@ in
               enable_wake_recursive "$device_path" "ZSA Keyboard ($product)"
             fi
           done
-          
+
           # Method 3: Enable by specific vendor:product IDs we saw in lsusb
           # ZSA Moonlander: 3297:1969
           for device in /sys/bus/usb/devices/*; do
@@ -163,7 +159,7 @@ in
               fi
             fi
           done
-          
+
           # Method 4: Find ALL HID devices and enable them (keyboards/mice often share this)
           for device in /sys/bus/usb/devices/*/bInterfaceClass; do
             if [[ "$(cat "$device" 2>/dev/null)" == "03" ]]; then
@@ -180,7 +176,7 @@ in
 
         ${lib.optionalString cfg.mouse ''
           echo "=== Looking for mice ==="
-          
+
           # Method 1: Find by product description
           for device in /sys/bus/usb/devices/*/product; do
             product=$(cat "$device" 2>/dev/null | tr '[:upper:]' '[:lower:]')
@@ -190,7 +186,7 @@ in
               enable_wake_recursive "$device_path" "Mouse ($product)"
             fi
           done
-          
+
           # Method 2: Logitech Unifying Receiver - 046d:c52b
           for device in /sys/bus/usb/devices/*; do
             if [[ -e "$device/idVendor" ]] && [[ -e "$device/idProduct" ]]; then
@@ -267,7 +263,7 @@ in
               fi
             fi
           done
-          
+
           # Also disable for any device with "8087:0026" (Intel Bluetooth from your lsusb)
           for device in /sys/bus/usb/devices/*; do
             if [[ -e "$device/idVendor" ]] && [[ -e "$device/idProduct" ]]; then
@@ -330,8 +326,8 @@ in
 
     # Install debugging tools
     environment.systemPackages = with pkgs; [
-      usbutils  # lsusb
-      pciutils  # lspci
+      usbutils # lsusb
+      pciutils # lspci
     ];
   };
 }

@@ -58,18 +58,16 @@ in
   # directory, so the test file needs the absolute path baked in either way.
   alert-rules-unit =
     let
-      testYml = pkgs.writeText "alert-rules.test.yml"
-        (builtins.replaceStrings
-          [ "@RULES@" ]
-          [ "${../modules/services/monitoring/alert-rules.yml}" ]
-          (builtins.readFile ./alert-rules.test.yml));
+      testYml = pkgs.writeText "alert-rules.test.yml" (
+        builtins.replaceStrings [ "@RULES@" ] [ "${../modules/services/monitoring/alert-rules.yml}" ] (
+          builtins.readFile ./alert-rules.test.yml
+        )
+      );
     in
-    pkgs.runCommand "check-alert-rules-unit"
-      { nativeBuildInputs = [ pkgs.prometheus.cli ]; }
-      ''
-        promtool test rules ${testYml}
-        touch $out
-      '';
+    pkgs.runCommand "check-alert-rules-unit" { nativeBuildInputs = [ pkgs.prometheus.cli ]; } ''
+      promtool test rules ${testYml}
+      touch $out
+    '';
 
   # Same idea for the Alertmanager side: routing, inhibition and muting are
   # assembled by monitoring.nix from options, and a structural mistake there
@@ -174,44 +172,42 @@ in
         esac
       '';
     in
-    pkgs.runCommand "check-bless-boot-guard"
-      { guard = builtins.toString guardScript; }
-      ''
-        mkdir -p fakebin
-        ln -s ${fakeBlessBoot} fakebin/systemd-bless-boot
+    pkgs.runCommand "check-bless-boot-guard" { guard = builtins.toString guardScript; } ''
+      mkdir -p fakebin
+      ln -s ${fakeBlessBoot} fakebin/systemd-bless-boot
 
-        # Swap only the binary the guard invokes; everything else in the unit
-        # is shipped verbatim.
-        sed 's|^bless=".*"$|bless="'"$PWD"'/fakebin/systemd-bless-boot"|' "$guard" > guard
-        chmod +x guard
+      # Swap only the binary the guard invokes; everything else in the unit
+      # is shipped verbatim.
+      sed 's|^bless=".*"$|bless="'"$PWD"'/fakebin/systemd-bless-boot"|' "$guard" > guard
+      chmod +x guard
 
-        assert_rc() {
-          name=$1
-          want=$2
-          export CASE="$name"
-          set +e
-          got=$(./guard 2>&1)
-          rc=$?
-          set -e
-          if [ "$rc" -ne "$want" ]; then
-            echo "FAIL: bless-boot-guard: $name exited $rc, expected $want" >&2
-            printf '%s\n' "$got" >&2
-            exit 1
-          fi
-          echo "ok: $name -> $rc"
-        }
+      assert_rc() {
+        name=$1
+        want=$2
+        export CASE="$name"
+        set +e
+        got=$(./guard 2>&1)
+        rc=$?
+        set -e
+        if [ "$rc" -ne "$want" ]; then
+          echo "FAIL: bless-boot-guard: $name exited $rc, expected $want" >&2
+          printf '%s\n' "$got" >&2
+          exit 1
+        fi
+        echo "ok: $name -> $rc"
+      }
 
-        assert_rc blessed 0
-        assert_rc already-blessed 0
-        assert_rc no-counting 0
-        assert_rc stale-counter 0
-        assert_rc pruned 0
-        assert_rc esp-missing 3
-        assert_rc esp-open 5
-        assert_rc rename-fail 7
+      assert_rc blessed 0
+      assert_rc already-blessed 0
+      assert_rc no-counting 0
+      assert_rc stale-counter 0
+      assert_rc pruned 0
+      assert_rc esp-missing 3
+      assert_rc esp-open 5
+      assert_rc rename-fail 7
 
-        touch $out
-      '';
+      touch $out
+    '';
 
   digital-garden = testLib.mkTest ./digital-garden.nix;
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
