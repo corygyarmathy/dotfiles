@@ -560,9 +560,26 @@ mark {
 }
 
 /* Wide content must scroll inside its own box rather than making the page
- * scroll sideways. */
+ * scroll sideways. The box is put there by _markup/render-table.html; for a
+ * while this rule was written and the hook was not, so it matched nothing and
+ * the page did the scrolling — see that file. */
 .table-container {
   overflow-x: auto;
+}
+
+/* Both of the page's scrollable boxes, showing that they have been reached.
+ * The table container is a tab stop because the hook makes it one; `pre` is
+ * one because Hugo has always emitted `tabindex="0"` on a code block, for the
+ * same reason and without being asked - which is the best evidence that the
+ * hook's decision is the right one. They were drawing two different rings, the
+ * accent one here and the browser's default there, so this names both.
+ *
+ * :focus-visible rather than :focus, so clicking a table or a code block to
+ * scroll it does not draw a ring. */
+.table-container:focus-visible,
+pre:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* The same rule, for a display-mode equation wider than the measure. */
@@ -572,9 +589,18 @@ mark {
   padding: 0.2rem 0;
 }
 
+/* Sized to its own content, with the measure as a floor rather than a ceiling.
+ * `width: 100%` was both halves of the same bug: it guaranteed the table could
+ * never overflow .table-container, so the container's `overflow-x` never had
+ * anything to scroll, and it guaranteed a table too wide for the measure would
+ * be squeezed into it instead — which is how a column of one-sentence theses
+ * came to be set one word per line. max-content lets a wide table be as wide as
+ * it needs and scroll; min-width keeps a narrow one filling the measure, which
+ * is what `width: 100%` was there for in the first place. */
 table {
   border-collapse: collapse;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
 }
 
 th,

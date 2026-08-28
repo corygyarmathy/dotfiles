@@ -1,0 +1,61 @@
+{{/*
+  A table, wrapped in the scroll container the stylesheet has always styled.
+
+  This hook exists for the wrapper and for nothing else: the cells below are
+  the markup Hugo emits without it. `.table-container { overflow-x: auto }` was
+  written when the single-column layout landed, but Hugo emits a bare <table>
+  and there was no hook to put the div around it, so the rule matched nothing
+  and a wide table had no box to scroll inside. It scrolled the PAGE instead —
+  at 390px the reference tables in the Lighting notes made the whole document
+  about twice the width of the phone, so every paragraph on the page could be
+  dragged sideways and had to be dragged back. That is the bug this fixes; the
+  desktop symptom of the same cause was a table pinned to the measure and
+  squeezing a prose column down to one word per line.
+
+  The alignment attribute is Goldmark's own (`|:---|---:|` in the markdown) and
+  is emitted as an inline style because that is where a per-cell, per-table
+  decision belongs — there is no class the stylesheet could name that would
+  know which column the author meant to right-align.
+
+  `.Attributes` carries any markdown attribute block written above the table.
+  Nothing in the vault uses one today; it is passed through so that adopting
+  this hook does not quietly drop a feature the bare renderer had.
+
+  tabindex="0" because a scrolling box has to be scrollable by keyboard.
+  Firefox makes an overflow container focusable on its own; Chrome does not, so
+  without this a reader on a keyboard could reach every other part of the page
+  and not the right-hand columns of a wide table - which would be a worse
+  regression than the page-scrolling this replaces, since the page at least
+  scrolled. The cost is one tab stop per table, and tables are rare here.
+
+  role and aria-label deliberately absent. The pattern usually pairs tabindex
+  with role="region" and a name, but the name would have to be invented - these
+  tables have no captions - and "region: table" announced before every one of
+  them is noise bought with nothing. A focusable box with no role is announced
+  as what it is, which is accurate.
+*/}}
+<div class="table-container" tabindex="0">
+  <table
+    {{- range $k, $v := .Attributes }}
+      {{- with $v }} {{ $k | safeHTMLAttr }}="{{ . }}"{{ end }}
+    {{- end }}>
+    <thead>
+      {{- range .THead }}
+        <tr>
+          {{- range . }}
+            <th{{ with .Alignment }} style="text-align: {{ . }}"{{ end }}>{{ .Text }}</th>
+          {{- end }}
+        </tr>
+      {{- end }}
+    </thead>
+    <tbody>
+      {{- range .TBody }}
+        <tr>
+          {{- range . }}
+            <td{{ with .Alignment }} style="text-align: {{ . }}"{{ end }}>{{ .Text }}</td>
+          {{- end }}
+        </tr>
+      {{- end }}
+    </tbody>
+  </table>
+</div>
