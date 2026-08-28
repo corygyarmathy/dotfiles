@@ -1,6 +1,6 @@
 # Plan: theme and navigation for the digital garden
 
-Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 3 is the only one left that fixes something broken today. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
+Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3 is the only one left that fixes something broken today. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
 
 | #   | Item                                | Size   | Depends on | Status      |
 | --- | ----------------------------------- | ------ | ---------- | ----------- |
@@ -14,6 +14,8 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | 8   | Footnotes as sidenotes              | large  | 4          | optional    |
 | 9   | Reading time in the dateline        | small  | -          | optional    |
 | 10  | Polish: print, selection, motion    | small  | 2          | **done** 2026-08-27 |
+| 11  | Rendering gaps found by review      | small  | 1          | **done** 2026-08-28 |
+| 12  | The dateline in the empty margin    | small  | 4          | not started |
 | -   | Graph view                          | -      | -          | **rejected**, see below |
 
 ## Decisions, 2026-08-27
@@ -258,6 +260,8 @@ Two hours to build and ten minutes to remove. The risk taken was page weight and
 
 Quartz's most-copied feature: hovering an internal link shows the target's opening. There is a cheap version here that nothing else has, because `publish-filter.py` already resolves the whole link graph and already knows every note's thesis. It can emit `data-thesis` on internal links at build time, and roughly thirty lines of CSS plus a small script turn that into a popover. No fetch, no second copy of the content, nothing at runtime that is not already in the HTML. A `title` attribute is the version with no JavaScript at all, if it turns out that is enough.
 
+Revised 2026-08-28: do the `title` version _first_ and treat the popover as a separate decision taken against it. The filter already resolves the graph and already knows every thesis, so the attribute is a few lines in `publish-filter.py` and nothing else — no CSS, no script, no new failure mode, and it works on a phone where a hover does not exist. If it turns out to be enough, the medium-sized half of this item never gets built; if it is not, the popover is built against something real rather than against a guess about what a reader wants from a link.
+
 ## 8. Footnotes as sidenotes (optional, depends on 4)
 
 Once the grid from item 4 exists, footnotes can be moved into the right margin beside the paragraph that cites them, Tufte-style, instead of collected at the bottom. The Lighting notes are heavily footnoted and this suits them. It is genuinely large: Hugo emits footnotes as a list at the end of the document, so they have to be relocated, and the vertical positioning of a sidenote against its reference is the part that never quite works. It also conflicts with item 4's rail — both want the right margin — so it would need a rule about which wins on a page that has both. Worth wanting, not worth doing before the rest of the list.
@@ -294,6 +298,86 @@ Verified by driving headless Chrome over the DevTools protocol — click the but
 
 Two hours, most of it in the printing. No risk taken: every rule here is inside a media query or behind an attribute the page already sets.
 
+## 11. Rendering gaps found by review, 2026-08-28
+
+### The problem
+
+Four things found by rendering the fixture and measuring it, none of which is visible from reading the stylesheet, and none of which the gate could fail on. They are grouped as one item because they share that property, not because they share a cause.
+
+**A wide table scrolled the page.** `.table-container { overflow-x: auto }` had been in the stylesheet since the single-column layout landed, and there was no render hook to emit the div, so the rule matched nothing. The container was never there. A table therefore had no box to scroll inside and did the only other thing available to it: at 390px the reference tables took the document to about twice the width of the phone, so every paragraph on the note could be dragged sideways and had to be dragged back. `width: 100%` on the table was the same bug seen from the other end — it guaranteed the table could never exceed the container, so `overflow-x` never had anything to scroll, and it guaranteed a table too wide for the measure was squeezed into it anyway. That is how a column of one-sentence theses came to be set one word per line at 1600px. The fixture has said _"a table wide enough to scroll inside its own container"_ since it was written, and it never did.
+
+**Wave's `--muted` was below the contrast floor for body text.** fujiGray `#727169` against sumiInk3 is 3.33:1, under the 4.5:1 that body text needs, and 2.88:1 where it lands on `--surface`. That would be defensible if `--muted` were decoration. It is not: it carries blockquote text, every sidenote at 0.8rem, the dateline, the backlink theses, the footer and every rail link that is not the current section. fujiGray is Kanagawa's _comment_ colour, and it was doing duty as reading text. Lotus needed nothing — lotusGray2 is 4.70:1.
+
+**No tab icon and no `theme-color`.** The site declared neither, so every visit asked for `/favicon.ico` and got a 404, the tab showed the browser's blank-page glyph, and on a phone a sumiInk3 page sat under a white address bar.
+
+**Task lists carried two markers.** An Obsidian `- [ ]` item rendered with a bullet _and_ a checkbox, a few pixels apart and aligned to neither the text nor each other. The fixture had said the stylesheet did not style these since the day it was written.
+
+### Approach
+
+Four commits, each independently revertible.
+
+A `_markup/render-table.html` hook, which is the missing half of a rule that was already written, plus `width: max-content; min-width: 100%` on the table so a wide one can be as wide as it needs and a narrow one still fills the measure. The container is a tab stop: Firefox makes an overflow box focusable on its own and Chrome does not, so without it a keyboard reader could reach every other part of the page and not the right-hand columns — a worse regression than the page-scrolling it replaces, since the page at least scrolled. Hugo already emits `tabindex="0"` on a `<pre>` for exactly this reason, which is the best evidence the decision is right. `role="region"` with a name is the usual companion and is not taken: the name would have to be invented, since these tables have no captions, and _"region: table"_ announced before every one of them is noise bought with nothing.
+
+`--muted` in Wave becomes springViolet1 `#938AA9`, 5.02:1. It is Wave's own, so the property this palette was built on holds: every hex is still traceable to the `colors.lua` that rides flake.lock, and none of it was picked off a screenshot.
+
+An `assets/icon.svg` seedling, drawn as three filled shapes rather than as strokes, because at the 16px a tab actually renders a hairline disappears and a filled leaf does not. It carries its own `prefers-color-scheme` rule, so it is lotusPink against a light tab strip and sakuraPink against a dark one. `theme-color` is a single tag driven by the theme script rather than the obvious pair of tags with media attributes: a media pair follows the operating system, and this site's theme is a toggle a reader can move off the system, so the only thing that knows the answer is the script that already decides `data-theme`.
+
+`li:has(> input[type="checkbox"])` for the task lists, which selects the item by what it contains and avoids a render hook whose only job would be to add a class. Scoped to the item rather than the list, so a list mixing tasks with plain items keeps its bullets on the plain ones.
+
+### What it cost that the plan did not price in
+
+One renderer change, and it is worth more than the icon that forced it. `lib/hugo.nix` copied only the stylesheet into the site's assets directory and not the theme's own assets, so any _second_ asset was invisible to `resources.Get`. Here that failed loudly, as a nil fingerprint at build time. The same shape in a template that guarded the lookup would have been a `<link>` to a file the renderer never copied: right in the HTML, 404 for every reader, and nothing to notice it. It now copies the directory and overlays the argument, which keeps `garden-preview`'s working-tree stylesheet working and needs no further change for the next asset.
+
+Two traps worth recording for the next person, both of which cost a rebuild to find. A new file under `layouts/` is invisible to the flake until it is `git add`-ed — the same trap `_partials/social.html` documents, met again from the other direction, and the symptom is a hook that silently does not run rather than an error. And XML forbids a double hyphen inside a comment, which is awkward in a repository whose colours are all named after CSS custom properties; the icon's comment says so, because writing `--brand` in it produces a file the browser renders as a broken image.
+
+### The regression guard
+
+Both of the new assertions are in `checks/digital-garden.nix`, and they are there because this is exactly the failure the check exists for: the build was clean, the CSS was present, the table rendered, and the page was wrong. The check's fixture grows a table, and the assertion has two halves because either one alone is the bug — the selector is in the stylesheet, _and_ a real table's markup contains it. Confirmed live by renaming the class in the hook and watching the check fail with `a table is not wrapped in .table-container`. The icon assertion reads the fingerprinted URL off the page and then fetches it, for the reason above: a link to an uncopied asset looks right and 404s.
+
+This is the same line item 6 drew between its two assertions. A rule that is written and never reached is the same class of failure as a stylesheet naming a font CDN, and neither is visible in a screenshot or a green gate.
+
+### The open question, not decided
+
+Lotus's `--brand` is 4.12:1 on the masthead. At 1.1rem and weight 600 that is 17.6px semibold, just under the 18.66px where the large-text allowance of 3:1 starts, so the 4.5:1 floor applies and it misses.
+
+Three ways out, and the choice is a taste decision rather than a measurement:
+
+- **Take the title to 1.2rem.** 19.2px semibold qualifies as large text, where 4.12:1 passes comfortably. Keeps sakuraPink and lotusPink, which were chosen deliberately on 2026-08-28, and costs a slightly heavier masthead.
+- **Change the hue.** lotusRed `#c84053` is 4.47:1 and still misses; lotusViolet3 `#5d57a3` is 5.75:1 and lotusViolet4 `#624c83` is 6.70:1, both of which reverse the pink decision back toward the violet it came from.
+- **Leave it.** One word of chrome at 4.12:1, on a masthead, is the mildest instance of this problem on the site, and it is now the only one.
+
+The first is the recommendation. Nothing is blocked on it.
+
+### Deliberately not changed
+
+The Chroma comment rule keeps fujiGray at 3.67:1 against sumiInk0. That one is genuinely a comment, on code the stylesheet already sets at lower contrast on purpose — the syntax block says so in as many words — and changing it would cost more editor parity than it buys.
+
+The light-ground SVG diagram still glares on the dark page. Item 5 settled that on 2026-08-27 and the answer has not changed: the fix for a glaring diagram is to export it with a transparent ground, which fixes it for every reader and every theme, and nothing in CSS can tell a diagram from a photograph.
+
+There is still no skip link, and there should not be one. The masthead is one link and two buttons; a skip link saves nobody a keystroke.
+
+### Cost and risk
+
+Half a day, most of it in finding the table bug rather than fixing it. No risk: every rule is a stylesheet edit or a render hook, the publish boundary is untouched, and the two new assertions fail loudly if any of it is undone.
+
+## 12. The dateline in the empty margin (optional)
+
+### The problem
+
+The rail renders on six of nineteen notes. On the other thirteen, a wide screen shows a 15rem left column of nothing while the dateline sits above the prose in the measure. The layout therefore reads as _"this site has a rail when it has one"_ rather than _"this site has margins"_, and the widest, emptiest version of the page is the one a reader on a large monitor gets.
+
+### Approach
+
+Move the dateline into the left column at the wide breakpoint, on the title's baseline where the rail's heading already sits, and leave it above the prose below it. The grid, the baseline alignment and the sticky behaviour all exist already; this is a second element placed in a column that is already built, and the narrow layout is the one the site has always served.
+
+Item 9's reading time, if it is ever taken, belongs in the same place and is the reason to do these two together rather than separately.
+
+The thing to check by looking, and the reason this is not obviously right: on a page that _does_ have a rail, the dateline and the rail's first heading are then both in the left column, and two small grey blocks stacked in a margin may read as a sidebar — which is the thing the single-column layout was chosen to avoid.
+
+### Cost and risk
+
+An hour, and it is entirely reversible. The risk is the one above, and it is a judgement that can only be made against the rendered pages.
+
 ## Rejected: a graph view
 
 The canonical Quartz feature, and it should not be built here. Nineteen nodes with six edges is not a graph, it is a list with extra steps — the rendered picture would be five connected Lighting notes and thirteen dots. It needs a rendering library, which means either a build-time network fetch or vendoring a canvas library into a site that currently ships zero bytes of framework, and it works badly on the phones that most of this site's readers will use. Items 3 and 4 deliver what a reader actually wants from a graph view, which is "what else is near this", at a fraction of the cost. Revisit at a hundred notes if the link density has gone up with them.
@@ -309,3 +393,7 @@ Item 3 is out of the first pass by choice, not by dependency; it can be taken at
 Each item is its own PR, per the usual gate. Item 2 will not change the VM test's assertions — the test looks for a stylesheet, not for its contents — which is worth stating explicitly, because it means the gate is not evidence for any of this and the screenshots are.
 
 That held for items 2, 4 and 5, and stopped holding at item 6, which added two assertions: a webfont is not a colour — the file either is served from this site or it is not, and if it is not, nothing fails, every reader silently gets their own serif. When the face was reverted one of the two went with it and one stayed, which is the useful line between them. The file being served was a fact about a decision that got reversed; **the stylesheet naming no font CDN** is a fact about the property this whole toolchain exists to hold, and it holds whether or not there is ever a webfont again. The rest of the judgement is still the screenshots'.
+
+Item 11 was not sequenced at all — it came out of a review on 2026-08-28 and every part of it was a defect or a gap rather than a design decision, so it was taken immediately and in four commits rather than one PR per item. It moved the line above again, in the same direction item 6 moved it: two more assertions now guard properties the screenshots cannot, because _"the build was clean, the CSS was present, the table rendered, and the page was wrong"_ is the failure this project keeps meeting and the only one the gate can be taught to catch.
+
+Item 12 depends on item 4 and on nothing else, and is worth doing at the same time as item 9 if item 9 is ever taken, since both put a small grey line in the same place. Item 3 remains the one item that fixes something broken today: fourteen of nineteen notes are still reachable only by search or by a backlink.
