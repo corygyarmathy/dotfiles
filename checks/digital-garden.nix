@@ -131,6 +131,44 @@
         Roughly $80k on fixtures that last 5–7 years is a better position than ~$400k on fixtures that last 10+ years, because the second option locks you into decade-old technology you can no longer afford to replace.
         NOTE
 
+        # A note that exercises the sidenote (_right-margin footnote_)
+        # positioning, with the geometry that used to put the notes out of
+        # order. Two footnotes live in DIFFERENT paragraphs that sit right on
+        # top of each other, and the first note is deliberately long so its
+        # margin note is tall. The placement loop keys its "don't overlap"
+        # bookkeeping by block; when it used a DOM node as an object key, every
+        # element stringified to the same value and these two independent
+        # paragraphs were wrongly coupled, pushing the second note below the
+        # tall first one instead of beside its own citation. The check on the
+        # served page asserts each note sits exactly beside its citation.
+        cat > $out/essays/on-sidenotes.md <<'NOTE'
+        ---
+        publish: true
+        ---
+
+        # On Sidenotes
+
+        MARKER-SIDENOTES-BODY
+
+        The first paragraph cites a note that is deliberately long, so that its
+        margin note wraps across several lines and grows tall: the exact
+        condition under which a wrongly shared block would drag the following
+        note down out of place.[^1]
+
+        [^1]: This is a deliberately long sidenote. It continues to assert its
+              length across multiple lines so that the rendered note in the
+              margin is tall, wrapping well past the single line of its own
+              citation, and tall enough to reach the position of the next
+              note's citation below it. That reach is what exposes a shared
+              block: the note that follows must still sit beside its own
+              citation and not be pushed below this one.
+
+        The second paragraph follows the first immediately, and cites its own
+        note.[^2]
+
+        [^2]: A second note in its own, separate paragraph.
+        NOTE
+
         # A real landing page, because it is the one note whose handling is
         # special: it is excluded as a backlink SOURCE. Without it here, the
         # rule that keeps a table of contents from becoming every note's
@@ -197,10 +235,20 @@
       ];
 
       # Hugo and Pagefind are two static binaries rendering a handful of
-      # notes, so this needs very little. Still well above what the run uses,
-      # because a test that fails by running out of memory does not say so
-      # clearly.
-      virtualisation.memorySize = 2048;
+      # notes, so this needs very little - except that the sidenote check at
+      # the bottom runs the page's own Javascript in a headless Chromium and
+      # asks it where the notes landed. That is the only client-side behaviour
+      # on the site, and no amount of grep can assert it, so chromium is here
+      # and the memory allowance is sized for a browser rather than two
+      # static generators.
+      environment.systemPackages = [
+        pkgs.chromium
+        # For splicing the measurement probe into a copy of the served page;
+        # coreutils alone cannot insert a multi-line script before </body>.
+        pkgs.python3
+      ];
+
+      virtualisation.memorySize = 4096;
       virtualisation.diskSize = 4096;
     };
 
@@ -239,7 +287,13 @@
         # the URL, and a file staged under any other name would mean the
         # generator was deciding the address after all.
         staged = sorted(machine.succeed("ls /var/lib/digital-garden/content").split())
-        assert staged == ["index.md", "on-boundaries.md", "on-gates.md", "on-money.md"], staged
+        assert staged == [
+            "index.md",
+            "on-boundaries.md",
+            "on-gates.md",
+            "on-money.md",
+            "on-sidenotes.md",
+          ], staged
 
     with subtest("no unpublished content reaches the served site"):
         # Deliberately the whole tree rather than the rendered page. A leak
@@ -324,6 +378,7 @@
             ("on-gates", "MARKER-PUBLISHED-BODY"),
             ("on-boundaries", "MARKER-BOUNDARIES-BODY"),
             ("on-money", "MARKER-MONEY-BODY"),
+            ("on-sidenotes", "MARKER-SIDENOTES-BODY"),
         ]:
             assert marker in served(f"/{slug}"), f"{slug} was not rendered"
 
@@ -601,6 +656,110 @@
         machine.wait_until_succeeds(
             "curl -sf http://localhost:8086/on-triggers | grep -q MARKER-TRIGGERED-BODY",
             timeout=dt.timedelta(seconds=60),
+        )
+
+    with subtest("each sidenote sits beside its citation, not a shared block top"):
+        # The sidenotes are the site's one piece of client-side behaviour: a
+        # <script> in baseof.html turns each rendered footnote into an
+        # absolutely-positioned note in the right-hand margin and writes its
+        # `top` inline. No amount of grep can assert where a note lands, so the
+        # only faithful check is to run that script and read the layout.
+        #
+        # The page is copied off the served tree onto the filesystem, the
+        # measurement probe is appended, and the fingerprinted stylesheet link
+        # is rewritten from an absolute root path to a same-directory one (the
+        # @media (min-width: 80rem) rule that makes the notes position:absolute
+        # and the .layout relative must actually apply, and on file:// an
+        # absolute /main..css link would not resolve). Chromium is given a wide
+        # viewport so that rule matches: at a phone-width viewport there is no
+        # margin column and no sidenotes at all. The probe waits until the
+        # script has written every note's top, then records each citation's and
+        # each note's position.
+        #
+        # This is the regression test for on-sidenotes.md: two footnotes in two
+        # separate paragraphs that sit right on top of each other, one of them
+        # deliberately tall. When the placement loop keyed its overlap
+        # bookkeeping by the DOM node as an object key, both paragraphs
+        # stringified to the same value and the second note was pushed below
+        # the tall first one instead of beside its own citation. The fix keys
+        # by node identity, so each note must land exactly on its citation.
+        machine.succeed(
+            "mkdir -p /tmp/sn && "
+            "cp /var/lib/digital-garden/public/on-sidenotes/index.html /tmp/sn/page.html && "
+            "cp /var/lib/digital-garden/public/main.*.css /tmp/sn/"
+        )
+
+        # The probe sits between the notes' first placement and any later
+        # re-placement, waiting in a requestAnimationFrame loop until every
+        # .sidenote has an inline top, then measuring once.
+        machine.succeed(
+            "cat > /tmp/sn/probe.js <<'PROBE'\n"
+            'var marker = document.createElement("div");\n'
+            'marker.id = "SN-MEAS";\n'
+            "function measure() {\n"
+            "  var parts = [];\n"
+            '  document.querySelectorAll("a.footnote-ref").forEach(function (a) {\n'
+            '    parts.push("c" + a.getAttribute("href").replace("#", "") + "=" + Math.round(a.getBoundingClientRect().top));\n'
+            "  });\n"
+            '  document.querySelectorAll(".sidenote").forEach(function (s) {\n'
+            '    parts.push("n" + s.id + "=" + Math.round(s.getBoundingClientRect().top));\n'
+            "  });\n"
+            '  marker.textContent = "@@" + parts.join("|") + "@@";\n'
+            "  document.body.appendChild(marker);\n"
+            "}\n"
+            "function maybeMeasure() {\n"
+            '  var notes = document.querySelectorAll(".sidenote");\n'
+            '  var placed = notes.length > 0 && Array.prototype.every.call(notes, function (n) { return n.style.top !== ""; });\n'
+            "  if (placed) measure(); else requestAnimationFrame(maybeMeasure);\n"
+            "}\n"
+            'window.addEventListener("load", function () { requestAnimationFrame(maybeMeasure); });\n'
+            "PROBE"
+        )
+
+        machine.succeed(
+            "python3 - <<'PY'\n"
+            "import re\n"
+            'p = "/tmp/sn/page.html"\n'
+            "s = open(p).read()\n"
+            'probe = open("/tmp/sn/probe.js").read()\n'
+            'css = re.search(r"main\\.[0-9a-f]+\\.css", s)\n'
+            'assert css, "no fingerprinted stylesheet on the sidenote page"\n'
+            's = re.sub(r\'href="/main\\.[0-9a-f]+\\.css"\', \'href="\' + css.group(0) + \'"\', s)\n'
+            's = s.replace("</body>", "<script>" + probe + "</" + "script>" + "</body>", 1)\n'
+            'open(p, "w").write(s)\n'
+            "PY"
+        )
+
+        dom = machine.succeed(
+            "chromium --headless=new --no-sandbox --disable-gpu "
+            "--disable-dev-shm-usage --allow-file-access-from-files "
+            "--virtual-time-budget=8000 --window-size=1600,1200 "
+            "--dump-dom file:///tmp/sn/page.html 2>/dev/null"
+        )
+
+        m = re.search(r'id="SN-MEAS">@@(.*?)@@', dom, re.S)
+        assert m, "the sidenote probe never ran"
+        parts = m.group(1).split("|")
+        cites = {}
+        notes = {}
+        for part in parts:
+            key, _, value = part.rpartition("=")
+            if key.startswith("cfn:"):
+                cites[key[4:]] = int(value)
+            elif key.startswith("nfn:"):
+                notes[key[4:]] = int(value)
+        assert cites, f"no sidenote citations measured: {parts}"
+        assert len(cites) <= len(notes), (
+            f"some citations got no sidenote: {sorted(cites)} vs {sorted(notes)}"
+        )
+        displaced = [
+            (fid, cite_top, notes.get(fid))
+            for fid, cite_top in cites.items()
+            if notes.get(fid) is None or abs(notes[fid] - cite_top) > 3
+        ]
+        assert not displaced, (
+            f"sidenotes not beside their citations {displaced} "
+            f"(cites={sorted(cites)}, notes={sorted(notes)})"
         )
   '';
 }
