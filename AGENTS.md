@@ -17,6 +17,19 @@ Read the relevant README, workflow documentation, ADR, or hardening-plan entry
 before changing behavior that affects deployment, rollback, services, or
 security. Prefer existing module patterns over introducing new abstractions.
 
+## Worktree Isolation
+
+When working on tasks that involve multiple concurrent agents or significant
+file changes, isolate work in a git worktree:
+
+1. `git worktree add ../repo-<task-slug> -b <branch-name>` from the repo root.
+2. Do all editing, building, and checking inside that worktree directory.
+3. Report the branch name and changed files when done. Clean up with
+   `git worktree remove` after the branch merges.
+
+Skip this step for trivial fixes or when the user explicitly works in the main
+checkout.
+
 ## Working Method
 
 1. Inspect the relevant files and trace how the current configuration works
