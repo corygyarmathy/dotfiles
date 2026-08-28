@@ -1,21 +1,21 @@
 # Plan: structural cleanup
 
-Status: drafted 2026-08-28. Nothing started.
+Status: drafted 2026-08-28. Item 0 landed the same day; nothing else started.
 
 This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines.
 
 The pipeline, the checks harness and the documentation are in good shape and are not the subject here. What has not kept up is the boundary between a host and a module: hosts transcribe facts that modules already know, modules hardcode facts about specific hosts, and the same value is written down in three places with nothing to notice when the copies diverge. Every item below is an instance of that one problem.
 
-| #   | Item                              | Size   | Changes behaviour | Depends on |
-| --- | --------------------------------- | ------ | ----------------- | ---------- |
-| 0   | Gate hygiene and budget           | small  | no                | —          |
-| 1   | A fleet source of truth           | medium | no                | —          |
-| 2   | Services publish themselves       | large  | no                | 1          |
-| 3   | Hosts become profiles + toggles   | medium | no                | 2          |
-| 4   | Per-host secret scoping           | large  | **yes**           | 1          |
-| 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       |
-| 6   | Decouple modules from the fleet   | small  | no                | 1          |
-| 7   | Documentation follows the code    | small  | no                | 1–6        |
+| #   | Item                              | Size   | Changes behaviour | Depends on | Status                |
+| --- | --------------------------------- | ------ | ----------------- | ---------- | --------------------- |
+| 0   | Gate hygiene and budget           | small  | no                | —          | **done** 2026-08-28   |
+| 1   | A fleet source of truth           | medium | no                | —          | not started           |
+| 2   | Services publish themselves       | large  | no                | 1          | not started           |
+| 3   | Hosts become profiles + toggles   | medium | no                | 2          | not started           |
+| 4   | Per-host secret scoping           | large  | **yes**           | 1          | not started           |
+| 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       | not started           |
+| 6   | Decouple modules from the fleet   | small  | no                | 1          | not started           |
+| 7   | Documentation follows the code    | small  | no                | 1–6        | not started           |
 
 Suggested order is the numbering. Item 0 first because the gate is currently over budget and every later PR pays that cost. Items 1–3 are one continuous piece of work and are only split because each has a natural landing point. Items 4 and 5 are the two that need a deliberate deploy and a rollback plan, and both are much easier once item 1 exists.
 
@@ -59,6 +59,22 @@ Consider `statix` and `deadnix` in the same job while it exists — both are fas
 ### Risks
 
 Sharding multiplies runner-minutes even as it reduces wall clock — ten jobs, each paying ~30s of installer and Cachix setup. That is the trade being made deliberately. If the shard count becomes the cost, group the cheap static checks (`alert-rules`, `alert-rules-unit`, `alertmanager-config`, `bless-boot-guard`, `digital-garden-sync-health`) into one entry and shard only the VM tests.
+
+### What landed
+
+All four pieces, plus two the approach above did not anticipate.
+
+`nix fmt` is `nixfmt-tree`, not bare `nixfmt`: `nix fmt` hands the formatter a directory, and nixfmt deprecates directory arguments in favour of exactly that wrapper. It also gives a `--ci` mode, which is what the gate runs.
+
+The tree-wide format was **verified inert rather than assumed**. For each of the 20 files, `nix-instantiate --parse` produces a byte-identical AST before and after; the only file whose AST changed is `flake.nix`, and only in the line adding the formatter. A whitespace pass over `monitoring.nix` is exactly the kind of change nobody reads, so it is worth being able to say it changed nothing rather than believing it.
+
+The format gate was checked against a deliberate break in both directions, the way the behaviour tests are: unformatted tree exits 1, clean tree exits 0. Worth doing, because `treefmt` formats *in place* and then fails - so a naive second invocation reports success, and a gate tested only once looks like it works when it does not.
+
+**Sharding needed two things `nix flake check` was doing incidentally.** Building each check by attribute path no longer evaluates the flake as a whole, so `devShells`, `apps`, `overlays` and `packages` stopped being evaluated at all - `lint` runs `nix flake check --no-build` to keep that. And the matrix names its shards rather than discovering them, because a discovery job serialises ahead of every shard and eats most of the saving; the price is that a check dropped from the matrix stops running silently, so `lint` asserts the matrix and `checks/default.nix` list the same names. That assertion was also tested against a deliberate break in both directions - a check removed from the matrix, and a phantom check added to it.
+
+The gate-timing history is recorded in [the hardening plan](deployment-hardening.md) under "It outgrew it again two days later", including the part worth keeping: this was the third occurrence, and the two previous fixes both worked by making one test faster, which is a fix with a shelf life.
+
+**Not yet measured.** The wall-clock claim - that the gate is now bounded by `build xps15` rather than by the checks - is an argument from how the jobs are shaped, not an observation. It needs a real run to confirm, and the number to watch is the slowest single shard plus its ~30s of setup against the host build's 3m12s.
 
 ---
 

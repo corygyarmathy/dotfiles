@@ -429,6 +429,18 @@ The prediction at #422 ("the number to watch is `flake-check` overtaking `build 
 
 The fix distinguishes two things the test was conflating. A VM test should prove that a warning-severity alert *routes* to push with the right priority and survives inhibition - not that it waits the production five minutes. The `5m` value is structural config, and it is already pinned by the `amtool` check (`alertmanager-config`), which evaluates the assembled Alertmanager config with the default. So `group_wait` became an option, `cg.service.monitoring.alertmanager.ntfy.warningGroupWait` (default `5m`), the `monitoring` test sets it to `5s`, and production is unchanged. `ci.yml` also passes `--max-jobs 5` to `nix flake check` so all five VM tests boot concurrently instead of four-plus-one. Result: `flake-check` is bounded by `upgrade-verify` (~2.5m), comfortably back inside the host build.
 
+### It outgrew it again two days later, 2026-08-28
+
+Measured on run `33151623433`: the `Check flake` step took **4m18s** against `Build xps15`'s **3m12s**, for a gate wall clock of **5m15s**. So "comfortably back inside the host build" held for two days, and the entry above is now the second time this was fixed by making one test cheaper.
+
+**That is the part worth recording.** Both previous fixes treated the symptom - a test that was too slow - and both worked, briefly. The structural problem is that `nix flake check` runs every check in one job, so the job's runtime is the _sum_ of the checks and the fix for "the gate is too slow" is always "find the slow test". That is a fix with a shelf life, and it had a two-day one.
+
+`checks` is now a matrix job, one runner per check, running `nix build .#checks.x86_64-linux.<name>`. The gate becomes bounded by the slowest single check rather than by their total, which means adding a check costs a runner rather than costing wall clock - and the failure mode above stops recurring by construction rather than by vigilance. Runner-minutes are free on a public repository; wall clock is the thing with a budget.
+
+Two things came with it, both to replace something `nix flake check` was doing incidentally. The matrix names its shards rather than discovering them, because a discovery job serialises ahead of every shard and eats most of the saving - so the `lint` job asserts that the matrix and `checks/default.nix` list the same names, since a check dropped from the matrix would otherwise stop running silently. And `lint` runs `nix flake check --no-build`, because building checks by attribute path no longer evaluates `devShells`, `apps`, `overlays` or `packages`, and noticing when one of those stops evaluating was worth keeping.
+
+Recorded here rather than edited into the entry above, so that the correction is dated - and because "we fixed this twice by making a test faster" is the useful part.
+
 ### `digital-garden`, 2026-08-16
 
 Landed, passing in 28 seconds. `source = "obsidian-sync"` reads the vault from disk instead of cloning it, so the builder runs entirely offline; the sync service that would normally fill that directory is disabled and the vault is staged from a three-note fixture - one published, one not, and one with no frontmatter at all.
