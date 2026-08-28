@@ -690,7 +690,23 @@ h4:hover > .heading-anchor,
      * past the measure and push the rail off the page. */
     grid-template-columns: 1fr minmax(0, var(--measure)) 1fr;
     column-gap: var(--gutter);
-    align-items: start;
+    /* Baseline, not `start`. Both size the columns to their own content -
+     * which is what the sticky rail needs - but `start` aligns the two
+     * BOXES, and the top of a box is not where a reader sees a line begin.
+     * The rail's label is 0.8rem and the title is 1.75rem, so aligning their
+     * tops left the label stranded in the leading above the title's
+     * letterforms: too low to read as part of the masthead, too high to read
+     * as part of the title, and belonging to neither.
+     *
+     * Baseline alignment sets those two first lines on one line instead, and
+     * the browser derives the offset from the fonts' own metrics rather than
+     * from a number measured off a screenshot - so it survives a change to
+     * either size, to the font stack, and to a title long enough to wrap,
+     * since it is the FIRST baseline that aligns and the rail still starts at
+     * the top. The alternative was a measured `margin-top` dropping the rail
+     * to the first line of prose, which looks a shade better and is correct
+     * only for as long as every title fits on one line. */
+    align-items: baseline;
   }
 
   .layout > article {
