@@ -132,15 +132,22 @@
         NOTE
 
         # A note that exercises the sidenote (_right-margin footnote_)
-        # positioning, with the geometry that used to put the notes out of
-        # order. Two footnotes live in DIFFERENT paragraphs that sit right on
-        # top of each other, and the first note is deliberately long so its
-        # margin note is tall. The placement loop keys its "don't overlap"
-        # bookkeeping by block; when it used a DOM node as an object key, every
-        # element stringified to the same value and these two independent
-        # paragraphs were wrongly coupled, pushing the second note below the
-        # tall first one instead of beside its own citation. The check on the
-        # served page asserts each note sits exactly beside its citation.
+        # positioning, built to pin BOTH ways it has been got wrong.
+        #
+        # The first two footnotes live in DIFFERENT paragraphs that sit right
+        # on top of each other, and the first note is deliberately long so its
+        # margin note is tall enough to reach past the second citation. They
+        # share one margin column, so the second note MUST be pushed down to
+        # clear the first: scoping the overlap bookkeeping per block let it
+        # land on top of the first instead, because two citations a few lines
+        # apart have notes that are not.
+        #
+        # The third footnote is cited far below both, with nothing above it to
+        # clear, so it MUST sit exactly beside its own citation. That is the
+        # other failure: keying the bookkeeping by a DOM node as an object key
+        # stringified every element to the same value, coupled every paragraph
+        # on the page into one bucket, and dragged notes like this one far from
+        # the text that cites them.
         cat > $out/essays/on-sidenotes.md <<'NOTE'
         ---
         publish: true
@@ -167,6 +174,36 @@
         note.[^2]
 
         [^2]: A second note in its own, separate paragraph.
+
+        ## Far below
+
+        This paragraph exists to put distance between the crowded pair above
+        and the free note below, so that the last citation has nothing above it
+        to clear and must therefore land exactly beside its own line.
+
+        Another paragraph of filler, for the same reason: the margin column has
+        to be empty here for the assertion below it to mean anything.
+
+        More filler still. The point of the distance is that a note placed here
+        is constrained by nothing except the position of its own citation.
+
+        The distance has to be real rather than nominal: the second note's
+        bottom, plus the gap a pushed note must clear it by, has to fall well
+        above the third citation, or the third note is still being pushed and
+        the assertion below it proves nothing.
+
+        So there are several paragraphs here rather than one. They say nothing
+        in particular; their only job is to be tall enough that the margin
+        beside the last citation is genuinely empty.
+
+        A fourth paragraph of the same, for the same reason.
+
+        A fifth, and that is enough: the margin above the next citation is now
+        clear by a wide margin at any window this test runs at.
+
+        The final paragraph cites a note with clear margin above it.[^3]
+
+        [^3]: A third note, far enough down the page that nothing crowds it.
         NOTE
 
         # A real landing page, because it is the one note whose handling is
@@ -702,7 +739,8 @@
             '    parts.push("c" + a.getAttribute("href").replace("#", "") + "=" + Math.round(a.getBoundingClientRect().top));\n'
             "  });\n"
             '  document.querySelectorAll(".sidenote").forEach(function (s) {\n'
-            '    parts.push("n" + s.id + "=" + Math.round(s.getBoundingClientRect().top));\n'
+            "    var r = s.getBoundingClientRect();\n"
+            '    parts.push("n" + s.id + "=" + Math.round(r.top) + "," + Math.round(r.height));\n'
             "  });\n"
             '  marker.textContent = "@@" + parts.join("|") + "@@";\n'
             "  document.body.appendChild(marker);\n"
@@ -744,22 +782,70 @@
         notes = {}
         for part in parts:
             key, _, value = part.rpartition("=")
+            # Strip only the c/n tag, so the keys stay the footnote ids Hugo
+            # gave them ("fn:2") and the assertions below name what they mean.
             if key.startswith("cfn:"):
-                cites[key[4:]] = int(value)
+                cites[key[1:]] = int(value)
             elif key.startswith("nfn:"):
-                notes[key[4:]] = int(value)
+                top, _, height = value.partition(",")
+                notes[key[1:]] = (int(top), int(height))
         assert cites, f"no sidenote citations measured: {parts}"
-        assert len(cites) <= len(notes), (
-            f"some citations got no sidenote: {sorted(cites)} vs {sorted(notes)}"
-        )
-        displaced = [
-            (fid, cite_top, notes.get(fid))
-            for fid, cite_top in cites.items()
-            if notes.get(fid) is None or abs(notes[fid] - cite_top) > 3
+        missing = sorted(set(cites) - set(notes))
+        assert not missing, f"some citations got no sidenote: {missing}"
+
+        # Down the page in citation order, which is the order the notes were
+        # built in and the order the placement pass walks them.
+        order = sorted(cites, key=lambda fid: cites[fid])
+
+        # Nothing may sit above its own citation: a note is either beside the
+        # line that cites it or below that line, never floating up the page.
+        above = [
+            (fid, cites[fid], notes[fid][0])
+            for fid in order
+            if notes[fid][0] < cites[fid] - 3
         ]
-        assert not displaced, (
-            f"sidenotes not beside their citations {displaced} "
-            f"(cites={sorted(cites)}, notes={sorted(notes)})"
+        assert not above, f"sidenotes above their citations (fid, cite, note): {above}"
+
+        # Nothing may overlap the note before it: they share one margin column.
+        overlaps = []
+        previous = None
+        for fid in order:
+            top, height = notes[fid]
+            if previous is not None and top < previous[1]:
+                overlaps.append((previous[0], fid, previous[1] - top))
+            previous = (fid, top + height)
+        assert not overlaps, (
+            f"sidenotes overlapping in the margin (above, below, px): {overlaps}"
+        )
+
+        # And a note is moved only as far as clearing the one above it needs.
+        # Without this, "push everything to the bottom" would satisfy the two
+        # assertions above, and so would the object-key bug that coupled every
+        # paragraph on the page into a single bucket.
+        slack = []
+        previous_bottom = None
+        for fid in order:
+            top, height = notes[fid]
+            floor = cites[fid] if previous_bottom is None else max(cites[fid], previous_bottom)
+            if top > floor + 16:
+                slack.append((fid, top, floor))
+            previous_bottom = top + height
+        assert not slack, (
+            f"sidenotes pushed further than clearing required (fid, top, floor): {slack}"
+        )
+
+        # Finally, the specific geometry on-sidenotes.md was built for: the
+        # tall first note reaches past the second citation, so fn:2 must have
+        # been pushed clear of it, while fn:3 -- far below, with an empty
+        # margin above it -- must be exactly beside its own line. One of these
+        # fails under each of the two bugs this has had.
+        assert notes["fn:2"][0] > cites["fn:2"] + 3, (
+            "fn:2 was not pushed clear of the tall note above it: "
+            f"note={notes['fn:2']} cite={cites['fn:2']}"
+        )
+        assert abs(notes["fn:3"][0] - cites["fn:3"]) <= 3, (
+            "fn:3 has an empty margin above it and must sit on its citation: "
+            f"note={notes['fn:3']} cite={cites['fn:3']}"
         )
   '';
 }
