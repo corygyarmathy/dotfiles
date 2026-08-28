@@ -56,6 +56,15 @@
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji";
   --measure: 40rem;
+  /* The margin columns either side of the prose: the rail on the left, the
+   * sidenotes on the right. One value for both, because they are the same
+   * margin seen from two sides, and a reader notices at once when the two
+   * halves of a symmetric page are not symmetric. */
+  --margin-col: 15rem;
+  /* Between a margin column and the prose. Wide enough that the margin reads
+   * as a column of its own, narrow enough that a note still reads as
+   * belonging to the paragraph beside it. */
+  --gutter: 3rem;
   color-scheme: light;
 }
 
@@ -652,19 +661,35 @@ h4:hover > .heading-anchor,
   color: var(--muted);
 }
 
-/* Wide enough for a rail that is a full 15rem AND leaves the prose centred:
- * the two outer tracks are equal, so the article sits exactly where it does at
- * every narrower width and the rail fills space that was empty. Below this the
- * whole block above applies unchanged and nothing has moved. */
+/* Wide enough for a rail that is a full margin column AND leaves the prose
+ * centred: the two outer tracks are equal, so the article sits exactly where
+ * it does at every narrower width and the rail fills space that was empty.
+ * Below this the whole block above applies unchanged and nothing has moved.
+ *
+ * The grid is capped at the width it needs and no wider. Letting the outer
+ * tracks absorb the surplus is correct at the breakpoint and then gets worse
+ * with every pixel of monitor after it: `1fr` spends the whole surplus on the
+ * margins, so at 2560px the rail sits against the left bezel and a footnote
+ * against the right one, with some 40rem of empty page — a second measure's
+ * worth — between a sentence and the note that annotates it. That is not a
+ * margin note any more. The point
+ * of moving a footnote into the margin is that the eye can hold the prose and
+ * the note at once; past a certain distance the reader is making the same
+ * journey they would have made to the foot of the page, without even the
+ * page's own edge to help them. So the cap freezes the layout at the
+ * proportions it has at the breakpoint, and `margin-inline: auto` — already on
+ * .layout from the rule above — centres the whole assembly from there on.
+ * Past 80rem the page stops growing and starts centring. */
 @media (min-width: 80rem) {
   .layout {
-    max-width: none;
+    /* The prose, both margins, and both gutters. Nothing else. */
+    max-width: calc(var(--measure) + 2 * (var(--margin-col) + var(--gutter)));
     display: grid;
     /* minmax(0, …) on the centre track rather than a bare value: a wide table
      * or a long code line inside the article would otherwise widen the track
      * past the measure and push the rail off the page. */
     grid-template-columns: 1fr minmax(0, var(--measure)) 1fr;
-    column-gap: 3rem;
+    column-gap: var(--gutter);
     align-items: start;
   }
 
@@ -685,7 +710,7 @@ h4:hover > .heading-anchor,
     /* Aligned to the top of the prose, not stretched down the page: `start`
      * on the grid keeps it the height of its own content, which is what
      * sticky needs. */
-    width: min(15rem, 100%);
+    width: min(var(--margin-col), 100%);
     position: sticky;
     top: 2rem;
     /* A rail longer than the window scrolls inside itself. A nested scrollbar
@@ -774,9 +799,11 @@ h4:hover > .heading-anchor,
     display: block;
     position: absolute;
     right: 0;
-    /* The margin is at least this wide at every width the grid builds at
-     * (>80rem), so the note never collides with the prose. */
-    width: min(14rem, 100%);
+    /* The full margin column — the same one the rail fills on the other
+     * side. With the grid capped, that column is exactly this wide at every
+     * width the wide layout builds at, so the note fills its track and the
+     * two margins are mirror images rather than two nearly-equal numbers. */
+    width: min(var(--margin-col), 100%);
     border-left: 1px solid var(--border);
     padding-left: 1rem;
     font-size: 0.8rem;

@@ -295,14 +295,17 @@
       There are two states, toggled whenever the viewport crosses the 80rem
       breakpoint:
 
-      Wide. The layout is a three-column grid: 1fr minmax(0, 40rem) 1fr. The
-      prose is the centred second column and never moves. The rail occupies
-      the first (left) column. The sidenotes fill the third (right) column,
-      each absolutely positioned beside the line that cites it -- the Tufte
-      margin note. Placing them in the third column means a page with no rail
-      still gets its margin notes: the rail is beside the prose on the left,
-      the notes beside it on the right, and neither needs the other to exist.
-      That is why they are not gated on the rail.
+      Wide. The layout is a three-column grid: 1fr minmax(0, 40rem) 1fr,
+      capped at the width those three tracks need and centred in the window,
+      so that the margins stay beside the prose instead of drifting out to the
+      bezels of a large monitor. The prose is the centred second column and
+      never moves. The rail occupies the first (left) column. The sidenotes
+      fill the third (right) column, each absolutely positioned beside the
+      line that cites it -- the Tufte margin note. Placing them in the third
+      column means a page with no rail still gets its margin notes: the rail
+      is beside the prose on the left, the notes beside it on the right, and
+      neither needs the other to exist. That is why they are not gated on the
+      rail.
 
       Narrow. No margin to put a note in, so the margin is torn down and the
       original endnote list is restored to the foot of the essay, where Hugo
