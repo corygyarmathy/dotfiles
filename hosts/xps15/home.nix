@@ -62,6 +62,7 @@
     direnv.enable = true;
     ssh.enable = true;
     psql.enable = true;
+    opencode.enable = true;
 
     # Media
     spotify-player.enable = false;
@@ -148,7 +149,6 @@
     dig # domain information groper
     small.bootdev-cli
     claude-code # TUI Claude code (agentic AI coding assistant)
-    opencode
 
     # Entertainment
     discord
