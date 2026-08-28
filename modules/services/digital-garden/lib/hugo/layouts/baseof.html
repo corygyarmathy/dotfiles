@@ -298,24 +298,24 @@
       Wide. The layout is a three-column grid: 1fr minmax(0, 40rem) 1fr. The
       prose is the centred second column and never moves. The rail occupies
       the first (left) column. The sidenotes fill the third (right) column,
-      each absolutely positioned at the top of the paragraph that cites it --
-      the Tufte margin note. Placing them in the third column means a page
-      with no rail still gets its margin notes: the rail is beside the prose
-      on the left, the notes beside it on the right, and neither needs the
-      other to exist. That is why they are not gated on the rail.
+      each absolutely positioned beside the line that cites it -- the Tufte
+      margin note. Placing them in the third column means a page with no rail
+      still gets its margin notes: the rail is beside the prose on the left,
+      the notes beside it on the right, and neither needs the other to exist.
+      That is why they are not gated on the rail.
 
       Narrow. No margin to put a note in, so the margin is torn down and the
       original endnote list is restored to the foot of the essay, where Hugo
       put it -- the same place the backlinks sit at the foot of the page.
 
       Positioning a wide note needs the vertical offset of its citation inside
-      the grid, so each note is anchored to the line that cites it, within the
-      ancestor of that citation that is a direct child of the article (a
-      paragraph, an li, a blockquote). Two notes from the same block must not
-      overlap, so when a second note would land on top of the first it is
-      pushed just below the previous note's bottom. The notes are inserted into
-      .layout rather than the article, so pagefind -- which indexes the article
-      marked data-pagefind-body -- does not index the note text.
+      the grid, so each note is anchored to the line that cites it. No two
+      notes may overlap, and they all share one margin column running the
+      length of the page, so a note whose citation falls behind the bottom of
+      the note above it is pushed down to clear it -- whatever paragraphs the
+      two citations happen to live in. The notes are inserted into .layout
+      rather than the article, so pagefind -- which indexes the article marked
+      data-pagefind-body -- does not index the note text.
 
       A note can be cited more than once (the same source can come up in many
       paragraphs). One note is built per definition, anchored to its FIRST
@@ -354,15 +354,12 @@
         var mql = window.matchMedia("(min-width: 80rem)");
         var notes = [];
 
-        // The topmost ancestor of a citation that is a direct child of the
-        // article -- the box whose top the margin note aligns to.
-        function anchorBlock(ref) {
-          var node = ref;
-          while (node && node.parentNode && node.parentNode !== article) {
-            node = node.parentNode;
-          }
-          return node && node.parentNode === article ? node : null;
-        }
+        // What a pushed-apart note must clear the one above it by. A single
+        // pixel ends the overlap arithmetically and still reads as one block
+        // of text, because each note carries a left border that joins into an
+        // unbroken rule when they touch. This is the gap between two notes
+        // that had to be separated, not the gap between every note.
+        var noteGap = 12;
 
         // Place the notes once the margin is laid out. A note sits beside the
         // line that cites it rather than at the top of the block that holds
@@ -379,26 +376,29 @@
         // stay where they are. Measure every note first, in a read-only pass,
         // and only then apply the measured tops.
         //
-        // Two notes from the same block share one margin column and must not
-        // overlap, so each block remembers the bottom of the most recently
-        // placed note and pushes a later one just below it. The block must be
-        // tracked by identity, not as an object key: every element stringifies
-        // to "[object HTMLElement]", so an object map would collapse all
-        // paragraphs (and all list items, all blockquotes) into one bucket and
-        // wrongly couple notes that live in different blocks.
+        // Notes must not overlap, and the thing they can overlap in is the
+        // margin column -- which is ONE column for the whole page, not one per
+        // paragraph. So the running bottom is page-wide: each note is placed
+        // at its citation, or just below the previous note when its citation
+        // sits too close behind a tall one. Scoping this per block (by node
+        // identity, in a Map) looks tidier and is wrong: two citations in
+        // adjacent paragraphs are a few lines apart, their notes are not, and
+        // nothing then stopped the second from landing on top of the first.
+        //
+        // `notes` is in first-citation order, because Hugo emits its
+        // definitions in that order and `showSidenotes` walks them as it found
+        // them, so a single pass down the page is enough.
         function place() {
           var layoutTop = layout.getBoundingClientRect().top;
-          var lastTopByBlock = new Map();
+          var previousBottom = null;
           var positions = [];
           notes.forEach(function (note) {
-            var block = note.block;
             var desired = note.ref.getBoundingClientRect().top - layoutTop;
-            var previous = lastTopByBlock.get(block);
             var top =
-              previous === undefined
+              previousBottom === null
                 ? desired
-                : Math.max(desired, previous + 1);
-            lastTopByBlock.set(block, top + note.aside.offsetHeight);
+                : Math.max(desired, previousBottom + noteGap);
+            previousBottom = top + note.aside.offsetHeight;
             positions.push({ aside: note.aside, top: top });
           });
           positions.forEach(function (position) {
@@ -421,8 +421,6 @@
           ids.forEach(function (id) {
             var ref = article.querySelector('.footnote-ref[href="#' + id + '"]');
             if (!ref) return;
-            var block = anchorBlock(ref);
-            if (!block) return;
             // First citation wins: a repeated citation must not place a second
             // copy of the same note.
             if (placed[id]) return;
@@ -452,7 +450,7 @@
             while (clone.firstChild) aside.appendChild(clone.firstChild);
 
             layout.appendChild(aside);
-            notes.push({ aside: aside, block: block, ref: ref });
+            notes.push({ aside: aside, ref: ref });
           });
 
           // Nothing to place (no citations on the page): keep the endnotes.
