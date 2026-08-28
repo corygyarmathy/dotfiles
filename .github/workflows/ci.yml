@@ -80,11 +80,39 @@ jobs:
       # The `checks` matrix builds each check by attribute path, which no
       # longer evaluates the flake as a whole. That was never the point of
       # `nix flake check`, but it was a side effect worth keeping: it is what
-      # notices a devShell, app, overlay or package output that stopped
-      # evaluating. --no-build so this stays evaluation only; the matrix does
-      # the building.
-      - name: Evaluate every flake output
-        run: nix flake check --no-build --print-build-logs
+      # notices an output that stopped evaluating.
+      #
+      # Only three outputs actually lost coverage, so only those are evaluated
+      # here. `checks` is covered by the matrix and `nixosConfigurations` by
+      # the build matrix, both more thoroughly than evaluation. `overlays` is
+      # applied by every host build and `formatter` is exercised by the step
+      # above, so both are already covered too.
+      #
+      # NOT `nix flake check --no-build`, which is what this started as and
+      # which cannot work here: stylix reads a base16 scheme through
+      # import-from-derivation, so evaluating any host needs that derivation
+      # *built*, and --no-build forbids exactly that. It fails with
+      # "path '...-base16-schemes-....drv' is not valid". It passes on a
+      # developer's machine, because the path is already in their store from
+      # the last host build - a false pass that only shows up on a clean
+      # runner.
+      #
+      # `apps` is the expensive one: garden-preview reads homelab01's
+      # evaluated config, so this evaluates a whole host. It is kept because
+      # nothing else covers preview.nix, and the job still finishes far inside
+      # the host builds it runs beside.
+      - name: Evaluate the outputs nothing else covers
+        run: |
+          set -euo pipefail
+          echo "devShells:"
+          nix eval --raw .#devShells.x86_64-linux.default.drvPath
+          echo
+          echo "packages:"
+          nix eval --json .#packages.x86_64-linux \
+            --apply 'ps: builtins.map (p: p.drvPath) (builtins.attrValues ps)'
+          echo "apps:"
+          nix eval --raw .#apps.x86_64-linux.garden-preview.program
+          echo
 
       # The matrix below names each check explicitly rather than discovering
       # them, because discovery costs a serialised job ahead of every shard and
