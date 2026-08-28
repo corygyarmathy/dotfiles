@@ -306,5 +306,20 @@
           ];
         };
       });
+
+      # `nix fmt` formats the tree; `nix fmt -- --ci` is what the `fmt` CI job
+      # runs, and fails on anything it would have changed.
+      #
+      # `nixfmt-tree` rather than bare `nixfmt`: `nix fmt` hands the formatter
+      # a directory, and nixfmt has deprecated directory arguments in favour of
+      # exactly this wrapper. It is treefmt with nixfmt configured, so it also
+      # walks the tree honouring .gitignore instead of formatting whatever it
+      # is pointed at.
+      #
+      # Taken from this flake's own nixpkgs rather than whatever happens to be
+      # on a PATH, so the version deciding the gate is the version in
+      # flake.lock - otherwise a contributor's newer nixfmt reformats files CI
+      # then rejects, and the two never agree.
+      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
     };
 }
