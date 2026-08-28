@@ -76,7 +76,19 @@
   --code-bg: #16161d;  /* sumiInk0 — the code well goes DARKER than the page
                         * here and lighter than it in Lotus, because in both
                         * directions that is away from the reading surface. */
-  --muted: #727169;    /* fujiGray  */
+  /* springViolet1, not fujiGray. fujiGray #727169 is Kanagawa's COMMENT
+   * colour, and it reads as one against sumiInk3: 3.33:1, under the 4.5:1
+   * that body text needs, and 2.88:1 on --surface. That would be defensible
+   * if --muted were decoration, but it is not — it carries blockquote text,
+   * every sidenote (at 0.8rem, where it matters most), the dateline, the
+   * backlink theses, the footer and every rail link that is not the current
+   * one. Those are things a reader reads. springViolet1 is 5.02:1 and is
+   * Wave's own, so the "every hex is traceable to a pinned colors.lua"
+   * property is unchanged. Lotus needed nothing: lotusGray2 is 4.70:1.
+   *
+   * The one place fujiGray survives is the Chroma comment rule below, which
+   * is genuinely a comment on genuinely lower-contrast-by-design code. */
+  --muted: #938aa9;    /* springViolet1 */
   --text: #dcd7ba;     /* fujiWhite */
   /* Deliberately the same as --text. fujiWhite is the brightest foreground
    * Wave has, so a heading cannot be brighter than the prose without leaving
