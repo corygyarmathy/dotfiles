@@ -24,7 +24,7 @@ The laptop follows `deploy` too, but never switches on its own: it builds in the
 
 | Workflow             | When                        | Does                                                               |
 | -------------------- | --------------------------- | ------------------------------------------------------------------ |
-| `ci.yml`             | every PR and push to master | builds all three hosts, `nix flake check` (incl. the VM tests in `checks/`), fast-forwards `deploy` |
+| `ci.yml`             | every PR and push to master | builds all three hosts, runs each check in `checks/` on its own runner, lints, fast-forwards `deploy` |
 | `flake-update.yml`   | daily, 15:00 UTC            | `nix flake update`, per-host closure diff, PR, auto-merge on green |
 | `package-update.yml` | Mondays, 03:00 UTC          | runs each package's own updater, one PR per package                |
 | `dependabot-auto-merge.yml` | every Dependabot PR  | schedules the merge; `nixos ci` is still the gate                  |
@@ -84,7 +84,9 @@ Both servers land on the same revision the same night. The 15 minute offset is n
 
 Naming the shards rather than discovering them is what keeps that saving: discovery costs a serialised job ahead of every shard, which is most of what sharding just bought back. The price is that a check added to `checks/default.nix` and not added to the matrix silently stops running, so the `lint` job asserts the two lists are identical and fails if they are not. If you add a check, add it in both places - CI will tell you if you forget, which is the point.
 
-**`lint` covers what sharding stopped doing.** Building checks by attribute path no longer evaluates the flake as a whole, and that side effect was worth keeping: it is what notices a `devShells`, `apps`, `overlays` or `packages` output that stopped evaluating. `lint` runs `nix flake check --no-build` for exactly that, plus `nix fmt -- --ci`. Nothing in it builds a closure, so it finishes well inside the host builds.
+**`lint` covers what sharding stopped doing.** Building checks by attribute path no longer evaluates the flake as a whole, and that side effect was worth keeping. Only `devShells`, `packages` and `apps` actually lost coverage - `checks` has the matrix, `nixosConfigurations` has the build matrix, `overlays` is applied by every host build, and `formatter` is exercised by `nix fmt -- --ci` in the same job - so `lint` evaluates those three by attribute and nothing else.
+
+**It is deliberately not `nix flake check --no-build`.** That is what it started as, and it cannot work here: stylix reads a base16 scheme through import-from-derivation, so evaluating any host needs that derivation *built*, and `--no-build` forbids exactly that. It fails with `path '...-base16-schemes-....drv' is not valid`. The trap is that it passes on a developer's machine, where the path is already in the store from the last host build - the failure appears only on a clean runner.
 
 **VM runtime still depends on KVM.** With `/dev/kvm` the behaviour tests are around a minute each; without it QEMU falls back to TCG emulation and the same tests take long enough to matter for a gate that also has to promote. Each shard logs which case it is in rather than failing either way, so a gate that suddenly got slow says why in its own output. Adding a test that needs several minutes is now a decision about that one shard rather than about the whole job, but it is still a decision about the nightly lock PR's auto-merge latency. The `monitoring` test shortens the warning route's production `group_wait` via `warningGroupWait` rather than waiting out five minutes; the `5m` value itself is pinned structurally by the `amtool` check.
 
