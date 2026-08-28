@@ -93,6 +93,10 @@
         # %% MARKER-IN-CODE %% - inside a fence, %% is code, not a comment
         x = 1
         ```
+
+        | Column | MARKER-TABLE-CELL |
+        | ------ | ----------------- |
+        | a      | b                 |
         NOTE
 
         # Named as Obsidian names things - spaces and capitals - because a
@@ -444,6 +448,25 @@
         # network, so nothing else would notice.
         assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css, \
             "the stylesheet fetches a font from a CDN"
+
+    with subtest("a table is wrapped in something that can scroll"):
+        # The other shape of the same failure the font assertion guards: a rule
+        # that is written and never reached. `.table-container { overflow-x:
+        # auto }` sat in the stylesheet for weeks with no hook to emit the div,
+        # so it matched nothing, and a table wider than the measure scrolled
+        # the PAGE - at 390px the document went to about twice the width of the
+        # phone, and every paragraph on it could be dragged sideways. Nothing
+        # failed: the build was clean, the CSS was there, the table rendered.
+        #
+        # So both halves are asserted, because either one alone is the bug: the
+        # selector exists in the stylesheet, AND the markup an actual table
+        # produces contains it.
+        page = served("/on-gates")
+        assert "MARKER-TABLE-CELL" in page, "the fixture table did not render"
+        assert re.search(r'<div class="table-container"[^>]*>\s*<table', page), \
+            "a table is not wrapped in .table-container"
+        assert ".table-container" in css, \
+            ".table-container missing from the stylesheet"
 
     with subtest("search costs a reading page nothing until it is asked for"):
         # The bundle is ~46KB gzipped that a reader who never searches never
