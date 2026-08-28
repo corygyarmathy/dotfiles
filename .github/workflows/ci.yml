@@ -54,9 +54,97 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  flake-check:
-    name: flake check
+  # Formatting, flake-level evaluation, and the audit that keeps the `checks`
+  # matrix below honest. Nothing here builds a closure, so the job finishes
+  # well inside the host builds and never sits on the critical path.
+  lint:
+    name: lint
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            extra-substituters = https://hyprland.cachix.org
+            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
+
+      # Formatting runs before the audit's checkout-modifying steps. `nix fmt`
+      # resolves to nixfmt-tree (flake.nix), which formats in place and then
+      # fails because it changed something - that is what makes it a gate, and
+      # also why it leaves the runner's checkout modified. Nothing below reads
+      # the formatting of the tree, only its content.
+      - name: Check formatting
+        run: nix fmt -- --ci
+
+      # The `checks` matrix builds each check by attribute path, which no
+      # longer evaluates the flake as a whole. That was never the point of
+      # `nix flake check`, but it was a side effect worth keeping: it is what
+      # notices a devShell, app, overlay or package output that stopped
+      # evaluating. --no-build so this stays evaluation only; the matrix does
+      # the building.
+      - name: Evaluate every flake output
+        run: nix flake check --no-build --print-build-logs
+
+      # The matrix below names each check explicitly rather than discovering
+      # them, because discovery costs a serialised job ahead of every shard and
+      # the gate has a wall-clock budget. The price of naming them is that a
+      # check added to ./checks and not added to the matrix silently stops
+      # being run - the same "gate that quietly stops gating" failure the
+      # `always()` note on the gate job is about. So assert the two agree.
+      #
+      # yq is a lint-time tool rather than a build input, so taking it from the
+      # unpinned registry is fine here; it is not going into anything shipped.
+      - name: Every flake check is in the matrix
+        run: |
+          set -euo pipefail
+          # LC_ALL=C on both sides: the names contain hyphens, which some
+          # locales collate as though they were not there, and a comparison
+          # that depends on the runner's locale is a comparison that will
+          # eventually disagree with itself for no reason.
+          nix eval --raw .#checks.x86_64-linux \
+            --apply 'cs: builtins.concatStringsSep "\n" (builtins.attrNames cs)' \
+            | LC_ALL=C sort > /tmp/flake-checks
+          nix shell nixpkgs#yq-go --command \
+            yq -r '.jobs.checks.strategy.matrix.check[]' .github/workflows/ci.yml \
+            | LC_ALL=C sort > /tmp/matrix-checks
+          if ! diff -u /tmp/flake-checks /tmp/matrix-checks; then
+            echo "::error::checks in the flake and checks in the ci.yml matrix disagree (- flake, + matrix)"
+            exit 1
+          fi
+          echo "::notice::$(wc -l < /tmp/flake-checks) checks, all present in the matrix"
+
+  # One runner per check, rather than one runner running `nix flake check`.
+  #
+  # The checks are independent, so a single job is as slow as their sum while
+  # four of the runner's cores idle waiting on VM boots. Sharded, the job is as
+  # slow as the *slowest* check. This is what took the gate back inside the
+  # host build after the alerting subtests pushed `flake check` past it for the
+  # second time - see "The gate outgrew the build" in
+  # docs/plans/deployment-hardening.md.
+  #
+  # It costs runner-minutes: ten jobs each pay ~30s of checkout and installer
+  # that one job paid once. On a public repository those minutes are free, and
+  # wall clock is the thing with a budget.
+  checks:
+    name: check ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Same reasoning as the host matrix: knowing that three checks fail is
+      # more useful than knowing that one does.
+      fail-fast: false
+      matrix:
+        check:
+          - alert-rules
+          - alert-rules-unit
+          - alertmanager-config
+          - bless-boot-guard
+          - digital-garden
+          - digital-garden-sync-health
+          - grafana
+          - monitoring
+          - reverse-proxy
+          - upgrade-verify
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -72,10 +160,10 @@ jobs:
         with:
           name: corygyarmathy-dotfiles
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # Substitute only. This job does now build things - the behaviour
-          # test VMs in ./checks - but nothing a host will ever need, and the
-          # test runners themselves have to execute on every commit regardless
-          # of whether their closure was cached.
+          # Substitute only. This job does build things - the behaviour test
+          # VMs in ./checks - but nothing a host will ever need, and the test
+          # runners themselves have to execute on every commit regardless of
+          # whether their closure was cached.
           skipPush: true
 
       # The behaviour tests boot real VMs. With KVM that is around a minute
@@ -93,13 +181,10 @@ jobs:
             echo "::warning::/dev/kvm absent - NixOS tests fall back to TCG emulation"
           fi
 
-      # --max-jobs 5 lets the five NixOS VM tests in ./checks boot
-      # concurrently (nix defaults to one job per CPU core, which is 4 on the
-      # runner, so one test would otherwise wait for another to finish). The
-      # tests spend most of their time waiting on boot and services, not CPU,
-      # so oversubscribing the 4 cores is cheap. See docs/plans/deployment-hardening.md.
-      - name: Check flake
-        run: nix flake check --print-build-logs --max-jobs 5
+      - name: Run ${{ matrix.check }}
+        run: |
+          nix build --print-build-logs --no-link \
+            ".#checks.x86_64-linux.${{ matrix.check }}"
 
   build:
     name: build ${{ matrix.host }}
@@ -150,17 +235,22 @@ jobs:
   gate:
     name: nixos ci
     runs-on: ubuntu-latest
-    needs: [flake-check, build]
+    needs: [lint, checks, build]
     # `always()` so the gate reports a real failure when a dependency fails.
     # Without it the job is *skipped*, and a skipped required check does not
     # block a merge - the gate would silently stop gating.
     if: always()
     steps:
+      # A matrix dependency reports one aggregate result, so `checks` and
+      # `build` here each stand for every shard: any shard failing makes the
+      # whole `needs` entry fail.
       - name: Verify all checks passed
         run: |
-          echo "flake-check: ${{ needs.flake-check.result }}"
-          echo "build:       ${{ needs.build.result }}"
-          [ "${{ needs.flake-check.result }}" = "success" ] || exit 1
+          echo "lint:   ${{ needs.lint.result }}"
+          echo "checks: ${{ needs.checks.result }}"
+          echo "build:  ${{ needs.build.result }}"
+          [ "${{ needs.lint.result }}" = "success" ] || exit 1
+          [ "${{ needs.checks.result }}" = "success" ] || exit 1
           [ "${{ needs.build.result }}" = "success" ] || exit 1
 
   # Fast-forward `deploy` to the commit that just passed the gate. This is the
