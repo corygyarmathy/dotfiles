@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.gnome;
-in {
+in
+{
   options.cg.gnome.enable = lib.mkEnableOption "GNOME desktop environment";
 
   config = lib.mkIf cfg.enable {

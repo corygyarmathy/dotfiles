@@ -112,10 +112,13 @@ in
     # Container definition
     virtualisation.oci-containers.containers.maintainerr = {
       image = "ghcr.io/maintainerr/maintainerr:latest";
-      user = "${toString config.users.users.${stack.user}.uid}:${toString config.users.groups.${stack.group}.gid}";
+      user = "${toString config.users.users.${stack.user}.uid}:${
+        toString config.users.groups.${stack.group}.gid
+      }";
       environment = {
         TZ = config.time.timeZone;
-      } // lib.optionalAttrs (cfg.basePath != "") {
+      }
+      // lib.optionalAttrs (cfg.basePath != "") {
         BASE_PATH = cfg.basePath;
       };
       volumes = [

@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.home.starship;
-in {
+in
+{
   options.cg.home.starship.enable = lib.mkEnableOption "Starship prompt";
 
   config = lib.mkIf cfg.enable {
@@ -18,6 +20,6 @@ in {
     # Source external config for portability
     xdg.configFile."starship.toml".source = ../../../configs/starship/starship.toml;
 
-    home.packages = [pkgs.starship];
+    home.packages = [ pkgs.starship ];
   };
 }

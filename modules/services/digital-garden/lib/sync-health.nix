@@ -27,48 +27,48 @@ pkgs.writeShellApplication {
     pkgs.gnused
   ];
   text = ''
-    # Overridable so the check in checks/ can point these at a fixture.
-    METRICS_DIR="''${DIGITAL_GARDEN_METRICS_DIR:-/var/lib/prometheus-node-exporter}"
-    SYNC_LOG_DIR="''${DIGITAL_GARDEN_SYNC_DIR:-${stateDir}/obsidian/obsidian-headless/sync}"
-    METRICS_FILE="$METRICS_DIR/digital_garden_sync.prom"
-    HOST="${hostName}"
+        # Overridable so the check in checks/ can point these at a fixture.
+        METRICS_DIR="''${DIGITAL_GARDEN_METRICS_DIR:-/var/lib/prometheus-node-exporter}"
+        SYNC_LOG_DIR="''${DIGITAL_GARDEN_SYNC_DIR:-${stateDir}/obsidian/obsidian-headless/sync}"
+        METRICS_FILE="$METRICS_DIR/digital_garden_sync.prom"
+        HOST="${hostName}"
 
-    mkdir -p "$METRICS_DIR"
+        mkdir -p "$METRICS_DIR"
 
-    latest=0
-    found=0
-    if [ -d "$SYNC_LOG_DIR" ]; then
-      for log in "$SYNC_LOG_DIR"/*/sync.log; do
-        [ -e "$log" ] || continue
-        # tac + quit-on-first-match finds the last "Fully synced" line without
-        # reading the whole (append-only, ever-growing) log. The line looks
-        # like "[2026-08-24T12:34:56.789Z] Fully synced".
-        ts=$(tac "$log" 2>/dev/null | sed -nE '/^\[[^]]+\] Fully synced$/{s/^\[([^]]+)\].*/\1/p;q}' || true)
-        if [ -n "$ts" ]; then
-          epoch=$(date -d "$ts" +%s 2>/dev/null || true)
-          if [ -n "$epoch" ]; then
-            found=1
-            if [ "$epoch" -gt "$latest" ]; then
-              latest=$epoch
+        latest=0
+        found=0
+        if [ -d "$SYNC_LOG_DIR" ]; then
+          for log in "$SYNC_LOG_DIR"/*/sync.log; do
+            [ -e "$log" ] || continue
+            # tac + quit-on-first-match finds the last "Fully synced" line without
+            # reading the whole (append-only, ever-growing) log. The line looks
+            # like "[2026-08-24T12:34:56.789Z] Fully synced".
+            ts=$(tac "$log" 2>/dev/null | sed -nE '/^\[[^]]+\] Fully synced$/{s/^\[([^]]+)\].*/\1/p;q}' || true)
+            if [ -n "$ts" ]; then
+              epoch=$(date -d "$ts" +%s 2>/dev/null || true)
+              if [ -n "$epoch" ]; then
+                found=1
+                if [ "$epoch" -gt "$latest" ]; then
+                  latest=$epoch
+                fi
+              fi
             fi
-          fi
+          done
         fi
-      done
-    fi
 
-    if [ "$found" -eq 1 ]; then
-      cat > "$METRICS_FILE.tmp" <<EOF
-# HELP digital_garden_sync_last_ok_timestamp_seconds Unix timestamp of the last completed Obsidian Sync cycle
-# TYPE digital_garden_sync_last_ok_timestamp_seconds gauge
-digital_garden_sync_last_ok_timestamp_seconds{host="$HOST"} $latest
-EOF
-      mv "$METRICS_FILE.tmp" "$METRICS_FILE"
-    else
-      # Fail open: no data yet, or the log format moved under us. Emit nothing
-      # so the alert cannot fire on a guess; the journal carries the reason for
-      # whoever looks.
-      echo "digital-garden-sync-health: no 'Fully synced' timestamp found under $SYNC_LOG_DIR" >&2
-      rm -f "$METRICS_FILE"
-    fi
+        if [ "$found" -eq 1 ]; then
+          cat > "$METRICS_FILE.tmp" <<EOF
+    # HELP digital_garden_sync_last_ok_timestamp_seconds Unix timestamp of the last completed Obsidian Sync cycle
+    # TYPE digital_garden_sync_last_ok_timestamp_seconds gauge
+    digital_garden_sync_last_ok_timestamp_seconds{host="$HOST"} $latest
+    EOF
+          mv "$METRICS_FILE.tmp" "$METRICS_FILE"
+        else
+          # Fail open: no data yet, or the log format moved under us. Emit nothing
+          # so the alert cannot fire on a guess; the journal carries the reason for
+          # whoever looks.
+          echo "digital-garden-sync-health: no 'Fully synced' timestamp found under $SYNC_LOG_DIR" >&2
+          rm -f "$METRICS_FILE"
+        fi
   '';
 }

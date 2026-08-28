@@ -467,8 +467,13 @@ in
 
     systemd.tmpfiles.rules = [
       "d ${stateDir} 0750 digital-garden digital-garden -"
-    ] ++ lib.optional (cfg.source == "obsidian-sync") "f ${stateDir}/trigger 0644 digital-garden digital-garden -"
-      ++ lib.optional (cfg.source == "obsidian-sync") "d /var/lib/prometheus-node-exporter 0755 root root -";
+    ]
+    ++ lib.optional (
+      cfg.source == "obsidian-sync"
+    ) "f ${stateDir}/trigger 0644 digital-garden digital-garden -"
+    ++ lib.optional (
+      cfg.source == "obsidian-sync"
+    ) "d /var/lib/prometheus-node-exporter 0755 root root -";
 
     systemd.services.digital-garden-build = {
       description = "Build the digital garden from published vault notes";

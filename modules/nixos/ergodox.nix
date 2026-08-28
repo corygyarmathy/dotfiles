@@ -4,9 +4,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.cg.ergodox;
-in {
+in
+{
   options.cg.ergodox.enable = lib.mkEnableOption "Ergodox/Moonlander keyboard support";
 
   config = lib.mkIf cfg.enable {
@@ -24,7 +26,7 @@ in {
 
       # Keymapp / Wally Flashing rules for the Moonlander and Planck EZ
       SUBSYSTEMS=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="df11", MODE="0666", SYMLINK+="stm32_dfu"
-      
+
       # Keymapp Flashing rules for the Voyager
       SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE="0666", SYMLINK+="ignition_dfu"
     '';

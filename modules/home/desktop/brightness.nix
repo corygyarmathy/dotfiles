@@ -13,7 +13,7 @@ in
 
   config = lib.mkIf cfg.enable {
     home.packages = with pkgs; [
-      brillo        # Backlight control (used in hyprland config)
+      brillo # Backlight control (used in hyprland config)
       brightnessctl # Alternative brightness control
     ];
   };

@@ -60,12 +60,11 @@ in
     # Export configuration via environment variables. systemd user services
     # (notably waybar) pick these up at session start, and so does any
     # process spawned from a graphical login.
-    home.sessionVariables =
-      {
-        PROJECT_LAUNCHER_DIRS = lib.concatStringsSep ":" cfg.directories;
-      }
-      // lib.optionalAttrs (cfg.monitor != null) {
-        PROJECT_LAUNCHER_MONITOR = cfg.monitor;
-      };
+    home.sessionVariables = {
+      PROJECT_LAUNCHER_DIRS = lib.concatStringsSep ":" cfg.directories;
+    }
+    // lib.optionalAttrs (cfg.monitor != null) {
+      PROJECT_LAUNCHER_MONITOR = cfg.monitor;
+    };
   };
 }

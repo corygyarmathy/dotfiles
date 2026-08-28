@@ -642,26 +642,32 @@ in
               ];
             };
 
-            mute_time_intervals = lib.optionals (cfg.alertmanager.ntfy.enable && cfg.alertmanager.quietHours.enable) [
-              {
-                name = "overnight";
-                time_intervals = [
+            mute_time_intervals =
+              lib.optionals (cfg.alertmanager.ntfy.enable && cfg.alertmanager.quietHours.enable)
+                [
                   {
-                    times = [
+                    name = "overnight";
+                    time_intervals = [
                       {
-                        start_time = cfg.alertmanager.quietHours.start;
-                        end_time = "23:59";
-                      }
-                      {
-                        start_time = "00:00";
-                        end_time = cfg.alertmanager.quietHours.end;
+                        times = [
+                          {
+                            start_time = cfg.alertmanager.quietHours.start;
+                            end_time = "23:59";
+                          }
+                          {
+                            start_time = "00:00";
+                            end_time = cfg.alertmanager.quietHours.end;
+                          }
+                        ];
+                        location =
+                          if cfg.alertmanager.quietHours.timeZone != null then
+                            cfg.alertmanager.quietHours.timeZone
+                          else
+                            "UTC";
                       }
                     ];
-                    location = if cfg.alertmanager.quietHours.timeZone != null then cfg.alertmanager.quietHours.timeZone else "UTC";
                   }
                 ];
-              }
-            ];
 
             inhibit_rules =
               let
@@ -728,7 +734,8 @@ in
                   }
                 ];
               }
-            ] ++ lib.optionals cfg.alertmanager.ntfy.enable [
+            ]
+            ++ lib.optionals cfg.alertmanager.ntfy.enable [
               {
                 name = "push";
                 webhook_configs = [
@@ -911,11 +918,12 @@ in
                 # test's minimal VM nothing did, provisioning logged
                 # "Cannot read directory" at warn level, and Grafana came up
                 # serving zero dashboards. See checks/grafana.nix.
-                options.path =
-                  toString (builtins.path {
+                options.path = toString (
+                  builtins.path {
                     name = "grafana-dashboards";
                     path = ./dashboards;
-                  });
+                  }
+                );
               }
             ];
           };

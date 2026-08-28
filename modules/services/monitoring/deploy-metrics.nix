@@ -38,7 +38,11 @@ let
 
   # Baked in at build time, so this reports the revision of the generation that
   # is actually *running* the script - not whatever happens to be staged.
-  revision = if config.system.configurationRevision != null then config.system.configurationRevision else "unknown";
+  revision =
+    if config.system.configurationRevision != null then
+      config.system.configurationRevision
+    else
+      "unknown";
 
   metricsScript = pkgs.writeShellScript "nixos-deploy-metrics" ''
       set -uo pipefail

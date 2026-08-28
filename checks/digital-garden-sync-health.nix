@@ -30,38 +30,40 @@ let
     [2026-08-01T00:00:00.000Z] Waiting to connect to server
   '';
 in
-pkgs.runCommand "check-digital-garden-sync-health" {
-  nativeBuildInputs = [ syncHealth ];
-} ''
-  set -euo pipefail
-  fixture=$(mktemp -d)
-  metrics=$(mktemp -d)
-  metric="$metrics/digital_garden_sync.prom"
+pkgs.runCommand "check-digital-garden-sync-health"
+  {
+    nativeBuildInputs = [ syncHealth ];
+  }
+  ''
+    set -euo pipefail
+    fixture=$(mktemp -d)
+    metrics=$(mktemp -d)
+    metric="$metrics/digital_garden_sync.prom"
 
-  # The exporter globs <syncDir>/*/sync.log, mirroring the real layout
-  # <stateDir>/obsidian/obsidian-headless/sync/<vaultId>/sync.log.
-  # Case 1: a "Fully synced" line becomes a metric with the right epoch.
-  mkdir -p "$fixture/sync/vault-abc"
-  cp ${logWithSync} "$fixture/sync/vault-abc/sync.log"
-  DIGITAL_GARDEN_SYNC_DIR="$fixture/sync" DIGITAL_GARDEN_METRICS_DIR="$metrics" digital-garden-sync-health
-  expected=$(date -d '2026-08-01T00:00:01.000Z' +%s)
-  got=$(sed -nE 's/^digital_garden_sync_last_ok_timestamp_seconds\{host="test"\} ([0-9]+)$/\1/p' "$metric")
-  test "$got" = "$expected" || { echo "case 1: expected $expected, got '$got'" >&2; exit 1; }
+    # The exporter globs <syncDir>/*/sync.log, mirroring the real layout
+    # <stateDir>/obsidian/obsidian-headless/sync/<vaultId>/sync.log.
+    # Case 1: a "Fully synced" line becomes a metric with the right epoch.
+    mkdir -p "$fixture/sync/vault-abc"
+    cp ${logWithSync} "$fixture/sync/vault-abc/sync.log"
+    DIGITAL_GARDEN_SYNC_DIR="$fixture/sync" DIGITAL_GARDEN_METRICS_DIR="$metrics" digital-garden-sync-health
+    expected=$(date -d '2026-08-01T00:00:01.000Z' +%s)
+    got=$(sed -nE 's/^digital_garden_sync_last_ok_timestamp_seconds\{host="test"\} ([0-9]+)$/\1/p' "$metric")
+    test "$got" = "$expected" || { echo "case 1: expected $expected, got '$got'" >&2; exit 1; }
 
-  # Case 2: the newest "Fully synced" across vaults wins.
-  mkdir -p "$fixture/sync/vault-newer"
-  cp ${logNewer} "$fixture/sync/vault-newer/sync.log"
-  DIGITAL_GARDEN_SYNC_DIR="$fixture/sync" DIGITAL_GARDEN_METRICS_DIR="$metrics" digital-garden-sync-health
-  expected=$(date -d '2026-08-03T00:00:00.000Z' +%s)
-  got=$(sed -nE 's/^digital_garden_sync_last_ok_timestamp_seconds\{host="test"\} ([0-9]+)$/\1/p' "$metric")
-  test "$got" = "$expected" || { echo "case 2: expected $expected, got '$got'" >&2; exit 1; }
+    # Case 2: the newest "Fully synced" across vaults wins.
+    mkdir -p "$fixture/sync/vault-newer"
+    cp ${logNewer} "$fixture/sync/vault-newer/sync.log"
+    DIGITAL_GARDEN_SYNC_DIR="$fixture/sync" DIGITAL_GARDEN_METRICS_DIR="$metrics" digital-garden-sync-health
+    expected=$(date -d '2026-08-03T00:00:00.000Z' +%s)
+    got=$(sed -nE 's/^digital_garden_sync_last_ok_timestamp_seconds\{host="test"\} ([0-9]+)$/\1/p' "$metric")
+    test "$got" = "$expected" || { echo "case 2: expected $expected, got '$got'" >&2; exit 1; }
 
-  # Case 3: no "Fully synced" line -> fail open, no metric file at all.
-  rm -rf "$fixture" "$metrics"
-  mkdir -p "$fixture/sync/vault-abc"
-  cp ${logNoSync} "$fixture/sync/vault-abc/sync.log"
-  DIGITAL_GARDEN_SYNC_DIR="$fixture/sync" DIGITAL_GARDEN_METRICS_DIR="$metrics" digital-garden-sync-health
-  test ! -e "$metric" || { echo "case 3: expected no metric file" >&2; exit 1; }
+    # Case 3: no "Fully synced" line -> fail open, no metric file at all.
+    rm -rf "$fixture" "$metrics"
+    mkdir -p "$fixture/sync/vault-abc"
+    cp ${logNoSync} "$fixture/sync/vault-abc/sync.log"
+    DIGITAL_GARDEN_SYNC_DIR="$fixture/sync" DIGITAL_GARDEN_METRICS_DIR="$metrics" digital-garden-sync-health
+    test ! -e "$metric" || { echo "case 3: expected no metric file" >&2; exit 1; }
 
-  touch "$out"
-''
+    touch "$out"
+  ''
