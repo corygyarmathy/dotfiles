@@ -308,14 +308,14 @@
       original endnote list is restored to the foot of the essay, where Hugo
       put it -- the same place the backlinks sit at the foot of the page.
 
-      Positioning a wide note needs the vertical offset of its paragraph
-      inside the grid, so each note is placed at the top of the ancestor of
-      its citation that is a direct child of the article (a paragraph, an li,
-      a blockquote). Notes cited from the same block stack beneath one
-      another, each measured against the one before it, so two notes in one
-      paragraph never overlap. The notes are inserted into .layout rather than
-      the article, so pagefind -- which indexes the article marked
-      data-pagefind-body -- does not index the note text.
+      Positioning a wide note needs the vertical offset of its citation inside
+      the grid, so each note is anchored to the line that cites it, within the
+      ancestor of that citation that is a direct child of the article (a
+      paragraph, an li, a blockquote). Two notes from the same block must not
+      overlap, so when a second note would land on top of the first it is
+      pushed just below the previous note's bottom. The notes are inserted into
+      .layout rather than the article, so pagefind -- which indexes the article
+      marked data-pagefind-body -- does not index the note text.
 
       A note can be cited more than once (the same source can come up in many
       paragraphs). One note is built per definition, anchored to its FIRST
@@ -364,23 +364,45 @@
           return node && node.parentNode === article ? node : null;
         }
 
-        // Place the notes once the margin is laid out. Several notes in one
-        // paragraph would all align to the same paragraph top and stack on
-        // top of each other, so notes are tracked per block: the first is
-        // anchored to its paragraph's top, and each later one in that
-        // paragraph sits one pixel below the previous note's bottom.
-        // `lastTopByBlock` holds that running bottom.
+        // Place the notes once the margin is laid out. A note sits beside the
+        // line that cites it rather than at the top of the block that holds
+        // that line: a paragraph can run for many lines and cite several
+        // "see also" notes, and pinning them all to the paragraph top would
+        // pile every one of them far from the text that cites it.
+        //
+        // There must be no interleaving of reading and writing here. Writing a
+        // note's `top` (and the first writes of each note's dimensions) force
+        // the browser to re-layout, and a `getBoundingClientRect` read after a
+        // write sees the new layout -- so a loop that reads and writes in one
+        // pass places every later note against positions that have already
+        // shifted, and the notes collapse toward the top while their citations
+        // stay where they are. Measure every note first, in a read-only pass,
+        // and only then apply the measured tops.
+        //
+        // Two notes from the same block share one margin column and must not
+        // overlap, so each block remembers the bottom of the most recently
+        // placed note and pushes a later one just below it. The block must be
+        // tracked by identity, not as an object key: every element stringifies
+        // to "[object HTMLElement]", so an object map would collapse all
+        // paragraphs (and all list items, all blockquotes) into one bucket and
+        // wrongly couple notes that live in different blocks.
         function place() {
           var layoutTop = layout.getBoundingClientRect().top;
-          var lastTopByBlock = {};
+          var lastTopByBlock = new Map();
+          var positions = [];
           notes.forEach(function (note) {
-            var key = note.block;
+            var block = note.block;
+            var desired = note.ref.getBoundingClientRect().top - layoutTop;
+            var previous = lastTopByBlock.get(block);
             var top =
-              key in lastTopByBlock
-                ? lastTopByBlock[key] + 1
-                : note.block.getBoundingClientRect().top - layoutTop;
-            note.aside.style.top = top + "px";
-            lastTopByBlock[key] = top + note.aside.offsetHeight;
+              previous === undefined
+                ? desired
+                : Math.max(desired, previous + 1);
+            lastTopByBlock.set(block, top + note.aside.offsetHeight);
+            positions.push({ aside: note.aside, top: top });
+          });
+          positions.forEach(function (position) {
+            position.aside.style.top = position.top + "px";
           });
         }
 
@@ -430,7 +452,7 @@
             while (clone.firstChild) aside.appendChild(clone.firstChild);
 
             layout.appendChild(aside);
-            notes.push({ aside: aside, block: block });
+            notes.push({ aside: aside, block: block, ref: ref });
           });
 
           // Nothing to place (no citations on the page): keep the endnotes.
@@ -471,6 +493,35 @@
         window.addEventListener("resize", function () {
           if (mql.matches && notes.length) requestAnimationFrame(place);
         });
+
+        // The margin is measured against the laid-out article, but images and
+        // web fonts load after first paint and push every later citation down
+        // the page. A note placed before they arrive hovers high, clumped with
+        // the notes above it instead of beside its own citation. So re-measure
+        // once the content has stopped growing: when every image in the essay
+        // has settled, when the window has fully loaded (covering anything
+        // else that grew), and when the fonts are ready. Each pass only
+        // rewrites the notes' `top`, so re-running it is idempotent.
+        function placeWhenSettled() {
+          requestAnimationFrame(place);
+        }
+        var settlingImages = article.querySelectorAll("img");
+        var settlingLeft = settlingImages.length;
+        if (settlingLeft === 0) {
+          window.addEventListener("load", placeWhenSettled);
+        } else {
+          Array.prototype.forEach.call(settlingImages, function (img) {
+            var oneDown = function () {
+              if (--settlingLeft === 0) placeWhenSettled();
+            };
+            img.addEventListener("load", oneDown);
+            img.addEventListener("error", oneDown);
+          });
+        }
+        window.addEventListener("load", placeWhenSettled);
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(placeWhenSettled);
+        }
 
         // On paper there is no right margin - a sheet is about 794px wide,
         // whatever the window is - so the footnotes are printed the way they
