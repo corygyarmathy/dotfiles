@@ -731,11 +731,18 @@
         # once -- so it reads the notes after the re-placement that images,
         # fonts and window load trigger, not the first pass.
         #
-        # The virtual-time budget below has to cover the SLOWEST runner this
-        # ever executes on. At 8000 it passed on a workstation in 9s of wall
-        # clock and expired on a CI runner that took 17s, dumping a DOM with no
-        # marker in it -- which the assertion could only report as "the probe
-        # never ran".
+        # Neither the probe nor the page it measures may depend on a frame
+        # being produced. Under --virtual-time-budget chromium advances the
+        # clock for pending timers, but rAF callbacks need frames, and in this
+        # VM they sometimes never arrive: the same tree passed on a branch and
+        # failed on master with "the probe never ran", because the poll loop
+        # stalled before its first tick and the DOM was dumped with no marker
+        # in it. The loop below polls on setTimeout for that reason, and the
+        # placement it measures now runs straight away rather than from a rAF.
+        #
+        # The budget still has to cover the slowest runner rather than the
+        # fastest -- 8000 passed here in 9s of wall clock and expired on a CI
+        # runner that took 17.
         machine.succeed(
             "cat > /tmp/sn/probe.js <<'PROBE'\n"
             'var marker = document.createElement("div");\n'
@@ -758,17 +765,27 @@
             '  var notes = document.querySelectorAll(".sidenote");\n'
             '  var placed = notes.length > 0 && Array.prototype.every.call(notes, function (n) { return n.style.top !== ""; });\n'
             '  var settled = document.readyState === "complete";\n'
-            "  if (placed && settled) { measure(); return; }\n"
+            "  // One more beat after both are true, so the measurement is the\n"
+            "  // one that survives the re-placement fonts and window load\n"
+            "  // trigger, not an earlier pass that is about to be rewritten.\n"
+            "  if (placed && settled) { setTimeout(measure, 500); return; }\n"
             "  // Give up loudly rather than by producing nothing: a probe that\n"
             "  // never appends its marker is indistinguishable from one that\n"
             "  // never parsed, and says nothing about which.\n"
-            "  if (tries > 600) {\n"
+            "  if (tries > 200) {\n"
             '    marker.textContent = "@@GAVEUP placed=" + placed + " settled=" + settled + " notes=" + notes.length + "@@";\n'
             "    document.body.appendChild(marker);\n"
             "    return;\n"
             "  }\n"
-            "  requestAnimationFrame(maybeMeasure);\n"
+            "  setTimeout(maybeMeasure, 50);\n"
             "}\n"
+            "// setTimeout, not requestAnimationFrame. Under --virtual-time-budget\n"
+            "// the clock is advanced for pending timers, but frames are only\n"
+            "// produced if something drives them, and in this VM rAF sometimes\n"
+            "// never fires at all -- which stalled this loop before its first\n"
+            "// tick and dumped a DOM with no marker in it. That is also why the\n"
+            "// page itself no longer waits on a frame to place its notes.\n"
+            "//\n"
             "// Polling starts here rather than from the load event: the page can\n"
             "// already be complete by the time this script parses, and a load\n"
             "// listener added after the event has fired never runs at all.\n"
