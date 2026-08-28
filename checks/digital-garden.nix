@@ -726,9 +726,16 @@
             "cp /var/lib/digital-garden/public/main.*.css /tmp/sn/"
         )
 
-        # The probe sits between the notes' first placement and any later
-        # re-placement, waiting in a requestAnimationFrame loop until every
-        # .sidenote has an inline top, then measuring once.
+        # The probe waits in a requestAnimationFrame loop until the document
+        # is complete AND every .sidenote carries an inline top, then measures
+        # once -- so it reads the notes after the re-placement that images,
+        # fonts and window load trigger, not the first pass.
+        #
+        # The virtual-time budget below has to cover the SLOWEST runner this
+        # ever executes on. At 8000 it passed on a workstation in 9s of wall
+        # clock and expired on a CI runner that took 17s, dumping a DOM with no
+        # marker in it -- which the assertion could only report as "the probe
+        # never ran".
         machine.succeed(
             "cat > /tmp/sn/probe.js <<'PROBE'\n"
             'var marker = document.createElement("div");\n'
@@ -745,12 +752,27 @@
             '  marker.textContent = "@@" + parts.join("|") + "@@";\n'
             "  document.body.appendChild(marker);\n"
             "}\n"
+            "var tries = 0;\n"
             "function maybeMeasure() {\n"
+            "  tries++;\n"
             '  var notes = document.querySelectorAll(".sidenote");\n'
             '  var placed = notes.length > 0 && Array.prototype.every.call(notes, function (n) { return n.style.top !== ""; });\n'
-            "  if (placed) measure(); else requestAnimationFrame(maybeMeasure);\n"
+            '  var settled = document.readyState === "complete";\n'
+            "  if (placed && settled) { measure(); return; }\n"
+            "  // Give up loudly rather than by producing nothing: a probe that\n"
+            "  // never appends its marker is indistinguishable from one that\n"
+            "  // never parsed, and says nothing about which.\n"
+            "  if (tries > 600) {\n"
+            '    marker.textContent = "@@GAVEUP placed=" + placed + " settled=" + settled + " notes=" + notes.length + "@@";\n'
+            "    document.body.appendChild(marker);\n"
+            "    return;\n"
+            "  }\n"
+            "  requestAnimationFrame(maybeMeasure);\n"
             "}\n"
-            'window.addEventListener("load", function () { requestAnimationFrame(maybeMeasure); });\n'
+            "// Polling starts here rather than from the load event: the page can\n"
+            "// already be complete by the time this script parses, and a load\n"
+            "// listener added after the event has fired never runs at all.\n"
+            "maybeMeasure();\n"
             "PROBE"
         )
 
@@ -771,12 +793,15 @@
         dom = machine.succeed(
             "chromium --headless=new --no-sandbox --disable-gpu "
             "--disable-dev-shm-usage --allow-file-access-from-files "
-            "--virtual-time-budget=8000 --window-size=1600,1200 "
+            "--virtual-time-budget=30000 --window-size=1600,1200 "
             "--dump-dom file:///tmp/sn/page.html 2>/dev/null"
         )
 
         m = re.search(r'id="SN-MEAS">@@(.*?)@@', dom, re.S)
         assert m, "the sidenote probe never ran"
+        assert not m.group(1).startswith("GAVEUP"), (
+            f"the sidenote probe timed out waiting for placement: {m.group(1)}"
+        )
         parts = m.group(1).split("|")
         cites = {}
         notes = {}
