@@ -35,6 +35,9 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../../nixos/fleet.nix ];
+
   options.cg.service.jellyfin = {
     enable = lib.mkEnableOption "Jellyfin media server";
 
@@ -107,7 +110,7 @@ in
     };
 
     systemd.services.jellyfin.environment = {
-      JELLYFIN_PublishedServerUrl = "https://jellyfin.gyarmathy.co";
+      JELLYFIN_PublishedServerUrl = "https://jellyfin.${config.cg.fleet.domain}";
     };
 
     # Recording post-processing pipeline

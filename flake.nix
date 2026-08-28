@@ -34,7 +34,6 @@
       nixpkgs-stable,
       nixpkgs-unstable-small,
       home-manager,
-      hardware,
       stylix,
       sops-nix,
       disko,
@@ -48,17 +47,30 @@
       ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
 
-      # Helper function to create a NixOS host configuration
+      # What this fleet is: ./fleet/default.nix. Read here as plain data
+      # because `nixosConfigurations` is generated from it, which happens
+      # before there is a module system to ask. Modules read the same data
+      # through `config.cg.fleet` - see modules/nixos/fleet.nix.
+      fleet = import ./fleet;
+
+      # Helper function to create a NixOS host configuration.
+      #
+      # Takes a host's name and its entry in `fleet.hosts`, so the set of
+      # hosts and the facts about each of them are stated once, in ./fleet,
+      # rather than restated here.
       mkHost =
-        {
-          hostname,
-          system ? "x86_64-linux",
-          extraModules ? [ ],
-        }:
+        hostname:
+        { system, ... }:
         nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = {
             inherit inputs self;
+            # The fleet, for this flake's own leaves under ./hosts. They are
+            # never instantiated outside mkHost, so there is nothing for them
+            # to gain from going through the option. Reusable modules under
+            # ./modules do go through `config.cg.fleet`, so that a behaviour
+            # test can hand one a different fleet.
+            inherit fleet;
             # Make stable packages available as pkgs-stable
             pkgs-stable = import nixpkgs-stable {
               inherit system;
@@ -171,41 +183,14 @@
                 };
               }
             )
-          ]
-          ++ extraModules;
+          ];
         };
     in
     {
-      # NixOS configurations for each host
-      nixosConfigurations = {
-        # Desktop: Dell XPS 15 9500
-        xps15 = mkHost {
-          hostname = "xps15";
-          extraModules = [
-            hardware.nixosModules.dell-xps-15-9500-nvidia
-          ];
-        };
-
-        # Server: Dell Optiplex 5080
-        homelab01 = mkHost {
-          hostname = "homelab01";
-          extraModules = [
-            hardware.nixosModules.common-cpu-intel
-            hardware.nixosModules.common-pc
-            hardware.nixosModules.common-pc-ssd
-          ];
-        };
-
-        # Server: HP Elitedesk 800 G6 SFF
-        homelab02 = mkHost {
-          hostname = "homelab02";
-          extraModules = [
-            hardware.nixosModules.common-cpu-intel
-            hardware.nixosModules.common-pc
-            hardware.nixosModules.common-pc-ssd
-          ];
-        };
-      };
+      # One NixOS configuration per host in ./fleet. The nixos-hardware
+      # modules a given machine needs are a property of that machine, so they
+      # are imported by hosts/<name>/default.nix rather than listed here.
+      nixosConfigurations = nixpkgs.lib.mapAttrs mkHost fleet.hosts;
 
       # Overlays exported by this flake
       overlays = import ./overlays { inherit inputs; };
@@ -238,8 +223,12 @@
       # judged against - the vault is a poor test of a stylesheet, because it
       # contains whatever it happens to contain.
       #
-      # The renderer comes out of homelab01's own evaluated config rather than
-      # being rebuilt here, so the preview cannot drift from what is deployed.
+      # The renderer comes out of the serving host's own evaluated config
+      # rather than being rebuilt here, so the preview cannot drift from what
+      # is deployed. That host is the gateway: the garden is published to the
+      # internet, and the gateway is the machine that owns the tunnel
+      # everything public goes through. Item 2 of docs/plans/structural-
+      # cleanup.md replaces this with a lookup by publication.
       apps = forAllSystems (
         system:
         let
@@ -248,7 +237,7 @@
             overlays = builtins.attrValues self.overlays;
             config.allowUnfree = true;
           };
-          garden = self.nixosConfigurations.homelab01.config.cg.service.digital-garden;
+          garden = self.nixosConfigurations.${fleet.roles.gateway}.config.cg.service.digital-garden;
           # caddyConfig takes no settings, so importing serve.nix again for it
           # duplicates no configuration - unlike the renderer, which is read
           # out of the host's own evaluated config below.

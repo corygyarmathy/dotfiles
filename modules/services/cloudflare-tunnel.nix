@@ -6,7 +6,7 @@
 # - Protection against DDoS and direct IP exposure
 #
 # Architecture:
-# - cloudflared daemon runs on homelab01
+# - cloudflared daemon runs on the fleet's gateway host
 # - Registers DNS routes in Cloudflare
 # - Creates outbound tunnel to Cloudflare
 # - Cloudflare routes traffic based on hostname to local services
@@ -41,12 +41,16 @@ let
   '';
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.cloudflare-tunnel = {
     enable = lib.mkEnableOption "Cloudflare Tunnel for zero-trust access";
 
     domain = lib.mkOption {
       type = lib.types.str;
-      default = "gyarmathy.co";
+      default = config.cg.fleet.domain;
+      defaultText = lib.literalExpression "config.cg.fleet.domain";
       description = "Domain name for services";
     };
 

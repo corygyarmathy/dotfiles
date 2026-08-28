@@ -25,7 +25,7 @@
 #
 # Mobile clients:
 # - Enable the Fever or Google Reader API in Miniflux Settings > Integrations
-# - Connect Reeder / NetNewsWire to https://rss.gyarmathy.co
+# - Connect Reeder / NetNewsWire to https://rss.<domain>
 #
 # Secrets required in secrets/homelab.yaml:
 #   miniflux/admin-credentials: |
@@ -43,6 +43,9 @@ let
   cfg = config.cg.service.miniflux;
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.miniflux = {
     enable = lib.mkEnableOption "Miniflux RSS reader";
 
@@ -54,7 +57,8 @@ in
 
     baseUrl = lib.mkOption {
       type = lib.types.str;
-      default = "https://rss.gyarmathy.co";
+      default = "https://rss.${config.cg.fleet.domain}";
+      defaultText = lib.literalExpression ''"https://rss.''${config.cg.fleet.domain}"'';
       description = "Public base URL for Miniflux (used in feed links and API responses)";
     };
   };

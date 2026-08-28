@@ -18,6 +18,9 @@ let
   cfg = config.cg.service.nas-storage;
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.nas-storage = {
     enable = lib.mkEnableOption "NAS storage with ZFS and NFS";
 
@@ -38,13 +41,14 @@ in
 
       allowedNetwork = lib.mkOption {
         type = lib.types.str;
-        default = "10.20.2.0/24";
+        default = config.cg.fleet.lan.cidr;
+        defaultText = lib.literalExpression "config.cg.fleet.lan.cidr";
         example = "10.20.2.85/32";
         description = ''
           Host or network allowed to mount the export. Prefer the narrowest
-          value that works — ideally the single NFS client's IP (e.g.
-          "10.20.2.85/32") rather than a whole subnet, since the export grants
-          read-write access to all media.
+          value that works — ideally the single NFS client's address as a /32
+          rather than a whole subnet, since the export grants read-write
+          access to all media.
         '';
       };
 

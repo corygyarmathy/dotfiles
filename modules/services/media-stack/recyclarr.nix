@@ -67,7 +67,7 @@ let
   # the series and movie quality definitions exactly once.
   defaultSettings = {
     sonarr.shows = {
-      base_url = "https://sonarr.gyarmathy.co";
+      base_url = "https://sonarr.${config.cg.fleet.domain}";
       api_key._secret = config.sops.secrets."media-stack/sonarr/api".path;
       delete_old_custom_formats = true;
 
@@ -100,7 +100,7 @@ let
     };
 
     radarr.movies = {
-      base_url = "https://radarr.gyarmathy.co";
+      base_url = "https://radarr.${config.cg.fleet.domain}";
       api_key._secret = config.sops.secrets."media-stack/radarr/api".path;
       delete_old_custom_formats = true;
 
@@ -129,6 +129,9 @@ let
   };
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../../nixos/fleet.nix ];
+
   options.cg.service.recyclarr = {
     enable = lib.mkEnableOption "Recyclarr TRaSH Guide sync";
 

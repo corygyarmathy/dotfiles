@@ -23,8 +23,8 @@ let
   cfg = config.cg.service.unpackerr;
   stack = config.cg.service.media-stack;
 
-  sonarrUrl = "https://sonarr.gyarmathy.co";
-  radarrUrl = "https://radarr.gyarmathy.co";
+  sonarrUrl = "https://sonarr.${config.cg.fleet.domain}";
+  radarrUrl = "https://radarr.${config.cg.fleet.domain}";
 
   # Generate the TOML config file
   configFile = pkgs.writeText "unpackerr.conf" ''
@@ -77,6 +77,9 @@ let
   '';
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../../nixos/fleet.nix ];
+
   options.cg.service.unpackerr = {
     enable = lib.mkEnableOption "Archived release unpacker";
   };

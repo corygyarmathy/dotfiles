@@ -39,6 +39,12 @@ let
     mapAttrsToList (_: v: v) cfg.repositories
   );
 
+  # Every fleet machine with a reserved address; the laptop has none and is
+  # never an SFTP backup target.
+  fleetAddresses = mapAttrsToList (_: host: host.address) (
+    filterAttrs (_: host: host ? address) config.cg.fleet.hosts
+  );
+
   # Submodule type for individual repository targets
   repositoryModule = types.submodule {
     options = {
@@ -106,6 +112,9 @@ let
     '';
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.backup = {
     enable = mkEnableOption "Restic backup to defined repositories";
 
@@ -231,10 +240,12 @@ in
       mode = "0600";
     };
 
-    # Configure root's SSH to use the backup key and accept host keys
-    # for known homelab hosts
+    # Configure root's SSH to use the backup key and accept host keys for the
+    # fleet's own machines. Named one at a time rather than as a subnet glob:
+    # every address here is one this flake already knows, and a glob offers the
+    # backup key to whatever else happens to answer on the LAN.
     programs.ssh.extraConfig = mkIf hasSftpRepo ''
-      Host 10.20.2.*
+      Host ${lib.concatStringsSep " " fleetAddresses}
         IdentityFile /root/.ssh/id_backup
         StrictHostKeyChecking accept-new
     '';

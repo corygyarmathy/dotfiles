@@ -51,6 +51,9 @@ let
   cfg = config.cg.service.wallabag;
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.wallabag = {
     enable = lib.mkEnableOption "Wallabag read-it-later service";
 
@@ -62,7 +65,8 @@ in
 
     baseUrl = lib.mkOption {
       type = lib.types.str;
-      default = "https://read.gyarmathy.co";
+      default = "https://read.${config.cg.fleet.domain}";
+      defaultText = lib.literalExpression ''"https://read.''${config.cg.fleet.domain}"'';
       description = "Public base URL for Wallabag (must match SYMFONY__ENV__DOMAIN_NAME)";
     };
   };

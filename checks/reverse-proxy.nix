@@ -72,10 +72,23 @@
         })
       ];
 
+      # A fleet that is not this one. reverse-proxy.nix takes the domain it
+      # serves and the LAN it lets through from `config.cg.fleet`, and the
+      # option carries the real fleet as its default - so overriding it here
+      # is what keeps this test about the module rather than about
+      # gyarmathy.co, and it is why that option is not `readOnly`
+      # (modules/nixos/fleet.nix explains what that would have cost).
+      cg.fleet = {
+        domain = "example.test";
+        lan.cidr = "10.0.0.0/24";
+        hosts = { };
+        roles = { };
+      };
+
       cg.service.reverse-proxy = {
         enable = true;
         email = "test@example.invalid";
-        # Exactly how the hosts wire it (hosts/homelab01/default.nix:370), so
+        # Exactly how the hosts wire it (hosts/homelab01/default.nix:218), so
         # the test breaks if that indirection changes.
         cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
 
@@ -154,25 +167,25 @@
         #
         # Without -f, so this waits on TLS alone and does not quietly double as
         # an assertion about the response.
-        for host in ["internal.gyarmathy.co", "public.gyarmathy.co"]:
+        for host in ["internal.example.test", "public.example.test"]:
             machine.wait_until_succeeds(curl(host, "-o /dev/null"), timeout=60)
 
     with subtest("a LAN-only service routes to its backend"):
-        body = get("internal.gyarmathy.co", "/some/path")
+        body = get("internal.example.test", "/some/path")
         assert body["path"] == "/some/path", body
 
     with subtest("the upstream sees the headers mkProxyHost sets"):
-        headers = get("internal.gyarmathy.co")["headers"]
+        headers = get("internal.example.test")["headers"]
         # header_up Host {host}: the backend must see the original vhost, not
         # 127.0.0.1. Getting this wrong breaks every service that builds an
         # absolute URL, which is most of them.
-        assert headers["host"] == "internal.gyarmathy.co", headers
+        assert headers["host"] == "internal.example.test", headers
         assert headers["x-forwarded-proto"] == "https", headers
         assert "x-real-ip" in headers, headers
         assert "x-forwarded-for" in headers, headers
 
     with subtest("an internet-facing service gets the security headers"):
-        response = headers_of("public.gyarmathy.co")
+        response = headers_of("public.example.test")
         for expected in [
             "x-frame-options: sameorigin",
             "x-content-type-options: nosniff",
@@ -185,10 +198,10 @@
         # Not pedantry: localOnly selects between two branches of mkProxyHost,
         # so a service silently flipping branch shows up as headers appearing
         # or disappearing rather than as anything failing outright.
-        response = headers_of("internal.gyarmathy.co")
+        response = headers_of("internal.example.test")
         assert "x-frame-options" not in response, response
 
     with subtest("an unconfigured host is not routed anywhere"):
-        machine.fail(curl("nothing-here.gyarmathy.co", "-f"))
+        machine.fail(curl("nothing-here.example.test", "-f"))
   '';
 }

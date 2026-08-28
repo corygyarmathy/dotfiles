@@ -1,14 +1,14 @@
 # AdGuard Home - Local DNS Server with Ad Blocking
 #
 # Provides:
-# - Local DNS resolution for *.gyarmathy.co services
+# - Local DNS resolution for the fleet's own subdomains
 # - Ad and tracker blocking
 # - Encrypted DNS (DoH/DoT) upstream
 # - Query logging and statistics
 #
 # Architecture:
-# - Primary: homelab01 (10.20.2.85)
-# - Secondary: homelab02 (10.20.2.130) - same config, different bind address
+# - Primary: the host named by fleet.roles.gateway
+# - Secondary: another host running the same config on a different bind address
 #
 # Usage:
 #   cg.service.adguard-home = {
@@ -23,149 +23,86 @@
 }:
 let
   cfg = config.cg.service.adguard-home;
+  fleet = config.cg.fleet;
+  inherit (fleet) domain;
 
-  # Domain configuration - centralised for easy updates
-  domain = "gyarmathy.co";
+  # Where the two fleet-wide duties live. Everything below is expressed
+  # against these rather than against host names, so moving a duty to another
+  # machine is an edit to fleet/default.nix and nothing else.
+  gateway = fleet.hosts.${fleet.roles.gateway}.address;
+  storage = fleet.hosts.${fleet.roles.storage}.address;
 
-  # Server IPs - used for DNS rewrites
-  servers = {
-    homelab01 = "10.20.2.85";
-    homelab02 = "10.20.2.130";
+  # Every host that has a reserved address resolves by name. The laptop does
+  # not have one, which is why this filters rather than mapping the lot.
+  addressed = lib.filterAttrs (_: host: host ? address) fleet.hosts;
+
+  # DNS rewrites for local services.
+  #
+  # Subdomains are listed by the duty that serves them, not by host name.
+  # Add a new service to the list for whichever machine's Caddy fronts it.
+  gatewaySubdomains = [
+    "jellyfin"
+    "requests"
+    "invite"
+    "sonarr"
+    "radarr"
+    "autobrr"
+    "prowlarr"
+    "bazarr"
+    "huntarr"
+    "cleanuparr"
+    "grafana"
+    "prometheus"
+    "adguard"
+    "rss"
+    "read"
+    "kavita"
+    "audiobookshelf"
+  ];
+
+  # Services fronted by the storage host's own Caddy.
+  #
+  # These entries are load-bearing, not documentation. The wildcard at the
+  # bottom of the list sends every subdomain that is not named here to the
+  # gateway, so a service added to the storage host's reverse proxy without an
+  # entry here resolves to a machine whose Caddy has never heard of it. That
+  # fails as a TLS error rather than a 404, because Caddy has no certificate
+  # for a hostname it does not serve, which points suspicion at the
+  # certificate rather than at DNS.
+  #
+  # A service running on the storage host but proxied *by the gateway* (via
+  # the reverse proxy's `upstream` option, as grimmory is) belongs in the list
+  # above, not this one.
+  storageSubdomains = [
+    "downloads"
+    "adguard2"
+    "filebrowser"
+    "shelfmark"
+    "suwayomi"
+  ];
+
+  mkRewrite = answer: sub: {
+    domain = "${sub}.${domain}";
+    inherit answer;
   };
 
-  # The server that runs the reverse proxy (where services are accessed)
-  primaryServer = servers.homelab01;
-
-  # DNS rewrites for local services
-  # These map subdomains to the reverse proxy server
-  # Add new services here as you deploy them
-  dnsRewrites = [
+  dnsRewrites =
     # Server hostnames
-    {
-      domain = "homelab01.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "homelab02.${domain}";
-      answer = servers.homelab02;
-    }
-
-    # Services on homelab01
-    {
-      domain = "jellyfin.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "requests.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "invite.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "sonarr.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "radarr.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "autobrr.${domain}";
-      answer = servers.homelab01;
-    }
-
-    {
-      domain = "prowlarr.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "bazarr.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "huntarr.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "cleanuparr.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "grafana.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "prometheus.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "adguard.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "rss.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "read.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "kavita.${domain}";
-      answer = servers.homelab01;
-    }
-    {
-      domain = "audiobookshelf.${domain}";
-      answer = servers.homelab01;
-    }
-
-    # Services on homelab02.
-    #
-    # These entries are load-bearing, not documentation. The wildcard at the
-    # bottom of this list sends every subdomain that is not named here to
-    # homelab01, so a service added to homelab02's reverse proxy without a
-    # rewrite here resolves to a machine whose Caddy has never heard of it.
-    # That fails as a TLS error rather than a 404, because Caddy has no
-    # certificate for a hostname it does not serve, which points suspicion at
-    # the certificate rather than at DNS.
-    #
-    # A service on homelab02 that is proxied *by homelab01* (via the reverse
-    # proxy's `upstream` option, as grimmory is) belongs above, not here.
-    {
-      domain = "downloads.${domain}";
-      answer = servers.homelab02;
-    }
-    {
-      domain = "adguard2.${domain}";
-      answer = servers.homelab02;
-    }
-    {
-      domain = "filebrowser.${domain}";
-      answer = servers.homelab02;
-    }
-    {
-      domain = "shelfmark.${domain}";
-      answer = servers.homelab02;
-    }
-    {
-      domain = "suwayomi.${domain}";
-      answer = servers.homelab02;
-    }
-  ]
-  ++ cfg.extraRewrites # add supplied rewrites
-  ++ [
-    # Wildcard fallback - routes undefined subdomains to primary
-    {
-      domain = "*.${domain}";
-      answer = primaryServer;
-    }
-    {
-      domain = domain;
-      answer = primaryServer;
-    }
-  ];
+    lib.mapAttrsToList (name: host: mkRewrite host.address name) addressed
+    ++ map (mkRewrite gateway) gatewaySubdomains
+    ++ map (mkRewrite storage) storageSubdomains
+    ++ cfg.extraRewrites # add supplied rewrites
+    ++ [
+      # Wildcard fallback - routes undefined subdomains to the gateway
+      {
+        domain = "*.${domain}";
+        answer = gateway;
+      }
+      {
+        domain = domain;
+        answer = gateway;
+      }
+    ];
 
   # Upstream DNS servers - using encrypted DNS
   # These are queried for external domains (anything not in rewrites)
@@ -236,6 +173,9 @@ let
 
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.adguard-home = {
     enable = lib.mkEnableOption "AdGuard Home DNS server";
 
@@ -247,8 +187,8 @@ in
       default = "primary";
       description = ''
         Role of this AdGuard Home instance.
-        - primary: Main DNS server (homelab01)
-        - secondary: Backup DNS server (homelab02)
+        - primary: Main DNS server
+        - secondary: Backup DNS server
         Both use identical configuration for failover.
       '';
     };
@@ -385,13 +325,13 @@ in
           ratelimit = 100; # queries per second per client
           ratelimit_whitelist = [
             "127.0.0.1"
-            "${servers.homelab01}"
-            "${servers.homelab02}"
-          ];
+          ]
+          ++ lib.mapAttrsToList (_: host: host.address) addressed;
 
-          # Local PTR resolvers for reverse DNS
+          # Local PTR resolvers for reverse DNS - the router is the only thing
+          # that knows what DHCP handed out.
           local_ptr_upstreams = [
-            "10.20.2.1" # Your router for local reverse lookups
+            fleet.lan.gateway
           ];
           use_private_ptr_resolvers = true;
 

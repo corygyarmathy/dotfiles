@@ -8,6 +8,7 @@
 
 let
   cfg = config.cg.service.monitoring;
+  fleet = config.cg.fleet;
 
   # ZFS health metrics script for textfile collector
   # Outputs Prometheus metrics for ZFS pool health
@@ -174,6 +175,9 @@ let
   '';
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../../nixos/fleet.nix ];
+
   options.cg.service.monitoring = {
     enable = lib.mkEnableOption "Monitoring stack";
 
@@ -243,7 +247,8 @@ in
 
         baseUrl = lib.mkOption {
           type = lib.types.str;
-          default = "https://ntfy.gyarmathy.co";
+          default = "https://ntfy.${fleet.domain}";
+          defaultText = lib.literalExpression ''"https://ntfy.''${config.cg.fleet.domain}"'';
           description = "Base URL of the ntfy server the bridge publishes to";
         };
 
@@ -512,17 +517,28 @@ in
                 }
               ];
             }
-            {
-              job_name = "cloudflared";
-              static_configs = [
-                {
-                  targets = [ cfg.cloudflaredTarget ];
-                  labels = {
-                    instance = "homelab01";
-                  };
-                }
-              ];
-            }
+          ]
+          # `null to disable` per the option's description. It used to emit the
+          # job regardless, which produced `targets = [ null ]` and a type
+          # error rather than the documented no-op; nothing sets it to null
+          # today, and now nothing has to.
+          ++ lib.optional (cfg.cloudflaredTarget != null) {
+            job_name = "cloudflared";
+            static_configs = [
+              {
+                targets = [ cfg.cloudflaredTarget ];
+                labels = {
+                  # cloudflared is scraped from wherever the tunnel runs,
+                  # which is not necessarily this host - so the instance label
+                  # comes from the target rather than from
+                  # `networking.hostName`, which would mislabel every series
+                  # the peer scrapes.
+                  instance = lib.head (lib.splitString ":" cfg.cloudflaredTarget);
+                };
+              }
+            ];
+          }
+          ++ [
             {
               job_name = "blackbox-http";
               metrics_path = "/probe";
@@ -876,8 +892,8 @@ in
             server = {
               http_port = 3000;
               http_addr = "127.0.0.1";
-              domain = "grafana.gyarmathy.co";
-              root_url = "https://grafana.gyarmathy.co";
+              domain = "grafana.${fleet.domain}";
+              root_url = "https://grafana.${fleet.domain}";
             };
 
             "auth.anonymous".enabled = false;
