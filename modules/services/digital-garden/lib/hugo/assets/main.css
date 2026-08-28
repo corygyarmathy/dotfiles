@@ -175,23 +175,11 @@ footer {
   outline-offset: 2px;
 }
 
-/* The glyph is the state, not the action: whichever of the three the page is
- * currently in. The system glyph is hidden by default and the two theme
- * glyphs are hidden when it is showing, so the rules stay in the order the
- * script sets the attributes in. */
+/* The glyph is the opposite of the current state: moon when dark, sun when
+ * light — whether the reader picked a theme or is following the OS. */
 :root[data-theme="dark"] .icon-sun,
-:root[data-theme="light"] .icon-moon,
-.icon-system {
+:root[data-theme="light"] .icon-moon {
   display: none;
-}
-
-:root[data-theme-source="system"] .icon-sun,
-:root[data-theme-source="system"] .icon-moon {
-  display: none;
-}
-
-:root[data-theme-source="system"] .icon-system {
-  display: block;
 }
 
 /* ── prose ──────────────────────────────────────────────────────────────── */
