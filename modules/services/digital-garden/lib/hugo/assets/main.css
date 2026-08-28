@@ -50,7 +50,7 @@
    * secondary accent (rofi's accent2, waybar's secondary). One brand title,
    * not a prose heading: the "headings stay neutral" decision was made for
    * notes with twenty-nine of them, not for a single masthead. */
-  --brand: #624c83;    /* lotusViolet4 */
+  --brand: #b35b79;    /* lotusPink */
 
   --body-font:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
@@ -75,7 +75,7 @@
    * headroom and uses it, which is why the two blocks disagree here. */
   --strong: #dcd7ba;   /* fujiWhite */
   --accent: #7e9cd8;   /* crystalBlue */
-  --brand: #957fb8;    /* oniViolet — the statement/keyword role, see Lotus above */
+  --brand: #d27e99;    /* sakuraPink — the statement/keyword role, see Lotus above */
   color-scheme: dark;
 }
 
