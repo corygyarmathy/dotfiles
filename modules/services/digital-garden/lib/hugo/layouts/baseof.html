@@ -406,6 +406,22 @@
           });
         }
 
+        // Place now, and again on the next frame once the grid has resolved.
+        //
+        // The second call is the accurate one: rAF lets the grid settle, and
+        // the offsetHeight read inside place() forces the layout it measures.
+        // The FIRST call is what stops the margin depending on a frame ever
+        // being produced. requestAnimationFrame does not fire in a background
+        // tab, so a reader who opens the essay in one -- middle-click, "open
+        // in new tab", a restored session -- would otherwise meet a column of
+        // notes still stacked where they were built, and see them snap into
+        // place only when they finally looked at the page. Placing straight
+        // away costs one extra layout and removes that.
+        function placeNowAndNextFrame() {
+          place();
+          requestAnimationFrame(place);
+        }
+
         // The wide state: build a margin note per definition, remove the
         // endnote list (the two would be the same words twice, and two
         // elements with one id is broken HTML), and position the notes.
@@ -462,9 +478,7 @@
           // The medium is the margin now, so drop the foot-of-page list.
           if (list.parentNode) list.remove();
 
-          // rAF waits for the grid to resolve; forcing layout (the offsetHeight
-          // read inside place) makes the measurement accurate on first run.
-          requestAnimationFrame(place);
+          placeNowAndNextFrame();
         }
 
         // The narrow state: the margin is gone, so the notes are removed and
@@ -489,7 +503,7 @@
 
         // While wide, a resize can move every citation's line, so re-measure.
         window.addEventListener("resize", function () {
-          if (mql.matches && notes.length) requestAnimationFrame(place);
+          if (mql.matches && notes.length) placeNowAndNextFrame();
         });
 
         // The margin is measured against the laid-out article, but images and
@@ -501,7 +515,7 @@
         // else that grew), and when the fonts are ready. Each pass only
         // rewrites the notes' `top`, so re-running it is idempotent.
         function placeWhenSettled() {
-          requestAnimationFrame(place);
+          placeNowAndNextFrame();
         }
         var settlingImages = article.querySelectorAll("img");
         var settlingLeft = settlingImages.length;
