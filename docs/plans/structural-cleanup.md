@@ -117,13 +117,27 @@ A plain data file, `fleet/default.nix`, holding an attrset of hosts: address, ro
 Surface it twice, deliberately:
 
 - **`specialArgs.fleet`** for flake-level consumers and for anything that needs it before the module system is running.
-- **`config.cg.fleet`**, a read-only option (`mkOption { readOnly = true; default = fleet; }`) set once in `mkHost`, so modules consume it through `config` like everything else instead of taking an extra function argument. A module that reads `config.cg.fleet.hosts.homelab02.address` stays a normal NixOS module and stays testable in `checks/`, where the test can supply its own fleet.
+- **`config.cg.fleet`**, an option carrying the data as its **default**, declared in an ordinary module (`modules/nixos/fleet.nix`) as `mkOption { type = …; default = import ../../fleet; }`. Modules consume it through `config` like everything else instead of taking an extra function argument, and a module that reads `config.cg.fleet.hosts.homelab02.address` stays a normal NixOS module.
+
+**Two things about that declaration are load-bearing, and both are easy to get wrong.**
+
+_The data belongs in the option's `default`, not in a definition from `mkHost`._ The two look equivalent and are not. The VM tests in `checks/` instantiate modules directly and never go through `mkHost`, so under the `mkHost` design the first module to read `config.cg.fleet` breaks every check containing it, and the fix is to teach `checks/lib.nix` to inject a fleet into every test — a harness change caused entirely by where the value was put. As a default, every module-system evaluation gets the fleet, tests included, and `mkHost` sets nothing.
+
+_Do not mark it `readOnly`._ It is the obvious thing to reach for — the value is meant to come from one place — and it silently costs the property this design exists for. `readOnly` counts the option's own default among its definitions, so `readOnly = true` together with `default = …` rejects **any** override, not just a second one:
+
+```
+error: The option `cg.fleet' is read-only, but it's set multiple times.
+```
+
+That would leave every check permanently stuck with the production fleet, unable to exercise a module against a different one. A plain option with a default keeps the single-source-of-truth property by convention rather than by mechanism, and a non-merging type still turns an accidental double definition into a conflict error, which is most of what `readOnly` was wanted for anyway.
+
+`specialArgs.fleet` stays for flake-level consumers — `checks`, `apps` — which are outside the module system entirely and cannot read `config` at all.
 
 The distinction worth keeping is between _fleet facts_ and _host choices_. `homelab02`'s address is a fleet fact. That `homelab02` runs qBittorrent is a host choice and belongs in `hosts/homelab02/`. Putting the second kind into `fleet/` recreates the monolith one level up.
 
 ### Done when
 
-No `.nix` file outside `fleet/` contains a literal fleet IP address, host name or the domain, except in comments, `example` fields and `hosts/homelab02/disko.nix` (which is consumed by `nixos-anywhere` before any of this exists).
+No `.nix` file outside `fleet/` contains a literal fleet IP address, host name or the domain, except in comments, `example` fields and `hosts/homelab02/disko.nix` (which is consumed by `nixos-anywhere` before any of this exists) — and `checks/` still passes without `checks/lib.nix` having learned anything about the fleet.
 
 ### Risks
 
