@@ -37,6 +37,9 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../../nixos/fleet.nix ];
+
   options.cg.service.qbittorrent = {
     enable = lib.mkEnableOption "qBittorrent torrent client";
 
@@ -100,7 +103,7 @@ in
           VPN_TYPE = "wireguard";
           SERVER_COUNTRIES = cfg.vpn.serverCountry;
           VPN_PORT_FORWARDING = "on";
-          FIREWALL_OUTBOUND_SUBNETS = "10.89.0.0/24,10.20.2.0/24";
+          FIREWALL_OUTBOUND_SUBNETS = "10.89.0.0/24,${config.cg.fleet.lan.cidr}";
           TZ = config.time.timeZone;
         };
         environmentFiles = [

@@ -286,6 +286,9 @@ let
   };
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../../nixos/fleet.nix ];
+
   options.cg.service.digital-garden = {
     enable = lib.mkEnableOption "Digital garden (published subset of the Obsidian vault)";
 
@@ -347,7 +350,8 @@ in
 
     baseUrl = lib.mkOption {
       type = lib.types.str;
-      default = "garden.gyarmathy.co";
+      default = "garden.${config.cg.fleet.domain}";
+      defaultText = lib.literalExpression ''"garden.''${config.cg.fleet.domain}"'';
       description = "Public base URL, without scheme; the scheme is added by the renderer";
     };
 

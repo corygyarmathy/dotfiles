@@ -17,8 +17,24 @@
   config,
   lib,
   pkgs,
+  fleet,
   ...
 }:
+let
+  inherit (fleet) domain;
+
+  hostName = config.networking.hostName;
+
+  # The fleet's always-on machines: what gets scraped, peered and backed up.
+  # `peer` is the other one - this fleet has exactly two, and the day it has
+  # three is the day the things below that assume one peer need revisiting.
+  servers = lib.attrNames (lib.filterAttrs (_: host: host.kind == "server") fleet.hosts);
+  peers = lib.remove hostName servers;
+  peer = lib.head peers;
+
+  # The host that owns the tunnel, the primary DNS instance and the wildcard.
+  gateway = fleet.roles.gateway;
+in
 {
   imports = [
     # Declarative disk partitioning (manages OS + data disks)
@@ -26,6 +42,11 @@
 
     # Hardware configuration (generate with nixos-generate-config)
     ./hardware.nix
+
+    # Quirks for this exact machine, from nixos-hardware
+    inputs.hardware.nixosModules.common-cpu-intel
+    inputs.hardware.nixosModules.common-pc
+    inputs.hardware.nixosModules.common-pc-ssd
 
     # Server-specific service modules
     ../../modules/services
@@ -48,7 +69,7 @@
   # rebooting into a new kernel simultaneously is worth avoiding on its own.
   system.autoUpgrade = {
     enable = true;
-    flake = "github:corygyarmathy/dotfiles/deploy#homelab02";
+    flake = "github:corygyarmathy/dotfiles/deploy#${hostName}";
     dates = "04:15"; # Offset from homelab01
     allowReboot = true;
     rebootWindow = {
@@ -111,8 +132,8 @@
     backup = {
       enable = true;
 
-      # homelab02 receives homelab01's cross-server backups here
-      incomingPath = "/srv/backups/homelab01";
+      # This host receives its peer's cross-server backups here
+      incomingPath = "/srv/backups/${peer}";
 
       paths = [
         # All arr service configs
@@ -138,14 +159,14 @@
       ];
 
       repositories = {
-        # Cross-server: back up to homelab01
+        # Cross-server: back up to the peer
         cross-server = {
-          repository = "sftp:coryg@10.20.2.85:/srv/backups/homelab02";
+          repository = "sftp:coryg@${fleet.hosts.${peer}.address}:/srv/backups/${hostName}";
           schedule = "02:30";
         };
         # Offsite: Google Drive via rclone
         gdrive = {
-          repository = "rclone:gdrive:backups/homelab/homelab02";
+          repository = "rclone:gdrive:backups/homelab/${hostName}";
           schedule = "03:00";
         };
       };
@@ -159,8 +180,8 @@
       prometheus.enable = true;
       alertmanager = {
         enable = true;
-        clusterPeers = [ "homelab01" ];
-        # Push lane. The ntfy server itself lives on homelab01; this host runs
+        clusterPeers = peers;
+        # Push lane. The ntfy server itself lives on the gateway; this host runs
         # only the local alertmanager-ntfy bridge, so either host can still
         # deliver on its own if the other is down.
         #
@@ -173,78 +194,72 @@
           port = 8015;
         };
         email = {
-          to = "cory@gyarmathy.co";
-          from = "alerts@gyarmathy.co";
-          authUsername = "alerts@gyarmathy.co";
+          to = "cory@${domain}";
+          from = "alerts@${domain}";
+          authUsername = "alerts@${domain}";
           # smarthost uses the default (smtp.protonmail.ch:587)
         };
       };
       grafana.enable = false;
       zfs.enable = true;
-      scrapeTargets = [
-        "homelab01:9100"
-        "homelab02:9100"
-      ];
-      smartctlTargets = [
-        "homelab01:9633"
-        "homelab02:9633"
-      ];
-      cloudflaredTarget = "homelab01:20241";
+      scrapeTargets = map (host: "${host}:9100") servers;
+      smartctlTargets = map (host: "${host}:9633") servers;
+      cloudflaredTarget = "${gateway}:20241";
 
       vpn.enable = true;
 
       httpProbes = [
         {
           name = "jellyfin";
-          url = "https://jellyfin.gyarmathy.co";
+          url = "https://jellyfin.${domain}";
         }
         {
           name = "requests";
-          url = "https://requests.gyarmathy.co";
+          url = "https://requests.${domain}";
         }
         {
           name = "sonarr";
-          url = "https://sonarr.gyarmathy.co";
+          url = "https://sonarr.${domain}";
         }
         {
           name = "radarr";
-          url = "https://radarr.gyarmathy.co";
+          url = "https://radarr.${domain}";
         }
         {
           name = "prowlarr";
-          url = "https://prowlarr.gyarmathy.co";
+          url = "https://prowlarr.${domain}";
         }
         {
           name = "downloads";
-          url = "https://downloads.gyarmathy.co";
+          url = "https://downloads.${domain}";
         }
         {
           name = "grafana";
-          url = "https://grafana.gyarmathy.co";
+          url = "https://grafana.${domain}";
         }
         {
           name = "adguard-01";
-          url = "https://adguard.gyarmathy.co";
+          url = "https://adguard.${domain}";
         }
         {
           name = "adguard-02";
-          url = "https://adguard2.gyarmathy.co";
+          url = "https://adguard2.${domain}";
         }
         {
           name = "autobrr";
-          url = "https://autobrr.gyarmathy.co";
+          url = "https://autobrr.${domain}";
         }
         {
           name = "miniflux";
-          url = "https://rss.gyarmathy.co";
+          url = "https://rss.${domain}";
         }
         {
           name = "wallabag";
-          url = "https://read.gyarmathy.co";
+          url = "https://read.${domain}";
         }
         {
           name = "filebrowser";
-          url = "https://filebrowser.gyarmathy.co";
+          url = "https://filebrowser.${domain}";
         }
       ];
     };
@@ -274,9 +289,9 @@
       poolPath = "/srv/media";
       nfs = {
         enable = true;
-        # Only homelab01 mounts this export; scope it to that host rather than
+        # Only the peer mounts this export; scope it to that host rather than
         # the whole subnet so no other device can touch the media as root.
-        allowedNetwork = "10.20.2.85/32";
+        allowedNetwork = "${fleet.hosts.${peer}.address}/32";
         exportPath = "/srv/media";
       };
       user = "coryg";
@@ -288,7 +303,7 @@
     # -------------------------------------------------------------------------
     reverse-proxy = {
       enable = true;
-      email = "cory@gyarmathy.co";
+      email = "cory@${domain}";
       cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
 
       services = {
@@ -308,7 +323,7 @@
           '';
         };
 
-        # homelab02's AdGuard instance
+        # This host's AdGuard instance
         adguard2 = {
           subdomain = "adguard2";
           port = 3080;
@@ -353,7 +368,7 @@
       webPort = 3080;
       bindAddresses = [
         "127.0.0.1"
-        "10.20.2.130"
+        fleet.hosts.${hostName}.address
       ];
     };
 
@@ -489,9 +504,9 @@
   # Networking
   # ============================================================================
   networking = {
-    # IP reserved by DHCP server
+    # IP reserved by the DHCP server; the reservation itself is recorded in
+    # fleet/default.nix, and mkHost sets hostName from the same place.
     useDHCP = lib.mkForce true;
-    hostName = "homelab02";
     networkmanager.enable = true;
   };
 

@@ -184,6 +184,9 @@ let
   '';
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../../nixos/fleet.nix ];
+
   options.cg.service.cross-seed = {
     enable = lib.mkEnableOption "cross-seed for private tracker ratio building";
 
@@ -195,7 +198,8 @@ in
 
     prowlarrUrl = lib.mkOption {
       type = lib.types.str;
-      default = "http://10.20.2.85:9696";
+      default = "http://${config.cg.fleet.hosts.${config.cg.fleet.roles.gateway}.address}:9696";
+      defaultText = lib.literalExpression "the gateway host's address on port 9696";
       example = "http://prowlarr:9696";
       description = ''
         Base URL for Prowlarr's Torznab feeds. An address, not a hostname, and
@@ -203,9 +207,10 @@ in
 
         Under VPN this container lives in Gluetun's network namespace, where
         DNS is Gluetun's own DoT resolver pointed at a public upstream. The
-        internal zone does not exist there: prowlarr.gyarmathy.co resolves only
-        on AdGuard and has no public record, so every Torznab request failed to
-        resolve and every search silently skipped its indexers. Reaching
+        internal zone does not exist there: the Prowlarr hostname resolves
+        only on AdGuard and has no public record, so every Torznab request
+        failed to resolve and every search silently skipped its indexers.
+        Reaching
         Prowlarr by address avoids resolution entirely, and Gluetun's
         FIREWALL_OUTBOUND_SUBNETS already permits the LAN.
       '';

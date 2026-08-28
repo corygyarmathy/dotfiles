@@ -12,6 +12,9 @@
     # Hardware configuration
     ./hardware.nix
 
+    # Quirks for this exact machine, from nixos-hardware
+    inputs.hardware.nixosModules.dell-xps-15-9500-nvidia
+
     # NixOS modules
     ../../modules/nixos
   ];

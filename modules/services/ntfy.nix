@@ -23,7 +23,7 @@
 #     `monitoring/ntfy/webhook-password`, e.g.:
 #       openssl rand -hex 24   # once per secret
 #     then re-run the deploy so the bridges pick them up.
-#  3. In the ntfy app add server https://ntfy.gyarmathy.co, log in with
+#  3. In the ntfy app add server https://ntfy.<domain>, log in with
 #     the user from step 1, and subscribe to the `alerts` topic.
 #
 # The auth database lives in /var/lib/ntfy-sh/user.db. It is not in the
@@ -39,6 +39,9 @@ let
   cfg = config.cg.service.ntfy;
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.ntfy = {
     enable = lib.mkEnableOption "ntfy self-hosted push notification server";
 
@@ -69,7 +72,7 @@ in
       settings = {
         # What clients see in messages' links and what iOS-style instant
         # delivery would key off; must match the public URL.
-        base-url = "https://${cfg.subdomain}.gyarmathy.co";
+        base-url = "https://${cfg.subdomain}.${config.cg.fleet.domain}";
         listen-http = "127.0.0.1:${toString cfg.port}";
 
         # We sit behind Caddy, which already terminates TLS and applies its

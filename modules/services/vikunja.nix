@@ -45,6 +45,9 @@ let
   cfg = config.cg.service.vikunja;
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.vikunja = {
     enable = lib.mkEnableOption "Vikunja task manager";
 
@@ -56,7 +59,8 @@ in
 
     frontendHostname = lib.mkOption {
       type = lib.types.str;
-      default = "tasks.gyarmathy.co";
+      default = "tasks.${config.cg.fleet.domain}";
+      defaultText = lib.literalExpression ''"tasks.''${config.cg.fleet.domain}"'';
       description = "Public hostname for Vikunja (used in links and CORS headers)";
     };
   };

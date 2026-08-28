@@ -17,7 +17,7 @@
 # - Certs auto-renew before expiry
 #
 # To switch to wildcard later, change the virtualHosts to use:
-#   "*.gyarmathy.co" = { ... }
+#   "*.${domain}" = { ... }
 # and add a single tls block with the dns challenge
 #
 # ════════════════════════════════════════════════════════════════════════════
@@ -43,7 +43,8 @@
 }:
 let
   cfg = config.cg.service.reverse-proxy;
-  domain = "gyarmathy.co";
+  fleet = config.cg.fleet;
+  inherit (fleet) domain;
 
   # Build Caddy with Cloudflare DNS plugin
   # This is required for DNS-01 challenge
@@ -152,7 +153,7 @@ let
 
           ${lib.optionalString localOnly ''
             # Restrict to local network only
-            @denied not remote_ip 10.20.2.0/24 10.89.0.0/24 192.168.0.0/16 127.0.0.1
+            @denied not remote_ip ${fleet.lan.cidr} 10.89.0.0/24 192.168.0.0/16 127.0.0.1
             respond @denied "Access denied" 403
           ''}
 
@@ -170,6 +171,9 @@ let
     };
 in
 {
+  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
+  imports = [ ../nixos/fleet.nix ];
+
   options.cg.service.reverse-proxy = {
     enable = lib.mkEnableOption "Caddy reverse proxy with automatic TLS";
 
