@@ -147,7 +147,20 @@ in
         trap 'rm -rf "$work"' EXIT
 
         cp -r ${theme}/layouts "$work/layouts"
+        # The theme's own assets, and then the stylesheet over the top of them.
+        # The stylesheet is the one asset that arrives as an argument, because
+        # garden-preview hands in the working-tree copy so that editing it
+        # re-renders with no Nix evaluation in the loop; everything else here
+        # (the tab icon) has no reason to be swappable and lives in the theme.
+        # Copying the directory first and the argument second is what keeps
+        # both true, and means the next asset needs no change to this file.
         mkdir -p "$work/assets"
+        cp -r ${theme}/assets/. "$work/assets/"
+        # Store paths copy out read-only, and the theme's assets already hold a
+        # main.css - so the overlay below is an overwrite of a file with no
+        # write bit on it. Same reason the static and content trees are chmod-ed
+        # after their copies rather than at the end.
+        chmod -R u+w "$work/assets"
         cp "$css" "$work/assets/main.css"
         cp ${config} "$work/hugo.toml"
         chmod -R u+w "$work"

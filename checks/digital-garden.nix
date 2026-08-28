@@ -468,6 +468,16 @@
         assert ".table-container" in css, \
             ".table-container missing from the stylesheet"
 
+    with subtest("the page declares a tab icon"):
+        # Without one the browser asks for /favicon.ico on every visit and gets
+        # a 404 for it. Fingerprinted like the stylesheet, so it is read off the
+        # page and then fetched rather than guessed - a <link> pointing at an
+        # asset the renderer did not copy would look right in the HTML and 404
+        # for every reader, which is exactly how it first failed.
+        icon = re.search(r'<link rel="icon"[^>]*href="([^"]+)"', served("/"))
+        assert icon, "no icon linked from the home page"
+        machine.succeed(f"curl -sf -o /dev/null http://localhost:8086{icon.group(1)}")
+
     with subtest("search costs a reading page nothing until it is asked for"):
         # The bundle is ~46KB gzipped that a reader who never searches never
         # needs, so the page carries its URLs and fetches it on first use. The

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    The tab icon. A seedling, because that is what the site is, drawn as three
+    filled shapes rather than as thin strokes: at the 16px a tab actually
+    renders it, a hairline disappears and a filled leaf does not.
+
+    Coloured in the brand role, both halves of it. An SVG favicon carries its
+    own stylesheet, and prefers-color-scheme inside one is honoured, so the
+    mark follows the tab strip's own light or dark the same way the page
+    follows the reader's: lotusPink against a light chrome, sakuraPink against
+    a dark one. It cannot follow the site's theme TOGGLE, since nothing outside
+    the document can, and the OS preference is the better cue here anyway: the
+    thing this has to stay legible against is the browser, not the page.
+
+    Note for editing: XML forbids a double hyphen inside a comment, which is
+    awkward in a repository whose colours are all named after CSS custom
+    properties. Spell them out here rather than writing one.
+  -->
+  <style>
+    path { fill: #b35b79; }           /* lotusPink  */
+    @media (prefers-color-scheme: dark) {
+      path { fill: #d27e99; }         /* sakuraPink */
+    }
+  </style>
+  <path d="M14 29V16a2 2 0 0 1 4 0v13a2 2 0 0 1-4 0Z"/>
+  <path d="M16 21c-6 0-10-4.5-10-10.5 6 0 10 4.5 10 10.5Z"/>
+  <path d="M16 17c0-6.5 4.5-11 11-11 0 6.5-4.5 11-11 11Z"/>
+</svg>
