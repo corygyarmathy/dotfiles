@@ -120,6 +120,99 @@ in
         mkdir $out
       '';
 
+  # Boot counting wraps systemd-bless-boot in a guard so that a redundant
+  # mid-session re-bless - a nixpkgs bump restarts the packaged unit, and the
+  # boot decision was already made - cannot leave the unit failed and turn
+  # every switch into an exit-4 apply failure. The whole decision is a
+  # case-statement over bless-boot's output, so the risk is a branch
+  # misclassified: a benign re-bless going red, or a real ESP error swallowed.
+  # Neither shows up in a build, and both would take a failing night to
+  # notice, so this pins the mapping the way the VM checks pin services.
+  #
+  # It is a unit test rather than a VM for the same reason the benign failure
+  # is rare: bless-boot produces it only under EFI against a consumed boot
+  # counter, which the QEMU harness does not model. What is testable is the
+  # string -> exit-code function itself, so the script under test is taken
+  # from the module's own evaluated ExecStart (never a copy) with only the
+  # bless-boot binary swapped for a stand-in emitting each branch. The
+  # stand-in fails with distinct exit codes so the "propagate everything not
+  # recognised" fall-through is asserted exactly, not just as non-zero.
+  bless-boot-guard =
+    let
+      eval = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ../modules/nixos/boot-counting.nix
+          {
+            boot.loader.systemd-boot.enable = true;
+            boot.loader.efi.canTouchEfiVariables = true;
+            cg.boot-counting.enable = true;
+          }
+        ];
+      };
+      execStart = builtins.filter (
+        s: s != ""
+      ) eval.config.systemd.services."systemd-bless-boot".serviceConfig.ExecStart;
+      guardScript = builtins.elemAt execStart 0;
+
+      # Messages and exit codes follow the real tool's paths in
+      # <systemd>/src/bless-boot/bless-boot.c: a successful or already
+      # performed blessing (0), and failures that are either the three benign
+      # "nothing left to bless" states (exit 1) or genuine ESP/rename errors
+      # (distinct codes, so propagation is asserted exact).
+      fakeBlessBoot = pkgs.writeShellScript "fake-systemd-bless-boot" ''
+        case "$CASE" in
+          blessed)          echo "Marked boot as 'good'. (Boot attempt counter is at 1.)" ; exit 0 ;;
+          already-blessed)  echo "Operation already executed before, not doing anything." ; exit 0 ;;
+          no-counting)      echo "Not booted with boot counting in effect." >&2 ; exit 1 ;;
+          stale-counter)    echo "Path read from LoaderBootCountPath does not contain a counter, refusing: /loader/entries/nixos+0.conf" >&2 ; exit 1 ;;
+          pruned)           echo "Can't find boot counter source file for '/loader/entries/nixos-b6320f7.conf'." >&2 ; exit 1 ;;
+          esp-missing)      echo "Couldn't find $BOOT partition. It is recommended to mount it to /boot." >&2 ; exit 3 ;;
+          esp-open)         echo "Failed to open $BOOT partition '/boot': No such file or directory" >&2 ; exit 5 ;;
+          rename-fail)      echo "Failed to rename '/loader/entries/x+3-1.conf' to '/loader/entries/x.conf': Input/output error" >&2 ; exit 7 ;;
+          *)                echo "unexpected CASE=$CASE" >&2 ; exit 9 ;;
+        esac
+      '';
+    in
+    pkgs.runCommand "check-bless-boot-guard"
+      { guard = builtins.toString guardScript; }
+      ''
+        mkdir -p fakebin
+        ln -s ${fakeBlessBoot} fakebin/systemd-bless-boot
+
+        # Swap only the binary the guard invokes; everything else in the unit
+        # is shipped verbatim.
+        sed 's|^bless=".*"$|bless="'"$PWD"'/fakebin/systemd-bless-boot"|' "$guard" > guard
+        chmod +x guard
+
+        assert_rc() {
+          name=$1
+          want=$2
+          export CASE="$name"
+          set +e
+          got=$(./guard 2>&1)
+          rc=$?
+          set -e
+          if [ "$rc" -ne "$want" ]; then
+            echo "FAIL: bless-boot-guard: $name exited $rc, expected $want" >&2
+            printf '%s\n' "$got" >&2
+            exit 1
+          fi
+          echo "ok: $name -> $rc"
+        }
+
+        assert_rc blessed 0
+        assert_rc already-blessed 0
+        assert_rc no-counting 0
+        assert_rc stale-counter 0
+        assert_rc pruned 0
+        assert_rc esp-missing 3
+        assert_rc esp-open 5
+        assert_rc rename-fail 7
+
+        touch $out
+      '';
+
   digital-garden = testLib.mkTest ./digital-garden.nix;
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;
