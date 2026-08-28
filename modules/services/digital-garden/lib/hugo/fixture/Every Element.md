@@ -41,7 +41,7 @@ Headings wrap. The line-height they wrap at is set separately from the body's, a
 2. A second ordered item
 3. A third, so the widest marker is two characters wide
 
-- [ ] An unfinished task, which Obsidian writes and the stylesheet does not currently style
+- [ ] An unfinished task, which Obsidian writes as a checkbox and the stylesheet gives the marker column to
 - [x] A finished one
 
 ## Quotation

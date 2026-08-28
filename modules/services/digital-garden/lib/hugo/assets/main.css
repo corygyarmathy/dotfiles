@@ -294,6 +294,27 @@ footer a::after {
   content: none;
 }
 
+/* Obsidian's `- [ ]` task lists. Goldmark emits a bare <li> holding a disabled
+ * checkbox, with no class on either it or the list, so the item is selected by
+ * what it contains rather than by a hook that would have to exist only to add
+ * one. Without this an item carried a bullet AND a checkbox — two markers for
+ * one item, neither aligned to the other.
+ *
+ * Scoped to the item and not the list, so a list that mixes tasks with plain
+ * items keeps the bullets on the plain ones. */
+li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+
+/* Pulled back into the space the marker vacated, so a task list keeps the same
+ * left edge as the bulleted list above it. `accent-color` is the whole of the
+ * checkbox's styling: it is a native control, it is disabled, and the platform
+ * draws a better one than a hand-rolled box would. */
+li > input[type="checkbox"] {
+  margin: 0 0.4rem 0 -1.35rem;
+  accent-color: var(--accent);
+}
+
 blockquote {
   border-left: 3px solid var(--border);
   padding-left: 1rem;
