@@ -74,7 +74,27 @@ The format gate was checked against a deliberate break in both directions, the w
 
 The gate-timing history is recorded in [the hardening plan](deployment-hardening.md) under "It outgrew it again two days later", including the part worth keeping: this was the third occurrence, and the two previous fixes both worked by making one test faster, which is a fix with a shelf life.
 
-**Not yet measured.** The wall-clock claim - that the gate is now bounded by `build xps15` rather than by the checks - is an argument from how the jobs are shaped, not an observation. It needs a real run to confirm, and the number to watch is the slowest single shard plus its ~30s of setup against the host build's 3m12s.
+### Measured, 2026-08-28
+
+Run `33181496820` (PR #90, all green):
+
+| Job                      | Duration  |
+| ------------------------ | --------- |
+| `build xps15`            | **3m42s** |
+| `check grafana` (slowest shard) | 2m43s |
+| `check upgrade-verify`   | 2m32s     |
+| `lint`                   | 1m06s     |
+| `build homelab01`        | 1m51s     |
+| **gate wall clock**      | **3m51s** |
+
+Inside the ~4 minute budget, and bounded by `build xps15` rather than by the checks - which is what the item was for. The checks axis went from `flake check`'s 4m18s to a slowest shard of 2m43s.
+
+The number that makes the point is the **sum** of the shards: 14m20s. That is what a single job pays before `--max-jobs` claws any of it back, and it is the quantity that grows every time a check is added. The gate now pays the maximum instead, so the next test costs a runner rather than wall clock.
+
+Two smaller observations, both expected:
+
+- `lint` went from 43s to 1m06s when `nix flake check --no-build` was replaced by direct evaluation, because evaluating `apps` pulls in homelab01's whole config. Still far inside the host builds.
+- The **first** run of this branch built `xps15` in 5m01s rather than 3m42s. Reformatting 20 module files changes their derivations, so that run was paying for its own whitespace commit against a cold cache. Worth knowing before reading a single slow run as a regression.
 
 ---
 
