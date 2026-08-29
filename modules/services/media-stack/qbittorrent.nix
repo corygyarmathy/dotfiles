@@ -38,7 +38,10 @@ let
 in
 {
   # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../../nixos/fleet.nix ];
+  imports = [
+    ../../nixos/fleet.nix
+    ../../nixos/publish.nix
+  ];
 
   options.cg.service.qbittorrent = {
     enable = lib.mkEnableOption "qBittorrent torrent client";
@@ -67,6 +70,23 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # The WebUI's CSRF protection rejects a proxied request that still
+    # carries Origin or Referer, so the proxy config travels with the
+    # module rather than being remembered by whichever host runs it.
+    cg.publish.qbittorrent = {
+      subdomain = "downloads";
+      port = cfg.port;
+      proxyExtraConfig = ''
+        # qBittorrent auth fix - strip headers that trigger CSRF protection
+        header_up -Origin
+        header_up -Referer
+        # Increase timeouts for large torrent lists
+        transport http {
+          response_header_timeout 30s
+        }
+      '';
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

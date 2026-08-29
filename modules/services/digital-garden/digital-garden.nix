@@ -13,8 +13,8 @@
 #   filters it down to published notes, then runs the site generator over the
 #   filtered tree.
 # - Serving is plain HTTP on 127.0.0.1:<port>, which lets this slot into
-#   cg.service.reverse-proxy.services (TLS + LAN) and
-#   cg.service.cloudflare-tunnel.services (public) with no special casing.
+#   cg.publish (TLS and LAN through Caddy, the internet through the tunnel)
+#   with no special casing.
 #
 # Where the vault comes from is `source`:
 # - "git" clones the notes repo, so publishing waits on whatever commits it.
@@ -287,7 +287,10 @@ let
 in
 {
   # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../../nixos/fleet.nix ];
+  imports = [
+    ../../nixos/fleet.nix
+    ../../nixos/publish.nix
+  ];
 
   options.cg.service.digital-garden = {
     enable = lib.mkEnableOption "Digital garden (published subset of the Obsidian vault)";
@@ -442,6 +445,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.digital-garden = {
+      subdomain = "garden";
+      port = cfg.port;
+    };
+
     sops.secrets = lib.mkMerge [
       (lib.mkIf (cfg.source == "git") {
         "digital-garden/deploy-key" = {

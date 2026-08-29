@@ -34,6 +34,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../nixos/publish.nix ];
+
   options.cg.service.filebrowser = {
     enable = lib.mkEnableOption "File Browser web file manager";
 
@@ -45,6 +49,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.filebrowser = {
+      port = cfg.port;
+      rateLimitProfile = "media"; # a directory listing is many thumbnails
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

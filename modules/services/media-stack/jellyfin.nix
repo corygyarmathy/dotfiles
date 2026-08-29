@@ -35,8 +35,12 @@ let
   stack = config.cg.service.media-stack;
 in
 {
-  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../../nixos/fleet.nix ];
+  # Reads config.cg.fleet and contributes to config.cg.publish, so it declares
+  # both - see modules/nixos/fleet.nix and modules/nixos/publish.nix.
+  imports = [
+    ../../nixos/fleet.nix
+    ../../nixos/publish.nix
+  ];
 
   options.cg.service.jellyfin = {
     enable = lib.mkEnableOption "Jellyfin media server";
@@ -46,6 +50,16 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.jellyfin = {
+      # 8096 is a literal because there is nothing to read it from: the
+      # upstream NixOS module has no port option, and Jellyfin's own default
+      # is what `openFirewall` below opens. One place is still one place.
+      port = 8096;
+      # Streaming: a client pulls segments continuously, and the admin
+      # profile's 300-per-10-minutes cuts a film off partway.
+      rateLimitProfile = "media";
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

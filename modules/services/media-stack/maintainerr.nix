@@ -78,6 +78,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.maintainerr = {
     enable = lib.mkEnableOption "Maintainerr media library maintenance";
 
@@ -96,6 +100,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.maintainerr = {
+      port = cfg.port;
+      # A collection scan walks the whole Jellyfin library through this UI,
+      # which the admin profile's 300-per-10-minutes cuts off partway.
+      rateLimitProfile = "none";
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

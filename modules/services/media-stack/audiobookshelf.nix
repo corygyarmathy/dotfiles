@@ -32,6 +32,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.audiobookshelf = {
     enable = lib.mkEnableOption "Audiobookshelf audiobook and podcast server";
 
@@ -43,6 +47,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.audiobookshelf = {
+      port = cfg.port;
+      rateLimitProfile = "media"; # streams audio, chapter by chapter
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

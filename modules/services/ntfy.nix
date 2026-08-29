@@ -39,8 +39,12 @@ let
   cfg = config.cg.service.ntfy;
 in
 {
-  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../nixos/fleet.nix ];
+  # Reads config.cg.fleet and contributes to config.cg.publish, so it declares
+  # both - see modules/nixos/fleet.nix and modules/nixos/publish.nix.
+  imports = [
+    ../nixos/fleet.nix
+    ../nixos/publish.nix
+  ];
 
   options.cg.service.ntfy = {
     enable = lib.mkEnableOption "ntfy self-hosted push notification server";
@@ -91,12 +95,12 @@ in
       };
     };
 
-    # Published for phones on mobile data; authentication is ntfy's own job,
-    # not the proxy's.
-    cg.service.reverse-proxy.services.ntfy = {
+    # Meant to be reached from phones on mobile data; authentication is ntfy's
+    # own job, not the proxy's. The host still decides `localOnly`, as it does
+    # for everything else.
+    cg.publish.ntfy = {
       subdomain = cfg.subdomain;
       port = cfg.port;
-      localOnly = false;
       rateLimitProfile = "none"; # alert storms must not be rate-limited
     };
 

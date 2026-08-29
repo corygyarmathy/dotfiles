@@ -5,6 +5,11 @@
 # - Automatic DNS management via tunnel routing
 # - Protection against DDoS and direct IP exposure
 #
+# WHAT IT EXPOSES:
+# Every entry in `cg.publish` with `localOnly = false` - the same registry the
+# reverse proxy reads, so the two cannot disagree about a port or a hostname.
+# See modules/nixos/publish.nix.
+#
 # Architecture:
 # - cloudflared daemon runs on the fleet's gateway host
 # - Registers DNS routes in Cloudflare
@@ -25,10 +30,14 @@
 let
   cfg = config.cg.service.cloudflare-tunnel;
 
+  # Everything this host publishes that is not LAN-only. `cg.publish` is the
+  # same registry the reverse proxy builds its vhosts from (see
+  # modules/nixos/publish.nix), so the tunnel and Caddy cannot disagree about
+  # a port; the filter is the whole of what makes a service public.
+  publicServices = lib.filterAttrs (_: svc: !svc.localOnly) config.cg.publish;
+
   # Build the list of public hostnames at eval time
-  publicHostnames = map (svc: "${svc.subdomain}.${cfg.domain}") (
-    lib.attrValues (lib.filterAttrs (_: svc: !svc.localOnly) cfg.services)
-  );
+  publicHostnames = map (svc: "${svc.subdomain}.${cfg.domain}") (lib.attrValues publicServices);
 
   routeScript = pkgs.writeShellScript "cloudflared-route-dns" ''
     TUNNEL_ID=$(cat ${config.sops.secrets."cloudflare/tunnel-id".path})
@@ -41,8 +50,12 @@ let
   '';
 in
 {
-  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../nixos/fleet.nix ];
+  # Reads config.cg.fleet and config.cg.publish, so it declares both - see
+  # modules/nixos/fleet.nix and modules/nixos/publish.nix.
+  imports = [
+    ../nixos/fleet.nix
+    ../nixos/publish.nix
+  ];
 
   options.cg.service.cloudflare-tunnel = {
     enable = lib.mkEnableOption "Cloudflare Tunnel for zero-trust access";
@@ -54,39 +67,6 @@ in
       description = "Domain name for services";
     };
 
-    services = lib.mkOption {
-      type = lib.types.attrsOf (
-        lib.types.submodule {
-          options = {
-            subdomain = lib.mkOption {
-              type = lib.types.str;
-              description = "Subdomain for this service";
-            };
-            port = lib.mkOption {
-              type = lib.types.port;
-              description = "Port the service listens on";
-            };
-            upstream = lib.mkOption {
-              type = lib.types.str;
-              default = "localhost";
-              example = "homelab02";
-              description = ''
-                Host the service runs on. Defaults to this machine -- cloudflared
-                bypasses Caddy and connects to the origin directly, so a service
-                living on another node needs its hostname here too.
-              '';
-            };
-            localOnly = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-              description = "If true, exclude from tunnel (local network only)";
-            };
-          };
-        }
-      );
-      default = { };
-      description = "Services to expose through the tunnel";
-    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -125,15 +105,18 @@ in
 
           # Ingress rules - routes traffic based on hostname
           ingress =
-            # Public services only (where localOnly = false)
-            (lib.mapAttrsToList (name: svc: {
+            # Public services only (where localOnly = false). cloudflared
+            # bypasses Caddy and connects to the origin directly, so a service
+            # living on another node reaches the tunnel through the same
+            # `upstream` the proxy uses.
+            (lib.mapAttrsToList (_name: svc: {
               hostname = "${svc.subdomain}.${cfg.domain}";
               service = "http://${svc.upstream}:${toString svc.port}";
               originRequest = {
                 httpHostHeader = "${svc.subdomain}.${cfg.domain}";
                 noTLSVerify = true;
               };
-            }) (lib.filterAttrs (_: svc: !svc.localOnly) cfg.services))
+            }) publicServices)
 
             # Required catch-all rule
             ++ [

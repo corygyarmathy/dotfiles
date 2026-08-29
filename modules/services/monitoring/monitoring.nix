@@ -10,6 +10,10 @@ let
   cfg = config.cg.service.monitoring;
   fleet = config.cg.fleet;
 
+  # The fleet's always-on machines: what gets scraped. Sorted, because
+  # `attrNames` is, which keeps the generated scrape config stable.
+  servers = lib.attrNames (lib.filterAttrs (_: host: host.kind == "server") fleet.hosts);
+
   # ZFS health metrics script for textfile collector
   # Outputs Prometheus metrics for ZFS pool health
   zfsHealthScript = pkgs.writeShellScript "zfs-health-exporter" ''
@@ -175,8 +179,13 @@ let
   '';
 in
 {
-  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../../nixos/fleet.nix ];
+  # Reads config.cg.fleet and config.cg.publish, and publishes its own three
+  # web UIs into the latter - see modules/nixos/fleet.nix and
+  # modules/nixos/publish.nix.
+  imports = [
+    ../../nixos/fleet.nix
+    ../../nixos/publish.nix
+  ];
 
   options.cg.service.monitoring = {
     enable = lib.mkEnableOption "Monitoring stack";
@@ -228,20 +237,28 @@ in
         enable = lib.mkEnableOption "ntfy push routing for Alertmanager";
 
         # Loopback port the local bridge listens on, and the one port
-        # Alertmanager delivers to. Configurable because 8000 is already taken
-        # by convention wherever the media stack runs: gluetun's HTTP control
-        # server is published there (qbittorrent.nix), and gluetun coexists
-        # with this bridge precisely on storage hosts. When the bridge landed
-        # on homelab02 with the shared literal below it lost that race on
-        # every start, crash-looped all night, and the switch that activated
-        # it reported failed units. Anything loopback and free will do;
-        # there is nothing to match on either side.
+        # Alertmanager delivers to. Both sides are read from here, so the
+        # number matters only in that nothing else on the host may hold it.
+        #
+        # It is 8015 rather than the 8000 this defaulted to, because 8000 is
+        # taken by convention wherever the media stack runs: gluetun's HTTP
+        # control server is published there (qbittorrent.nix), and gluetun
+        # coexists with this bridge precisely on storage hosts. The bridge
+        # landed on homelab02 against that, lost the bind race on every
+        # start, crash-looped all night, and the switch that activated it
+        # reported failed units. That was repaired by having homelab02 name
+        # a different port - which left the collision in the default, one
+        # host away from happening again. A default that does not collide
+        # with anything this fleet runs costs nothing and needs no host to
+        # remember.
         port = lib.mkOption {
           type = lib.types.port;
-          default = 8000;
+          default = 8015;
           description = ''
-            Loopback port for the local alertmanager-ntfy bridge. Move off
-            8000 on any host whose gluetun control server is published there.
+            Loopback port for the local alertmanager-ntfy bridge. Anything
+            loopback and free will do; there is nothing to match on either
+            side. Avoid 8000, which gluetun's control server is published on
+            wherever the media stack runs.
           '';
         };
 
@@ -328,27 +345,47 @@ in
     };
 
     # Targets for Prometheus to scrape
+    #
+    # Both default to every machine the fleet calls a `server` - the ones with
+    # a reserved address, expected to be up - at the port this module gives
+    # its own exporters. Neither the host list nor the port is written down
+    # twice: the hosts came from `cg.fleet` and the port from the exporter
+    # that answers on it, so moving either moves the scrape with it.
     scrapeTargets = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [ ];
-      example = [
-        "homelab01:9100"
-        "homelab02:9100"
-      ];
+      default = map (host: "${host}:${toString config.services.prometheus.exporters.node.port}") servers;
+      defaultText = lib.literalExpression "every `server` in `config.cg.fleet`, at the node_exporter port";
       description = "List of node_exporter targets to scrape";
     };
 
     smartctlTargets = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [ ];
-      example = [
-        "homelab01:9633"
-        "homelab02:9633"
-      ];
+      default = map (
+        host: "${host}:${toString config.services.prometheus.exporters.smartctl.port}"
+      ) servers;
+      defaultText = lib.literalExpression "every `server` in `config.cg.fleet`, at the smartctl_exporter port";
       description = "List of smartctl_exporter targets to scrape";
     };
 
     # HTTP endpoints to probe
+    #
+    # Derived from `cg.publish`, and that is the point: the two hosts used to
+    # hand-maintain overlapping lists, and by the time this was written seven
+    # proxied hostnames were probed from nowhere - two of them published to
+    # the internet. A service that is published and not probed is no longer
+    # expressible, because nothing writes this list any more.
+    #
+    # Each host probes what its own Caddy serves. `cg.publish` is per-host, so
+    # a host cannot see what its peer publishes, and the union of the two
+    # covers the fleet exactly once. The dual coverage the hand-written lists
+    # happened to give is gone with them; a host that is down takes its own
+    # probes with it and is reported by the node and target-down alerts
+    # instead.
+    #
+    # The value is the option's *default* rather than a fixed computation, for
+    # the reason modules/nixos/fleet.nix gives about `cg.fleet`: checks/
+    # instantiates this module directly and needs to point a probe at a target
+    # that exists inside a sandboxed VM. No host sets it.
     httpProbes = lib.mkOption {
       type = lib.types.listOf (
         lib.types.submodule {
@@ -364,7 +401,14 @@ in
           };
         }
       );
-      default = [ ];
+      default = lib.mapAttrsToList (name: svc: {
+        inherit name;
+        url = "https://${svc.subdomain}.${fleet.domain}${svc.probePath}";
+      }) (lib.filterAttrs (_: svc: svc.probe) config.cg.publish);
+      defaultText = lib.literalExpression ''
+        every `config.cg.publish` entry with `probe = true`, as
+        `https://''${subdomain}.''${config.cg.fleet.domain}''${probePath}`
+      '';
       description = "HTTP endpoints to probe with blackbox_exporter";
     };
 
@@ -472,6 +516,22 @@ in
       # Prometheus server + blackbox exporter
       # ============================================================
       (lib.mkIf cfg.prometheus.enable {
+        # A hostname for the graph view, but only where Grafana is. Every
+        # host in the fleet runs a Prometheus, and a subdomain names one
+        # machine - so publishing from each of them would put the same
+        # hostname on two proxies, where DNS decides which one answers and
+        # the other holds a certificate for a name it never serves. Grafana
+        # runs on one host, and it is the thing that links here, so its
+        # presence is the sensible place to hang the name. Reach the others
+        # at `<host>:9090` over ssh.
+        #
+        # The port comes from the upstream option rather than a literal, which
+        # is the whole point of the registry: nothing here can drift from what
+        # Prometheus is actually listening on.
+        cg.publish = lib.mkIf cfg.grafana.enable {
+          prometheus.port = config.services.prometheus.port;
+        };
+
         services.prometheus.exporters.blackbox = {
           enable = true;
           configFile = pkgs.writeText "blackbox.yml" ''
@@ -582,6 +642,14 @@ in
       # Alertmanager
       # ============================================================
       (lib.mkIf cfg.alertmanager.enable {
+        # Where silences live, so it is worth a hostname - on the one host
+        # that gets one, for the reason given against the Prometheus UI
+        # above. Both hosts run an Alertmanager; they are clustered, so a
+        # silence set through this one reaches the peer anyway.
+        cg.publish = lib.mkIf cfg.grafana.enable {
+          alertmanager.port = config.services.prometheus.alertmanager.port;
+        };
+
         # Ensure alertmanager user exists before sops-nix runs
         users.users.alertmanager = {
           isSystemUser = true;
@@ -858,6 +926,10 @@ in
       # Grafana
       # ============================================================
       (lib.mkIf cfg.grafana.enable {
+        # Grafana binds 127.0.0.1 (see the server settings below), so the
+        # proxy is the only way in.
+        cg.publish.grafana.port = config.services.grafana.settings.server.http_port;
+
         # Ensure grafana user exists before sops-nix runs
         users.users.grafana = {
           isSystemUser = true;

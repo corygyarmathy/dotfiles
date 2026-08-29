@@ -66,6 +66,7 @@
     {
       imports = [
         ../modules/services/reverse-proxy.nix
+        ../modules/nixos/publish.nix
         (import ./stub-secrets.nix {
           secrets."cloudflare/api-token" = token;
           templates."caddy-cloudflare-env" = "CF_API_TOKEN=${token}\n";
@@ -88,31 +89,33 @@
       cg.service.reverse-proxy = {
         enable = true;
         email = "test@example.invalid";
-        # Exactly how the hosts wire it (hosts/homelab01/default.nix:218), so
-        # the test breaks if that indirection changes.
+        # Exactly how the hosts wire it, so the test breaks if that
+        # indirection changes.
         cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
+      };
 
-        services = {
-          # The common case: a LAN-only service. mkProxyHost's allowlist
-          # includes 127.0.0.1, so a request from inside the VM is permitted.
-          internal = {
-            subdomain = "internal";
-            port = backendPort;
-            localOnly = true;
-            extraConfig = "tls internal";
-          };
+      # What Caddy serves comes from `cg.publish`, contributed to on a real
+      # host by the modules that run the services. Written by hand here for
+      # the same reason `cg.fleet` is overridden above: this test is about the
+      # proxy, not about which services this fleet happens to run.
+      cg.publish = {
+        # The common case: a LAN-only service. mkProxyHost's allowlist
+        # includes 127.0.0.1, so a request from inside the VM is permitted.
+        internal = {
+          port = backendPort;
+          localOnly = true;
+          extraConfig = "tls internal";
+        };
 
-          # An internet-facing service, which takes the other branch of
-          # mkProxyHost entirely: security headers and the rate_limit
-          # directive - the latter being the one thing here that depends on
-          # the Caddy build actually carrying the caddy-ratelimit plugin.
-          public = {
-            subdomain = "public";
-            port = backendPort;
-            localOnly = false;
-            rateLimitProfile = "media";
-            extraConfig = "tls internal";
-          };
+        # An internet-facing service, which takes the other branch of
+        # mkProxyHost entirely: security headers and the rate_limit
+        # directive - the latter being the one thing here that depends on
+        # the Caddy build actually carrying the caddy-ratelimit plugin.
+        public = {
+          port = backendPort;
+          localOnly = false;
+          rateLimitProfile = "media";
+          extraConfig = "tls internal";
         };
       };
 

@@ -28,6 +28,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.kavita = {
     enable = lib.mkEnableOption "Kavita reading server";
 
@@ -39,6 +43,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.kavita = {
+      port = cfg.port;
+      rateLimitProfile = "media"; # a reader: many small requests per page turn
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

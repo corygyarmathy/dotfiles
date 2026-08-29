@@ -85,6 +85,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.cleanuparr = {
     enable = lib.mkEnableOption "Cleanuparr stalled download cleanup";
 
@@ -103,6 +107,14 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.cleanuparr = {
+      port = cfg.port;
+      # The readiness endpoint the podman healthcheck used to hit, so probing
+      # it keeps exactly the signal that healthcheck gave. The front page
+      # answers 200 whether or not the app is working.
+      probePath = "/health";
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {
