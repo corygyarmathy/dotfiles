@@ -166,6 +166,7 @@ jobs:
           - alert-rules
           - alert-rules-unit
           - alertmanager-config
+          - auto-upgrade-build-gate
           - bless-boot-guard
           - digital-garden
           - digital-garden-sync-health
