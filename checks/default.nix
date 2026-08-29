@@ -209,6 +209,95 @@ in
       touch $out
     '';
 
+  # The build gate and its self-heal hook, together.
+  #
+  # A laptop's `nixos-upgrade-build` can be asked to run before the network
+  # works: network-online.target only means a default route exists, and the
+  # Persistent timer fires the catch-up at the first opportunity after the
+  # 04:00 slot, which is usually just after boot. The module's defence is
+  # three things that only exist as text in the generated unit, dispatcher and
+  # NetworkManager.conf - a wait-for-connectivity gate in the build's script,
+  # a marker that turns a deferral into a retryable event rather than a
+  # genuine failure, and a dispatcher hook that clears the marker and restarts
+  # the build on `up` / `connectivity-change` when the network returns. All
+  # default to silently doing nothing if they evaluate, so this reads the
+  # evaluated outputs (never a copy) and asserts the behaviour markers that a
+  # refactor could fold away without breaking the build: the gate becoming a
+  # bare `nix build`, the deferral losing its marker, the hook forgetting to
+  # handicap by CONNECTIVITY_STATE, or NetworkManager's connectivity check
+  # being dropped so the `connectivity-change` branch never fires.
+  auto-upgrade-build-gate =
+    let
+      eval = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ../modules/nixos/auto-upgrade.nix
+          {
+            networking.hostName = "check-md";
+            networking.networkmanager.enable = true;
+            system.stateVersion = "24.11";
+            cg.auto-upgrade = {
+              enable = true;
+              flake = "github:corygyarmathy/dotfiles/deploy";
+            };
+          }
+        ];
+      };
+      buildScript = eval.config.systemd.services.nixos-upgrade-build.script;
+      dispatchers = eval.config.networking.networkmanager.dispatcherScripts;
+      retryScript = builtins.concatStringsSep "\n" (
+        builtins.map (d: builtins.readFile d.source) dispatchers
+      );
+    in
+    pkgs.runCommand "check-auto-upgrade-build-gate"
+      {
+        passAsFile = [
+          "build"
+          "retry"
+          "nmsettings"
+        ];
+        build = buildScript;
+        retry = retryScript;
+        nmsettings = builtins.toJSON eval.config.networking.networkmanager.settings;
+      }
+      ''
+        fail() { echo "FAIL: $*" >&2; exit 1; }
+
+        # The gate itself.
+        grep -q 'github.com' "$buildPath" \
+          || fail "build service no longer waits for outbound connectivity"
+        grep -q 'deferring the build until a connection comes up' "$buildPath" \
+          || fail "connectivity timeout no longer defers the build"
+        grep -q 'offline-defers' "$buildPath" \
+          || fail "deferral marker was removed from the build script"
+
+        # The self-heal hook: scoped to network-return events, throttled by
+        # the marker, and only ever a retry of a failed unit.
+        grep -qF 'up)' "$retryPath" \
+          || fail "dispatcher no longer reacts to connection-up events"
+        grep -qF 'connectivity-change' "$retryPath" \
+          || fail "dispatcher no longer reacts to connectivity-change"
+        grep -qF 'CONNECTIVITY_STATE' "$retryPath" \
+          || fail "connectivity-change is no longer gated on the assessed state"
+        grep -qF 'offline-defers' "$retryPath" \
+          || fail "retry is no longer limited to deferred (offline) builds"
+        grep -qF 'is-failed --quiet' "$retryPath" \
+          || fail "dispatcher no longer checks the unit is failed before retrying"
+        grep -qF 'start --no-block' "$retryPath" \
+          || fail "retry no longer starts the build asynchronously"
+        grep -qF '"$systemctl" reset-failed' "$retryPath" \
+          || fail "retry no longer clears the failed result first"
+
+        # Without NetworkManager actually assessing connectivity, the
+        # connectivity-change branch above can never fire.
+        grep -q '"connectivity"' "$nmsettingsPath" \
+          || fail "NetworkManager connectivity checking is no longer enabled"
+        grep -q '"uri"' "$nmsettingsPath" \
+          || fail "NetworkManager connectivity check has no probe URI"
+
+        touch $out
+      '';
+
   digital-garden = testLib.mkTest ./digital-garden.nix;
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;

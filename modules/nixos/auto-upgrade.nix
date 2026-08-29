@@ -16,6 +16,14 @@
 #   - reboot on a schedule       that is a server behaviour
 #   - catch up on resume         systemd timers with Persistent already do this
 #
+# The build is gated on real outbound connectivity (schedule.onlineWait):
+# `network-online.target` on a NetworkManager laptop can be satisfied while the
+# wifi is still joining, and a fetch made before the network works would leave
+# the indicator showing an error for the rest of the session. A deferral drops
+# a marker (`offline-defers`) that the NetworkManager dispatcher hook consumes
+# by re-running the build once a connection - or assessed connectivity -
+# returns.
+#
 # The waybar front-end is packages/nixos-upgrade-scripts; the home-manager
 # side is modules/home/desktop/auto-upgrade-desktop.nix.
 {
@@ -59,6 +67,22 @@ in
         type = lib.types.str;
         default = "30min";
         description = "Random delay added to the scheduled time";
+      };
+
+      # `network-online.target` only means NetworkManager has reached a
+      # default route. On a laptop that can predate any real internet (DNS
+      # still settling, captive portal up, wifi auth unfinished), and the
+      # Persistent catch-up fires this unit at the first opportunity after the
+      # 04:00 slot was missed - typically just after boot, before the user has
+      # signed in. Rather than fail the fetch (which leaves the waybar
+      # indicator showing an error for the rest of the session), the build
+      # waits up to this many seconds for real outbound connectivity first.
+      # The dispatcher hook then defers the build to when a connection comes
+      # up if this window runs out.
+      onlineWait = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 600;
+        description = "Seconds to wait for outbound connectivity before deferring a scheduled build";
       };
     };
 
@@ -118,10 +142,48 @@ in
       path = [
         pkgs.nix
         pkgs.git
+        pkgs.curl
       ];
       environment.HOME = "/root";
 
       script = ''
+        # Only touch the network once there is real outbound connectivity.
+        #
+        # `network-online.target` is ordered here, but it means NetworkManager
+        # has *a* default route - not that the internet works. On a laptop the
+        # timer's Persistent catch-up fires this the moment the machine boots,
+        # which is before the user has signed in and often before the wifi has
+        # come up, and `--refresh` turns a fetch made too early into a hard
+        # unit failure that the waybar indicator then shows for the rest of
+        # the session. The actual precondition for a flake build is an HTTPS
+        # connection to the flake host, so wait for that.
+        #
+        # The timeout defers rather than fails: the NetworkManager dispatcher
+        # hook restarts this unit when a connection comes up, and a later
+        # success clears the failed state the indicator reads. The marker it
+        # leaves behind is what lets the hook tell "deferred for being
+        # offline" (retry when the network returns) from "build genuinely
+        # failed" (keep showing the error) - see the dispatcher below.
+        deadline=$(( $(date +%s) + ${toString cfg.schedule.onlineWait} ))
+        while :; do
+          if ${pkgs.curl}/bin/curl -fsS --connect-timeout 5 --max-time 10 \
+              https://github.com/ >/dev/null 2>&1; then
+            break
+          fi
+          if [ "$(date +%s)" -ge "$deadline" ]; then
+            touch "${stateDir}/offline-defers"
+            echo "No outbound connectivity after ${toString cfg.schedule.onlineWait}s; deferring the build until a connection comes up." >&2
+            exit 1
+          fi
+          sleep 5
+        done
+
+        # Connectivity confirmed, so any offline condition (and with it the
+        # deferral marker) is over. Clear it first: a build that now fails for
+        # a real reason must stay failed rather than be retried on every
+        # reconnect.
+        rm -f "${stateDir}/offline-defers"
+
         # --refresh, or the flake evaluation cache pins `deploy` to whatever it
         # resolved to last time and the build silently never sees a new
         # revision.
@@ -148,6 +210,84 @@ in
         # doing what systemd already does.
         Persistent = true;
         Unit = "nixos-upgrade-build.service";
+      };
+    };
+
+    # Self-heal a build that the connectivity gate had to defer.
+    #
+    # A deferral is still a failure to systemd, and a failed build shows on
+    # the waybar indicator for the rest of the session even once the machine
+    # is online - so when the network genuinely comes back, re-run the build.
+    # Success clears the failed state and the indicator goes back to the
+    # truth.
+    #
+    # The marker makes that retry safe: it is left only by the gate's timeout
+    # path and removed as soon as connectivity is confirmed, so a genuinely
+    # broken fetch or build (marker absent) keeps its error instead of being
+    # retried on every reconnect forever.
+    #
+    # Two events mean "the network is back". `up`, when a device activates,
+    # and `connectivity-change` when the assessed level recovers on an
+    # *already-linked* device - a captive portal accepted, an ISP outage
+    # ending, a VPN coming up. The second needs NetworkManager to actually
+    # assess connectivity (enabled below); without it a same-connection
+    # recovery never reaches this hook, which is precisely the stale-error
+    # case that matters after sign-in.
+    #
+    # It never restarts an in-flight build and never force-builds ahead of a
+    # deferral, and the gateway between a disconnected and a connected state
+    # is narrow: `reset-failed` + `start` replaces a failed result with a
+    # fresh, cheaper attempt.
+    networking.networkmanager = {
+      dispatcherScripts = [
+        {
+          type = "basic";
+          source = pkgs.writeShellScript "nixos-upgrade-build-retry" ''
+            case "$NM_DISPATCHER_ACTION" in
+              up)
+                ;;
+              connectivity-change)
+                [ "$CONNECTIVITY_STATE" = "FULL" ] || exit 0
+                ;;
+              *)
+                exit 0
+                ;;
+            esac
+
+            if [ ! -f "${stateDir}/offline-defers" ]; then
+              exit 0
+            fi
+
+            unit=nixos-upgrade-build.service
+            systemctl=${pkgs.systemd}/bin/systemctl
+
+            if "$systemctl" is-active --quiet "$unit"; then
+              # already building (or waiting on the connectivity gate)
+              exit 0
+            fi
+
+            if ! "$systemctl" is-failed --quiet "$unit"; then
+              exit 0
+            fi
+
+            rm -f "${stateDir}/offline-defers"
+            echo "Network is up; retrying $unit after its earlier offline deferral." >&2
+            "$systemctl" reset-failed "$unit"
+            "$systemctl" start --no-block "$unit"
+          '';
+        }
+      ];
+
+      # The dispatcher's `connectivity-change` branch above only exists if
+      # NetworkManager assesses connectivity. That is off by default; the
+      # accepted-portal / never-device-change recovery would otherwise never
+      # fire. The check is a periodic request along the default route (the
+      # URI returns a bare OK), which is the small cost of self-healing the
+      # same-connection case.
+      settings.connectivity = {
+        enabled = true;
+        uri = "http://connectivity-check.ubuntu.com/connectivity-check.html";
+        interval = 300;
       };
     };
 
