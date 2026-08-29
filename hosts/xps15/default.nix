@@ -15,6 +15,11 @@
     # Quirks for this exact machine, from nixos-hardware
     inputs.hardware.nixosModules.dell-xps-15-9500-nvidia
 
+    # What it costs to be a machine in this fleet, and to be one someone sits
+    # in front of. Decisions rather than options - see profiles/common.nix.
+    ../../profiles/common.nix
+    ../../profiles/workstation.nix
+
     # NixOS modules
     ../../modules/nixos
   ];
@@ -87,41 +92,15 @@
   # ============================================================================
   # Boot Configuration
   # ============================================================================
+  # The loader itself is in profiles/common.nix; what is here is specific to
+  # this machine.
   boot = {
-    loader = {
-      systemd-boot.enable = true;
-      efi.canTouchEfiVariables = true;
-    };
     kernelPackages = pkgs.linuxPackages_latest;
     # Note: acpi_rev_override is handled by nixos-hardware dell-xps-15-9500 module
     # WiFi power save fix (https://bugzilla.kernel.org/show_bug.cgi?id=213381)
     extraModprobeConfig = ''
       options iwlwifi power_save=1
     '';
-  };
-
-  # ============================================================================
-  # Networking
-  # ============================================================================
-  networking.networkmanager.enable = true;
-
-  # ============================================================================
-  # Localisation
-  # ============================================================================
-  time.timeZone = "Australia/Perth";
-  i18n = {
-    defaultLocale = "en_GB.UTF-8";
-    extraLocaleSettings = {
-      LC_ADDRESS = "en_AU.UTF-8";
-      LC_IDENTIFICATION = "en_AU.UTF-8";
-      LC_MEASUREMENT = "en_AU.UTF-8";
-      LC_MONETARY = "en_AU.UTF-8";
-      LC_NAME = "en_AU.UTF-8";
-      LC_NUMERIC = "en_AU.UTF-8";
-      LC_PAPER = "en_AU.UTF-8";
-      LC_TELEPHONE = "en_AU.UTF-8";
-      LC_TIME = "en_AU.UTF-8";
-    };
   };
 
   # ============================================================================
@@ -158,47 +137,10 @@
   programs.solaar.enable = true;
 
   # ============================================================================
-  # Audio
-  # ============================================================================
-  services.pulseaudio.enable = false;
-  security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-  };
-
-  # ============================================================================
-  # Display & Input
-  # ============================================================================
-  services.xserver.xkb = {
-    layout = "us";
-    variant = "";
-  };
-
-  # ============================================================================
   # Services
   # ============================================================================
-
-  # DBus
-  services.dbus.enable = true;
-  systemd.user.services.dbus = {
-    enable = true;
-    wantedBy = [ "default.target" ];
-  };
-
-  # USB auto-mounting
-  services.gvfs.enable = true;
-  services.udisks2.enable = true;
-
-  # Printing
-  services.printing.enable = true;
-  services.avahi = {
-    enable = true;
-    nssmdns4 = true;
-    openFirewall = true;
-  };
+  # Audio, printing, dbus, USB auto-mounting, the GnuPG agent and nix-ld are in
+  # profiles/workstation.nix. What is left here is what this machine is for.
 
   # Firmware updates
   services.fwupd.enable = true;
@@ -209,13 +151,6 @@
   # SSH server
   services.openssh.enable = true;
 
-  # GnuPG agent
-  programs.gnupg.agent = {
-    enable = true;
-    enableSSHSupport = true;
-  };
-  services.pcscd.enable = true;
-
   # ============================================================================
   # Virtualisation
   # ============================================================================
@@ -224,15 +159,6 @@
   # ============================================================================
   # Programs
   # ============================================================================
-
-  # Allow dynamically linked executables
-  programs.nix-ld = {
-    enable = true;
-    libraries = with pkgs; [
-      stdenv.cc.cc
-      libGL
-    ];
-  };
 
   # kdeconnect - also opens firewall ports
   programs.kdeconnect.enable = true;
@@ -247,11 +173,11 @@
   # ============================================================================
   # Environment
   # ============================================================================
+  # The editor variables are in profiles/common.nix; these are about what this
+  # machine is used for.
   environment.sessionVariables = {
     DOTNET_ROOT = "${pkgs.dotnet-sdk_8}";
     PATH = "$PATH:$HOME/go/bin";
-    GIT_EDITOR = "nvim";
-    EDITOR = "nvim";
     STEAM_EXTRA_COMPAT_TOOLS_PATHS = "\${HOME}/.steam/root/compatibilitytools.d";
   };
 
@@ -285,17 +211,14 @@
   # ============================================================================
   # Users
   # ============================================================================
-  users.users.coryg = {
-    description = "Cory Gyarmathy";
-    isNormalUser = true;
-    extraGroups = [
-      "networkmanager"
-      "wheel"
-      "i2c" # For ddcutil
-      "docker"
-      "input" # For evdev keyboard monitoring
-    ];
-  };
+  # The account itself is in profiles/common.nix and its networkmanager group in
+  # profiles/workstation.nix. These three groups exist because of the toggles
+  # above, so they belong beside them.
+  users.users.coryg.extraGroups = [
+    "i2c" # for ddcutil (cg.ddc)
+    "docker"
+    "input" # for evdev keyboard monitoring (cg.ergodox)
+  ];
 
   # Home-manager configuration for this user
   home-manager.users.coryg = import ./home.nix;

@@ -43,6 +43,11 @@ in
     inputs.hardware.nixosModules.common-pc
     inputs.hardware.nixosModules.common-pc-ssd
 
+    # What it costs to be a machine in this fleet, and to be a server in it.
+    # Decisions rather than options - see profiles/common.nix.
+    ../../profiles/common.nix
+    ../../profiles/server.nix
+
     # Server-specific service modules
     ../../modules/services
 
@@ -451,52 +456,12 @@ in
   };
 
   # ============================================================================
-  # Boot Configuration
-  # ============================================================================
-  boot = {
-    loader = {
-      systemd-boot.enable = true;
-      efi.canTouchEfiVariables = true;
-    };
-  };
-
-  # ============================================================================
-  # Networking
-  # ============================================================================
-  networking = {
-    # IP reserved by the DHCP server; the reservation itself is recorded in
-    # fleet/default.nix, and mkHost sets hostName from the same place.
-    useDHCP = lib.mkForce true;
-    networkmanager.enable = true;
-  };
-
-  # ============================================================================
-  # Localisation
-  # ============================================================================
-  time.timeZone = "Australia/Perth";
-  i18n = {
-    defaultLocale = "en_GB.UTF-8";
-    extraLocaleSettings = {
-      LC_ADDRESS = "en_AU.UTF-8";
-      LC_IDENTIFICATION = "en_AU.UTF-8";
-      LC_MEASUREMENT = "en_AU.UTF-8";
-      LC_MONETARY = "en_AU.UTF-8";
-      LC_NAME = "en_AU.UTF-8";
-      LC_NUMERIC = "en_AU.UTF-8";
-      LC_PAPER = "en_AU.UTF-8";
-      LC_TELEPHONE = "en_AU.UTF-8";
-      LC_TIME = "en_AU.UTF-8";
-    };
-  };
-
-  # Disable root login entirely
-  users.users.root = {
-    hashedPassword = "!"; # locks the account
-  };
-
-  # ============================================================================
   # Hardware
   # ============================================================================
+  # The NIC to arm for Wake-on-LAN. profiles/server.nix decides that this
+  # machine should wake; only the machine knows what its interface is called.
+  cg.wake-on-lan.interfaces = [ "eno1" ];
+
   # Enable hardware acceleration for transcoding (Intel Quick Sync)
   hardware.graphics = {
     enable = true;
@@ -514,141 +479,19 @@ in
   # ============================================================================
   # Environment
   # ============================================================================
+  # The editor variables are in profiles/common.nix; this one is about the GPU
+  # above it.
   environment.sessionVariables = {
-    GIT_EDITOR = "nvim";
-    EDITOR = "nvim";
     # Help applications find VA-API drivers
     LIBVA_DRIVER_NAME = "iHD";
   };
 
   # ============================================================================
-  # Firmware Updates (automated via fwupd)
-  # ============================================================================
-  services.fwupd.enable = true;
-
-  # Run firmware updates BEFORE nixos-upgrade so any pending firmware
-  # gets applied during the reboot that nixos-upgrade may trigger
-  systemd.services.fwupd-auto-update = {
-    description = "Automatic firmware updates";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    before = [ "nixos-upgrade.service" ];
-    wantedBy = [ "nixos-upgrade.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.fwupd}/bin/fwupdmgr update -y --no-reboot";
-      # Exit codes: 0=success, 1=no updates, 2=no devices
-      SuccessExitStatus = [
-        0
-        1
-        2
-      ];
-    };
-  };
-
-  # ============================================================================
-  # Services
-  # ============================================================================
-
-  # Disable sleep/suspend - this is a server
-  systemd.sleep.settings.Sleep = {
-    AllowSuspend = "no";
-    AllowHibernation = "no";
-    AllowSuspendThenHibernate = "no";
-    AllowHybridSleep = "no";
-  };
-
-  # Enable wake-on-LAN
-  # You may need to also enable this in BIOS
-  systemd.services.enable-wol = {
-    description = "Enable Wake-on-LAN";
-    after = [ "network.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.ethtool}/bin/ethtool -s eno1 wol g";
-    };
-  };
-
-  # ============================================================================
-  # Virtualisation (for containers)
-  # ============================================================================
-  virtualisation.podman = {
-    enable = true;
-    dockerCompat = true; # Provides `docker` command alias
-    defaultNetwork.settings.dns_enabled = true;
-    autoPrune = {
-      enable = true;
-      dates = "weekly";
-    };
-  };
-
-  # ============================================================================
   # System Packages
   # ============================================================================
-  # Basic packages for server administration
-  environment.systemPackages = with pkgs; [
-    # System utilities
-    vim
-    neovim
-    git
-    htop
-    btop
-    tmux
-    curl
-    wget
-    dig
-    tree
-
-    # Disk and storage utilities
-    ncdu
-    iotop
-    smartmontools
-
-    # Hardware monitoring
-    lm_sensors
-    intel-gpu-tools # For monitoring Quick Sync usage
-    libva-utils # Provides vainfo for checking VA-API
-
-    # Container management
-    podman-compose
-
-    # Network utilities
-    ethtool
-    iperf3
-    nfs-utils # NFS client tools
-
-    # Cloudflare Tunnel
-    cloudflared
-  ];
-
-  # ============================================================================
-  # Users
-  # ============================================================================
-  users = {
-    users.coryg = {
-      description = "Cory Gyarmathy";
-      isNormalUser = true;
-      extraGroups = [
-        "wheel"
-        "podman" # Container management
-        "media" # Access to media files
-        "render" # GPU access
-        "video" # Video device access
-      ];
-      hashedPasswordFile = config.sops.secrets."users/coryg".path;
-      uid = 1000;
-    };
-
-    # Media group for shared file access between services
-    # Explicit GID for container compatibility AND NFS consistency
-    groups.media.gid = 1011;
-
-    mutableUsers = false;
-  };
-
-  # Home-manager configuration for this user
-  home-manager.users.coryg = import ./home.nix;
+  # The server package set is in profiles/server.nix. Only this host owns the
+  # tunnel, so only this host needs the client.
+  environment.systemPackages = [ pkgs.cloudflared ];
 
   # ============================================================================
   # System Version

@@ -84,6 +84,10 @@ service starts or that its generated configuration is valid.
   automatically. Follow the `cg.service.<name>.enable` pattern.
 - Host-specific choices belong under `hosts/<host>/`; shared behavior belongs
   in the appropriate `modules/` subtree.
+- `profiles/` holds decisions shared by every machine (`common.nix`) or by a
+  kind of machine (`server.nix`, `workstation.nix`). A profile has no options:
+  anything that must differ per host is a module under `modules/nixos/`, with
+  the host supplying the differing value.
 - Changes to a package updater should be made in that package. The workflow
   discovers packages through `passthru.autoUpdate`.
 - Adding a host requires adding it to the build matrix in

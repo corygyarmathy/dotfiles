@@ -1,6 +1,6 @@
 # Plan: structural cleanup
 
-Status: drafted 2026-08-28. Items 0 and 1 landed the same day, item 2 on 2026-08-29; nothing else started.
+Status: drafted 2026-08-28. Items 0 and 1 landed the same day, items 2 and 3 on 2026-08-29; nothing else started.
 
 This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines. Items 1 and 2 are marked `minor`: each changed a handful of lines of generated configuration, and each lists them under what it landed. Item 2's are the probe list it exists to fix.
 
@@ -11,7 +11,7 @@ The pipeline, the checks harness and the documentation are in good shape and are
 | 0   | Gate hygiene and budget           | small  | no                | —          | **done** 2026-08-28   |
 | 1   | A fleet source of truth           | medium | minor             | —          | **done** 2026-08-28   |
 | 2   | Services publish themselves       | large  | minor             | 1          | **done** 2026-08-29   |
-| 3   | Hosts become profiles + toggles   | medium | no                | 2          | not started           |
+| 3   | Hosts become profiles + toggles   | medium | no                | 2          | **done** 2026-08-29   |
 | 4   | Per-host secret scoping           | large  | **yes**           | 1          | not started           |
 | 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       | not started           |
 | 6   | Decouple modules from the fleet   | small  | no                | 1          | not started           |
@@ -296,6 +296,24 @@ Both server host files are under ~250 lines and contain only: the auto-upgrade b
 ### Risks
 
 Profiles are a well-known place for a config to acquire a second, worse module system. The rule that keeps that from happening: **a profile has no options.** If something in `profiles/` needs to be configurable per host, it is a module and belongs in `modules/`.
+
+### What landed
+
+`profiles/` exists, with the four files the approach named: `common.nix` (75 lines, every host), `server.nix` (161, both servers), `workstation.nix` (85, `xps15`) and `home/server.nix` (39, replacing the two host `home.nix` files). The host files lost 391 lines between them — `homelab01` 657 → 500, `homelab02` 607 → 450, `xps15` 311 → 234 — and no profile declares an option.
+
+`common.nix` took two things the approach did not list, both because they were written out three times and are decisions rather than hardware: `boot.loader.systemd-boot` with `canTouchEfiVariables`, which `cg.boot-counting` has nowhere to write without, and `networking.networkmanager.enable`. It also took only the part of the `coryg` account that is true everywhere — description, `isNormalUser`, `wheel`. Authentication is not portable: the servers read a hashed password from SOPS, set `uid = 1000` because the media tree outlives any particular install, and turn `mutableUsers` off, none of which is true on the laptop, so all of it is in `server.nix`.
+
+**Wake-on-LAN did not become a profile line, and the reason is the item's own risk section.** The obvious implementation is the stock `networking.interfaces.<iface>.wakeOnLan.enable`, which replaces the hand-rolled `ethtool` unit with a systemd `.link` file. It was written, and reverted: nothing else on `homelab02` declares `networking.interfaces.eno1`, so declaring it there to reach that one attribute also generated a `network-addresses-eno1.service`, a udev rule to start it, and two new per-interface sysctls — one of them `net.ipv6.conf.eno1.use_tempaddr`, which changes how the host picks a source address. That is a real change to a running server smuggled in by a refactor that is supposed to change nothing. So Wake-on-LAN is now `modules/nixos/wake-on-lan.nix`, keeping the `ethtool` unit these machines already run: the profile says `cg.wake-on-lan.enable = true` because "a server should be startable without walking to it" is a decision, and each host says `cg.wake-on-lan.interfaces = [ "eno1" ]` because an interface name is a fact about a NIC. Enabling it without naming one is an assertion failure rather than a unit that succeeds while arming nothing. This is exactly the escape hatch the risk section describes — something in `profiles/` that has to be configurable per host is a module — and it is worth noting that the first thing to need it was the first thing the approach flagged as needing care.
+
+`workstation.nix` removes no duplication, because there is one workstation. It exists so the `xps15` file is about the XPS 15 — its screens, thermals, GPU and what it is used for — rather than about a desktop needing an audio server and a way to mount a USB stick. What went in is what a second laptop would want unasked: pipewire, printing and mDNS, dbus, `gvfs`/`udisks2`, the GnuPG agent, `nix-ld`, the keyboard layout. What stayed is anything tied to a `cg.*` toggle: the `i2c`, `docker` and `input` groups are still beside the toggles that need them.
+
+### Verified, 2026-08-29
+
+**Inert, not assumed.** For all three hosts, the generated `/etc` and the `system-path` closure were compared against the same host built from `f095ab2`. Every host's package set is identical apart from `nixos-version`, and the only files that differ in `/etc` are the ones that always do: `dbus-1/session.conf` and `system.conf` and the `dbus-broker` and `polkit` override files, which carry the `system-path` hash; `nixos-deploy-metrics` and `nixos-upgrade`, which carry the revision literally; and on `homelab01` `digital-garden-build`, whose build stamp folds in a store path from the source tree. **Nothing else moves on any host** — no unit added, none removed, and `enable-wol.service` byte-identical on both servers, which is the check that matters most given what the first implementation of it did.
+
+The two server `home.nix` files really were interchangeable: `home.activationPackage` is the same store path for `homelab01` and `homelab02`, before and after, so the profile reproduces both exactly.
+
+**The `Done when` is met structurally and missed numerically.** The host files contain only the auto-upgrade block, the `cg.*` toggles, the hardware, and what is unique to that machine — but they are 500 and 450 lines, not 250. What is left is almost entirely `cg.service` toggles and the comments explaining them: `homelab01`'s backup `paths` and `extraExclude` are 60 lines of prose about which state is regenerable, and its comskip block is 35 lines of tuning constants. Those are toggles, which the `Done when` says stay. Getting under 250 means moving backup paths to the modules that own the state and comskip's tuning into its module's defaults — the same "services publish themselves" move as item 2, applied to state rather than ports, which is item 6's shape rather than this one's. The line target was set against the pre-item-2 files and did not anticipate that item 2 would remove the other kind of bulk first.
 
 ---
 
