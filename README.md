@@ -69,6 +69,7 @@ dotfiles/
 │   ├── homelab01/         # Compute + streaming
 │   ├── homelab02/         # Storage + download (ZFS, NFS export)
 │   └── xps15/             # Laptop
+├── profiles/              # Composed opinions: what a machine costs to be
 ├── modules/
 │   ├── nixos/             # System-level modules
 │   ├── services/          # Homelab service modules (auto-imported)
@@ -80,6 +81,8 @@ dotfiles/
 ├── secrets/               # SOPS-encrypted secrets
 └── docs/adr/              # Architecture decision records
 ```
+
+`profiles/` sits between the two: a module offers an option and does nothing until a host enables it, while a profile makes a decision and offers nothing. `cg.boot-counting` is a module; "servers in this fleet do not suspend" is a profile. A host imports `profiles/common.nix` plus the one for what kind of machine it is, and what is left in the host file is the auto-upgrade block, the toggles, and the hardware. The rule that keeps `profiles/` from becoming a second module system: **a profile has no options** — anything that has to differ per host is a module.
 
 Modules follow a consistent shape and are toggled per host:
 
