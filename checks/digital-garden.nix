@@ -456,9 +456,9 @@
         assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css, \
             "the stylesheet fetches a font from a CDN"
 
-    with subtest("a table is capped to the measure, not scrolled past it"):
-        # Two independent failures are guarded here, each of which alone is a
-        # bug.
+    with subtest("a table wraps to the page, and scrolls only when it cannot"):
+        # Three independent failures are guarded here, each of which alone is a
+        # bug, and two of which have actually shipped.
         #
         # The first is the wrapper: `.table-container { overflow-x: auto }` sat
         # in the stylesheet for weeks with no hook to emit the div, so it
@@ -469,47 +469,57 @@
         # halves are asserted: the selector exists in the stylesheet, AND the
         # markup an actual table produces contains it.
         #
-        # The second is the cap. The wrapper alone left a wide table scrolled
-        # inside its box - better than scrolling the page, but the right-hand
-        # columns sat off-screen and another ~500px of sideways scroll was still
-        # the interface. The hook now emits a <colgroup> of percentage widths
-        # summed to 100%, and the stylesheet honours them with
-        # `table-layout: fixed; width: 100%`, so every column stays on the
-        # measure and nothing is left to scroll. That only works if all three
-        # halves land on an actual table rendered through the hook:
+        # The second and third are the two ways of sizing a column by hand,
+        # both of which were tried and both of which were worse than letting
+        # the browser measure it:
         #
-        #   - the hook emitted the <colgroup> (a table whose widths are left to
-        #     auto layout can blow a prose column wide again);
-        #   - the stylesheet applies fixed layout (a <col> width is a hint the
-        #     content can outgrow under auto layout);
-        #   - the old `width: max-content` that made the table as wide as its
-        #     content is gone (under fixed layout it would fight the cap).
+        #   - `width: max-content` sized the table to its content, so nothing
+        #     wrapped and every table wider than the measure became one long
+        #     line inside a scroll box;
+        #   - `table-layout: fixed` over a <colgroup> of percentages estimated
+        #     from codepoint counts made those estimates binding, so on a phone
+        #     a 10% column was about two characters and "Backlinks" was set as
+        #     nine stacked letters.
+        #
+        # Automatic layout has neither failure because it measures glyphs at the
+        # width the page is being read at. It is the absence of the two overrides
+        # that makes it work, and an absence is exactly what a future edit
+        # reintroduces without noticing - so both are pinned negative.
         page = served("/on-gates")
         assert "MARKER-TABLE-CELL" in page, "the fixture table did not render"
         assert re.search(r'<div class="table-container"[^>]*>\s*<table', page), \
             "a table is not wrapped in .table-container"
         assert ".table-container" in css, \
             ".table-container missing from the stylesheet"
-        assert re.search(r'<table[^>]*>\s*<colgroup>\s*<col\s+style="width:\s*\d', page), \
-            "the table has no <colgroup> width cap from the hook"
-        # Presence is not enough: the widths could be negative, out of range, or
-        # fail to sum to a table that fills the measure. Parse every column the
-        # fixture's table emits and check both - a positive percentage each, and
-        # a total of 100 (within rounding). A negative fallback (an impossible
-        # table of eleven short columns plus a prose one) would be caught here.
-        col_widths = [float(m)
-                      for m in re.findall(r'<col\s+style="width:\s*(-?\d+\.\d+|-?\d+)%"', page)]
-        assert col_widths, "the table emitted no parseable <col> widths"
-        assert all(0.0 < w <= 100.0 for w in col_widths), \
-            f"a table column has an out-of-range width: {col_widths}"
-        assert abs(sum(col_widths) - 100.0) < 0.1, \
-            f"a table's columns do not sum to 100%: {col_widths} = {sum(col_widths)}"
-        assert re.search(r'table\s*{[^}]*table-layout:\s*fixed', css), \
-            "tables are not laid out with fixed width"
+        assert "<colgroup" not in page, \
+            "the hook is estimating column widths again; the browser measures better"
+        assert not re.search(r'table\s*{[^}]*table-layout:\s*fixed', css), \
+            "fixed layout is back, which makes an estimated width binding"
+        assert not re.search(r'table\s*{[^}]*width:\s*max-content', css), \
+            "the table rule sizes the table to its content again, so nothing wraps"
         assert re.search(r'table\s*{[^}]*width:\s*100%', css), \
             "tables do not fill the measure"
-        assert not re.search(r'table\s*{[^}]*width:\s*max-content', css), \
-            "the table rule still sizes the table to its content, so the cap would fight it"
+        # `anywhere` lets a break count towards the minimum width a cell reports,
+        # so a column can be squeezed to one character and still claim to fit -
+        # which is how the fixed layout produced its stacked letters, and it
+        # would do the same under auto layout. `break-word` reports the honest
+        # minimum. The two differ by one word and by exactly this bug.
+        assert re.search(r'\bth,\s*\n\s*td\s*{[^}]*overflow-wrap:\s*break-word', css), \
+            "cells do not wrap with break-word"
+        assert not re.search(r'\bth,\s*\n\s*td\s*{[^}]*overflow-wrap:\s*anywhere', css), \
+            "cells wrap with `anywhere`, which lets a column be sized below a word"
+        # A table that scrolls has to say so. On a phone there is no scrollbar
+        # until you touch the box, so a clipped table with no shadow on its edge
+        # reads as a broken table rather than a scrollable one. The shadow pair
+        # is `local` covers over `scroll` shadows; the `local` keyword is the
+        # whole trick, so that is what is pinned.
+        assert re.search(r'\.table-container\s*{[^}]*\blocal\b', css), \
+            "the scroll shadow on a table container is gone"
+        # And paper, which cannot scroll: the box must stop clipping there, or a
+        # wide table prints with its right-hand columns cut off.
+        assert re.search(r'@media print\s*{.*\.table-container\s*{[^}]*overflow-x:\s*visible',
+                         css, re.S), \
+            "a wide table is still clipped when printed"
 
     with subtest("the page declares a tab icon"):
         # Without one the browser asks for /favicon.ico on every visit and gets

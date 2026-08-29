@@ -1,48 +1,33 @@
 {{/*
-  A table, wrapped in the scroll container the stylesheet has always styled,
-  with a column cap so a wide table never overflows the measure.
+  A table, wrapped in the scroll container the stylesheet styles. The cells
+  below are the markup Hugo emits without this hook; the wrapper is the only
+  thing being added, because Hugo emits a bare <table> and there is no other
+  place to put a div around it.
 
-  This hook started with the wrapper and none of the widths: the cells below
-  are the markup Hugo emits without it. `.table-container { overflow-x: auto }`
-  was written when the single-column layout landed, but Hugo emits a bare
-  <table> and there was no hook to put the div around it, so the rule matched
-  nothing and a wide table had no box to scroll inside. It scrolled the PAGE
-  instead — at 390px the reference tables in the Lightning notes made the whole
-  document about twice the width of the phone, so every paragraph on the page
-  could be dragged sideways and had to be dragged back.
+  `.table-container { overflow-x: auto }` was written when the single-column
+  layout landed, but with no hook to emit the div the rule matched nothing and
+  a wide table had no box to scroll inside. It scrolled the PAGE instead — at
+  390px the reference tables in the Lightning notes made the whole document
+  about twice the width of the phone, so every paragraph could be dragged
+  sideways and had to be dragged back.
 
-  The wrapper alone fixed the page-scrolling, but left a table pinned to the
-  measure: `width: max-content` sized the table to its content and the scroll
-  box let the right-hand columns run off to the right, so a prose column sat
-  untouched while the reader scrolled ~500px sideways to reach it. The cap
-  below is the second half. Each table gets a <colgroup> whose columns carry a
-  percentage width estimated from the longest thing in them, so a wide table
-  keeps every column on the measure instead of forcing the page to grow:
+  This hook once also emitted a <colgroup> of estimated percentage widths, to
+  keep a wide table on the measure rather than scrolling. It is gone, and the
+  reasoning is worth keeping because the idea is tempting: the widths were
+  estimated from `len(.Text)`, a codepoint count, and a codepoint count is not
+  a width. Under `table-layout: fixed` those estimates were binding, so where
+  the estimate was wrong the column was wrong — on a phone a 10% column of a
+  350px viewport is about two characters of content, and "Backlinks" came out
+  as nine stacked letters while "2026-08-23" came out as five stacked
+  fragments. Under `table-layout: auto` they are merely a preference the
+  browser can honour, which sounds harmless and is not: measured against the
+  fixture the estimates were simply worse than the browser's own measurement,
+  wrapping "Datelines, theses, captions" onto two lines in a column that had
+  room for one.
 
-    - a short column (a number, a date, a code name) is given what its longest
-      cell actually needs, so "2026-08-23" does not wrap into a two-line cell;
-    - a long prose column is capped high enough (120 codepoints) that it keeps
-      a share of the table proportional to its length, rather than a flat equal
-      share — a term/definition table gives the explanation most of the width;
-    - every column is floored at a minimum so a boxed header like "Headings"
-      is never squeezed into a one-glyph-wide sliver, and a short data column
-      like "Role" or a price stays readable instead of being crushed by a long
-      prose neighbour; the floor prefers the prose to give up width first;
-    - after each width is estimated the widths are normalised to a clean 100%,
-      so the table is exactly as wide as the container it sits in and there is
-      nothing left to scroll.
-
-  `table-layout: fixed` in the stylesheet is what makes these widths stick:
-  under auto layout a <col> width is only a hint the content can outgrow, and a
-  long prose cell blows it wide again — which is exactly the bug being fixed.
-  Percentages instead of pixels matter for the same reason: a fixed layout
-  handed pixel columns summing to the desktop measure overflows a phone that is
-  narrower than them, while percentages squash to whatever the container is.
-
-  The width estimate is deliberately crude — `len(.Text)` counts codepoints,
-  not rendered pixels, so a wide glyph (CJK, say) is underpriced. Nothing in
-  the vault renders one today; if it ever does, this undercounts and the table
-  wraps more than it could. That is the safe failure: it still fits the page.
+  What replaced them is the browser's automatic table layout, which does this
+  arithmetic against real glyph widths and does it at whatever width the page
+  is actually being read at. See `table` in the stylesheet.
 
   The alignment attribute is Goldmark's own (`|:---|---:|` in the markdown) and
   is emitted as an inline style because that is where a per-cell, per-table
@@ -53,131 +38,24 @@
   Nothing in the vault uses one today; it is passed through so that adopting
   this hook does not quietly drop a feature the bare renderer had.
 
-  A one-column table still gets a width of 100, so it behaves like any other
-  table rather than being a special case the CSS has to remember.
-
   tabindex="0" because a scrolling box has to be scrollable by keyboard.
   Firefox makes an overflow container focusable on its own; Chrome does not, so
   without this a reader on a keyboard could reach every other part of the page
-  and not the right-hand columns of a wide table - which would be a worse
+  and not the right-hand columns of a wide table — which would be a worse
   regression than the page-scrolling this replaces, since the page at least
   scrolled. The cost is one tab stop per table, and tables are rare here.
 
   role and aria-label deliberately absent. The pattern usually pairs tabindex
-  with role="region" and a name, but the name would have to be invented - these
-  tables have no captions - and "region: table" announced before every one of
+  with role="region" and a name, but the name would have to be invented — these
+  tables have no captions — and "region: table" announced before every one of
   them is noise bought with nothing. A focusable box with no role is announced
   as what it is, which is accurate.
 */}}
-{{- $headers := index .THead 0 -}}
-{{- if not $headers }}{{ $headers = index .TBody 0 }}{{ end -}}
-{{- $n := len $headers -}}
-
-{{- /* Column width tuning, in px at the 40rem measure. A prose column is
-     capped at $textChars codepoints (120 × $char = 960px): the cap is the bound
-     that stops one pathological cell from eating the table, and it sits high
-     enough that a 150-char column still earns more of the table than a 60-char
-     one — without that a term/definition table splits 50/50 no matter how its
-     columns differ. $min is the per-cell floor, $pad the padding. The share
-     floor $MINW is separate and lives at the end: a short data column keeps at
-     least 10% of the table so that long prose cannot crush "Role" or the price
-     column into a 30px sliver. The floor holds short columns at $MINW but does
-     not guard a column that is long enough to be free: a prose column sitting
-     just above the floor gives up some of its width to the donation and can
-     drop below it. That is the point - prose yields width so a data column is
-     not crushed - and it fails safe because the prose still wraps. */ -}}
-{{- $textChars := 120 }}
-{{- $min := 56 }}
-{{- $char := 8 }}
-{{- $pad := 20 }}
-{{- $MINW := 10.0 }}
-
-{{- /* The longest text in one column, across every header and body row. */ -}}
-{{- $colMax := 0 }}
-
-{{- /* First pass: the sum of every column's weight, so shares can be derived
-     from a known total. $i is the zero-based column index that `range` over the
-     header row provides. */ -}}
-{{- $totalWeight := 0 }}
-{{- range $i, $c := $headers -}}
-  {{- $colMax = 0 -}}
-  {{- range $.THead -}}{{ with (index . $i) }}{{ $l := len .Text }}{{ if gt $l $colMax }}{{ $colMax = $l }}{{ end }}{{ end }}{{ end -}}
-  {{- range $.TBody -}}{{ with (index . $i) }}{{ $l := len .Text }}{{ if gt $l $colMax }}{{ $colMax = $l }}{{ end }}{{ end }}{{ end -}}
-  {{- $w := $colMax -}}
-  {{- if gt $w $textChars }}{{ $w = $textChars }}{{ end -}}
-  {{- $w = mul $w $char -}}
-  {{- if lt $w $min }}{{ $w = $min }}{{ end -}}
-  {{- $totalWeight = add $totalWeight (add $w $pad) -}}
-{{- end -}}
-
-{{- /* Second pass: how much of the table falls below the share floor. A column
-     at or above $MINW is "free" and donates proportionally to raise the others;
-     a column below it is held at $MINW. natural is that column's unrounded
-     percentage of the table. */ -}}
-{{- $nShort := 0 }}
-{{- $freePctSum := 0.0 }}
-{{- range $i, $c := $headers -}}
-  {{- $colMax = 0 -}}
-  {{- range $.THead -}}{{ with (index . $i) }}{{ $l := len .Text }}{{ if gt $l $colMax }}{{ $colMax = $l }}{{ end }}{{ end }}{{ end -}}
-  {{- range $.TBody -}}{{ with (index . $i) }}{{ $l := len .Text }}{{ if gt $l $colMax }}{{ $colMax = $l }}{{ end }}{{ end }}{{ end -}}
-  {{- $w := $colMax -}}
-  {{- if gt $w $textChars }}{{ $w = $textChars }}{{ end -}}
-  {{- $w = mul $w $char -}}
-  {{- if lt $w $min }}{{ $w = $min }}{{ end -}}
-  {{- $w = add $w $pad -}}
-  {{- $natural := div (mul 100.0 (float $w)) (float $totalWeight) -}}
-  {{- if lt $natural $MINW }}
-    {{- $nShort = add $nShort 1 }}
-  {{- else }}
-    {{- $freePctSum = add $freePctSum $natural }}
-  {{- end }}
-{{- end -}}
-{{- /* Apply the floor only when it is achievable. It needs at least one free
-     column to donate from (lt $nShort $n) and the reserved slots to fit
-     ($nShort × $MINW ≤ 100); otherwise short columns outnumber what a 10% share
-     can reserve, forcing $freeRemainder (and a free column's scaled width)
-     negative. In that case the floor is skipped and every column keeps its
-     natural share - no <col> can ever carry a negative width. When the floor
-     does apply, each free column is scaled so the reserved $MINW slots sum with
-     the donated remainder to exactly 100. */ -}}
-{{- $useFloor := false }}
-{{- $minReserve := mul $MINW (float $nShort) }}
-{{- if and (lt $nShort $n) (le $minReserve 100.0) }}{{ $useFloor = true }}{{ end }}
-{{- $freeRemainder := sub 100.0 $minReserve }}
-
-{{- /* used: the exact percentage of every column but the last, so the last can
-     absorb the rounding and the widths sum to a clean 100%. */ -}}
-{{- $used := 0.0 }}
 <div class="table-container" tabindex="0">
   <table
     {{- range $k, $v := .Attributes }}
       {{- with $v }} {{ $k | safeHTMLAttr }}="{{ . }}"{{ end }}
     {{- end }}>
-    <colgroup>
-      {{- range $i, $c := $headers }}
-        {{- $colMax = 0 -}}
-        {{- range $.THead -}}{{ with (index . $i) }}{{ $l := len .Text }}{{ if gt $l $colMax }}{{ $colMax = $l }}{{ end }}{{ end }}{{ end -}}
-        {{- range $.TBody -}}{{ with (index . $i) }}{{ $l := len .Text }}{{ if gt $l $colMax }}{{ $colMax = $l }}{{ end }}{{ end }}{{ end -}}
-        {{- $w := $colMax -}}
-        {{- if gt $w $textChars }}{{ $w = $textChars }}{{ end -}}
-        {{- $w = mul $w $char -}}
-        {{- if lt $w $min }}{{ $w = $min }}{{ end -}}
-        {{- $w = add $w $pad -}}
-        {{- $natural := div (mul 100.0 (float $w)) (float $totalWeight) -}}
-        {{- $pct := $natural -}}
-        {{- if and $useFloor (lt $natural $MINW) }}
-          {{- $pct = $MINW }}
-        {{- else if $useFloor }}
-          {{- $pct = div (mul $natural $freeRemainder) $freePctSum }}
-        {{- end }}
-        {{- if eq $i (sub $n 1) }}
-          <col style="width: {{ printf "%.2f" (sub 100.0 $used) }}%">
-        {{- else }}
-          {{- $used = add $used $pct -}}
-          <col style="width: {{ printf "%.2f" $pct }}%">
-        {{- end }}
-      {{- end }}
-    </colgroup>
     <thead>
       {{- range .THead }}
         <tr>
