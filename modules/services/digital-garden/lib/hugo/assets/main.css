@@ -595,7 +595,13 @@ mark {
 /* Wide content must scroll inside its own box rather than making the page
  * scroll sideways. The box is put there by _markup/render-table.html; for a
  * while this rule was written and the hook was not, so it matched nothing and
- * the page did the scrolling — see that file. */
+ * the page did the scrolling — see that file.
+ *
+ * Today the table fits the measure by construction — see `table` below — so
+ * the scroll bar sits unused on a well-sized table. It is kept because the
+ * width estimate in the hook is intentionally crude: a table of exceptional
+ * glyphs (CJK, say) underprices a column and overflows, and when that happens
+ * we want the overflow consumed here rather than scrolling the page. */
 .table-container {
   overflow-x: auto;
 }
@@ -622,18 +628,28 @@ pre:focus-visible {
   padding: 0.2rem 0;
 }
 
-/* Sized to its own content, with the measure as a floor rather than a ceiling.
- * `width: 100%` was both halves of the same bug: it guaranteed the table could
- * never overflow .table-container, so the container's `overflow-x` never had
- * anything to scroll, and it guaranteed a table too wide for the measure would
- * be squeezed into it instead — which is how a column of one-sentence theses
- * came to be set one word per line. max-content lets a wide table be as wide as
- * it needs and scroll; min-width keeps a narrow one filling the measure, which
- * is what `width: 100%` was there for in the first place. */
+/* The width estimate that used to live on the table is gone. What was
+ * `width: max-content` sized the table to its content, so a wide table
+ * scrolled inside .table-container and a prose column sat untouched at 450px
+ * while the reader scrolled the rest of the way sideways — the exact thing the
+ * container was meant to replace. `fixed` + `100%` instead takes the measures
+ * the hook put on each <col> and uses them verbatim, so every column stays on
+ * the measure and prose wraps at a readable cap instead of running off to the
+ * right. The columns already sum to 100%, so the table is exactly the width of
+ * the box it sits in.
+ *
+ * `overflow-wrap: anywhere` and `min-width: 0` are what let a cell wrap
+ * rather than fitting its content to one long unbroken line. A fixed table
+ * will not wrap a cell on its own; it honours the col width and lets the text
+ * break at the box edge — good for prose, but it turns a long unbreakable token
+ * into a page-wide overflow. `anywhere` caps that (the stronger of the two
+ * break modes, which is what keeps a token from widening the page), and without
+ * `min-width: 0` a grid or block child would still force the min-content width
+ * and overflow anyway. */
 table {
   border-collapse: collapse;
-  width: max-content;
-  min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
 }
 
 th,
@@ -641,6 +657,8 @@ td {
   border-bottom: 1px solid var(--border);
   padding: 0.4rem 0.6rem;
   text-align: left;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 /* ── heading anchors ────────────────────────────────────────────────────── */

@@ -449,24 +449,60 @@
         assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css, \
             "the stylesheet fetches a font from a CDN"
 
-    with subtest("a table is wrapped in something that can scroll"):
-        # The other shape of the same failure the font assertion guards: a rule
-        # that is written and never reached. `.table-container { overflow-x:
-        # auto }` sat in the stylesheet for weeks with no hook to emit the div,
-        # so it matched nothing, and a table wider than the measure scrolled
-        # the PAGE - at 390px the document went to about twice the width of the
-        # phone, and every paragraph on it could be dragged sideways. Nothing
-        # failed: the build was clean, the CSS was there, the table rendered.
+    with subtest("a table is capped to the measure, not scrolled past it"):
+        # Two independent failures are guarded here, each of which alone is a
+        # bug.
         #
-        # So both halves are asserted, because either one alone is the bug: the
-        # selector exists in the stylesheet, AND the markup an actual table
-        # produces contains it.
+        # The first is the wrapper: `.table-container { overflow-x: auto }` sat
+        # in the stylesheet for weeks with no hook to emit the div, so it
+        # matched nothing, and a table wider than the measure scrolled the PAGE
+        # - at 390px the document went to about twice the width of the phone,
+        # and every paragraph on it could be dragged sideways. Nothing failed:
+        # the build was clean, the CSS was there, the table rendered. So both
+        # halves are asserted: the selector exists in the stylesheet, AND the
+        # markup an actual table produces contains it.
+        #
+        # The second is the cap. The wrapper alone left a wide table scrolled
+        # inside its box - better than scrolling the page, but the right-hand
+        # columns sat off-screen and another ~500px of sideways scroll was still
+        # the interface. The hook now emits a <colgroup> of percentage widths
+        # summed to 100%, and the stylesheet honours them with
+        # `table-layout: fixed; width: 100%`, so every column stays on the
+        # measure and nothing is left to scroll. That only works if all three
+        # halves land on an actual table rendered through the hook:
+        #
+        #   - the hook emitted the <colgroup> (a table whose widths are left to
+        #     auto layout can blow a prose column wide again);
+        #   - the stylesheet applies fixed layout (a <col> width is a hint the
+        #     content can outgrow under auto layout);
+        #   - the old `width: max-content` that made the table as wide as its
+        #     content is gone (under fixed layout it would fight the cap).
         page = served("/on-gates")
         assert "MARKER-TABLE-CELL" in page, "the fixture table did not render"
         assert re.search(r'<div class="table-container"[^>]*>\s*<table', page), \
             "a table is not wrapped in .table-container"
         assert ".table-container" in css, \
             ".table-container missing from the stylesheet"
+        assert re.search(r'<table[^>]*>\s*<colgroup>\s*<col\s+style="width:\s*\d', page), \
+            "the table has no <colgroup> width cap from the hook"
+        # Presence is not enough: the widths could be negative, out of range, or
+        # fail to sum to a table that fills the measure. Parse every column the
+        # fixture's table emits and check both - a positive percentage each, and
+        # a total of 100 (within rounding). A negative fallback (an impossible
+        # table of eleven short columns plus a prose one) would be caught here.
+        col_widths = [float(m)
+                      for m in re.findall(r'<col\s+style="width:\s*(-?\d+\.\d+|-?\d+)%"', page)]
+        assert col_widths, "the table emitted no parseable <col> widths"
+        assert all(0.0 < w <= 100.0 for w in col_widths), \
+            f"a table column has an out-of-range width: {col_widths}"
+        assert abs(sum(col_widths) - 100.0) < 0.1, \
+            f"a table's columns do not sum to 100%: {col_widths} = {sum(col_widths)}"
+        assert re.search(r'table\s*{[^}]*table-layout:\s*fixed', css), \
+            "tables are not laid out with fixed width"
+        assert re.search(r'table\s*{[^}]*width:\s*100%', css), \
+            "tables do not fill the measure"
+        assert not re.search(r'table\s*{[^}]*width:\s*max-content', css), \
+            "the table rule still sizes the table to its content, so the cap would fight it"
 
     with subtest("the page declares a tab icon"):
         # Without one the browser asks for /favicon.ico on every visit and gets
