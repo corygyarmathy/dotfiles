@@ -44,7 +44,10 @@ let
 in
 {
   # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../nixos/fleet.nix ];
+  imports = [
+    ../nixos/fleet.nix
+    ../nixos/publish.nix
+  ];
 
   options.cg.service.miniflux = {
     enable = lib.mkEnableOption "Miniflux RSS reader";
@@ -64,6 +67,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.miniflux = {
+      subdomain = "rss";
+      port = cfg.port;
+    };
+
     sops = {
       secrets = {
         # Admin credentials EnvironmentFile: ADMIN_USERNAME and ADMIN_PASSWORD

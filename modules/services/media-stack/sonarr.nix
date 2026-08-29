@@ -27,6 +27,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.sonarr = {
     enable = lib.mkEnableOption "Sonarr TV show management";
 
@@ -38,6 +42,10 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Published under its own name at the module's own port; whether it
+    # answers from outside the LAN is the host's call.
+    cg.publish.sonarr.port = cfg.port;
+
     # Require media-stack infrastructure
     assertions = [
       {

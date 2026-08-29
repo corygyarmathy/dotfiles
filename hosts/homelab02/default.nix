@@ -202,66 +202,13 @@ in
       };
       grafana.enable = false;
       zfs.enable = true;
-      scrapeTargets = map (host: "${host}:9100") servers;
-      smartctlTargets = map (host: "${host}:9633") servers;
       cloudflaredTarget = "${gateway}:20241";
 
       vpn.enable = true;
 
-      httpProbes = [
-        {
-          name = "jellyfin";
-          url = "https://jellyfin.${domain}";
-        }
-        {
-          name = "requests";
-          url = "https://requests.${domain}";
-        }
-        {
-          name = "sonarr";
-          url = "https://sonarr.${domain}";
-        }
-        {
-          name = "radarr";
-          url = "https://radarr.${domain}";
-        }
-        {
-          name = "prowlarr";
-          url = "https://prowlarr.${domain}";
-        }
-        {
-          name = "downloads";
-          url = "https://downloads.${domain}";
-        }
-        {
-          name = "grafana";
-          url = "https://grafana.${domain}";
-        }
-        {
-          name = "adguard-01";
-          url = "https://adguard.${domain}";
-        }
-        {
-          name = "adguard-02";
-          url = "https://adguard2.${domain}";
-        }
-        {
-          name = "autobrr";
-          url = "https://autobrr.${domain}";
-        }
-        {
-          name = "miniflux";
-          url = "https://rss.${domain}";
-        }
-        {
-          name = "wallabag";
-          url = "https://read.${domain}";
-        }
-        {
-          name = "filebrowser";
-          url = "https://filebrowser.${domain}";
-        }
-      ];
+      # httpProbes is not set: it defaults to every service this host
+      # publishes. This host and its peer used to hand-maintain overlapping
+      # lists that had drifted apart by six entries.
     };
 
     orphan-cleanup = {
@@ -301,62 +248,19 @@ in
     # -------------------------------------------------------------------------
     # Reverse Proxy (Caddy)
     # -------------------------------------------------------------------------
+    # What it serves is not written here. Each service module contributes its
+    # own entry to `cg.publish` (modules/nixos/publish.nix) and Caddy is built
+    # from that, so a port lives in exactly one place.
+    #
+    # Nothing this host publishes is internet-facing, so it has no `cg.publish`
+    # block of its own: `localOnly` defaults to true. The tunnel lives on the
+    # gateway, and grimmory - the one service here that answers from outside -
+    # is published from there.
     reverse-proxy = {
       enable = true;
       email = "cory@${domain}";
       cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
 
-      services = {
-        # Download client
-        downloads = {
-          subdomain = "downloads";
-          port = 8080; # qBittorrent
-          localOnly = true;
-          proxyExtraConfig = ''
-            # qBittorrent auth fix - strip headers that trigger CSRF protection
-            header_up -Origin
-            header_up -Referer
-            # Increase timeouts for large torrent lists
-            transport http {
-              response_header_timeout 30s
-            }
-          '';
-        };
-
-        # This host's AdGuard instance
-        adguard2 = {
-          subdomain = "adguard2";
-          port = 3080;
-          localOnly = true;
-        };
-
-        # FileBrowser
-        filebrowser = {
-          subdomain = "filebrowser";
-          port = 8085;
-          rateLimitProfile = "media";
-          localOnly = true;
-        };
-
-        # Shelfmark. Published by the gluetun container on this host, so from
-        # Caddy's point of view it is just another local port.
-        shelfmark = {
-          subdomain = "shelfmark";
-          port = 8084;
-          localOnly = true; # acquisition tooling
-        };
-
-        # Suwayomi. Not behind gluetun, so this is an ordinary local port.
-        suwayomi = {
-          subdomain = "suwayomi";
-          port = 4567;
-          localOnly = true;
-          rateLimitProfile = "media"; # it is a reader as well as a downloader
-        };
-
-        # Future NAS-related services would go here
-        # e.g., syncthing, nextcloud, etc.
-      };
     };
 
     # -------------------------------------------------------------------------
@@ -365,7 +269,6 @@ in
     adguard-home = {
       enable = true;
       role = "secondary";
-      webPort = 3080;
       bindAddresses = [
         "127.0.0.1"
         fleet.hosts.${hostName}.address

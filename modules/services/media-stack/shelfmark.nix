@@ -68,6 +68,10 @@ let
   qbt = config.cg.service.qbittorrent;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.shelfmark = {
     enable = lib.mkEnableOption "Shelfmark book search and request hub";
 
@@ -104,6 +108,10 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Published by the gluetun container on this host, so from Caddy's point
+    # of view it is an ordinary local port.
+    cg.publish.shelfmark.port = cfg.port;
+
     assertions = [
       {
         assertion = stack.enable;

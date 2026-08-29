@@ -1,8 +1,8 @@
 # Plan: structural cleanup
 
-Status: drafted 2026-08-28. Items 0 and 1 landed the same day; nothing else started.
+Status: drafted 2026-08-28. Items 0 and 1 landed the same day, item 2 on 2026-08-29; nothing else started.
 
-This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines. Item 1 is marked `minor`: it changed two lines of generated configuration, neither of which a running host can tell apart, and both are listed under what it landed.
+This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines. Items 1 and 2 are marked `minor`: each changed a handful of lines of generated configuration, and each lists them under what it landed. Item 2's are the probe list it exists to fix.
 
 The pipeline, the checks harness and the documentation are in good shape and are not the subject here. What has not kept up is the boundary between a host and a module: hosts transcribe facts that modules already know, modules hardcode facts about specific hosts, and the same value is written down in three places with nothing to notice when the copies diverge. Every item below is an instance of that one problem.
 
@@ -10,7 +10,7 @@ The pipeline, the checks harness and the documentation are in good shape and are
 | --- | --------------------------------- | ------ | ----------------- | ---------- | --------------------- |
 | 0   | Gate hygiene and budget           | small  | no                | —          | **done** 2026-08-28   |
 | 1   | A fleet source of truth           | medium | minor             | —          | **done** 2026-08-28   |
-| 2   | Services publish themselves       | large  | no                | 1          | not started           |
+| 2   | Services publish themselves       | large  | minor             | 1          | **done** 2026-08-29   |
 | 3   | Hosts become profiles + toggles   | medium | no                | 2          | not started           |
 | 4   | Per-host secret scoping           | large  | **yes**           | 1          | not started           |
 | 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       | not started           |
@@ -225,6 +225,39 @@ No port number appears in a host file, `httpProbes` is not written by hand anywh
 This is the item most likely to sprawl, because `cg.publish` is a small piece of framework and framework attracts features. Keep the submodule to the fields the three consumers actually read today. `proxyExtraConfig` and `rateLimitProfile` already exist on the proxy and should move across unchanged rather than being redesigned in passing.
 
 The probe derivation will _add_ seven probes to a running Prometheus, and new probes on services nobody was watching may well fire. That is the point, but do it on a day when investigating an alert is welcome.
+
+### What landed
+
+`modules/nixos/publish.nix` declares `cg.publish`, an `attrsOf submodule` with nine fields, every one of them read by one of the three consumers. Twenty-two service modules contribute an entry each; `reverse-proxy.nix` builds its vhosts from the registry, `cloudflare-tunnel.nix` its ingress from the `localOnly = false` subset, and `monitoring.nix` its `httpProbes` from all of it. Both hosts' `services` blocks, both probe lists and the `lib.mapAttrs` that wired the proxy into the tunnel are gone — 331 lines out of the two host files against 65 added, most of the latter being the block naming which services face the internet.
+
+**Four things the approach did not anticipate.**
+
+_`localOnly` moved off the modules entirely, including ntfy's._ `ntfy.nix` was already publishing itself into the proxy, and it set `localOnly = false` there. Leaving that would have meant the answer to "what does this host expose" was one block in the host file plus however many modules had opinions. It is now the host's block alone, and the field defaults to `true`, so a service nobody decided about stays off the internet.
+
+_Two web UIs cannot both be `prometheus`._ Every host runs a Prometheus and an Alertmanager, so a module that publishes them unconditionally puts the same hostname on two proxies — where DNS picks one and the other holds a certificate for a name it never serves. They are published where Grafana is, since Grafana is what links to them and runs on one host. Reach the peer's at `<host>:9090` over ssh, as before.
+
+_The probe URL is the `instance` label._ Building it as `https://${subdomain}.${domain}${probePath}` with `probePath` defaulting to `/` appended a trailing slash to all seventeen existing probes and renamed every series they produce — silently cutting the dashboards and alert history off from their own past. The default is `""`, and `probePath` is documented as being about that rather than about tidiness.
+
+_Two more transcribed ports were in scope after all._ `scrapeTargets` and `smartctlTargets` were `map (host: "${host}:9100") servers` in both host files — the same duplication one level down, since `9100` and `9633` are set by `monitoring.nix` itself. They now default to every `server` in `cg.fleet` at the port that module gives its own exporters, and neither host writes them. That is what makes the `Done when` true rather than nearly true.
+
+**One thing changed on purpose**, and it is the item's whole point: each host now probes what its own Caddy serves. `cg.publish` is per-host and a host cannot see what its peer publishes, so the union of the two lists covers the fleet exactly once, where the hand-written lists covered thirteen hostnames twice and seven not at all. The redundancy is gone with them: a host that is down takes its own probes with it, and is reported by the node and target-down alerts instead of by its peer's probe.
+
+`checks/publish.nix` pins both halves. Against a stand-in service module it asserts that a port set once reaches the vhost, the ingress and the probe, that `localOnly` keeps a service out of the tunnel but not out of Caddy, and that `probe = false` removes the probe but not the vhost. Against the real hosts it asserts that every published entry is probed and that every tunnel hostname is served by the host carrying it — the assertion that would have caught the original drift. It fails as intended: dropping two entries from the probe derivation names `cg.publish.bazarr` and `cg.publish.suwayomi`.
+
+### Verified, 2026-08-29
+
+**Inert, not assumed.** For homelab01 and homelab02, every entry in the generated `/etc` was compared against the same host built from `b950130`, and every systemd unit within it. **`/etc/caddy/caddy_config` is byte-identical on both hosts** — the same store path, from a registry assembled a completely different way, which is the strongest available statement that no service moved.
+
+Two units differ beyond the five that always do:
+
+- `cloudflared-route-dns.service` on homelab01, by ordering alone. The same ten hostnames are registered; the registry is keyed by module name rather than by subdomain, so `invite` now comes last instead of second. `cloudflared tunnel route dns` is idempotent and each call is `|| true`.
+- `prometheus.service` on both, which is the intended change. Every retained probe URL is byte-identical; homelab01 gains `alertmanager`, `bazarr`, `grimmory`, `invite`, `ntfy` and `prometheus` and loses `downloads` and `adguard2` to homelab02, which gains `shelfmark` and `suwayomi` and loses the eleven the gateway fronts. The node and smartctl target lists are unchanged, which is the check on the `scrapeTargets` default.
+
+The five that always move — `system-path`, `dbus-1`, `user-units`, and the `nixos-upgrade`, `nixos-deploy-metrics`, `digital-garden-build`, `dbus-broker` and `polkit` units — are the same set item 1 identified, and move for the same reason: they carry `system.configurationRevision`.
+
+All eleven checks pass, including the reverse-proxy VM test now driven from a `cg.publish` registry rather than the deleted `services` option. `nix fmt -- --ci` is clean, all three hosts build, and `devShells`, `packages` and `apps` still evaluate.
+
+The `Done when` was checked by script. One port literal remains in a host file: `monitoring.alertmanager.ntfy.port = 8015` on homelab02, which is not a transcription of anything — it is a genuine host-specific bind choice, off the module's default because gluetun's control server holds 8000 on that machine. Moving it into the module would change homelab01's bridge port for no reason.
 
 ---
 

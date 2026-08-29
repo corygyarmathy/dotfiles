@@ -216,6 +216,10 @@ in
   };
   grafana = testLib.mkTest ./grafana.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
+
+  # Not a VM: what it asserts is a shape in the generated configuration, and
+  # the file says why that shape is worth a check of its own.
+  publish = import ./publish.nix { inherit pkgs self inputs; };
   reverse-proxy = testLib.mkTest ./reverse-proxy.nix;
   upgrade-verify = testLib.mkTest ./upgrade-verify.nix;
 }

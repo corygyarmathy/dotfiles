@@ -22,6 +22,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.wizarr = {
     enable = lib.mkEnableOption "Wizarr user invitation system";
 
@@ -33,6 +37,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # `invite` is the link handed to a new user, so it is the hostname.
+    cg.publish.wizarr = {
+      subdomain = "invite";
+      port = cfg.port;
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

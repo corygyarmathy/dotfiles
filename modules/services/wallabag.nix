@@ -52,7 +52,10 @@ let
 in
 {
   # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../nixos/fleet.nix ];
+  imports = [
+    ../nixos/fleet.nix
+    ../nixos/publish.nix
+  ];
 
   options.cg.service.wallabag = {
     enable = lib.mkEnableOption "Wallabag read-it-later service";
@@ -72,6 +75,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.wallabag = {
+      subdomain = "read";
+      port = cfg.port;
+    };
+
     sops = {
       # Database password — group-owned by postgres so wallabag-db-setup can
       # read it while running as the postgres OS user (peer auth on local socket).

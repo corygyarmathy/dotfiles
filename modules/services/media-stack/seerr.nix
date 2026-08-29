@@ -25,6 +25,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.seerr = {
     enable = lib.mkEnableOption "Seerr request management";
 
@@ -36,6 +40,15 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # `requests` rather than `seerr`: this is the front door people are
+    # given, and it is named for what they do with it.
+    cg.publish.seerr = {
+      subdomain = "requests";
+      port = cfg.port;
+      # Users browse and search constantly; the admin profile throttles them.
+      rateLimitProfile = "media";
+    };
+
     # Require media-stack infrastructure
     assertions = [
       {

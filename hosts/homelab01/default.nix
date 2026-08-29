@@ -192,7 +192,6 @@ in
     # see modules/services/digital-garden/publish-filter.py.
     digital-garden = {
       enable = true;
-      port = 8086;
       baseUrl = "garden.${domain}";
       siteTitle = "Cory Gyarmathy";
       footerLinks = {
@@ -212,144 +211,15 @@ in
     # -------------------------------------------------------------------------
     # Reverse Proxy (Caddy)
     # -------------------------------------------------------------------------
+    # What it serves is not written here. Each service module contributes its
+    # own entry to `cg.publish` (modules/nixos/publish.nix) and Caddy is built
+    # from that, so a port lives in exactly one place. The one decision left
+    # to this host is which of them answer from outside the LAN, and that is
+    # the `cg.publish` block further down.
     reverse-proxy = {
       enable = true;
       email = "cory@${domain}";
       cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
-
-      services = {
-        # Media - User Facing
-        jellyfin = {
-          subdomain = "jellyfin";
-          port = 8096;
-          localOnly = false;
-          rateLimitProfile = "media"; # Higher limits for media streaming
-        };
-        requests = {
-          subdomain = "requests";
-          port = 5055;
-          localOnly = false;
-          rateLimitProfile = "media"; # Users browse content frequently
-        };
-        invite = {
-          subdomain = "invite";
-          port = 5690;
-          localOnly = false;
-        };
-
-        # Media - Admin
-        sonarr = {
-          subdomain = "sonarr";
-          port = 8989;
-          localOnly = true;
-        };
-        radarr = {
-          subdomain = "radarr";
-          port = 7878;
-          localOnly = true;
-        };
-        prowlarr = {
-          subdomain = "prowlarr";
-          port = 9696;
-          localOnly = true;
-        };
-        bazarr = {
-          subdomain = "bazarr";
-          port = 6767;
-          localOnly = true;
-        };
-        autobrr = {
-          subdomain = "autobrr";
-          port = 7474;
-          localOnly = true;
-        };
-
-        # Management
-        cleanuparr = {
-          subdomain = "cleanuparr";
-          port = 11011;
-          localOnly = true;
-        };
-
-        # Infrastructure (this host's AdGuard)
-        adguard = {
-          subdomain = "adguard";
-          port = 3080;
-          localOnly = true;
-        };
-        grafana = {
-          subdomain = "grafana";
-          port = 3000;
-          localOnly = true;
-        };
-
-        # Monitoring internals. LAN-only like the other admin UIs - remote
-        # access stays ssh-tunnelled. The Alertmanager UI is where silences
-        # live and Prometheus' graph view backs every alert expression, so
-        # both are one click from Grafana instead of an ssh port-forward.
-        prometheus-ui = {
-          subdomain = "prometheus";
-          port = 9090;
-          localOnly = true;
-        };
-        alertmanager-ui = {
-          subdomain = "alertmanager";
-          port = 9093;
-          localOnly = true;
-        };
-
-        # RSS
-        rss = {
-          subdomain = "rss";
-          port = 8082;
-          localOnly = false;
-        };
-        read = {
-          subdomain = "read";
-          port = 8083;
-          localOnly = false;
-        };
-
-        # Digital garden - static, public, no backend to protect
-        garden = {
-          subdomain = "garden";
-          port = 8086;
-          localOnly = false;
-        };
-
-        # Maintainerr - media library maintenance
-        maintainerr = {
-          subdomain = "maintainerr";
-          port = 6246;
-          localOnly = true;
-          rateLimitProfile = "none"; # Scans entire Jellyfin library
-        };
-
-        # Reading
-        kavita = {
-          subdomain = "kavita";
-          port = 5000;
-          localOnly = false; # readers need external access
-          rateLimitProfile = "media";
-        };
-        audiobookshelf = {
-          subdomain = "audiobookshelf";
-          port = 13378;
-          localOnly = false; # listeners need external access for mobile apps
-          rateLimitProfile = "media";
-        };
-        # Runs on the storage host, where the library is on local disk rather
-        # than the NFS mount -- see the header of
-        # modules/services/media-stack/grimmory.nix. Proxied from here because
-        # this host owns the Cloudflare tunnel.
-        grimmory = {
-          subdomain = "grimmory";
-          port = 6060;
-          upstream = storage.address;
-          localOnly = false; # readers need external access
-          rateLimitProfile = "media";
-        };
-      };
     };
 
     monitoring = {
@@ -369,83 +239,12 @@ in
 
       grafana.enable = true;
       zfs.enable = false;
-      scrapeTargets = map (host: "${host}:9100") servers;
-      smartctlTargets = map (host: "${host}:9633") servers;
       cloudflaredTarget = "${gateway}:20241";
 
-      httpProbes = [
-        {
-          name = "jellyfin";
-          url = "https://jellyfin.${domain}";
-        }
-        {
-          name = "requests";
-          url = "https://requests.${domain}";
-        }
-        {
-          name = "sonarr";
-          url = "https://sonarr.${domain}";
-        }
-        {
-          name = "radarr";
-          url = "https://radarr.${domain}";
-        }
-        {
-          name = "prowlarr";
-          url = "https://prowlarr.${domain}";
-        }
-        {
-          name = "downloads";
-          url = "https://downloads.${domain}";
-        }
-        {
-          name = "grafana";
-          url = "https://grafana.${domain}";
-        }
-        {
-          name = "adguard-01";
-          url = "https://adguard.${domain}";
-        }
-        {
-          name = "adguard-02";
-          url = "https://adguard2.${domain}";
-        }
-        {
-          name = "autobrr";
-          url = "https://autobrr.${domain}";
-        }
-        {
-          name = "miniflux";
-          url = "https://rss.${domain}";
-        }
-        {
-          name = "wallabag";
-          url = "https://read.${domain}";
-        }
-        {
-          # /health rather than the bare root the other entries use: this is
-          # the readiness endpoint cleanuparr's podman healthcheck used to hit,
-          # so probing it keeps exactly the signal that healthcheck gave.
-          name = "cleanuparr";
-          url = "https://cleanuparr.${domain}/health";
-        }
-        {
-          name = "maintainerr";
-          url = "https://maintainerr.${domain}";
-        }
-        {
-          name = "kavita";
-          url = "https://kavita.${domain}";
-        }
-        {
-          name = "audiobookshelf";
-          url = "https://audiobookshelf.${domain}";
-        }
-        {
-          name = "garden";
-          url = "https://garden.${domain}";
-        }
-      ];
+      # httpProbes is not set: it defaults to every service this host
+      # publishes. The two hosts used to hand-maintain overlapping lists that
+      # had drifted apart by six entries, with seven proxied hostnames probed
+      # from nowhere.
     };
 
     # -------------------------------------------------------------------------
@@ -462,7 +261,6 @@ in
     adguard-home = {
       enable = true;
       role = "primary";
-      webPort = 3080;
       bindAddresses = [
         "127.0.0.1"
         fleet.hosts.${hostName}.address
@@ -567,18 +365,11 @@ in
     # -------------------------------------------------------------------------
     # Cloudflare Tunnel
     # -------------------------------------------------------------------------
-    cloudflare-tunnel = {
-      enable = true;
-
-      # Map reverse-proxy services to cloudflare-tunnel format
-      # Only pass the fields that cloudflare-tunnel understands
-      services = lib.mapAttrs (name: svc: {
-        subdomain = svc.subdomain;
-        port = svc.port;
-        upstream = svc.upstream;
-        localOnly = svc.localOnly;
-      }) config.cg.service.reverse-proxy.services;
-    };
+    # Ingress is every `cg.publish` entry with `localOnly = false`, read
+    # directly by the module. The hand-written mapAttrs that used to sit here
+    # was module-to-module wiring in a host file: the one place least able to
+    # notice when the two sides stopped agreeing.
+    cloudflare-tunnel.enable = true;
 
     # -------------------------------------------------------------------------
     # Commercial Detection (Comskip)
@@ -616,6 +407,46 @@ in
         # Performance
         threads = 4; # Parallel processing threads
       };
+    };
+  };
+
+  # ============================================================================
+  # What this host puts on the internet
+  # ============================================================================
+  # Everything else about a publication - its hostname, its port, its
+  # rate-limit profile - comes from the module that runs the service
+  # (modules/nixos/publish.nix). Reachability does not: whether strangers can
+  # reach a service is a decision about this fleet, not a property of the
+  # software, so it is the one field a host writes.
+  #
+  # `localOnly` defaults to true, so this list is the complete answer to "what
+  # is exposed", and forgetting to add something here fails closed. Anything
+  # named below is also in the Cloudflare tunnel's ingress, which is what
+  # actually carries the traffic.
+  cg.publish = {
+    jellyfin.localOnly = false;
+    seerr.localOnly = false; # requests.
+    wizarr.localOnly = false; # invite; the link is handed to new users.
+    miniflux.localOnly = false; # rss.
+    wallabag.localOnly = false; # read.
+    digital-garden.localOnly = false; # garden; static and public by design.
+    kavita.localOnly = false; # readers need it away from the LAN
+    audiobookshelf.localOnly = false; # mobile apps stream from outside
+    ntfy.localOnly = false; # push to phones on mobile data is the whole point
+
+    # Grimmory is the one service this host proxies without running: it lives
+    # on the storage host, where the library is on local disk rather than the
+    # NFS mount (see the header of modules/services/media-stack/grimmory.nix),
+    # and it is published from here because this host owns the tunnel.
+    #
+    # So the entry is written here rather than by the module - but the port is
+    # still read from the module's own option, and the address from the fleet,
+    # so neither is transcribed.
+    grimmory = {
+      port = config.cg.service.grimmory.port;
+      upstream = storage.address;
+      localOnly = false; # readers need external access
+      rateLimitProfile = "media";
     };
   };
 

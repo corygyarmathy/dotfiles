@@ -50,6 +50,10 @@ let
   stack = config.cg.service.media-stack;
 in
 {
+  # Contributes to config.cg.publish, so it declares it - see
+  # modules/nixos/publish.nix.
+  imports = [ ../../nixos/publish.nix ];
+
   options.cg.service.suwayomi = {
     enable = lib.mkEnableOption "Suwayomi manga server";
 
@@ -71,6 +75,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.suwayomi = {
+      port = cfg.port;
+      rateLimitProfile = "media"; # it is a reader as well as a downloader
+    };
+
     assertions = [
       {
         assertion = stack.enable;

@@ -6,6 +6,11 @@
 # - DNS-01 challenge via Cloudflare (works for internal-only services)
 # - Individual certificates per service (as requested for learning)
 #
+# WHAT IT PROXIES:
+# One vhost per entry in `cg.publish`, which the modules that run the services
+# contribute to themselves - this module keeps no list of its own. See
+# modules/nixos/publish.nix.
+#
 # Prerequisites:
 # - Domain DNS managed by Cloudflare
 # - Cloudflare API token with Zone:DNS:Edit permissions
@@ -118,20 +123,20 @@ let
 
   # Helper to create a reverse proxy virtual host with TLS
   # Each service gets its own cert via DNS-01 challenge
+  #
+  # Takes a `cg.publish` entry whole, so every field it reads has already been
+  # given a type and a default by modules/nixos/publish.nix rather than here.
   mkProxyHost =
     {
       subdomain,
       port,
-      # Optional: host the service actually runs on. Defaults to this machine;
-      # set it to proxy a service hosted on another homelab node.
-      upstream ? "localhost",
-      # Optional: restrict to local network only
-      localOnly ? false,
-      # Optional: rate limiting profile ("media", "admin", "none")
-      rateLimitProfile ? "admin",
-      # Optional: extra Caddy config
-      extraConfig ? "",
-      proxyExtraConfig ? "",
+      upstream,
+      localOnly,
+      rateLimitProfile,
+      extraConfig,
+      proxyExtraConfig,
+      # `probe` and `probePath` are the monitoring consumer's business.
+      ...
     }:
     {
       "${subdomain}.${domain}" = {
@@ -171,8 +176,12 @@ let
     };
 in
 {
-  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../nixos/fleet.nix ];
+  # Reads config.cg.fleet and config.cg.publish, so it declares both - see
+  # modules/nixos/fleet.nix and modules/nixos/publish.nix.
+  imports = [
+    ../nixos/fleet.nix
+    ../nixos/publish.nix
+  ];
 
   options.cg.service.reverse-proxy = {
     enable = lib.mkEnableOption "Caddy reverse proxy with automatic TLS";
@@ -187,65 +196,6 @@ in
       type = lib.types.path;
       description = "Path to file containing Cloudflare API token";
       example = "/run/secrets/cloudflare-api-token";
-    };
-
-    # Service definitions - add new services here
-    # Format: { subdomain, port, localOnly (optional), extraConfig (optional) }
-    #
-    # NOTE: Services marked localOnly = true will only be accessible from
-    # the local network, even if exposed via Cloudflare tunnel later
-    services = lib.mkOption {
-      type = lib.types.attrsOf (
-        lib.types.submodule {
-          options = {
-            subdomain = lib.mkOption {
-              type = lib.types.str;
-              description = "Subdomain for this service";
-            };
-            port = lib.mkOption {
-              type = lib.types.port;
-              description = "Port the service listens on";
-            };
-            upstream = lib.mkOption {
-              type = lib.types.str;
-              default = "localhost";
-              example = "homelab02";
-              description = ''
-                Host the service runs on. Defaults to this machine. Set it to
-                another node's hostname or IP to proxy a service hosted there --
-                the traffic crosses the LAN in the clear, so only use it for
-                links inside the trusted network.
-              '';
-            };
-            localOnly = lib.mkOption {
-              type = lib.types.bool;
-              default = true;
-              description = "Restrict access to local network";
-            };
-            rateLimitProfile = lib.mkOption {
-              type = lib.types.enum [
-                "media"
-                "admin"
-                "none"
-              ];
-              default = "admin";
-              description = "Rate limiting profile to apply";
-            };
-            extraConfig = lib.mkOption {
-              type = lib.types.lines;
-              default = "";
-              description = "Additional Caddy configuration";
-            };
-            proxyExtraConfig = lib.mkOption {
-              type = lib.types.lines;
-              default = "";
-              description = "Additional Caddy config inside the reverse_proxy block";
-            };
-          };
-        }
-      );
-      default = { };
-      description = "Services to proxy on this host";
     };
 
     openFirewall = lib.mkOption {
@@ -305,8 +255,13 @@ in
         }
       '';
 
-      # Convert services attrset to virtualHosts format
-      virtualHosts = lib.foldl' (acc: svc: acc // (mkProxyHost svc)) { } (lib.attrValues cfg.services);
+      # One vhost per published service. The registry is contributed to by
+      # the modules that run the services (see modules/nixos/publish.nix), so
+      # a port change in one of them moves the proxy with it instead of
+      # leaving it pointed at nothing.
+      virtualHosts = lib.foldl' (acc: svc: acc // (mkProxyHost svc)) { } (
+        lib.attrValues config.cg.publish
+      );
     };
 
     # Firewall

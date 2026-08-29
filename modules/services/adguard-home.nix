@@ -173,8 +173,12 @@ let
 
 in
 {
-  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../nixos/fleet.nix ];
+  # Reads config.cg.fleet and contributes to config.cg.publish, so it declares
+  # both - see modules/nixos/fleet.nix and modules/nixos/publish.nix.
+  imports = [
+    ../nixos/fleet.nix
+    ../nixos/publish.nix
+  ];
 
   options.cg.service.adguard-home = {
     enable = lib.mkEnableOption "AdGuard Home DNS server";
@@ -244,6 +248,14 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # The web UI. Both instances run this module, so the hostname is the one
+    # part a host has to choose for itself - the secondary answers to
+    # `adguard2`, which is the name in the storage host's rewrite list above.
+    cg.publish.adguard-home = {
+      subdomain = if cfg.role == "primary" then "adguard" else "adguard2";
+      port = cfg.webPort;
+    };
+
     # Configure secrets
     sops.secrets."adguard/admin-password" = {
       sopsFile = ../../secrets/homelab.yaml;
