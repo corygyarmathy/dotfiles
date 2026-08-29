@@ -336,6 +336,8 @@ Both of the new assertions are in `checks/digital-garden.nix`, and they are ther
 
 This is the same line item 6 drew between its two assertions. A rule that is written and never reached is the same class of failure as a stylesheet naming a font CDN, and neither is visible in a screenshot or a green gate.
 
+**Updated, 2026-08-29:** the `width: max-content; min-width: 100%` fix above was itself the next instance of the same shape. It left a wide table scrolling inside its container — no longer the page, but the right-hand prose columns sat off-screen and ~500px of sideways scroll was still the interface. It is replaced by a `<colgroup>` cap emitted by the hook plus `table-layout: fixed; width: 100%` on the table, so every column stays on the measure and prose wraps at a capped width. Two numbers tune it: the prose cap (120 codepoints) sits high enough that a longer column still earns proportionally more of the table, and a 10% share floor keeps a short data column ("Role", a price) from being crushed by a long prose neighbour. Fixed layout is what makes the hook's widths stick — under auto layout a `<col>` width is only a hint the content can outgrow, which is the original bug returning. See `_markup/render-table.html` and `checks/digital-garden.nix`.
+
 ### The open question, not decided
 
 Lotus's `--brand` is 4.12:1 on the masthead. At 1.1rem and weight 600 that is 17.6px semibold, just under the 18.66px where the large-text allowance of 3:1 starts, so the 4.5:1 floor applies and it misses.
