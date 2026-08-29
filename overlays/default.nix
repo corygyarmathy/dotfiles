@@ -18,7 +18,7 @@
     # https://github.com/NixOS/nixpkgs/issues/514113
     openldap = prev.openldap.overrideAttrs (
       old:
-      final.lib.optionalAttrs final.stdenv.is32bit {
+      final.lib.optionalAttrs final.stdenv.hostPlatform.is32bit {
         doCheck = false;
       }
     );

@@ -155,10 +155,7 @@
   services.blueman.enable = false;
 
   # Logitech wireless devices
-  hardware.logitech.wireless = {
-    enable = true;
-    enableGraphical = true;
-  };
+  programs.solaar.enable = true;
 
   # ============================================================================
   # Audio
