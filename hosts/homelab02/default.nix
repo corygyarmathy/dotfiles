@@ -185,14 +185,12 @@ in
         # only the local alertmanager-ntfy bridge, so either host can still
         # deliver on its own if the other is down.
         #
-        # Off 8000 because gluetun's control server is published there
-        # (qbittorrent.nix) - with the shared default the bridge lost the bind
-        # race on every start, and the 2026-08-26 upgrade that introduced it
-        # was marked failed by its own activation.
-        ntfy = {
-          enable = true;
-          port = 8015;
-        };
+        # The bridge's port is the module's default, which is off 8000 for
+        # this host's sake: gluetun's control server is published there
+        # (qbittorrent.nix), and with the old shared default the bridge lost
+        # the bind race on every start - the 2026-08-26 upgrade that
+        # introduced it was marked failed by its own activation.
+        ntfy.enable = true;
         email = {
           to = "cory@${domain}";
           from = "alerts@${domain}";

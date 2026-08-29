@@ -238,9 +238,13 @@ _Two web UIs cannot both be `prometheus`._ Every host runs a Prometheus and an A
 
 _The probe URL is the `instance` label._ Building it as `https://${subdomain}.${domain}${probePath}` with `probePath` defaulting to `/` appended a trailing slash to all seventeen existing probes and renamed every series they produce — silently cutting the dashboards and alert history off from their own past. The default is `""`, and `probePath` is documented as being about that rather than about tidiness.
 
-_Two more transcribed ports were in scope after all._ `scrapeTargets` and `smartctlTargets` were `map (host: "${host}:9100") servers` in both host files — the same duplication one level down, since `9100` and `9633` are set by `monitoring.nix` itself. They now default to every `server` in `cg.fleet` at the port that module gives its own exporters, and neither host writes them. That is what makes the `Done when` true rather than nearly true.
+_Three more transcribed ports were in scope after all._ `scrapeTargets` and `smartctlTargets` were `map (host: "${host}:9100") servers` in both host files — the same duplication one level down, since `9100` and `9633` are set by `monitoring.nix` itself. They now default to every `server` in `cg.fleet` at the port that module gives its own exporters, and neither host writes them.
+
+The third was the alertmanager-ntfy bridge's `port = 8015` on homelab02, which is the only one of these that changes a running host. It was not a copy of anything — it was a host dodging the module's default, because 8000 is gluetun's control server wherever the media stack runs and the bridge lost that bind race on homelab02 every start. Repairing it per-host left the collision sitting in the default, one host away from happening again, so 8015 is now the default and homelab02 says nothing. The bridge on homelab01 moves 8000 → 8015 with it. Both ends of that port are read from the same option, so the move is self-consistent: the generated diff is Alertmanager's webhook URL and the bridge's listen address, and nothing else. With it gone, no host file contains a port number at all.
 
 **One thing changed on purpose**, and it is the item's whole point: each host now probes what its own Caddy serves. `cg.publish` is per-host and a host cannot see what its peer publishes, so the union of the two lists covers the fleet exactly once, where the hand-written lists covered thirteen hostnames twice and seven not at all. The redundancy is gone with them: a host that is down takes its own probes with it, and is reported by the node and target-down alerts instead of by its peer's probe.
+
+_The one literal that mattered was in a check._ `checks/monitoring.nix` asserted against `http://127.0.0.1:8000/hook`, transcribed from the module. Moving the bridge's default broke that test — and broke it *as* "unauthenticated webhook post was not rejected", a message about authentication that had nothing to do with the cause. Its `testScript` is now a function of `nodes` and reads the port from the option, which is the same lesson as the rest of this item arriving from the direction of a test.
 
 `checks/publish.nix` pins both halves. Against a stand-in service module it asserts that a port set once reaches the vhost, the ingress and the probe, that `localOnly` keeps a service out of the tunnel but not out of Caddy, and that `probe = false` removes the probe but not the vhost. Against the real hosts it asserts that every published entry is probed and that every tunnel hostname is served by the host carrying it — the assertion that would have caught the original drift. It fails as intended: dropping two entries from the probe derivation names `cg.publish.bazarr` and `cg.publish.suwayomi`.
 
@@ -248,16 +252,19 @@ _Two more transcribed ports were in scope after all._ `scrapeTargets` and `smart
 
 **Inert, not assumed.** For homelab01 and homelab02, every entry in the generated `/etc` was compared against the same host built from `b950130`, and every systemd unit within it. **`/etc/caddy/caddy_config` is byte-identical on both hosts** — the same store path, from a registry assembled a completely different way, which is the strongest available statement that no service moved.
 
-Two units differ beyond the five that always do:
+Four units differ beyond the five that always do:
 
 - `cloudflared-route-dns.service` on homelab01, by ordering alone. The same ten hostnames are registered; the registry is keyed by module name rather than by subdomain, so `invite` now comes last instead of second. `cloudflared tunnel route dns` is idempotent and each call is `|| true`.
+- `alertmanager.service` and `alertmanager-ntfy.service` on homelab01, by the bridge port alone: `http://127.0.0.1:8000/hook` becomes `:8015` in Alertmanager's webhook config, and the bridge's `http.addr` follows. Nothing else in either file moves. homelab02 is unaffected — it was already on 8015.
 - `prometheus.service` on both, which is the intended change. Every retained probe URL is byte-identical; homelab01 gains `alertmanager`, `bazarr`, `grimmory`, `invite`, `ntfy` and `prometheus` and loses `downloads` and `adguard2` to homelab02, which gains `shelfmark` and `suwayomi` and loses the eleven the gateway fronts. The node and smartctl target lists are unchanged, which is the check on the `scrapeTargets` default.
 
 The five that always move — `system-path`, `dbus-1`, `user-units`, and the `nixos-upgrade`, `nixos-deploy-metrics`, `digital-garden-build`, `dbus-broker` and `polkit` units — are the same set item 1 identified, and move for the same reason: they carry `system.configurationRevision`.
 
 All eleven checks pass, including the reverse-proxy VM test now driven from a `cg.publish` registry rather than the deleted `services` option. `nix fmt -- --ci` is clean, all three hosts build, and `devShells`, `packages` and `apps` still evaluate.
 
-The `Done when` was checked by script. One port literal remains in a host file: `monitoring.alertmanager.ntfy.port = 8015` on homelab02, which is not a transcription of anything — it is a genuine host-specific bind choice, off the module's default because gluetun's control server holds 8000 on that machine. Moving it into the module would change homelab01's bridge port for no reason.
+**`publish` is in the `ci.yml` matrix**, which it was not on the first pass — the flake had eleven checks and the matrix ten, so `lint`'s "Every flake check is in the matrix" audit would have failed the PR. That is item 0's audit doing exactly the job it was added for, on the first check added after it landed. Both directions were re-confirmed locally: with the entry the audit reports eleven, without it, it names `publish` and exits 1. Its own shard rather than a group, since it evaluates two whole hosts; item 0's grouping note is about the cheap static checks and only applies once shard count becomes the cost.
+
+The `Done when` was checked by script, and holds without exception: no port number appears in any host file.
 
 ---
 

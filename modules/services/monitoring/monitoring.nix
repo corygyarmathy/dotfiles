@@ -237,20 +237,28 @@ in
         enable = lib.mkEnableOption "ntfy push routing for Alertmanager";
 
         # Loopback port the local bridge listens on, and the one port
-        # Alertmanager delivers to. Configurable because 8000 is already taken
-        # by convention wherever the media stack runs: gluetun's HTTP control
-        # server is published there (qbittorrent.nix), and gluetun coexists
-        # with this bridge precisely on storage hosts. When the bridge landed
-        # on homelab02 with the shared literal below it lost that race on
-        # every start, crash-looped all night, and the switch that activated
-        # it reported failed units. Anything loopback and free will do;
-        # there is nothing to match on either side.
+        # Alertmanager delivers to. Both sides are read from here, so the
+        # number matters only in that nothing else on the host may hold it.
+        #
+        # It is 8015 rather than the 8000 this defaulted to, because 8000 is
+        # taken by convention wherever the media stack runs: gluetun's HTTP
+        # control server is published there (qbittorrent.nix), and gluetun
+        # coexists with this bridge precisely on storage hosts. The bridge
+        # landed on homelab02 against that, lost the bind race on every
+        # start, crash-looped all night, and the switch that activated it
+        # reported failed units. That was repaired by having homelab02 name
+        # a different port - which left the collision in the default, one
+        # host away from happening again. A default that does not collide
+        # with anything this fleet runs costs nothing and needs no host to
+        # remember.
         port = lib.mkOption {
           type = lib.types.port;
-          default = 8000;
+          default = 8015;
           description = ''
-            Loopback port for the local alertmanager-ntfy bridge. Move off
-            8000 on any host whose gluetun control server is published there.
+            Loopback port for the local alertmanager-ntfy bridge. Anything
+            loopback and free will do; there is nothing to match on either
+            side. Avoid 8000, which gluetun's control server is published on
+            wherever the media stack runs.
           '';
         };
 

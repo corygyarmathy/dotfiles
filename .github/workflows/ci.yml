@@ -171,6 +171,7 @@ jobs:
           - digital-garden-sync-health
           - grafana
           - monitoring
+          - publish
           - reverse-proxy
           - upgrade-verify
     steps:
