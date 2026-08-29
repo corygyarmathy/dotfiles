@@ -44,19 +44,30 @@ kernel_of() {
 
 # --- in-flight states take precedence over anything derived ------------------
 
-if [ "$(state_of nixos-upgrade-apply.service)" = "active" ]; then
+apply_state="$(state_of nixos-upgrade-apply.service)"
+build_state="$(state_of nixos-upgrade-build.service)"
+
+# Type=oneshot units report `activating` for the whole run - they only reach
+# `active` after completion (and only then when RemainAfterExit is set, which
+# these units don't) - so `activating` is the "something is happening right
+# now" state, not `active`. The build spends it both actually building and
+# waiting out the connectivity gate, which cannot be told apart from systemd
+# state alone; both are better shown as work in progress than as "up to
+# date", which is what falling through to the derived states would claim.
+
+if [ "$apply_state" = "active" ] || [ "$apply_state" = "activating" ]; then
   emit "⟳" "Applying updates…" "applying"
 fi
 
-if [ "$(state_of nixos-upgrade-build.service)" = "active" ]; then
-  emit "󰔟" "Building updates in the background…" "building"
+if [ "$build_state" = "active" ] || [ "$build_state" = "activating" ]; then
+  emit "󰔟" "Checking for updates in the background…" "building"
 fi
 
-if [ "$(state_of nixos-upgrade-apply.service)" = "failed" ]; then
+if [ "$apply_state" = "failed" ]; then
   emit "⚠" "Update failed to apply. Middle-click for logs." "error"
 fi
 
-if [ "$(state_of nixos-upgrade-build.service)" = "failed" ]; then
+if [ "$build_state" = "failed" ]; then
   emit "⚠" "Update failed to build. Middle-click for logs." "error"
 fi
 
