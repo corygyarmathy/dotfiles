@@ -442,6 +442,13 @@
         css = served(href.group(1))
         for selector in [".masthead", ".page", "--pf-border"]:
             assert selector in css, f"{selector} missing from the stylesheet"
+        # The rail's "you are here" marker gets its own hue in Wave (carpYellow)
+        # so it stays distinct from the purple --muted links around it; pin it so
+        # that value cannot drift back toward crystalBlue, which the muted
+        # change made indistinguishable (1.18:1).
+        assert re.search(
+            r"\.rail a\.current\s*{[^}]*light-dark\(#4d699b,\s?#e6c384\)", css
+        ), ".rail a.current no longer uses lotusBlue4/carpYellow"
         # And it asks nobody else for anything. The whole toolchain is offline
         # by construction; an @import or a font CDN named here undoes that in
         # one line, and it would still render perfectly on a machine with a
