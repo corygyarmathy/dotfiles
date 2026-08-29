@@ -1,6 +1,6 @@
 # Plan: structural cleanup
 
-Status: drafted 2026-08-28. Items 0 and 1 landed the same day, items 2 and 3 on 2026-08-29; nothing else started.
+Status: drafted 2026-08-28. Items 0 and 1 landed the same day, items 2 and 3 on 2026-08-29. Item 4 is a three-step item and step 1 landed on 2026-08-29; the re-key that finishes it is deliberately a later PR. Nothing else started.
 
 This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines. Items 1 and 2 are marked `minor`: each changed a handful of lines of generated configuration, and each lists them under what it landed. Item 2's are the probe list it exists to fix.
 
@@ -12,7 +12,7 @@ The pipeline, the checks harness and the documentation are in good shape and are
 | 1   | A fleet source of truth           | medium | minor             | —          | **done** 2026-08-28   |
 | 2   | Services publish themselves       | large  | minor             | 1          | **done** 2026-08-29   |
 | 3   | Hosts become profiles + toggles   | medium | no                | 2          | **done** 2026-08-29   |
-| 4   | Per-host secret scoping           | large  | **yes**           | 1          | not started           |
+| 4   | Per-host secret scoping           | large  | **yes**           | 1          | **step 1 of 3** 2026-08-29 |
 | 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       | not started           |
 | 6   | Decouple modules from the fleet   | small  | no                | 1          | not started           |
 | 7   | Documentation follows the code    | small  | no                | 1–6        | not started           |
@@ -360,6 +360,44 @@ Do not combine step 1 and step 3. Splitting them is what makes step 2 recoverabl
 `sops updatekeys` rewrites every value's encryption. Confirm `git diff` shows only `sops:` metadata and ciphertext changes, and that the decrypted plaintext is byte-identical before and after — compare digests, do not print the values.
 
 The host keys are derived from `/etc/ssh/ssh_host_ed25519_key`, so reinstalling a host means re-keying. That is already true and already documented in `secrets/README.md`; the per-host split makes it a smaller operation, not a larger one.
+
+### What landed — step 1 of 3
+
+`secrets/secrets.yaml` and `secrets/homelab.yaml` are gone, replaced by five files: `shared.yaml` (11 entries), `homelab01.yaml` (16), `homelab02.yaml` (7), `xps15.yaml` (1) and `operator.yaml` (25). All 60 values moved verbatim — the migration asserted that each leaf's digest was unchanged and that the union of the five new files equals the union of the two old ones.
+
+**`operator.yaml` is a fifth file the approach did not name, and it exists because a third of the entries turned out to belong to nobody.** The approach assumed every secret has a host. Twenty-five did not: the Cachix and CI tokens, the indexer cookies, and the web logins for every service that keeps its own user database. No `sops.secrets` declaration references any of them and none ever will — they are what a person types into a login form. Putting them in a host's file would give that host's key material it never uses, which is the thing this item exists to stop, so they went into a file no host key opens. The user's own SSH keys went there too rather than into `xps15.yaml` as the approach suggested: home-manager decrypts them with the *user's* age key, not the laptop's host key, so `xps15.yaml` — the file the laptop's host key opens — is the wrong place for them by exactly the rule this item is applying. `xps15.yaml` is one wifi PSK.
+
+**The distinction that took the longest to get right is between "no host declares this" and "no host declares this today."** `vikunja/jwt-secret` and `digital-garden/deploy-key` are both undeclared right now — the first because the service is off, the second because the garden syncs from Obsidian rather than git. Both are parked in `homelab01.yaml`, so flipping either toggle works without an editing session. `operator.yaml` is for the first case only.
+
+**`prowlarr/api` is in `homelab02.yaml` and Prowlarr runs on homelab01.** The file follows the declaration, not the service: cross-seed on homelab02 is the only thing that declares that key. This is the case that makes "a secret lives in the file for the host that needs it" mean something more specific than "where the service runs", and it is written down in `secrets/README.md` because it will read as a mistake otherwise.
+
+**Every `sopsFile` line is gone from `modules/`, and no new per-site line replaced it.** The plan asked for the mapping to live in one place in `cg.sops-nix`, which is harder than it sounds: the obvious implementation reads `config.sops.secrets` to find out which names the host declared and then writes back to the same attrset, which is an infinite recursion. What works instead is a second `options.sops.secrets` declaration whose only content is a name-dependent default for `sopsFile`; the module system merges it with sops-nix's own declaration, so a secret gets `secrets/shared.yaml` if its name is in `cg.sops-nix.sharedSecrets` and `secrets/<hostname>.yaml` otherwise, without any module naming a file and without declaring a single secret the host does not use. `sharedSecrets` is eleven names, each with the reason two machines have to agree on one value.
+
+`users/coryg` moved out of `cg.sops-nix` and into `profiles/server.nix` next to the `hashedPasswordFile` that reads it. It was declared on every host with the module enabled, including the laptop, which sets no `hashedPasswordFile` and leaves `mutableUsers` alone — so xps15 was decrypting a password hash it had no use for. It now has no `setupSecretsForUsers` activation step at all.
+
+`checks/secrets.nix` is the new gate. It reads the key structure and the recipient list out of the *encrypted* files — sops leaves both in clear text — and asserts that every name any host declares (system and home-manager both) is in the file that host would read it from, and that every host reading a file is a recipient of it. A misspelt name now fails the gate as `homelab01 (system) declares media-stack/sonar/api, which is not in homelab01.yaml`, which was verified by introducing exactly that typo. The check also runs its own comparison against a name that is deliberately absent, so a run that reports nothing has demonstrably compared something rather than found an empty list.
+
+### Not done: steps 2 and 3
+
+**The `Done when` is not met yet, and cannot be met by this PR.** `xps15`'s age key still decrypts every server secret, because every one of the five files is still encrypted to all four keys — which is the whole content of the sequencing section's step 1. What changed is which file each host *reads*: homelab01 opens `homelab01.yaml` and `shared.yaml` and nothing else, so a mis-scoped secret surfaces as a missing name in CI rather than as a host that cannot activate.
+
+Step 2 is a hand deploy to homelab01 and a check that every unit consuming a secret is running, before the nightly takes homelab02. Step 3 is the re-key: delete the `# step 3: remove` lines from `.sops.yaml`, `sops updatekeys` the five files, and add them to `narrowedFiles` in `checks/secrets.nix` so a key that reappears is a failure rather than a note. `check-secrets` prints the outstanding surplus on every run, so the gate says how much of the item is left:
+
+```
+note: xps15.yaml is still encrypted to homelab02 homelab01, which do not read it (step 3 of the re-key)
+```
+
+The procedure, including the digest comparison the risk section asks for, is in `secrets/README.md` under "Narrowing the recipients".
+
+**Also removed:** `secrets/secrets.yaml.example` and `secrets/secrets.yaml.template`, which documented the structure of a file that no longer exists. The layout table in `secrets/README.md` replaces both.
+
+**One thing was lost.** The old files carried encrypted comments — sops encrypts comment text along with values — and the migration ran through JSON, which does not have comments. Nothing that was a secret was lost; what went is a handful of notes about which indexer a cookie belonged to.
+
+### Verified, 2026-08-29
+
+For all three hosts, the generated `/etc` was compared against the same host built from `8b22aaf`. **No file was added or removed on any host**, and the only files that differ are the ones that always do: the `dbus` and `polkit` overrides that carry the `system-path` hash, `nixos-deploy-metrics` and `nixos-upgrade` which carry the revision literally, and on homelab01 `digital-garden-build`. On xps15 `home-manager-coryg.service` also moves, because the home-manager side's `defaultSopsFile` is a different store path.
+
+The sops manifests — the thing that actually decides what gets decrypted where — were realised and diffed field by field for all three hosts. **Every difference is the `sopsFile` field and nothing else**: same names, same owners, groups, modes, `restartUnits` and paths, on all 46 declarations. The one structural change is xps15's `manifest-for-users.json` disappearing, which is `users/coryg` moving to `profiles/server.nix`.
 
 ---
 

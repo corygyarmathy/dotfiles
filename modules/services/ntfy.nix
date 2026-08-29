@@ -19,8 +19,8 @@
 #     (`--config` matters: without it these commands create a fresh,
 #      empty user database somewhere else and appear to do nothing.)
 #  2. Put the token into sops as `monitoring/ntfy/alerts-token`
-#     (secrets/secrets.yaml), along with a generated password in
-#     `monitoring/ntfy/webhook-password`, e.g.:
+#     and a generated password as `monitoring/ntfy/webhook-password` - both in
+#     the shared secrets file, see secrets/README.md - e.g.:
 #       openssl rand -hex 24   # once per secret
 #     then re-run the deploy so the bridges pick them up.
 #  3. In the ntfy app add server https://ntfy.<domain>, log in with

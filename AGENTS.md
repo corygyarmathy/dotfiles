@@ -67,7 +67,7 @@ service starts or that its generated configuration is valid.
 
 - Never print, decrypt, expose, or commit plaintext secrets, age private keys,
   tokens, or credentials.
-- Treat `secrets/secrets.yaml` and SOPS configuration as sensitive. Use `sops`
+- Treat everything under `secrets/` and the SOPS configuration as sensitive. Use `sops`
   for intentional secret edits and avoid including secret values in command
   output or summaries.
 - Do not weaken SSH, firewall, SOPS, service confinement, deployment gates, or

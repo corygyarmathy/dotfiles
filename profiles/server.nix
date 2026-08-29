@@ -28,6 +28,11 @@
     users.coryg = {
       # The password comes from SOPS, so it is the same after a reinstall and
       # is never set by hand. This is why `mutableUsers` can be off.
+      #
+      # Declared here rather than in `cg.sops-nix` because this is the only
+      # thing that reads it: the laptop leaves `mutableUsers` alone and has no
+      # use for the hash, and a secret nothing consumes is a secret a machine
+      # should not be able to decrypt.
       hashedPasswordFile = config.sops.secrets."users/coryg".path;
 
       # Fixed, because files in the media tree are owned by it and that tree
@@ -50,6 +55,11 @@
     # Nothing declares an account outside this repository.
     mutableUsers = false;
   };
+
+  # `neededForUsers` puts it in /run/secrets-for-users, which is populated
+  # before the users are built - an ordinary secret is decrypted too late for
+  # a password hash to be read.
+  sops.secrets."users/coryg".neededForUsers = true;
 
   # The home-manager side of that account. Identical on both servers, and
   # deliberately minimal - a shell prompt and the CLI tools, no desktop.

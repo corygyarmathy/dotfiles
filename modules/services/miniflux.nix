@@ -27,7 +27,8 @@
 # - Enable the Fever or Google Reader API in Miniflux Settings > Integrations
 # - Connect Reeder / NetNewsWire to https://rss.<domain>
 #
-# Secrets required in secrets/homelab.yaml:
+# Secrets required (which file they live in is decided by cg.sops-nix; see
+# secrets/README.md):
 #   miniflux/admin-credentials: |
 #     ADMIN_USERNAME=admin
 #     ADMIN_PASSWORD=<password>
@@ -78,7 +79,6 @@ in
         # Owned by root — systemd reads EnvironmentFile as root before dropping
         # privileges, so the miniflux user doesn't need direct access.
         "miniflux/admin-credentials" = {
-          sopsFile = ../../secrets/homelab.yaml;
           mode = "0400";
           restartUnits = [ "miniflux.service" ];
         };
@@ -86,14 +86,12 @@ in
         # Database password — group-owned by postgres so miniflux-db-setup can
         # read it while running as the postgres OS user (required for peer auth).
         "miniflux/db-password" = {
-          sopsFile = ../../secrets/homelab.yaml;
           owner = "root";
           group = "postgres";
           mode = "0440";
         };
 
         "miniflux/media-proxy-key" = {
-          sopsFile = ../../secrets/homelab.yaml;
           mode = "0400";
         };
       };

@@ -34,8 +34,10 @@ in
         generateKey = false; # Don't auto-generate, we'll create manually
       };
 
-      # Default secrets file for user secrets
-      defaultSopsFile = ../../../secrets/secrets.yaml;
+      # Secrets that belong to the person rather than to a machine. This side
+      # decrypts with the *user's* age key, not a host key, so the file it
+      # reads is the one no host key needs to open - see secrets/README.md.
+      defaultSopsFile = ../../../secrets/operator.yaml;
 
       # Define user-level secrets here
       secrets = {

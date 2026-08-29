@@ -212,8 +212,6 @@ in
     # Cloudflare API token for Caddy DNS challenge
     # sops-nix creates this as an environment file that Caddy can read
     sops.secrets."cloudflare/api-token" = {
-      sopsFile = ../../secrets/homelab.yaml;
-
       # IMPORTANT: The secret value should be JUST the token, not "CF_API_TOKEN=..."
       # sops-nix will create the file, and we use a template to make it an env file
       owner = "caddy";
