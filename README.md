@@ -116,12 +116,12 @@ Everything under `modules/services/` is imported automatically, so a new service
 
 ## Secrets
 
-[sops-nix](https://github.com/Mic92/sops-nix) with age keys derived from each host's SSH host key, so a host can decrypt only what it is granted.
+[sops-nix](https://github.com/Mic92/sops-nix) with age keys derived from each host's SSH host key, so a host can decrypt only what it is granted. One file per host plus `shared.yaml` for what two machines must agree on; no module names a file, and `nix flake check` fails if a host declares a secret its files do not carry. See [secrets/README.md](secrets/README.md).
 
 ```bash
 age-keygen -o ~/.config/sops/age/keys.txt   # generate a key
 ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub   # derive a host's key
-sops secrets/homelab.yaml                   # edit
+sops secrets/homelab01.yaml                 # edit
 ```
 
 ## Homelab infrastructure

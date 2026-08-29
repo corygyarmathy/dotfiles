@@ -37,7 +37,8 @@
 #      Chrome:  https://chromewebstore.google.com/detail/wallabagger
 #   5. Mobile: search "wallabag" in App Store or Play Store
 #
-# Secrets required in secrets/homelab.yaml:
+# Secrets required (which file they live in is decided by cg.sops-nix; see
+# secrets/README.md):
 #   wallabag/db-password: <password>
 #   wallabag/app-secret: <random string — generate with: openssl rand -hex 32>
 #
@@ -84,7 +85,6 @@ in
       # Database password — group-owned by postgres so wallabag-db-setup can
       # read it while running as the postgres OS user (peer auth on local socket).
       secrets."wallabag/db-password" = {
-        sopsFile = ../../secrets/homelab.yaml;
         owner = "root";
         group = "postgres";
         mode = "0440";
@@ -93,7 +93,6 @@ in
       # App secret — used by Symfony for session tokens and CSRF protection.
       # Must remain stable; changing it invalidates all active sessions.
       secrets."wallabag/app-secret" = {
-        sopsFile = ../../secrets/homelab.yaml;
         mode = "0400";
       };
 

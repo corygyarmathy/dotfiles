@@ -74,7 +74,6 @@ in
     sops = {
       secrets = {
         "cloudflare/tunnel-credentials" = {
-          sopsFile = ../../secrets/homelab.yaml;
           owner = "cloudflared";
           group = "cloudflared";
           mode = "0400";
@@ -82,14 +81,12 @@ in
         };
 
         "cloudflare/tunnel-id" = {
-          sopsFile = ../../secrets/homelab.yaml;
           owner = "cloudflared";
           group = "cloudflared";
           mode = "0400";
           restartUnits = [ "cloudflared-tunnel.service" ];
         };
         "cloudflare/origin-cert" = {
-          sopsFile = ../../secrets/homelab.yaml;
           owner = "cloudflared";
           group = "cloudflared";
           mode = "0400";

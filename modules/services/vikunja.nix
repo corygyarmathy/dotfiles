@@ -28,7 +28,8 @@
 # - The upstream module does not configure caddy/nginx — wired via the
 #   existing cg.service.reverse-proxy module in homelab01.nix.
 #
-# Secrets required in secrets/homelab.yaml:
+# Secrets required (which file they live in is decided by cg.sops-nix; see
+# secrets/README.md):
 #   vikunja/jwt-secret: <random-string>
 #     Generate with: openssl rand -hex 32
 #
@@ -72,7 +73,6 @@ in
         # service drops privileges. No DB password needed: peer auth on the
         # Unix socket matches by OS username ("vikunja") with no password.
         "vikunja/jwt-secret" = {
-          sopsFile = ../../secrets/homelab.yaml;
           mode = "0400";
           restartUnits = [ "vikunja.service" ];
         };

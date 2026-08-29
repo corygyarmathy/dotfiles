@@ -64,7 +64,8 @@
 # dates from a ledger at ${stateDir}/dates.json rather than asking for them to
 # be written by hand. Both are explained in publish-filter.py.
 #
-# Secrets required in secrets/homelab.yaml, depending on `source`:
+# Secrets required, depending on `source` (which file they live in is decided
+# by cg.sops-nix; see secrets/README.md):
 #   git:           digital-garden/deploy-key
 #                  <ssh private key with read access to the vault repo>
 #   obsidian-sync: digital-garden/obsidian-token
@@ -453,7 +454,6 @@ in
     sops.secrets = lib.mkMerge [
       (lib.mkIf (cfg.source == "git") {
         "digital-garden/deploy-key" = {
-          sopsFile = ../../../secrets/homelab.yaml;
           owner = "digital-garden";
           group = "digital-garden";
           mode = "0400";
@@ -461,7 +461,6 @@ in
       })
       (lib.mkIf (cfg.source == "obsidian-sync") {
         "digital-garden/obsidian-token" = {
-          sopsFile = ../../../secrets/homelab.yaml;
           owner = "digital-garden";
           group = "digital-garden";
           mode = "0400";

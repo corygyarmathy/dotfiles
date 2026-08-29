@@ -207,8 +207,8 @@ creation_rules:
 #### Step 5: Re-encrypt Secrets
 
 ```bash
-# Update all secret files with the new key
-sops updatekeys secrets/secrets.yaml
+# Re-key the files this host reads - its own, and the shared one
+sops updatekeys secrets/<hostname>.yaml secrets/shared.yaml
 ```
 
 #### Step 6: Prepare Extra Files
@@ -472,7 +472,7 @@ nix develop
 ./nixos-install-remote.sh <hostname> <ip> --disk /dev/nvme0n1
 
 # Re-encrypt secrets after adding a key
-sops updatekeys secrets/secrets.yaml
+sops updatekeys secrets/<hostname>.yaml secrets/shared.yaml
 
 # Test disko config without installing
 nix run github:nix-community/disko -- --mode dry-run ./hosts/homelab02/disko.nix

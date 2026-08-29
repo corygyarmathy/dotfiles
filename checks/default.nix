@@ -310,5 +310,11 @@ in
   # the file says why that shape is worth a check of its own.
   publish = import ./publish.nix { inherit pkgs self inputs; };
   reverse-proxy = testLib.mkTest ./reverse-proxy.nix;
+
+  # Also not a VM: sops leaves the key structure and the recipient list
+  # readable without decrypting, so "does this secret exist, and can the host
+  # that wants it open the file" is answerable in the sandbox.
+  secrets = import ./secrets.nix { inherit pkgs self; };
+
   upgrade-verify = testLib.mkTest ./upgrade-verify.nix;
 }

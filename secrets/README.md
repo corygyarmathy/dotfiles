@@ -1,257 +1,93 @@
-# Secrets Management with SOPS-Nix
+# Secrets
 
-## Overview
+Encrypted with [sops](https://github.com/getsops/sops) and age, decrypted by [sops-nix](https://github.com/Mic92/sops-nix) at activation. Every file here is safe to commit; none of them can be read without a key that is not in this repository.
 
-SOPS-Nix allows you to store encrypted secrets in your git repository.
-Secrets are encrypted with age keys and decrypted at build/activation time.
+## The layout
 
-SOPS (Secrets OPerationS) encrypts sensitive data so you can safely store it in git. Without sops, you'd have to either:
+**A secret lives in the file for the host that needs it.** "Needs" means a `sops.secrets."<name>"` declaration in that host's evaluated configuration — not that the service happens to run there.
 
-- Keep secrets out of your dotfiles repo (annoying, not reproducible)
-- Risk accidentally committing plaintext secrets (dangerous)
+| File             | Read by                | Holds                                                                                                                    |
+| ---------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `shared.yaml`    | both servers           | Only what two machines must agree on. Every entry is justified in `cg.sops-nix.sharedSecrets` (`modules/nixos/sops-nix.nix`). |
+| `homelab01.yaml` | homelab01              | Everything only homelab01 declares — the tunnel, Grafana, miniflux, wallabag, the garden.                                  |
+| `homelab02.yaml` | homelab02              | Everything only homelab02 declares — qBittorrent, the VPN, grimmory's database.                                            |
+| `xps15.yaml`     | xps15                  | The laptop's wifi PSKs. Nothing else on a machine that leaves the house.                                                   |
+| `operator.yaml`  | nobody — the user only | Secrets that belong to a person rather than a machine: the user's SSH keys, CI tokens, and web logins for services that keep their own user database. |
 
-With sops, your `secrets/secrets.yaml` file is encrypted at rest - it's safe to commit because only someone with the right age key can decrypt it.
+Two consequences worth stating, because both are easy to get wrong:
 
-### How It Works
+- **`prowlarr/api` is in `homelab02.yaml`, and Prowlarr runs on homelab01.** The file follows the declaration, and the only thing that declares that key is cross-seed, on homelab02. The service's location is not the question.
+- **A secret for a service that is switched off still lives in its host's file.** `vikunja/jwt-secret` and `digital-garden/deploy-key` are both parked in `homelab01.yaml` so that flipping the toggle works without an editing session. `operator.yaml` is for what no host will ever declare, not for what no host declares today.
+
+Nothing in `modules/` names a file. A module writes `sops.secrets."<name>" = { ... }` and `cg.sops-nix` decides where the name is read from: `secrets/<hostname>.yaml`, or `shared.yaml` if the name is in `cg.sops-nix.sharedSecrets`. That option is the whole of the mapping and the place to change it.
+
+## The check
+
+`nix flake check` runs `checks/secrets.nix`, which asserts that every declared name exists in the file its host would read, and that every host reading a file is a recipient of it. sops leaves the key structure and the recipient list in clear text, so both are answerable in CI without decrypting anything.
+
+A misspelt name fails the gate:
 
 ```
-┌─────────────────┐     sops encrypt      ┌──────────────────────┐
-│ Plaintext YAML  │ ──────────────────►   │ Encrypted YAML       │
-│ (you edit this) │                       │ (stored in git)      │
-└─────────────────┘                       └──────────────────────┘
-                                                    │
-                                                    │ nixos-rebuild
-                                                    ▼
-                                          ┌──────────────────────┐
-                                          │ Decrypted at runtime │
-                                          │ /run/secrets/...     │
-                                          │ ~/.ssh/id_github     │
-                                          └──────────────────────┘
+homelab01 (system) declares media-stack/sonar/api, which is not in homelab01.yaml
 ```
 
-## Your Current Setup
+That used to be an activation failure at 04:00 on the machine.
 
-You already have age keys configured in `secrets/.sops.yaml`:
-
-- **User key (coryg):** `age1g02vwy6867g9v4w58d4v52h3q37slhd0gjyygh9eramdfshw0ats0wkc5x`
-- **Host key (xps15):** `age1aqvdthnw8k7wn3z90qf8f8d3fupchhf55ecdafn5yr4axad75f3qvst4dg`
-
-## Setup Steps
-
-### Step 1: Verify Your Age Keys
-
-**Check if your user age key exists:**
+## Common operations
 
 ```bash
-cat ~/.config/sops/age/keys.txt
+sops secrets/homelab01.yaml    # edit (encrypts on save; keeps the file's existing recipients)
+sops -d secrets/shared.yaml    # print decrypted, for debugging
 ```
 
-If it doesn't exist, create one:
+Adding a secret: put it in the file for the host that will declare it, add the `sops.secrets` entry to the module that consumes it, and rebuild. If it needs to be readable by both servers, add it to `shared.yaml` **and** to `cg.sops-nix.sharedSecrets` with a line saying why two machines must agree on one value.
+
+Moving a secret between files: `sops -d --extract` it out of one and into the other, then delete it from the first. The check will tell you if you got it backwards.
+
+## Keys
+
+`.sops.yaml` lists every key and which files it opens. Host keys are derived from `/etc/ssh/ssh_host_ed25519_key`, so a host has no key file to back up — and no key material lives in this repo.
 
 ```bash
-mkdir -p ~/.config/sops/age
-age-keygen -o ~/.config/sops/age/keys.txt
+cat ~/.config/sops/age/keys.txt | grep "public key:"   # the user key
+ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub          # a host key
 ```
 
-Then update `secrets/.sops.yaml` with the public key shown.
+**After adding or removing a key, `sops updatekeys <file>`.** Editing a file with `sops` does not re-key it; the recipient list only changes when you say so.
 
-**Get your host's age key (derived from SSH host key):**
+### After a reinstall
 
-```bash
-sudo cat /etc/ssh/ssh_host_ed25519_key.pub | ssh-to-age
-```
+Reinstalling a host regenerates its SSH host key and therefore its age key, and the files it reads can no longer be opened by it.
 
-Verify this matches what's in `.sops.yaml` for `&xps15`.
+1. Copy the user age key back to `~/.config/sops/age/keys.txt`.
+2. `ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub` on the new host.
+3. Replace that host's anchor in `.sops.yaml`.
+4. `sops updatekeys secrets/<host>.yaml secrets/shared.yaml` — only the files that host reads, which is what the per-host split buys you.
+5. Commit and rebuild.
 
-### Step 2: Create Your Secrets File
+## Narrowing the recipients
 
-Create the actual secrets file:
+The per-host split landed in two parts on purpose, and **part two has not run yet**.
 
-```bash
-cd ~/git/dotfiles
-sops secrets/secrets.yaml
-```
+Today every file is still encrypted to all four keys, exactly as `secrets.yaml` and `homelab.yaml` were. What has changed is which file each host *reads*: homelab01 opens `homelab01.yaml` and `shared.yaml` and nothing else. So a mis-scoped secret shows up as a missing name — which the check catches before a deploy — rather than as a host that cannot decrypt.
 
-This will open your editor. Add secrets in YAML format:
-
-```yaml
-# SSH Keys
-private_keys:
-  github: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAA...
-    -----END OPENSSH PRIVATE KEY-----
-
-# API Tokens
-tokens:
-  openai: sk-xxxxxxxxxxxxxxxxxxxxxxxx
-  github: ghp_xxxxxxxxxxxxxxxxxxxxxxxx
-
-# Other secrets
-passwords:
-  some_service: supersecretpassword
-```
-
-Save and close - sops will encrypt it automatically.
-
-### Step 3: Enable sops-nix in Your Configuration
-
-**In `hosts/xps15/default.nix`:**
-
-```nix
-cg = {
-  # ... other options ...
-  sops-nix.enable = true;  # Change from false to true
-};
-```
-
-**In `hosts/xps15/home.nix`:**
-
-```nix
-cg.home = {
-  # ... other options ...
-  sops-nix.enable = true;  # Change from false to true
-};
-```
-
-### Step 4: Define Which Secrets to Decrypt
-
-**For system-level secrets** (in `modules/nixos/sops-nix.nix`):
-
-```nix
-sops.secrets = {
-  "private_keys/github" = {
-    mode = "0600";
-    owner = config.users.users.coryg.name;
-    group = config.users.users.coryg.group;
-    path = "/home/coryg/.ssh/id_github_system";
-  };
-};
-```
-
-**For user-level secrets** (in `modules/home/security/sops-nix.nix`):
-
-```nix
-sops.secrets = {
-  "private_keys/github" = {
-    mode = "0600";
-    path = "${config.home.homeDirectory}/.ssh/id_github";
-  };
-  "tokens/openai" = {
-    mode = "0600";
-    path = "${config.home.homeDirectory}/.config/openai/api_key";
-  };
-};
-```
-
-### Step 5: Rebuild
-
-```bash
-sudo nixos-rebuild switch --flake .#xps15
-```
-
-## File Structure
+`check-secrets` prints what is still outstanding on every run:
 
 ```
-secrets/
-├── .sops.yaml          # Defines which keys can decrypt which files
-├── secrets.yaml        # Your encrypted secrets (safe to commit!)
-└── secrets.yaml.example # Template showing structure (optional)
+note: xps15.yaml is still encrypted to homelab02 homelab01, which do not read it (step 3 of the re-key)
 ```
 
-## Common Operations
+To finish, once the split has been deployed to both servers and everything that consumes a secret has been seen running:
 
-### Edit Secrets
+1. Delete the `# step 3: remove` lines from `creation_rules` in `.sops.yaml`.
+2. `sops updatekeys secrets/shared.yaml secrets/homelab01.yaml secrets/homelab02.yaml secrets/xps15.yaml secrets/operator.yaml`
+3. Add the five file names to `narrowedFiles` in `checks/secrets.nix`, so a key that reappears is a failure rather than a note.
+4. Confirm the diff is only `sops:` metadata and ciphertext, and that the plaintext did not move — compare digests, do not print the values:
 
-```bash
-sops secrets/secrets.yaml
-```
+   ```bash
+   sops -d --output-type json secrets/shared.yaml | sha256sum   # before and after
+   ```
 
-### Add a New Secret
+5. Deploy homelab01 by hand and verify before letting the nightly take homelab02.
 
-1. Edit with `sops secrets/secrets.yaml`
-2. Add the secret in YAML format
-3. Save and close
-4. Add the secret definition in your nix module
-5. Rebuild
-
-### Rotate Keys
-
-If you need to add a new machine or remove access:
-
-1. Update `secrets/.sops.yaml` with new keys
-2. Run: `sops updatekeys secrets/secrets.yaml`
-3. Commit the changes
-
-### View Decrypted Secrets (for debugging)
-
-```bash
-sops -d secrets/secrets.yaml
-```
-
-## Example: Migrating Your GitHub SSH Key
-
-### 1. Add the key to secrets.yaml
-
-```bash
-sops secrets/secrets.yaml
-```
-
-Add:
-
-```yaml
-private_keys:
-  github: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    <paste your key here>
-    -----END OPENSSH PRIVATE KEY-----
-```
-
-### 2. Update home sops-nix module
-
-```nix
-sops.secrets = {
-  "private_keys/github" = {
-    mode = "0600";
-    path = "${config.home.homeDirectory}/.ssh/id_github";
-  };
-};
-```
-
-### 3. Update SSH config to use the managed key
-
-Your existing `modules/home/development/ssh.nix` already references `~/.ssh/id_github`,
-so it should work automatically after rebuild.
-
-### 4. Rebuild and test
-
-```bash
-sudo nixos-rebuild switch --flake .#xps15
-ssh -T git@github.com
-```
-
-## Troubleshooting
-
-### "Failed to decrypt"
-
-- Ensure your age key is in `~/.config/sops/age/keys.txt`
-- Check the public key matches what's in `.sops.yaml`
-- Run `sops updatekeys secrets/secrets.yaml` if keys changed
-
-### "Permission denied" on secret file
-
-- Check the `mode` and `owner` settings in your secret definition
-- Ensure the target directory exists
-
-### Secret not appearing at expected path
-
-- Check `path` is set correctly in the secret definition
-- Look at `/run/secrets/` for NixOS-level secrets
-- Check `systemctl --user status sops-nix` for home-manager secrets
-
-## Security Notes
-
-1. **Never commit unencrypted secrets** - Always use `sops` to edit
-2. **Backup your age keys** - Store `~/.config/sops/age/keys.txt` securely
-3. **Use separate keys per machine** - Allows revoking access per-device
-4. **The `secrets.yaml` file is safe to commit** - It's encrypted!
+Doing this in the same change as the split is what would make the split unrecoverable, which is why it is a separate one.

@@ -5,7 +5,8 @@
 # NetworkManager reads.
 #
 # Usage:
-# 1. Add wifi passwords to secrets/secrets.yaml:
+# 1. Add wifi passwords to this host's secrets file (secrets/<hostname>.yaml -
+#    a PSK is as host-specific as a secret gets; see secrets/README.md):
 #    wifi:
 #        MyHomeNetwork: "my_password"
 #        WorkWifi: "work_password"
