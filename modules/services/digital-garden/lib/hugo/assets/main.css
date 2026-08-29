@@ -831,9 +831,19 @@ h4:hover > .heading-anchor,
   }
 
   /* Rail links are navigation, not prose. "You are here" is the one place the
-   * accent is deliberately spent: the section being read is blue. But a
-   * pointer overrides the state — a section that is merely pointed at goes to
-   * the text colour whether it is active or not, so hover never claims to
+   * section-being-read gets its own hue rather than borrowing the prose link
+   * colour: the section being read is the accent in Lotus and carpYellow in
+   * Wave, both deliberately NOT the --muted of the links around them. The hue
+   * split was forced by the muted change: Wave's --muted moved to
+   * springViolet1 #938AA9, a pale cool pastel, and crystalBlue #7E9CD8 — the
+   * accent the active section had shared with links — is only 1.18:1 from it,
+   * so the active link read as "just another rail link". carpYellow is the
+   * warm side of the wheel from both the purple rail text and the blue prose
+   * links (1.94:1 from muted, 9.73:1 on the dark ground, 1.64:1 from
+   * crystalBlue), so it marks the section without being mistaken for either.
+   *
+   * A pointer overrides the state — a section that is merely pointed at goes
+   * to the text colour whether it is active or not, so hover never claims to
    * mark the section being read. The `:hover` rule comes after `.current`,
    * and the two selectors are equally specific, so hover wins the tie. */
   .rail a {
@@ -843,7 +853,7 @@ h4:hover > .heading-anchor,
   }
 
   .rail a.current {
-    color: var(--accent);
+    color: light-dark(#4d699b, #e6c384); /* lotusBlue4 / carpYellow */
   }
 
   .rail a:hover {
