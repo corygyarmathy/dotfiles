@@ -119,6 +119,14 @@ A table wide enough to scroll inside its own container:
 | Riverview Lighting Upgrade  | 5871  | 29       | 0         | 2026-08-23 | 2026-08-27 | A year of volunteer work, written down while it is still true |
 | Relationship with Work      | 1604  | 0        | 0         | 2026-08-23 | 2026-08-23 | Work is a trade, and a trade has two sides                    |
 
+And a table holding a token no line break can shorten, which is the case that
+decides how a cell is allowed to wrap — it must widen the table and scroll
+rather than be cut into stacked fragments:
+
+| Endpoint                                                             | Note        |
+| -------------------------------------------------------------------- | ----------- |
+| `https://example.invalid/a/very/long/path/that/never/breaks/anywhere` | It is long. |
+
 ## An image
 
 Diagrams in the vault are frequently light-background scans and exports, which is the case worth looking at on a dark page:

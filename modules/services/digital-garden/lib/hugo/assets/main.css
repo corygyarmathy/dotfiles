@@ -597,13 +597,40 @@ mark {
  * while this rule was written and the hook was not, so it matched nothing and
  * the page did the scrolling — see that file.
  *
- * Today the table fits the measure by construction — see `table` below — so
- * the scroll bar sits unused on a well-sized table. It is kept because the
- * width estimate in the hook is intentionally crude: a table of exceptional
- * glyphs (CJK, say) underprices a column and overflows, and when that happens
- * we want the overflow consumed here rather than scrolling the page. */
+ * Most tables fit and this box never scrolls. The ones that do not fit are
+ * genuinely wider than a phone: seven columns whose headers alone ("Backlinks",
+ * "Published") want nine characters each cannot be shown at 390px, and every
+ * attempt to make them fit has been worse than scrolling them.
+ *
+ * So the scroll needs to be visible, because a table that is clipped at the
+ * screen edge with nothing to say so reads as a broken table rather than a
+ * scrollable one — and a phone draws no scrollbar until you touch it. The four
+ * backgrounds are the standard shadow pair: two `local` gradients painted in
+ * the page colour that travel WITH the content, parked over the two ends, and
+ * two `scroll` shadows underneath them that do not move. At rest the cover sits
+ * on the shadow and hides it; scroll away from an end and the cover slides off,
+ * uncovering the shadow on the side there is more content on. No script, and it
+ * is self-correcting — it responds to the actual scroll position, so it is
+ * right at every width without anything having to measure the table. */
 .table-container {
   overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--bg) 60%, transparent) left / 2rem 100% no-repeat
+      local,
+    linear-gradient(to left, var(--bg) 60%, transparent) right / 2rem 100% no-repeat
+      local,
+    radial-gradient(
+        farthest-side at 0 50%,
+        color-mix(in srgb, var(--text) 30%, transparent),
+        transparent
+      )
+      left / 0.9rem 100% no-repeat scroll,
+    radial-gradient(
+        farthest-side at 100% 50%,
+        color-mix(in srgb, var(--text) 30%, transparent),
+        transparent
+      )
+      right / 0.9rem 100% no-repeat scroll;
 }
 
 /* Both of the page's scrollable boxes, showing that they have been reached.
@@ -628,27 +655,43 @@ pre:focus-visible {
   padding: 0.2rem 0;
 }
 
-/* The width estimate that used to live on the table is gone. What was
- * `width: max-content` sized the table to its content, so a wide table
- * scrolled inside .table-container and a prose column sat untouched at 450px
- * while the reader scrolled the rest of the way sideways — the exact thing the
- * container was meant to replace. `fixed` + `100%` instead takes the measures
- * the hook put on each <col> and uses them verbatim, so every column stays on
- * the measure and prose wraps at a readable cap instead of running off to the
- * right. The columns already sum to 100%, so the table is exactly the width of
- * the box it sits in.
+/* Automatic layout, and nothing else. Two attempts to size these columns by
+ * hand are behind this rule and both failed in the same place — the width of a
+ * column is a question about glyphs and about the width of the window, and
+ * neither a stylesheet nor a template can see either one.
  *
- * `overflow-wrap: anywhere` and `min-width: 0` are what let a cell wrap
- * rather than fitting its content to one long unbroken line. A fixed table
- * will not wrap a cell on its own; it honours the col width and lets the text
- * break at the box edge — good for prose, but it turns a long unbreakable token
- * into a page-wide overflow. `anywhere` caps that (the stronger of the two
- * break modes, which is what keeps a token from widening the page), and without
- * `min-width: 0` a grid or block child would still force the min-content width
- * and overflow anyway. */
+ * `width: max-content` was the first: it sized the table to its content, so
+ * nothing wrapped and every table wider than the measure became one long line
+ * inside a scroll box, a prose column sitting untouched at 450px while the
+ * reader dragged sideways to reach it.
+ *
+ * `table-layout: fixed` over estimated <col> percentages was the second, and it
+ * traded that for a worse fault: fixed layout honours the declared width no
+ * matter what is in the cell, so a column whose estimate came out at 10% of a
+ * 350px phone was two characters wide and set "Backlinks" as nine stacked
+ * letters. The percentages could not know the viewport; the estimates could not
+ * know the glyphs.
+ *
+ * Automatic layout knows both. It measures each column's content, gives every
+ * one at least the width of its longest word so a header is never broken, and
+ * spends what is left over on the columns that asked for the most — which is
+ * the prose column, every time. When the total will not fit it lets the table
+ * overflow, and .table-container above turns that into a scroll with a shadow
+ * on it. Fits when it can, scrolls when it cannot, and the decision is made at
+ * the width the page is actually being read at.
+ *
+ * `width: 100%` so a table still spans the measure rather than shrink-wrapping
+ * to its content, which is the look the site already had.
+ *
+ * `overflow-wrap: break-word` rather than `anywhere`: `anywhere` lets a break
+ * count towards the minimum width a cell reports, so a column can be squeezed
+ * to one character and still claim to fit — exactly how the fixed layout above
+ * produced its stacked letters. `break-word` breaks the same long token when
+ * one genuinely does not fit, but reports the honest minimum, so a column is
+ * never sized below a word. A token longer than the whole table (a URL) makes
+ * the table wide instead, and it scrolls. */
 table {
   border-collapse: collapse;
-  table-layout: fixed;
   width: 100%;
 }
 
@@ -657,8 +700,7 @@ td {
   border-bottom: 1px solid var(--border);
   padding: 0.4rem 0.6rem;
   text-align: left;
-  overflow-wrap: anywhere;
-  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 /* ── heading anchors ────────────────────────────────────────────────────── */
@@ -1105,6 +1147,22 @@ pagefind-modal {
   h3,
   h4 {
     break-after: avoid;
+  }
+
+  /* Paper does not scroll, so the one thing the screen relies on for a wide
+   * table is not available here. The container stops clipping and the shadows
+   * that advertised the scroll come off — on paper they are two grey smudges
+   * advertising a gesture nobody can make. A table still too wide for the page
+   * is set smaller rather than cut off; below about this size the type stops
+   * being worth printing, so that is where the shrinking stops and a table
+   * wider than that is simply a table this sheet cannot hold. */
+  .table-container {
+    overflow-x: visible;
+    background: none;
+  }
+
+  table {
+    font-size: 0.85em;
   }
 
   pre,
