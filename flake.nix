@@ -177,9 +177,20 @@
                   sharedModules = [
                     sops-nix.homeManagerModules.sops
                   ]
-                  ++ lib.optional (!config.cg.stylix.enable) inputs.stylix.homeModules.stylix;
-                  # ^ If system-level stylix is NOT enabled (like on servers),
-                  # safely inject the schema so `stylix-hm.nix` doesn't crash!
+                  # No host sets cg.stylix.enable (xps15 enables the raw
+                  # `stylix.enable` instead), so this injects the schema on
+                  # every host so `stylix-hm.nix` doesn't crash.
+                  ++ lib.optional (!config.cg.stylix.enable) {
+                    imports = [
+                      inputs.stylix.homeModules.stylix
+                    ];
+                    # With `home-manager.useGlobalPkgs` the Home Manager
+                    # `nixpkgs.*` options are inert and setting them is a
+                    # warning (soon an error). Stylix injects them through its
+                    # overlays, so switch those off here - matching what
+                    # Stylix's own `useGlobalPkgs` integration does.
+                    stylix.overlays.enable = false;
+                  };
                 };
               }
             )
@@ -258,6 +269,9 @@
           garden-preview = {
             type = "app";
             program = nixpkgs.lib.getExe preview;
+            meta = {
+              description = "Local preview that renders and serves the digital garden exactly as the server does";
+            };
           };
         }
       );
