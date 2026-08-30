@@ -189,6 +189,24 @@ in
           mv "$work/content/index.md" "$work/content/_index.md"
         fi
 
+        # A generated /notes/ page lists everything published, so that nothing
+        # on the site is reachable only by search or by a backlink — fourteen
+        # of nineteen notes once were, and the landing page is deliberately
+        # still the hand-written table of contents. Chrome, like the 404 and
+        # the feed, so it is born here rather than in the vault or the staging
+        # tree: the staging tree is exactly the published set. Rendered by
+        # layouts/_default/list.html.
+        mkdir -p "$work/content/notes"
+        cat > "$work/content/notes/_index.md" <<'EOF'
+        ---
+        title: All notes
+        description: Every published note, newest first.
+        ---
+
+        Every note published here, newest first.
+
+        EOF
+
         # Not --quiet: this runs inside a oneshot service whose journal is the
         # only place a failure surfaces. A quiet hugo turned "KaTeX could not
         # render this expression" into two silent seconds and exit 1.

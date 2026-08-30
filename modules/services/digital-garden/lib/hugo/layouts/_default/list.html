@@ -1,0 +1,35 @@
+{{ define "main" }}
+  {{/*
+    The generated index of everything published, at /notes/. Distinct from the
+    landing page and in addition to it: the landing page is a hand-written
+    table of contents, and this is the page that guarantees nothing published
+    is reachable only by search or by a backlink. Fourteen of nineteen notes
+    were once exactly that, which is the whole reason this page exists.
+
+    Every entry is a fact about the note it describes rather than something
+    written for this page: the title, the thesis (publish-filter.py has
+    already put it in .Description) and the date the ledger derived. Newest
+    first. Nothing lives in this template but the reuse of those.
+
+    Indexed by Pagefind like the home page is. These words are also on the
+    notes themselves, but so are the landing page's; a listing page that
+    carries theses has always been searchable here, and the backlinks rule
+    that keeps another page's words out of a search has nothing to say about
+    a note's own title and claim.
+  */}}
+  <div class="layout">
+    <article data-pagefind-body>
+      <h1>{{ .Title }}</h1>
+      {{ .Content }}
+      <ol class="note-index">
+        {{ range site.RegularPages.ByDate.Reverse }}
+          <li>
+            <h2 class="note-index-title"><a href="{{ .RelPermalink }}">{{ .Title }}</a></h2>
+            {{ with .Description }}<p class="note-index-thesis">{{ . }}</p>{{ end }}
+            {{ partial "dateline.html" . }}
+          </li>
+        {{ end }}
+      </ol>
+    </article>
+  </div>
+{{ end }}
