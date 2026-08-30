@@ -126,6 +126,7 @@
           {{ range site.Params.footerLinks }}
             <li><a href="{{ .url }}">{{ .name }}</a></li>
           {{ end }}
+          <li><a href="{{ "notes/" | relURL }}">All notes</a></li>
           {{ with site.Home.OutputFormats.Get "rss" }}<li><a href="{{ .Permalink }}">RSS</a></li>{{ end }}
         </ul>
       </footer>

@@ -977,6 +977,40 @@ h4:hover > .heading-anchor,
   }
 }
 
+/* ── the notes index ────────────────────────────────────────────────────── */
+
+/* The generated /notes/ page: every published note, newest first, so nothing
+ * on the site is reachable only by search or by a backlink — the gap this page
+ * exists to close. Each entry is the note's own title, thesis and date, so
+ * this block only has to arrange them. */
+.note-index {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.note-index > li + li {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.note-index-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.note-index-thesis {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+}
+
+/* The dateline's own spacing is tuned for the top of an essay; inside an
+ * index entry it follows the thesis and nothing else follows it. */
+.note-index .dateline {
+  margin: 0.1rem 0 0;
+}
+
 /* ── footer ─────────────────────────────────────────────────────────────── */
 
 footer {
