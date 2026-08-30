@@ -1,6 +1,6 @@
 # Plan: structural cleanup
 
-Status: drafted 2026-08-28. Items 0 and 1 landed the same day, items 2 and 3 on 2026-08-29. Item 4 is a three-step item and step 1 landed on 2026-08-29; the re-key that finishes it is deliberately a later PR. Nothing else started.
+Status: drafted 2026-08-28. Items 0 and 1 landed the same day, items 2 and 3 on 2026-08-29. Item 4 was a three-step item: step 1 landed on 2026-08-29, and steps 2 and 3 — the deploy and the re-key that finishes it — on 2026-08-30. Items 5 to 7 have not started.
 
 This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines. Items 1 and 2 are marked `minor`: each changed a handful of lines of generated configuration, and each lists them under what it landed. Item 2's are the probe list it exists to fix.
 
@@ -12,7 +12,7 @@ The pipeline, the checks harness and the documentation are in good shape and are
 | 1   | A fleet source of truth           | medium | minor             | —          | **done** 2026-08-28   |
 | 2   | Services publish themselves       | large  | minor             | 1          | **done** 2026-08-29   |
 | 3   | Hosts become profiles + toggles   | medium | no                | 2          | **done** 2026-08-29   |
-| 4   | Per-host secret scoping           | large  | **yes**           | 1          | **step 1 of 3** 2026-08-29 |
+| 4   | Per-host secret scoping           | large  | **yes**           | 1          | **done** 2026-08-30   |
 | 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       | not started           |
 | 6   | Decouple modules from the fleet   | small  | no                | 1          | not started           |
 | 7   | Documentation follows the code    | small  | no                | 1–6        | not started           |
@@ -377,27 +377,41 @@ The host keys are derived from `/etc/ssh/ssh_host_ed25519_key`, so reinstalling 
 
 `checks/secrets.nix` is the new gate. It reads the key structure and the recipient list out of the *encrypted* files — sops leaves both in clear text — and asserts that every name any host declares (system and home-manager both) is in the file that host would read it from, and that every host reading a file is a recipient of it. A misspelt name now fails the gate as `homelab01 (system) declares media-stack/sonar/api, which is not in homelab01.yaml`, which was verified by introducing exactly that typo. The check also runs its own comparison against a name that is deliberately absent, so a run that reports nothing has demonstrably compared something rather than found an empty list.
 
-### Not done: steps 2 and 3
-
-**The `Done when` is not met yet, and cannot be met by this PR.** `xps15`'s age key still decrypts every server secret, because every one of the five files is still encrypted to all four keys — which is the whole content of the sequencing section's step 1. What changed is which file each host *reads*: homelab01 opens `homelab01.yaml` and `shared.yaml` and nothing else, so a mis-scoped secret surfaces as a missing name in CI rather than as a host that cannot activate.
-
-Step 2 is a hand deploy to homelab01 and a check that every unit consuming a secret is running, before the nightly takes homelab02. Step 3 is the re-key: delete the `# step 3: remove` lines from `.sops.yaml`, `sops updatekeys` the five files, and add them to `narrowedFiles` in `checks/secrets.nix` so a key that reappears is a failure rather than a note. `check-secrets` prints the outstanding surplus on every run, so the gate says how much of the item is left:
-
-```
-note: xps15.yaml is still encrypted to homelab02 homelab01, which do not read it (step 3 of the re-key)
-```
-
-The procedure, including the digest comparison the risk section asks for, is in `secrets/README.md` under "Narrowing the recipients".
-
-**Also removed:** `secrets/secrets.yaml.example` and `secrets/secrets.yaml.template`, which documented the structure of a file that no longer exists. The layout table in `secrets/README.md` replaces both.
-
-**One thing was lost.** The old files carried encrypted comments — sops encrypts comment text along with values — and the migration ran through JSON, which does not have comments. Nothing that was a secret was lost; what went is a handful of notes about which indexer a cookie belonged to.
-
 ### Verified, 2026-08-29
 
 For all three hosts, the generated `/etc` was compared against the same host built from `8b22aaf`. **No file was added or removed on any host**, and the only files that differ are the ones that always do: the `dbus` and `polkit` overrides that carry the `system-path` hash, `nixos-deploy-metrics` and `nixos-upgrade` which carry the revision literally, and on homelab01 `digital-garden-build`. On xps15 `home-manager-coryg.service` also moves, because the home-manager side's `defaultSopsFile` is a different store path.
 
 The sops manifests — the thing that actually decides what gets decrypted where — were realised and diffed field by field for all three hosts. **Every difference is the `sopsFile` field and nothing else**: same names, same owners, groups, modes, `restartUnits` and paths, on all 46 declarations. The one structural change is xps15's `manifest-for-users.json` disappearing, which is `users/coryg` moving to `profiles/server.nix`.
+
+### What landed — steps 2 and 3
+
+**The `Done when` is now met.** `xps15`'s age key decrypts one wifi PSK and nothing else; every `sopsFile` line was already gone from `modules/` after step 1; and a misspelled secret name fails `nix flake check`.
+
+Step 2 was the hand deploy: homelab01 by `nixos-rebuild --target-host`, every unit consuming a secret seen running, and only then the nightly on homelab02. Both hosts were on the split before anything was re-keyed.
+
+Step 3 deleted the `# step 3: remove` lines from `.sops.yaml` and ran one `sops updatekeys` over the five files. What each file is now encrypted to:
+
+| File             | Recipients                 | Dropped              |
+| ---------------- | -------------------------- | -------------------- |
+| `shared.yaml`    | user, homelab01, homelab02 | xps15                |
+| `homelab01.yaml` | user, homelab01            | homelab02, xps15     |
+| `homelab02.yaml` | user, homelab02            | homelab01, xps15     |
+| `xps15.yaml`     | user, xps15                | homelab01, homelab02 |
+| `operator.yaml`  | user                       | all three hosts      |
+
+**The risk section predicted the wrong diff, and the real one is better.** It expected `sops updatekeys` to rewrite every value's encryption, and asked for a digest comparison on that basis. It does not: it re-wraps the _data key_ and leaves the encrypted values byte-identical, so the change is confined to the `sops:` block at the foot of each file. That was checked structurally — everything above `sops:` compared equal in all five files — as well as by the digest comparison the risk section asked for, which also came back identical for all five. Two independent confirmations that no plaintext moved, and the ciphertext-level one is the stronger of them.
+
+**`operator.yaml` now has exactly one recipient, and that is a new single point of loss.** Every other file has a host key as a second way in — a workstation can die and the secret is still recoverable from the machine that reads it. `operator.yaml` deliberately has no host key, which was the whole point of creating it, and the cost is that `~/.config/sops/age/keys.txt` is now the only thing that opens 25 entries. That is written down in `secrets/README.md` under "Who can open what". It argues for a backup of that key, not for putting a host key back.
+
+**The gate now fails on a widened file rather than noting it.** All five names went into `narrowedFiles` in `checks/secrets.nix`, which turns the step-3 note into an error. Verified by putting `homelab01` back into `xps15.yaml`'s rule and re-keying: `nix flake check` failed with `xps15.yaml is narrowed but is still encrypted to: homelab01`. The file was then restored from the pre-test copy, and the check derivation hashed to the same store path as the clean run before it — which is a stronger statement than "the test was reverted", since it means the file is byte-identical, not merely equivalent.
+
+### Verified, 2026-08-30
+
+Every `sops.secrets` declaration on all three hosts — 25 on homelab01, 18 on homelab02, 3 on xps15, matching the 46 the gate counts — was compared field by field against the same host built from `0257a55`. **No declaration was added, removed, or changed in any field except `sopsFileHash`**, which is the digest of the encrypted file and therefore moves by definition when the file is re-keyed. Names, owners, groups, modes, paths, `restartUnits` and `neededForUsers` are identical, on both the system and the home-manager side.
+
+The generated `/etc` was diffed for all three hosts against the same baseline. **No file was added or removed on any host**, and every file that differs is one of the five that always move: the `dbus` and `polkit` overrides carrying the `system-path` hash, `nixos-deploy-metrics` and `nixos-upgrade` carrying the revision literally, plus `digital-garden-build` on homelab01 and `home-manager-coryg` on xps15. That is the same set as the step-1 verification, with nothing sops-shaped in it.
+
+`nix flake check` passes all 13 checks, `check-secrets` among them, now with no outstanding note.
 
 ---
 

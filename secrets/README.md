@@ -23,7 +23,7 @@ Nothing in `modules/` names a file. A module writes `sops.secrets."<name>" = { .
 
 ## The check
 
-`nix flake check` runs `checks/secrets.nix`, which asserts that every declared name exists in the file its host would read, and that every host reading a file is a recipient of it. sops leaves the key structure and the recipient list in clear text, so both are answerable in CI without decrypting anything.
+`nix flake check` runs `checks/secrets.nix`, which asserts three things: every declared name exists in the file its host would read, every host reading a file is a recipient of it, and no file has a recipient that reads nothing in it. sops leaves the key structure and the recipient list in clear text, so all three are answerable in CI without decrypting anything.
 
 A misspelt name fails the gate:
 
@@ -31,7 +31,11 @@ A misspelt name fails the gate:
 homelab01 (system) declares media-stack/sonar/api, which is not in homelab01.yaml
 ```
 
-That used to be an activation failure at 04:00 on the machine.
+That used to be an activation failure at 04:00 on the machine. So does a key that should not be able to open a file:
+
+```
+xps15.yaml is narrowed but is still encrypted to: homelab01
+```
 
 ## Common operations
 
@@ -53,7 +57,7 @@ cat ~/.config/sops/age/keys.txt | grep "public key:"   # the user key
 ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub          # a host key
 ```
 
-**After adding or removing a key, `sops updatekeys <file>`.** Editing a file with `sops` does not re-key it; the recipient list only changes when you say so.
+**After adding or removing a key, `sops updatekeys <file>`.** Editing a file with `sops` does not re-key it; the recipient list only changes when you say so. See "Re-keying" below for what to check afterwards.
 
 ### After a reinstall
 
@@ -65,29 +69,35 @@ Reinstalling a host regenerates its SSH host key and therefore its age key, and 
 4. `sops updatekeys secrets/<host>.yaml secrets/shared.yaml` — only the files that host reads, which is what the per-host split buys you.
 5. Commit and rebuild.
 
-## Narrowing the recipients
+## Who can open what
 
-The per-host split landed in two parts on purpose, and **part two has not run yet**.
+Every file is encrypted to the keys that read it and to nothing else:
 
-Today every file is still encrypted to all four keys, exactly as `secrets.yaml` and `homelab.yaml` were. What has changed is which file each host *reads*: homelab01 opens `homelab01.yaml` and `shared.yaml` and nothing else. So a mis-scoped secret shows up as a missing name — which the check catches before a deploy — rather than as a host that cannot decrypt.
+| File             | Recipients                     |
+| ---------------- | ------------------------------ |
+| `shared.yaml`    | user, homelab01, homelab02     |
+| `homelab01.yaml` | user, homelab01                |
+| `homelab02.yaml` | user, homelab02                |
+| `xps15.yaml`     | user, xps15                    |
+| `operator.yaml`  | user                           |
 
-`check-secrets` prints what is still outstanding on every run:
+So the laptop cannot decrypt a server secret, neither server can decrypt the other's, and `operator.yaml` is opened by the user key alone. That last row is the one with an operational consequence: **`operator.yaml` has no second key.** Lose `~/.config/sops/age/keys.txt` and nothing else can open it — the host keys, which survive a lost workstation, do not read that file by design.
 
+`checks/secrets.nix` holds this table to the file: all five names are in its `narrowedFiles`, so a key that reappears in a `creation_rule` fails `nix flake check` rather than quietly widening what a machine can read.
+
+This landed as a separate change from the per-host split, on purpose. The split moved secrets between files while every host could still decrypt everything, so a mis-scoped entry surfaced as a missing name in CI; narrowing the recipients afterwards meant a mistake in the split had already been caught. Doing both at once is what would have made the split unrecoverable.
+
+### Re-keying
+
+Changing who can open a file is two steps, and the second is the one people forget:
+
+1. Edit `creation_rules` in `.sops.yaml`.
+2. `sops updatekeys secrets/<file>.yaml` — **editing a file with `sops` does not re-key it.**
+
+`sops updatekeys` re-wraps the data key and leaves the encrypted values alone, so the diff is confined to the `sops:` block at the foot of the file and the ciphertext of every entry is untouched. Confirm both before committing — compare digests, do not print the values:
+
+```bash
+sops -d --output-type json secrets/shared.yaml | sha256sum   # before and after
 ```
-note: xps15.yaml is still encrypted to homelab02 homelab01, which do not read it (step 3 of the re-key)
-```
 
-To finish, once the split has been deployed to both servers and everything that consumes a secret has been seen running:
-
-1. Delete the `# step 3: remove` lines from `creation_rules` in `.sops.yaml`.
-2. `sops updatekeys secrets/shared.yaml secrets/homelab01.yaml secrets/homelab02.yaml secrets/xps15.yaml secrets/operator.yaml`
-3. Add the five file names to `narrowedFiles` in `checks/secrets.nix`, so a key that reappears is a failure rather than a note.
-4. Confirm the diff is only `sops:` metadata and ciphertext, and that the plaintext did not move — compare digests, do not print the values:
-
-   ```bash
-   sops -d --output-type json secrets/shared.yaml | sha256sum   # before and after
-   ```
-
-5. Deploy homelab01 by hand and verify before letting the nightly take homelab02.
-
-Doing this in the same change as the split is what would make the split unrecoverable, which is why it is a separate one.
+Then deploy homelab01 by hand and verify before letting the nightly take homelab02. A host that has lost access to a file it needs fails at activation.

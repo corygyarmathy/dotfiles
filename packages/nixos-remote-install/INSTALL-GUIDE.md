@@ -187,7 +187,11 @@ ssh-to-age < .install-temp/homelab02_ssh_host_ed25519_key.pub
 
 #### Step 4: Update .sops.yaml
 
-Add the age key to your `.sops.yaml`:
+Add the age key to your `.sops.yaml`, and put it in the rules for the files
+this host reads — **its own and `shared.yaml`, and no others.** A host that is a
+recipient of a file it never reads can decrypt secrets it has no use for, which
+is what `secrets/README.md` exists to prevent and what `checks/secrets.nix`
+fails on.
 
 ```yaml
 keys:
@@ -195,12 +199,17 @@ keys:
   - &homelab02 age1abc123...  # The key from step 3
 
 creation_rules:
-  - path_regex: secrets/secrets\.yaml$
+  - path_regex: secrets/shared\.yaml$
     key_groups:
       - age:
           - *coryg
-          - *xps15
           - *homelab01
+          - *homelab02  # Add new host
+
+  - path_regex: secrets/homelab02\.yaml$
+    key_groups:
+      - age:
+          - *coryg
           - *homelab02  # Add new host
 ```
 

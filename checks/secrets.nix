@@ -20,11 +20,12 @@
 #   1. Every `sops.secrets.<name>` any host declares - system or home-manager -
 #      exists in the file that host would read it from.
 #   2. Every host that reads a file is a recipient of it, and so is the user
-#      key. This is the one that makes the re-key (step 3 in secrets/README.md)
-#      safe: removing a key a host still needs fails here rather than on the
-#      next activation.
-#   3. A file whose recipients have been narrowed stays narrowed - see
-#      `narrowedFiles` below.
+#      key. This is the one that made the re-key safe: removing a key a host
+#      still needs fails here rather than on the next activation.
+#   3. A file has no recipient that reads nothing in it - see `narrowedFiles`
+#      below. This is what keeps the split from quietly eroding: a key added
+#      back to a `creation_rule` widens what a machine can decrypt, which is
+#      invisible in a diff of ciphertext and obvious here.
 #
 # It also runs property 1 against a name that is deliberately wrong, so a
 # passing run means the comparison happened rather than that it found nothing
@@ -67,12 +68,19 @@ let
 
   declarations = lib.concatMap (host: systemDecls host ++ homeDecls host) hosts;
 
-  # Step 3 of the re-key has not run for any file yet: every file is still
-  # encrypted to every host, exactly as secrets.yaml and homelab.yaml were, so
-  # the split itself cannot cost a host access to anything. Naming a file here
-  # turns its surplus recipients from a note into a failure, which is what the
-  # step-3 PR does after `sops updatekeys` - one line per file.
-  narrowedFiles = [ ];
+  # Every file has been narrowed to the keys that read it, so a surplus
+  # recipient is a mistake rather than a step still to take. A name here means
+  # "this file's recipient list is final": if a key reappears - a stray anchor
+  # added to a `creation_rule`, or a `sops updatekeys` run against an edited
+  # .sops.yaml - the note above becomes a failure. Every file the fleet reads
+  # is listed, and a new one should be added the moment it is first narrowed.
+  narrowedFiles = [
+    "shared.yaml"
+    "homelab01.yaml"
+    "homelab02.yaml"
+    "xps15.yaml"
+    "operator.yaml"
+  ];
 
   # Property 1 has to be able to fail. A name nothing declares, checked the
   # same way, so a run that reports nothing has actually compared something.
@@ -201,7 +209,7 @@ pkgs.runCommand "check-secrets"
         if jq -e --arg f "$base" '.narrowedFiles | index($f)' "$specPath" > /dev/null; then
           report "$base is narrowed but is still encrypted to: $names"
         else
-          echo "note: $base is still encrypted to $names, which do not read it (step 3 of the re-key)"
+          echo "note: $base is still encrypted to $names, which do not read it - add it to narrowedFiles once it has been re-keyed"
         fi
       fi
     done < files.txt
