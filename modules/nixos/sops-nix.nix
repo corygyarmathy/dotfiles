@@ -92,6 +92,11 @@ in
         # the hash has to be the same or the same password stops working when
         # you SSH to the other one.
         "users/coryg"
+
+        # The deploy-rs user's password hash, for the same reason as coryg's:
+        # the two servers must accept the same interactive sudo password when
+        # the laptop deploys to either of them.
+        "users/deploy"
       ];
     };
   };

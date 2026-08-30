@@ -29,6 +29,13 @@ in
           IdentityFile = [ "~/.ssh/id_github" ];
         };
 
+        # The two homelab servers, reached by name. `User` is spelled out so a
+        # plain `ssh homelab01` works from the laptop; deploy-rs passes its own
+        # `sshUser` on the command line, which overrides it.
+        "homelab01 homelab02" = {
+          User = "coryg";
+        };
+
         "*" = {
           IdentityFile = [ "~/.ssh/id_ed25519_personal" ];
           AddKeysToAgent = "yes";

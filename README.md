@@ -33,7 +33,14 @@ flowchart LR
 ## Working on it
 
 ```bash
-# Iterate on a server without a commit, a push, or a CI round-trip
+# Iterate on a server without a commit, a push, or a CI round-trip.
+# `deploy` (item 6 of the hardening plan) connects as the dedicated `deploy`
+# user and escalates with sudo; its magicRollback reverts a change that cuts
+# the laptop off from the machine. It prompts for the deploy user's sudo
+# password.
+nix deploy .#homelab01
+
+# The long form still works if you want it, with the same caveats as below.
 nixos-rebuild switch --flake .#homelab01 \
   --target-host coryg@homelab01 --elevate=sudo --ask-elevate-password
 
@@ -54,7 +61,7 @@ re-renders whenever a note or the site's stylesheet
 existed, seeing a CSS change meant a full PR -> gate -> merge -> promote ->
 upgrade round trip, which is minutes; the render itself is under a second.
 
-`coryg@`, not `root@` — `cg.ssh-hardening` sets `PermitRootLogin = "no"` and `AllowUsers = [ "coryg" ]`, so root SSH is refused on both servers. `--elevate=sudo` is what then runs the activation as root, and `--ask-elevate-password` is needed because `wheelNeedsPassword` is on. That command is long enough to discourage the iteration it exists for, which is [item 6](docs/plans/deployment-hardening.md) of the hardening plan.
+The `deploy` command above uses `coryg@`-less SSH: it connects as `deploy` and elevates to root with sudo, because `cg.ssh-hardening` sets `PermitRootLogin = "no"` and `AllowUsers` is `coryg` and `deploy` over SSH, so root SSH is refused on both servers. `nixos-rebuild --target-host` needs `--elevate=sudo` and `--ask-elevate-password` for the same reason — `wheelNeedsPassword` is on. `deploy` was [item 6](docs/plans/deployment-hardening.md) of the hardening plan; `nixos-rebuild --target-host` is the fallback.
 
 `flake.lock` is CI's to move — running `nix flake update` by hand only creates a conflict with the nightly PR.
 

@@ -25,6 +25,11 @@
     # Declarative disk partitioning
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Interactive / recovery deployment (item 6 of the hardening plan). The
+    # fleet keeps pulling; this is only the human-driven push from the laptop.
+    deploy-rs.url = "github:serokell/deploy-rs";
+    deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -37,6 +42,7 @@
       stylix,
       sops-nix,
       disko,
+      deploy-rs,
       ...
     }@inputs:
     let
@@ -286,13 +292,53 @@
       # another system needs a builder for it - `nix flake check` would
       # evaluate a whole foreign NixOS system just to skip building it.
       checks = {
-        x86_64-linux = import ./checks {
-          pkgs = import nixpkgs {
-            system = "x86_64-linux";
-            overlays = builtins.attrValues self.overlays;
-            config.allowUnfree = true;
+        x86_64-linux =
+          (import ./checks {
+            pkgs = import nixpkgs {
+              system = "x86_64-linux";
+              overlays = builtins.attrValues self.overlays;
+              config.allowUnfree = true;
+            };
+            inherit self inputs;
+          })
+          // deploy-rs.lib.x86_64-linux.deployChecks self.deploy;
+      };
+
+      # deploy-rs (item 6 of the hardening plan): the laptop pushes a change
+      # to a server and its magicRollback reverts it if the deployer cannot
+      # reconnect over the new configuration - the network-level failure neither
+      # health-gated activation nor boot counting can see.
+      #
+      # This is deliberately NOT the fleet mechanism (ADR 0002): the servers
+      # keep pulling the promoted ref, and deploy-rs is only the human-driven
+      # push when iterating on a service or recovering a host the automated
+      # path cannot reach.
+      #
+      # `sshUser = "deploy"` + `user = "root"` + `interactiveSudo`: deploy-rs
+      # connects as the dedicated deploy user (modules/nixos/deploy-rs.nix) and
+      # escalates to root through sudo, prompting for the deploy user's password
+      # (that host keeps `security.sudo.wheelNeedsPassword = true` and refuses
+      # root SSH).
+      deploy = {
+        nodes = {
+          homelab01 = {
+            hostname = "homelab01";
+            sshUser = "deploy";
+            profiles.system = {
+              user = "root";
+              path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.homelab01;
+            };
+            interactiveSudo = true;
           };
-          inherit self inputs;
+          homelab02 = {
+            hostname = "homelab02";
+            sshUser = "deploy";
+            profiles.system = {
+              user = "root";
+              path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.homelab02;
+            };
+            interactiveSudo = true;
+          };
         };
       };
 
@@ -306,6 +352,9 @@
             age
             ssh-to-age
             (callPackage ./packages/nixos-remote-install { })
+            # The `deploy` command for item 6 of the hardening plan - a short
+            # interactive push to homelab01/homelab02 with magic rollback.
+            deploy-rs.packages.${system}.deploy-rs
           ];
         };
       });
