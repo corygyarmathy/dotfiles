@@ -13,7 +13,7 @@
 #
 # Imported by every host. ./server.nix and ./workstation.nix sit on top of this
 # file and are imported alongside it, not instead of it.
-{ ... }:
+{ pkgs, ... }:
 {
   # ============================================================================
   # Boot
@@ -64,6 +64,19 @@
     isNormalUser = true;
     extraGroups = [ "wheel" ];
   };
+
+  # ============================================================================
+  # Terminfo
+  # ============================================================================
+  # Ghostty advertises TERM=xterm-ghostty, and any machine in this fleet is a
+  # possible SSH target, so every one of them must be able to resolve that
+  # terminal name. systemPackages is what makes it work: its share/terminfo is
+  # collated into /run/current-system/sw/share/terminfo, and NixOS login shells
+  # export TERMINFO_DIRS with that path via /etc/set-environment - the same
+  # mechanism that supplies xterm-256color from ncurses. This covers interactive
+  # SSH and sudo; a non-interactive `ssh host 'command'` does not read
+  # /etc/set-environment.
+  environment.systemPackages = [ pkgs.ghostty.terminfo ];
 
   # ============================================================================
   # Environment
