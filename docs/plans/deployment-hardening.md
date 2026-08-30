@@ -1,10 +1,10 @@
 # Plan: hardening the deployment pipeline
 
-Status: extended 2026-08-24 with items 8 and 9, neither of which is new work so much as work item 4 named and did not do. Revised 2026-08-16 to follow [ADR 0002](../adr/0002-protect-at-activation-not-in-the-rollout.md), which retires the staged rollout and moves protection to activation time. Supersedes the earlier version of this plan, whose "health-gate the canary promotion" item is dropped along with the canary itself.
+Status: extended 2026-08-24 with items 8 and 9, neither of which is new work so much as work item 4 named and did not do. Item 10 added 2026-08-30 as the parked security half of item 6. Revised 2026-08-16 to follow [ADR 0002](../adr/0002-protect-at-activation-not-in-the-rollout.md), which retires the staged rollout and moves protection to activation time. Supersedes the earlier version of this plan, whose "health-gate the canary promotion" item is dropped along with the canary itself.
 
 Already in place, and assumed by everything below: the deployment metrics in `modules/services/monitoring/deploy-metrics.nix` and the `NixosDeployFailed` / `NixosDeployStale` / `NixosRebootPending` rules in `modules/services/monitoring/alert-rules.yml`. No new monitoring work is required to start.
 
-Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md), plus two added on 2026-08-24. The first two are small and independent; the rest can proceed in any order once they are in.
+Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md), plus two added on 2026-08-24 and one parked on 2026-08-30. The first two are small and independent; the rest can proceed in any order once they are in.
 
 | #   | Item                      | Size    | Status                                                   |
 | --- | ------------------------- | ------- | -------------------------------------------------------- |
@@ -13,9 +13,10 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 | 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
 | 4   | Behaviour tests           | large   | **harness + 3 tests landed** - `media-stack` waits on the container move |
 | 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
-| 6   | `deploy-rs` interactively | small   | not started - one prerequisite removed                   |
+| 6   | `deploy-rs` interactively | small   | **done** 2026-08-30 - `homelab01` deployed end to end with `magicRollback` confirmation; `homelab02` still needs its bootstrap switch + first deploy |
 | 8   | Download-root canary      | small   | not started - the replacement item 4 named and skipped   |
 | 9   | Reachability from outside | small   | not started - the last gap whose recovery is physical    |
+| 10  | Deploy-user sudo on SSH keys | small | not started - the security half of item 6, parked by the operator 2026-08-30 |
 
 ### Where this stands, 2026-08-16
 
@@ -399,6 +400,7 @@ That does not make the property unenforceable, it makes it the wrong shape for t
 
 - ~~`digital-garden`~~ **done** - see below.
 - `media-stack` - the largest of the candidates, and now waiting on the migration off `oci-containers` rather than on anything in this harness. Taking it before that migration means pinning image digests that are about to become irrelevant.
+
 ### KVM and cost, answered on the first run (#32)
 
 Both open questions from "Cost and risks" are now measured rather than guessed, and both came out well.
@@ -427,7 +429,7 @@ Which answers the auto-merge question the risks section raised: the tests do not
 
 The prediction at #422 ("the number to watch is `flake-check` overtaking `build xps15`") came true. The alerting subtests landed after this section was written, and one of them waits out the warning route's production `group_wait` of five minutes to prove delivery, which took `monitoring` from **71s to ~383s** and pushed `flake check` from **3m18s to ~8m30s**.
 
-The fix distinguishes two things the test was conflating. A VM test should prove that a warning-severity alert *routes* to push with the right priority and survives inhibition - not that it waits the production five minutes. The `5m` value is structural config, and it is already pinned by the `amtool` check (`alertmanager-config`), which evaluates the assembled Alertmanager config with the default. So `group_wait` became an option, `cg.service.monitoring.alertmanager.ntfy.warningGroupWait` (default `5m`), the `monitoring` test sets it to `5s`, and production is unchanged. `ci.yml` also passes `--max-jobs 5` to `nix flake check` so all five VM tests boot concurrently instead of four-plus-one. Result: `flake-check` is bounded by `upgrade-verify` (~2.5m), comfortably back inside the host build.
+The fix distinguishes two things the test was conflating. A VM test should prove that a warning-severity alert _routes_ to push with the right priority and survives inhibition - not that it waits the production five minutes. The `5m` value is structural config, and it is already pinned by the `amtool` check (`alertmanager-config`), which evaluates the assembled Alertmanager config with the default. So `group_wait` became an option, `cg.service.monitoring.alertmanager.ntfy.warningGroupWait` (default `5m`), the `monitoring` test sets it to `5s`, and production is unchanged. `ci.yml` also passes `--max-jobs 5` to `nix flake check` so all five VM tests boot concurrently instead of four-plus-one. Result: `flake-check` is bounded by `upgrade-verify` (~2.5m), comfortably back inside the host build.
 
 ### It outgrew it again two days later, 2026-08-28
 
@@ -451,11 +453,11 @@ The assertions are written the other way round from the obvious ones. A test tha
 
 **Every assertion here was checked against a deliberate break**, because on this test more than the others a false pass is the expected failure mode:
 
-| Break                                                    | Host build | Test  | Caught by                                     |
+| Break | Host build | Test | Caught by |
 | -------------------------------------------------------- | ---------- | ----- | ---------------------------------------------- |
-| `-d ${stateDir}/content` → `-d ${vaultDir}`               | exit 0     | fails | flattening/URL assertions                     |
-| fixture note flipped to `publish: true`                   | -          | fails | staging tree, then the leak grep              |
-| `cat … >> custom.scss` → `cat … > custom.scss`            | exit 0     | fails | `.flex-component` missing from the served CSS |
+| `-d ${stateDir}/content` → `-d ${vaultDir}` | exit 0 | fails | flattening/URL assertions |
+| fixture note flipped to `publish: true` | - | fails | staging tree, then the leak grep |
+| `cat … >> custom.scss` → `cat … > custom.scss` | exit 0 | fails | `.flex-component` missing from the served CSS |
 
 Two of those three build perfectly and would have merged, deployed and served.
 
@@ -469,11 +471,11 @@ Two of those three build perfectly and would have merged, deployed and served.
 
 ### `digital-garden` again, 2026-08-24: the generator changed underneath it
 
-The site moved from Quartz to Hugo, and the test had to be rewritten rather than adjusted - which is the interesting part, because it was the *assertions* that were generator-shaped, not the properties.
+The site moved from Quartz to Hugo, and the test had to be rewritten rather than adjusted - which is the interesting part, because it was the _assertions_ that were generator-shaped, not the properties.
 
-**The failure mode the test guards against changed, and shrank.** Under Quartz it was a build that succeeded while producing a featureless site: a plugin that failed to instantiate left an undefined in the component list, and a plugin index regenerated without `dist/` yielded a site that was green all the way through and empty. Hugo removes most of that class - a template that does not resolve is a build error, and there are no plugins to resolve. What remains is narrower and still real: a *missing* template is not an error. Hugo skips the pages it would have rendered and reports success. The first Hugo build of this site emitted the home page and nothing else, and said `Total in 40 ms` while doing it. Every assertion that looked only at the home page passed.
+**The failure mode the test guards against changed, and shrank.** Under Quartz it was a build that succeeded while producing a featureless site: a plugin that failed to instantiate left an undefined in the component list, and a plugin index regenerated without `dist/` yielded a site that was green all the way through and empty. Hugo removes most of that class - a template that does not resolve is a build error, and there are no plugins to resolve. What remains is narrower and still real: a _missing_ template is not an error. Hugo skips the pages it would have rendered and reports success. The first Hugo build of this site emitted the home page and nothing else, and said `Total in 40 ms` while doing it. Every assertion that looked only at the home page passed.
 
-So the stylesheet assertions - `.flex-component`, `.desktop-only`, `.table-container`, chosen because they came from `base.scss` and nowhere else - were retired along with the file they were defending, and replaced by assertions that *every published note became a page*, plus that it is served on the first request rather than after a 308.
+So the stylesheet assertions - `.flex-component`, `.desktop-only`, `.table-container`, chosen because they came from `base.scss` and nowhere else - were retired along with the file they were defending, and replaced by assertions that _every published note became a page_, plus that it is served on the first request rather than after a 308.
 
 **Three assertions were coupled to Quartz's output layout, not to anything the site promises.** `test -f public/index.css` (Hugo fingerprints its CSS, so there is no fixed name), `cat public/on-gates.html` (Hugo writes `on-gates/index.html`), and `url=../on-gates` in the alias redirect (Quartz wrote it relative, Hugo absolute). All three were checking the shape of the output tree, which is the generator's business, when what matters is what a reader receives. They now read the stylesheet URL off the page that links it, request pages over HTTP, and match the redirect target loosely.
 
@@ -522,6 +524,20 @@ The fleet mechanism. The servers keep pulling. Mutual push - each server deployi
 ### Done when
 
 `deploy homelab02` from the laptop is one short command, and a deliberately broken firewall rule reverts itself instead of requiring a trip to the cupboard.
+
+### Landed, 2026-08-30
+
+Implemented on `feat/deploy-rs-interactive` and proven live on `homelab01`: `nix develop -c deploy .#homelab01` built, copied, activated through `interactiveSudo`, and the reconnect confirmation returned with "Deployment confirmed." The bootstrapping had to happen twice over the existing `coryg` path (creating the user, then re-applying after the shell fix below), and the run surfaced three facts worth recording:
+
+- **A deploy user needs a real login shell.** System users default to shadow's `nologin`; deploy-rs's `nix-store --serve` remote command runs through the user's shell, so the default prints "This account is currently not available." and every deploy fails at the copy step. `modules/nixos/deploy-rs.nix` sets `shell = pkgs.bash`.
+- **A stale SSH control-master socket defeats the fix entirely.** `~/.ssh/config` uses `ControlMaster auto` + `ControlPersist 10m`. A mux socket created during the failed runs cached the old account state, and every subsequent `deploy` reused it and kept failing with the same message - while a fresh `ssh -o ControlPath=none deploy@homelab01` worked. Killing the socket (`ssh -O exit -S .../S.deploy@homelab01:22`) fixed it. The socket needs a per-host kill after any deploy-account change like this.
+- **The hashed deploy password has to come from sops** because servers run `mutableUsers = false` and `wheelNeedsPassword = true`; deploy-rs prompts for it via `interactiveSudo`. `users/deploy` was added to `secrets/shared.yaml`.
+
+`homelab02` still needs its one-time bootstrap switch (same commands as `homelab01`) and a first live deploy to close the item's "done when".
+
+### Item 10, parked here
+
+See [item 10](#10-deploy-account-sudo-on-ssh-keys-instead-of-a-hashed-password): replacing `interactiveSudo`'s hashed-password prompt with key-bound sudo for the `deploy` account only. Out of scope for the initial item-6 deploy, deliberately, since it touches sudo policy on every server.
 
 ---
 
@@ -622,3 +638,42 @@ Worth noting the interaction with item 6: `magicRollback` reverts a change that 
 ### Done when
 
 Something not running on the affected host notices that the host has stopped answering, and says so somewhere a person will see.
+
+---
+
+## 10. Deploy-account sudo on SSH keys instead of a hashed password
+
+_Added 2026-08-30, parked by the operator during item 6 - the deploy works, and this is the security half to revisit separately._
+
+### The problem
+
+Item 6 deploys with `interactiveSudo` against a `deploy` account whose password hash is stored in sops (`users/deploy` in `secrets/shared.yaml`). deploy-rs itself warns on every run that an interactive sudo password is weaker than key-bound sudo. The SSH hop to the host already uses the laptop's key; the sudo hop to root is the remaining password.
+
+The obstacle is that servers set `security.sudo.wheelNeedsPassword = true` and the deploy account is a wheel member - so today, disabling the prompt for it means weakening sudo for `coryg` too, which is not acceptable.
+
+### Approach
+
+Keep `wheelNeedsPassword` true for the human, and give the `deploy` account a passwordless-sudo exception scoped to exactly what deploy-rs runs, via a dedicated sudoers rule that does not touch the `%wheel` policy:
+
+```nix
+security.sudo.extraRules = [
+  {
+    users = [ cfg.username ];
+    commands = [ { command = "${config.system.build.activate}/bin/activate-rs"; options = [ "NOPASSWD" ]; } ];
+  }
+];
+```
+
+Confirmed against deploy-rs: the escalation is only the profile activation binary (`activate-rs`), so a `NOPASSWD` on that one path closes the last password without opening the account to arbitrary sudo. Then `interactiveSudo` can be dropped from the `deploy.nodes` block, removing the per-deploy prompt and the hashed password requirement.
+
+Two checks to add when built: that `sudo -n` as `deploy` actually reaches the activation command, and that `sudo` still prompts for `coryg` afterwards (a `%wheel` rule must not be accidentally overridden).
+
+### Explicitly not
+
+- `NOPASSWD` for all of `%wheel`.
+- Allowing the `deploy` user `ALL` commands - the whole point is confining to the activation path.
+- Reconsidering `wheelNeedsPassword` globally - it is a deliberate server posture.
+
+### Done when
+
+`deploy .#homelab01` (and `.=homelab02`) run with no sudo password prompt, the `users/deploy` secret in sops can be retired, and `coryg`'s own sudo still asks for a password.

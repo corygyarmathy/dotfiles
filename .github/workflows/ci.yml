@@ -170,6 +170,8 @@ jobs:
           - bless-boot-guard
           - digital-garden
           - digital-garden-sync-health
+          - deploy-schema
+          - deploy-activate
           - grafana
           - monitoring
           - publish

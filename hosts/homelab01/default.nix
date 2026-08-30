@@ -87,6 +87,15 @@ in
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPWfMUll4YosHtfkgs/68GAaszVU/VM94IrQzz4xZuPN restic-backup"
       ];
     };
+    # The account deploy-rs connects as when the laptop pushes a change (item 6
+    # of the hardening plan). Only the laptop needs to reach it, so only the
+    # laptop's key is authorized.
+    deploy-rs = {
+      enable = true;
+      authorizedKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGN2/Vvyb3abKAxdCYt9pxGgOho5uqtNzhpXVxGVw1gq coryg@xps15"
+      ];
+    };
     kernel-hardening = {
       enable = true;
       level = "desktop";
