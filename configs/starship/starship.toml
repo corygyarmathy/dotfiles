@@ -178,8 +178,13 @@ unknown_indicator = '?_'
 format = '[ $indicator ]($style)'
 style = "bg:bg_dark fg:fg"
 
+# Disabled: the sudo module probes `sudo -Nnv` on every prompt render to check
+# the credential cache. Combined with the short `timestamp_timeout=5` sudoers
+# setting and multiple terminals sharing the same user's sudo cache, this
+# caused periodic 2-3s freezes across all terminals at once (starship reported
+# "Executing command 'sudo' timed out"). sudo itself is unaffected.
 [sudo]
-disabled = false
+disabled = true
 style = "bg:bg_dark fg:fg"
 symbol = '󱕴 '
 format = '[$symbol]($style)'
