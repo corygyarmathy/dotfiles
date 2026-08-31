@@ -1088,9 +1088,19 @@ h4:hover > .heading-anchor,
   /* Follows the viewport rather than being chosen once, because the tree's
    * width is a function of the vault - it is as many characters wide as it
    * grew, and nothing here can decide that. The floor is what keeps a full
-   * canopy on a phone; the ceiling is where a cell stops reading as a leaf and
-   * starts reading as a piece of punctuation. */
-  font-size: clamp(0.5rem, 1.7vw, 1rem);
+   * canopy on a phone.
+   *
+   * The ceiling was 1rem, and the taste pass raised it: at 1rem the tree came
+   * out under half the width of the measure and read as a sketch of itself
+   * rather than as the page's one picture. 1rem was the size at which a
+   * TWO-HUNDRED-note tree still fits the measure without scrolling, which is a
+   * vault ten times the size of this one, and paying for it today is what kept
+   * the picture small. At 1.25rem every vault up to about a hundred notes
+   * still fits; past that `.bonsai-plate` scrolls, which is what its
+   * `overflow-x` is for. Item 19 composes this page around the tree and may
+   * want the scale again - this is the size it should start from, not a
+   * decision that item has to undo. */
+  font-size: clamp(0.5rem, 2vw, 1.25rem);
   /* A character cell is about twice as tall as it is wide before leading is
    * added, and the pad geometry in bonsai.py is built on that ratio - it
    * halves x when it orders a pad's cells by distance. Tightening the line box

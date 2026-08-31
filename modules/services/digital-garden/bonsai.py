@@ -57,16 +57,52 @@ Note = collections.namedtuple("Note", "title url words stage topic")
 # the tree that was looked at and agreed to.
 DEFAULT_SEED = 7
 
-# Branch count is `round(sqrt(notes) * SPREAD)`, clamped. SPREAD is the one
-# knob the taste pass is expected to move: lower packs the same notes onto
-# fewer, heavier limbs, higher opens the canopy into more, lighter ones. At
-# 1.7, eighteen notes get 7 branches, sixty get 13, two hundred get 18.
+# Branch count is `round(sqrt(notes) * SPREAD)`, clamped: lower packs the same
+# notes onto fewer, heavier limbs, higher opens the canopy into more, lighter
+# ones. At 1.7, eighteen notes get 7 branches, sixty get 13, two hundred get
+# 18. The taste pass expected to move this one and did not: at 1.4 the canopy
+# closes into a single blob, at 2.1 it breaks into scattered small pads, and
+# 1.7 was still the best of the three once the trunk numbers below were fixed.
 SPREAD = 1.7
 MIN_BRANCHES = 3
 # Not a limit on notes - a limit on WOOD. Past this the canopy keeps filling in
 # and the trunk stops sprouting new limbs, which is the whole mechanism for
 # staying a tree rather than becoming a thicket.
 MAX_BRANCHES = 18
+
+# The trunk's length in steps is `TRUNK_BASE + round(branches * 0.8)`, so a
+# bigger vault gets a little more wood to hang it on. TRUNK_BASE was 13 and is
+# the number the taste pass moved most. A trunk climbs a row on about seven steps in ten, so
+# thirteen steps of trunk is most of the canvas's height, and the canopy - which
+# only starts where the first branch forks - had nowhere to sit but on top of
+# it. That is the "ball on a stick" the plan recorded as this item's known open
+# problem, and it was a third of the tree's height on average.
+TRUNK_BASE = 8
+
+# Where the branches leave the trunk, as fractions of its length: the first at
+# FORK_LO, the last at FORK_LO + FORK_SPAN, evenly spaced between. These were
+# 0.55 and 0.44 - every branch forking from the top 45% - which is the other
+# half of the ball on a stick. At 0.35 the lowest branch sits about a third of
+# the way up, which is where the first branch of a trained bonsai goes.
+#
+# Nothing sprouts from the soil at 0.35, and the guarantee is not this number:
+# it is `ceiling` and the no-descent rule in `branch`, which are what actually
+# hold foliage off the ground. FORK_LO is free to be a taste decision because
+# those two are not.
+FORK_LO = 0.35
+FORK_SPAN = 0.55
+
+# How far the trunk may wander from its base before its lean turns back, in
+# columns. The lean has to PERSIST across steps - a fresh sideways sign every
+# step averages to a vertical trunk, which is the bug the trunk loop's own
+# comment records -
+# but a lean that persists and only reverses at random walks the trunk out from
+# under its own canopy, so the tree reads as falling over. Reversing more often
+# would fix that by re-creating the bug it is there to prevent. This reins the
+# trunk in instead: the lean is as persistent as it ever was, and turns back
+# when the trunk has swept this far out and is still going. Over the same 48
+# trees it takes the average base-to-canopy offset from 6.6 columns to 2.8.
+LEAN_REIN = 7
 
 # The canvas. Wide enough for the widest branch reach (the trunk wanders, and a
 # branch is clamped to 30 columns either side of it, with a pad another 7 wide
@@ -325,17 +361,21 @@ def grow(notes, seed=DEFAULT_SEED, spread=SPREAD):
             for index in at.get(step, ()):
                 foliage(x, y, index, notes[index])
 
-    trunk_life = 13 + _round(branches * 0.8)
-    # Branches leave the upper half of the trunk only, so that nothing sprouts
-    # out of the soil. Clamped to the last trunk step, because unclamped the
-    # final fork point landed one step PAST the end of the trunk: that branch
-    # never grew, and the notes riding on it were silently missing from the
-    # tree. The assertion at the foot of this function is what caught it.
+    trunk_life = TRUNK_BASE + _round(branches * 0.8)
+    # Branches leave the trunk from FORK_LO of the way up it, so the lowest
+    # limb sits above the ground without the canopy sitting above the tree.
+    # Clamped to the last trunk step, because unclamped the final fork point
+    # landed one step PAST the end of the trunk: that branch never grew, and
+    # the notes riding on it were silently missing from the tree. The assertion
+    # at the foot of this function is what caught it.
     fork_at = {}
     for i in range(branches):
         step = min(
             trunk_life - 1,
-            _round(trunk_life * 0.55 + (i / max(1, branches - 1)) * trunk_life * 0.44),
+            _round(
+                trunk_life * FORK_LO
+                + (i / max(1, branches - 1)) * trunk_life * FORK_SPAN
+            ),
         )
         fork_at.setdefault(step, []).append(i)
 
@@ -346,6 +386,11 @@ def grow(notes, seed=DEFAULT_SEED, spread=SPREAD):
         # reverses occasionally instead, so the trunk sweeps out and doubles
         # back the way a trained bonsai does.
         if ri(10) > 7:
+            lean = -lean
+        # And it is reined in: past LEAN_REIN columns from the base, a lean
+        # still heading away from it turns back. See LEAN_REIN for why this is
+        # not just "reverse more often".
+        if abs(tx - centre) >= LEAN_REIN and (tx - centre) * lean > 0:
             lean = -lean
         dy = -1 if ri(10) > 2 else 0
         dx = lean * (2 if ri(10) > 7 else 1)
