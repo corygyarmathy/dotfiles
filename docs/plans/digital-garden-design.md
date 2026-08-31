@@ -23,7 +23,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-
 | 17  | A margin on every note              | medium | 14         | not started |
 | 18  | The bonsai                          | large  | 14         | not started |
 | 19  | The home page, composed once        | small  | 18         | not started |
-| 20  | Ambient Life on the 404             | small  | -          | not started |
+| 20  | Ambient Life on the 404             | small  | -          | **done** 2026-08-31 |
 | -   | Graph view                          | -      | -          | **rejected**, see below; the bonsai is not a revisit |
 
 ## Decisions, 2026-08-31
@@ -604,6 +604,14 @@ Two hours, and it is the largest change in how the site feels for the least code
 Conway's Game of Life, seeded from an R-pentomino, running quietly in `--border` on the 404 page. About a kilobyte, paused when scrolled out of view and when `prefers-reduced-motion` is set.
 
 It is the one thing on this list that reports nothing — the cells are cells, not notes — which is why it is confined to the page where the reader has nothing to read. It is deliberately **not** on the home page: two growing things on one screen is one too many, the same argument that removed the seedling from item 19.
+
+### Shipped, 2026-08-31
+
+One `<canvas>` and one inline script in `layouts/404.html`. The plan guessed "about a kilobyte"; the script is about 2.5KB of code, and Caddy's gzip makes it about 1.3KB on the wire — the number that matters for a page this rare, and the estimate was optimistic about how much the two pauses and the reseed cost. The placement is the rail's trick applied to the one page whose margin is always empty: beside the prose at wide widths, beneath it below the breakpoint, one piece of markup for both. The cells read `--border` from the computed style each frame, so a theme change while the page is open repaints in the new one with nothing to observe it.
+
+One thing the build made obvious that the plan did not say: on a 40×26 grid the R-pentomino's gliders fly off the edges and the rest settles, so the page goes still within a minute. The reseed when the population stops changing is what keeps it alive — the plan named the seed and not the cycle, and the cycle is the difference between life and a screenshot.
+
+Both pauses are behaviour, so the VM check runs the page in headless Chromium rather than grepping for it: the script writes its running state and population back to the canvas as data-attributes, and the check reads those to assert it runs, that it pauses under `prefers-reduced-motion`, and that it pauses out of view — plus the plan's own "not on the home page" pinned as a negative. No cost over the estimate; the Chromium machinery was already in the test.
 
 ## Rejected: a graph view
 
