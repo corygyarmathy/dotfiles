@@ -336,6 +336,9 @@ in
 
     cross-seed = {
       enable = true;
+      # Prowlarr runs on the gateway; cross-seed reaches it by address, not
+      # hostname (see the prowlarrUrl option in the module).
+      prowlarrUrl = "http://${fleet.hosts.${gateway}.address}:9696";
       # Your private tracker indexer IDs from Prowlarr
       # Find at: Prowlarr -> Indexers -> click tracker -> ID in URL
       torznabIndexerIds = [ 8 ]; # IPT

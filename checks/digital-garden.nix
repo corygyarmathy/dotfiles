@@ -252,6 +252,20 @@
           secrets."digital-garden/obsidian-token" = "not-a-real-obsidian-token";
           templates."digital-garden-obsidian-env" = "OBSIDIAN_AUTH_TOKEN=not-a-real-obsidian-token\n";
         })
+        # The module asserts cg.service.reverse-proxy.enable is on - its Caddy
+        # vhost depends on Caddy, which the reverse proxy enables on a real
+        # host. Declare just that toggle here (rather than importing the whole
+        # reverse-proxy module with its Cloudflare plugin build) so this test
+        # keeps exercising only the digital garden.
+        (
+          { lib, ... }:
+          {
+            options.cg.service.reverse-proxy.enable = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+            };
+          }
+        )
       ];
 
       cg.service.digital-garden = {
@@ -262,9 +276,11 @@
         baseUrl = "garden.test.invalid";
       };
 
-      # The module adds a virtual host but never enables Caddy - on a real host
-      # that comes from cg.service.reverse-proxy. Enabling it directly keeps
-      # this test to the one module under examination.
+      # The module asserts cg.service.reverse-proxy.enable is on (declared by
+      # the module added to imports above); satisfy it, then enable Caddy
+      # directly rather than through the reverse proxy so this test keeps
+      # exercising only the one module under examination.
+      cg.service.reverse-proxy.enable = true;
       services.caddy.enable = true;
 
       # The half of the module that wants the network. It would restart every

@@ -29,8 +29,14 @@ let
   # Where the two fleet-wide duties live. Everything below is expressed
   # against these rather than against host names, so moving a duty to another
   # machine is an edit to fleet/default.nix and nothing else.
-  gateway = fleet.hosts.${fleet.roles.gateway}.address;
-  storage = fleet.hosts.${fleet.roles.storage}.address;
+  #
+  # Looked up defensively so that a fleet without these roles fails the
+  # assertions below with a message naming the role, rather than as
+  # "attribute 'gateway' missing" halfway through building the rewrites.
+  gatewayName = fleet.roles.gateway or null;
+  storageName = fleet.roles.storage or null;
+  gateway = if gatewayName == null then "" else fleet.hosts.${gatewayName}.address or "";
+  storage = if storageName == null then "" else fleet.hosts.${storageName}.address or "";
 
   # Every host that has a reserved address resolves by name. The laptop does
   # not have one, which is why this filters rather than mapping the lot.
@@ -257,6 +263,23 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = gateway != "";
+        message = ''
+          cg.service.adguard-home requires cg.fleet.roles.gateway to name a
+          host with an address - every unlisted subdomain rewrites to it.
+        '';
+      }
+      {
+        assertion = storage != "";
+        message = ''
+          cg.service.adguard-home requires cg.fleet.roles.storage to name a
+          host with an address - the storage host's own services rewrite to it.
+        '';
+      }
+    ];
+
     # The web UI. Both instances run this module, so the hostname is the one
     # part a host has to choose for itself - the secondary answers to
     # `adguard2`, which is the name in the storage host's rewrite list above.

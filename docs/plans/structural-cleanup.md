@@ -1,6 +1,6 @@
 # Plan: structural cleanup
 
-Status: drafted 2026-08-28. Items 0 and 1 landed the same day, items 2 and 3 on 2026-08-29. Item 4 was a three-step item: step 1 landed on 2026-08-29, and steps 2 and 3 — the deploy and the re-key that finishes it — on 2026-08-30. Items 5 to 7 have not started.
+Status: drafted 2026-08-28. Items 0 and 1 landed the same day, items 2 and 3 on 2026-08-29. Item 4 was a three-step item: step 1 landed on 2026-08-29, and steps 2 and 3 — the deploy and the re-key that finishes it — on 2026-08-30. Items 5 to 8 have not started.
 
 This is a refactoring plan, not a feature plan. Almost none of it changes what the fleet does; most of it changes where a fact is written down and who is allowed to read it. Two items are exceptions and are marked as such — the secrets re-key (item 4) and closing the service ports (item 5) both change behaviour on running machines. Items 1 and 2 are marked `minor`: each changed a handful of lines of generated configuration, and each lists them under what it landed. Item 2's are the probe list it exists to fix.
 
@@ -16,6 +16,7 @@ The pipeline, the checks harness and the documentation are in good shape and are
 | 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       | not started           |
 | 6   | Decouple modules from the fleet   | small  | no                | 1          | not started           |
 | 7   | Documentation follows the code    | small  | no                | 1–6        | not started           |
+| 8   | AdGuard rewrites follow cg.publish | medium | minor             | 2          | not started           |
 
 Suggested order is the numbering. Item 0 first because the gate is currently over budget and every later PR pays that cost. Items 1–3 are one continuous piece of work and are only split because each has a natural landing point. Items 4 and 5 are the two that need a deliberate deploy and a rollback plan, and both are much easier once item 1 exists.
 
@@ -479,7 +480,7 @@ The in-app configuration is the part no check can cover — the same limitation 
 
 Reusable modules carry knowledge of this specific installation, which is what makes them not reusable. Item 1 took the literals out; what it did not do is make the defaults right for a machine outside this fleet.
 
-- `modules/services/adguard-home.nix` — the literal host-to-address map is gone, but the module now *requires* `cg.fleet.roles.gateway` and `.storage` to name real hosts, and its `gatewaySubdomains` / `storageSubdomains` lists are still this installation's service map living in a general-purpose DNS module. That is item 2's to move; what belongs here is that the module should say so rather than failing on a missing attribute.
+- `modules/services/adguard-home.nix` — the literal host-to-address map is gone, but the module now *requires* `cg.fleet.roles.gateway` and `.storage` to name real hosts, and its `gatewaySubdomains` / `storageSubdomains` lists are still this installation's service map living in a general-purpose DNS module. Item 2 was meant to move these into `cg.publish` and did not: the lists are the one copy of the fleet's service map that the registry does not drive. The reason is structural rather than an oversight — `cg.publish` is per-host, so a host cannot see what its peer publishes, while a resolver's rewrite list is a fleet-wide view — so it is an open follow-up (item 8) rather than part of this item. What belongs here is only that the module should say so rather than failing on a missing attribute.
 - `modules/services/media-stack/cross-seed.nix` — `prowlarrUrl` still defaults to the gateway host's address, i.e. the module still defaults to another machine in this fleet.
 - `modules/services/immich.nix:111` — `DB_PASSWORD=changeme-use-sops-for-real-deployment`. The service is disabled everywhere, so this is not live, but a literal password in a module is the kind of thing that survives being enabled.
 - `modules/services/digital-garden/digital-garden.nix` — adds a Caddy virtual host without enabling Caddy. Already noted in the hardening plan as "a coupling that is invisible until it bites"; it should be an assertion.
@@ -519,6 +520,53 @@ Two things worth adding rather than updating: an ADR for the fleet layer (the ch
 ### Done when
 
 A reader can answer "where does this belong?" from `modules/README.md`, and no document restates a fact that `fleet/` now holds.
+
+---
+
+## 8. AdGuard rewrites follow cg.publish
+
+### The problem
+
+`modules/services/adguard-home.nix` still carries `gatewaySubdomains` and
+`storageSubdomains`, two hand-written lists of which subdomain is fronted by
+which host's Caddy. They are the one copy of the fleet's service map that item
+2's `cg.publish` registry does not drive, so adding or moving a service updates
+`cg.publish` but not DNS. The failure is silent and points the wrong way: a
+service moved to the storage host's Caddy keeps resolving to the gateway, whose
+Caddy has no certificate for it, so it surfaces as a TLS error rather than a DNS
+one — the lists' own comment says this.
+
+### Approach
+
+Item 2 could not move these: `cg.publish` is per-host and a host cannot see what
+its peer publishes, while the primary resolver's rewrite list is a fleet-wide
+view — it has to answer for the storage host's subdomains too. What is
+missing is a cross-host union of `cg.publish`, which nothing in the tree builds.
+
+Two directions, in order of preference:
+
+1. Derive the rewrites from the registry. Expose a fleet-wide view of
+   `cg.publish` (the flake already evaluates every host, so this is a read at
+   flake level rather than new module-system framework) and turn each published
+   entry into a rewrite to the host that carries it, keeping the wildcard
+   fallback and the apex entry.
+2. If the union is not worth the framework, add a check that the hand-written
+   lists and the union of `cg.publish` agree, so drift fails `nix flake check`
+   instead of failing as a TLS error on the LAN.
+
+### Done when
+
+Either a published subdomain is rewritten automatically with no hand-written
+list, or a list that disagrees with `cg.publish` fails the gate.
+
+### Risks
+
+The union is the whole job and it is easy to over-build: the resolver needs only
+"which host fronts which subdomain", not a second publication registry. Keep the
+wildcard fallback, which the host-alive beacons deliberately rely on (see the
+wildcard comment in `adguard-home.nix`). Diff the generated rewrites against the
+current lists before landing; if they come out byte-identical this is a
+`no`-behaviour change and the only risk is getting the union wrong.
 
 ---
 

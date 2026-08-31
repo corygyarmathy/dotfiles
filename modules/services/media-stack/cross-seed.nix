@@ -75,6 +75,10 @@ let
   # When VPN disabled: cross-seed is on arr-network, uses container hostname
   effectiveQbtHost = if qbt.vpn.enable then "localhost" else cfg.qbittorrentHost;
 
+  # Empty when prowlarrUrl is unset, so the assertion below is what reports a
+  # missing URL rather than a "cannot coerce null to a string" from here.
+  prowlarrBase = lib.optionalString (cfg.prowlarrUrl != null) cfg.prowlarrUrl;
+
   # Build Torznab URL list for config.
   # This used the reverse proxy hostname, on the stated grounds that it worked
   # under both VPN and non-VPN configurations. It did not: under VPN this
@@ -82,7 +86,7 @@ let
   # the prowlarrUrl option.
   torznabUrlList = lib.concatMapStringsSep ",\n    " (
     id:
-    ''"${cfg.prowlarrUrl}/${toString id}/api?apikey=${
+    ''"${prowlarrBase}/${toString id}/api?apikey=${
       config.sops.placeholder."media-stack/prowlarr/api"
     }"''
   ) cfg.torznabIndexerIds;
@@ -184,9 +188,6 @@ let
   '';
 in
 {
-  # Reads config.cg.fleet, so it declares it - see modules/nixos/fleet.nix.
-  imports = [ ../../nixos/fleet.nix ];
-
   options.cg.service.cross-seed = {
     enable = lib.mkEnableOption "cross-seed for private tracker ratio building";
 
@@ -197,9 +198,8 @@ in
     };
 
     prowlarrUrl = lib.mkOption {
-      type = lib.types.str;
-      default = "http://${config.cg.fleet.hosts.${config.cg.fleet.roles.gateway}.address}:9696";
-      defaultText = lib.literalExpression "the gateway host's address on port 9696";
+      type = lib.types.nullOr lib.types.str;
+      default = null;
       example = "http://prowlarr:9696";
       description = ''
         Base URL for Prowlarr's Torznab feeds. An address, not a hostname, and
@@ -213,6 +213,11 @@ in
         Reaching
         Prowlarr by address avoids resolution entirely, and Gluetun's
         FIREWALL_OUTBOUND_SUBNETS already permits the LAN.
+
+        Required, and therefore no default: the obvious default would name the
+        gateway host of whichever fleet this module happens to be in, which is
+        exactly the coupling a reusable module must not carry. The host sets
+        it, typically to the gateway's address taken from `config.cg.fleet`.
       '';
     };
 
@@ -374,6 +379,14 @@ in
       {
         assertion = qbt.enable;
         message = "cross-seed requires qbittorrent to be enabled";
+      }
+      {
+        assertion = cfg.prowlarrUrl != null;
+        message = ''
+          cross-seed requires a prowlarrUrl - the Prowlarr host it reads
+          Torznab feeds from. Set cg.service.cross-seed.prowlarrUrl (an
+          address, not a hostname; see the option description).
+        '';
       }
       {
         assertion = cfg.torznabIndexerIds != [ ];
