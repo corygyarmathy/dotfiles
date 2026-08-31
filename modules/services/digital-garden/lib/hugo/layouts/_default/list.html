@@ -22,9 +22,14 @@
       <h1>{{ .Title }}</h1>
       {{ .Content }}
       <ol class="note-index">
+        {{- /* Every entry carries a growth mark, so the page shows at a
+             glance what is finished (item 15). The flag tells baseof.html to
+             ship the sprite; the mark itself takes the note's maturity shape
+             and the topic-* class gives it the note's shelf hue, if any. */}}
+        {{ .Page.Store.Set "hasMark" true }}
         {{ range site.RegularPages.ByDate.Reverse }}
           <li>
-            <h2 class="note-index-title"><a href="{{ .RelPermalink }}">{{ .Title }}</a></h2>
+            <h2 class="note-index-title"><a href="{{ .RelPermalink }}"{{ with .Params.topic }} class="topic-{{ . }}"{{ end }}>{{ .Title }}{{ partial "mark-icon.html" (dict "maturity" .Params.maturity) }}</a></h2>
             {{ with .Description }}<p class="note-index-thesis">{{ . }}</p>{{ end }}
             {{ partial "dateline.html" . }}
           </li>

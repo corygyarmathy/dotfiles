@@ -19,7 +19,7 @@
 # vault is a poor thing to judge a stylesheet against: it contains whatever it
 # happens to contain, which today is nineteen notes of which ten have no
 # heading at all and five carry a single backlink. The fixture puts every
-# element the theme styles onto three pages, so a visual change is checked by
+# element the theme styles onto four pages, so a visual change is checked by
 # looking at those rather than by remembering which real note has a table in
 # it. It has its own dates ledger, so rendering it never touches the vault's.
 {
@@ -83,7 +83,7 @@ pkgs.writeShellApplication {
       --port N       port to serve on (default 8087)
       --once         render once and exit; do not serve or watch
       --fixture      render the theme's own fixture vault instead of yours:
-                     every element the stylesheet styles, on three pages
+                     every element the stylesheet styles, on four pages
 
     Renders the published subset of the vault exactly as the server does and
     serves it locally, re-rendering whenever the vault or the stylesheet

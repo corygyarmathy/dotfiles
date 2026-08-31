@@ -1,0 +1,49 @@
+{{/*
+  The three kinds of link, told apart by SHAPE rather than by hue (item 15 of
+  docs/plans/digital-garden-design.md): a link to another published note takes
+  the target's maturity sprout, in the target's topic hue; a link to a section
+  of the note the reader is already on takes a dotted underline and no glyph,
+  because there is no destination note to describe; an external link keeps the
+  arrow the stylesheet emits. Kanagawa gives about eight usable hues and the
+  callouts have spent most of them, so hue carries topic (two values) and the
+  link kind is carried by the mark instead.
+
+  The target is resolved back to a page so its own frontmatter can be read
+  off it: publish-filter.py already rewrote every wikilink to an absolute URL
+  (/slug/), so the path part of the destination is the lookup key and the
+  target's `maturity` and `topic` — both written by the filter — are what
+  name the sprout and its hue. An empty path is a same-page fragment, which
+  is the section-link case above.
+
+  The sprout is a <use> into the mark-icons sprite, filled with currentColor
+  so its hue comes from the topic-* class and the --topic rules in the
+  stylesheet — the same ones the bonsai's foliage reads. The hasMark
+  store flag tells baseof.html to include the sprite only on pages that
+  actually rendered a mark — the same gating the callout sprite gets from
+  hasCallout.
+
+  Footnotes and the heading anchors are NOT rendered here: Goldmark builds
+  the footnote references and the render-heading hook builds the anchors, so
+  neither can pick up a sprout or a dotted underline. A link to a page with
+  no known maturity — the home page, a section — renders as it always did.
+*/}}
+{{- $u := urls.Parse .Destination }}
+{{- $path := $u.Path | strings.TrimPrefix "/" | strings.TrimSuffix "/" }}
+{{- if $u.Scheme }}
+  {{/* external: the stylesheet's trailing arrow is the mark */}}
+  <a href="{{ .Destination }}">{{ .Text }}</a>
+{{- else if and (eq $path "") $u.Fragment }}
+  {{/* a same-page section: an empty path and a fragment, so no destination
+     note to describe. A bare `/` has an empty path and no fragment, and it
+     is a link to the home page — a note like any other. */}}
+  <a href="{{ .Destination }}" class="link-section">{{ .Text }}</a>
+{{- else }}
+  {{- $target := .Page.GetPage (printf "/%s" $path) }}
+  {{- $maturity := $target.Params.maturity }}
+  {{- if in (slice "seedling" "sapling" "evergreen") $maturity }}
+    {{- $.Page.Store.Set "hasMark" true }}
+    <a href="{{ .Destination }}" data-maturity="{{ $maturity }}"{{ with $target.Params.topic }} class="topic-{{ . }}"{{ end }}>{{ .Text }}{{ partial "mark-icon.html" (dict "maturity" $maturity) }}</a>
+  {{- else }}
+    <a href="{{ .Destination }}">{{ .Text }}</a>
+  {{- end }}
+{{- end -}}

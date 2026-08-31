@@ -131,6 +131,17 @@
         {{ partial "callout-icons.html" . }}
       {{ end }}
 
+      {{/*
+        The growth-mark sprite, only where a mark rendered. The flag is set
+        by _markup/render-link.html while the prose above was evaluated and by
+        _default/list.html for the index's entries, so this sits after <main>
+        exactly as the callout sprite does. A page with no internal links pays
+        nothing for it. See _partials/mark-icons.html.
+      */}}
+      {{ if .Page.Store.Get "hasMark" }}
+        {{ partial "mark-icons.html" . }}
+      {{ end }}
+
       <footer>
         <hr />
         <p>&copy; {{ now.Year }} {{ site.Title }}</p>
