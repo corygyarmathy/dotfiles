@@ -16,7 +16,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-
 | 10  | Polish: print, selection, motion    | small  | 2          | **done** 2026-08-27 |
 | 11  | Rendering gaps found by review      | small  | 1          | **done** 2026-08-28 |
 | 12  | The dateline in the empty margin    | small  | 4          | **superseded by 17** |
-| 13  | Rename-stable ledger (defect)       | small  | -          | not started |
+| 13  | Rename-stable ledger (defect)       | small  | -          | **done** 2026-08-31 (#118) |
 | 14  | Maturity: model, counter, override  | medium | 13         | not started |
 | 15  | Growth marks, topic hue, link marks | small  | 14         | not started |
 | 16  | Callout icons on Obsidian's mapping | small  | -          | not started |
