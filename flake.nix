@@ -264,8 +264,7 @@
           preview = import ./modules/services/digital-garden/lib/preview.nix {
             inherit pkgs serve;
             inherit (nixpkgs) lib;
-            inherit (garden) renderer styleSheet;
-            filter = ./modules/services/digital-garden/publish-filter.py;
+            inherit (garden) renderer styleSheet filter;
             workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
             fixture = ./modules/services/digital-garden/lib/hugo/fixture;
             workingTreeFixture = "modules/services/digital-garden/lib/hugo/fixture";

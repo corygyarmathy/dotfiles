@@ -121,6 +121,15 @@ from pathlib import Path
 
 import yaml
 
+# The bonsai (docs/plans/digital-garden-design.md, item 18): the tree on the
+# landing page, whose every foliage pad is one published note. It lives beside
+# this file rather than inside it because it is a page of arithmetic that has
+# nothing to do with filtering, and because it can then be run on its own to
+# look at trees - which is the only way the plan's taste pass can work. This
+# filter is what calls it, because this is the only thing that knows the
+# published set. See bonsai.py.
+import bonsai
+
 # The libyaml-backed loader when it is available, the pure-Python one otherwise.
 # Both implement the SafeLoader schema, so this is a speed choice with no
 # semantic difference - the filter must not get faster at the cost of reading a
@@ -165,6 +174,10 @@ BARE_LINK_ITEM = re.compile(
 # percent-escaped: an escape in a path is not something anyone wants to read,
 # type, or see in a browser's address bar.
 SLUG_DROP = re.compile(r"[^a-z0-9._~-]")
+# Anything that is not a letter or a digit, for the topic label. A separate
+# rule from SLUG_DROP on purpose - see `note_topic` for why an address and a
+# label are not the same string.
+TOPIC_DROP = re.compile(r"[^a-z0-9]+")
 # Runs of two or more hyphens, which Goldmark's typographer turns into dashes
 # before a heading id is computed. See `anchorize`.
 DASH_RUN = re.compile(r"-{2,}")
@@ -177,6 +190,10 @@ UNDERSCORE_EMPHASIS = re.compile(r"(?<![^\W_])_([^_]+)_(?![^\W_])")
 LONG_NOTE_WORDS = 500
 # Where embedded files are staged, and the first segment of their URL.
 ATTACHMENTS = "attachments"
+# The one file in the staging tree that is not a note and not an attachment:
+# the bonsai's markup. lib/hugo.nix moves it out of the content tree by this
+# name before Hugo runs, so the two files agree on it and nothing else does.
+BONSAI = "bonsai.html"
 ATTACHMENT_SUFFIXES = {
     ".png",
     ".jpg",
@@ -226,6 +243,33 @@ def slugify(name):
     whatever renders it.
     """
     return SLUG_DROP.sub("", name.lower().replace(" ", "-"))
+
+
+def note_topic(rel):
+    """Which shelf a note came from: the folder it sits in, slugified.
+
+    The published tree is flat, so the vault's folders are the one fact about a
+    note that publishing otherwise throws away - and they are exactly the fact
+    a reader would call its topic. `_Slip_Box/Getting Good.md` is `slip-box`;
+    `_Reference/Lighting/Effective Lighting.md` is `lighting`, because the
+    shelf is Lighting and not Reference. A note at the vault root has no shelf
+    and gets no topic, which is the honest answer rather than a made-up one.
+
+    Emitted as frontmatter as well as handed to the bonsai, so that the value
+    the tree colours a pad with is inspectable in the staging tree next to
+    everything else the filter decided. Item 15 of the design plan is the other
+    consumer, and this is the only place the two items touch.
+
+    Deliberately NOT `slugify`. That function reproduces the URLs this site
+    was already serving and must keep serving, so it preserves `_` and `~` and
+    never collapses a run of hyphens; a topic is a label and a CSS class rather
+    than an address, and `_Slip_Box` should read as `slip-box` and not as
+    `_slip_box`. Two rules because there are two jobs, not because one of them
+    is wrong.
+    """
+    if rel.parent == Path("."):
+        return ""
+    return TOPIC_DROP.sub("-", rel.parent.name.lower()).strip("-")
 
 
 def resolve_title(front, body, rel):
@@ -688,6 +732,12 @@ def main(argv):
     written = 0
     no_thesis = []
     overlong = []
+    # What the bonsai is grown from, in the order this loop writes notes -
+    # which is `sorted(published)`, so the tree is a function of the published
+    # set and of nothing else. Appended only after a note has actually been
+    # written, so a note dropped below is not a pad on a tree that claims to be
+    # a picture of what is published.
+    grown = []
     for key, (rel, text) in sorted(published.items()):
         slug = slugify(rel.stem)
         # Rewritten as one string, frontmatter included: a wikilink to a private
@@ -779,6 +829,12 @@ def main(argv):
         if "maturity" not in front:
             front["maturity"] = maturity_stage(score)
 
+        # Which shelf the note came from. Emitted for every note, index
+        # included: it is a fact about the file either way, and a key that is
+        # present on some notes and absent on others is a key every consumer
+        # has to special-case.
+        front["topic"] = note_topic(rel)
+
         # A list item that is only a link gets the target's thesis appended, so
         # an index or hub page reads as claims rather than as bare titles, and
         # the claim itself lives in exactly one place: the essay making it. An
@@ -831,6 +887,38 @@ def main(argv):
 
         (tmp / f"{slug}.md").write_text(f"---\n{head}---\n{body}", encoding="utf-8")
         written += 1
+
+        # The landing page is not foliage on its own tree: it is a table of
+        # contents, the same reason it is excluded from the backlink graph and
+        # from the dateline.
+        if rel.name.lower() != "index.md":
+            # The stage the PAGE claims, so the glyph and the page agree - a
+            # hand-written `maturity:` wins here exactly as it wins in the
+            # frontmatter. Anything that is not one of the three stages is not
+            # a stage the tree can draw, so the computed one stands and the
+            # note is still on the tree.
+            stage = front["maturity"]
+            if stage not in bonsai.LEAF:
+                stage = maturity_stage(score)
+            grown.append(
+                bonsai.Note(
+                    title=titles[slug],
+                    url=f"/{slug}/",
+                    words=words,
+                    stage=stage,
+                    topic=front["topic"],
+                )
+            )
+
+    # The bonsai, grown from the notes that were actually written above. It
+    # goes into the staging tree because that is the one place downstream of
+    # this filter and upstream of the generator, and it is NOT a note: the
+    # renderer lifts it out of the content tree before Hugo ever sees it (see
+    # lib/hugo.nix), so the published set is still exactly the .md files here.
+    #
+    # Written unconditionally, so an empty garden produces an empty plate
+    # rather than last build's tree.
+    (tmp / BONSAI).write_text(bonsai.render(grown), encoding="utf-8")
 
     for src in used_attachments:
         dest = tmp / ATTACHMENTS / slugify(src.name)

@@ -1,5 +1,23 @@
 {{ define "main" }}
   {{/*
+    The bonsai (docs/plans/digital-garden-design.md, item 18). Grown by
+    publish-filter.py and left in the staging tree as ready markup, which
+    lib/hugo.nix moves into assets; all this template does is inline it. That
+    is the whole reason the page ships no generator and no library - the
+    characters are already in the HTML by the time it is served, and the only
+    script involved reveals ones that are already there.
+
+    `resources.Get` returns nothing when there is no tree, so a content tree
+    that came from somewhere other than the filter still renders a home page.
+
+    Outside <article>, deliberately. The article is what carries
+    data-pagefind-body, and the tree's caption store holds the title of every
+    note on the site - indexing it here would put the whole garden into the
+    search results for the home page.
+  */}}
+  {{ with resources.Get "bonsai.html" }}{{ .Content | safeHTML }}{{ end }}
+
+  {{/*
     The landing page is a hand-written table of contents, not a generated list:
     publish-filter.py has already annotated each bare link with the target's
     thesis, so what is authored is what should be shown.

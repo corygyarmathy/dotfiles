@@ -1,6 +1,6 @@
 # Plan: theme and navigation for the digital garden
 
-Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Item 16, the callout icons, was taken and is done on 2026-08-31 — the first of the 2026-08-31 set, per the sequencing that lets a small dependency-free item fill a short session. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
+Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Item 16, the callout icons, was taken and is done on 2026-08-31 — the first of the 2026-08-31 set, per the sequencing that lets a small dependency-free item fill a short session. Item 18, the bonsai, followed on the same day: the generator is done and on the landing page, and the taste pass it names as a second session is still a second session. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
 
 | #   | Item                                | Size   | Depends on | Status      |
 | --- | ----------------------------------- | ------ | ---------- | ----------- |
@@ -18,10 +18,10 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-
 | 12  | The dateline in the empty margin    | small  | 4          | **superseded by 17** |
 | 13  | Rename-stable ledger (defect)       | small  | -          | **done** 2026-08-31 (#118) |
 | 14  | Maturity: model, counter, override  | medium | 13         | **done** 2026-08-31 (#121) |
-| 15  | Growth marks, topic hue, link marks | small  | 14         | not started |
+| 15  | Growth marks, topic hue, link marks | small  | 14         | the filter half **done** 2026-08-31 with 18; the sprite and the links are not started |
 | 16  | Callout icons on Obsidian's mapping | small  | -          | **done** 2026-08-31 |
 | 17  | A margin on every note              | medium | 14         | not started |
-| 18  | The bonsai                          | large  | 14         | not started |
+| 18  | The bonsai                          | large  | 14         | generator **done** 2026-08-31; the taste pass is still open |
 | 19  | The home page, composed once        | small  | 18         | not started |
 | 20  | Ambient Life on the 404             | small  | -          | **done** 2026-08-31 |
 | -   | Graph view                          | -      | -          | **rejected**, see below; the bonsai is not a revisit |
@@ -494,6 +494,8 @@ Three separate wants, one sprite and one hue decision between them: an index tha
 
 **The hue** carries topic and nothing else. `_Slip_Box` takes lotusGreen/springGreen, `_Reference/Lighting` takes lotusOrange/roninYellow. This needs the filter to carry the source directory into frontmatter, which item 3 already identified as a small change to `publish-filter.py` and is the only place these two items touch.
 
+**Done 2026-08-31, with item 18**, because the bonsai's foliage is coloured by topic and there was no topic to read. `note_topic` in `publish-filter.py` writes the note's own folder — the deepest one, so `_Reference/Lighting` is `lighting` and not `reference` — into `topic:` on every note, and the two hues above are declared once each in the stylesheet as `--topic`, which the foliage and the bonsai's caption both read. A new shelf in the vault is one line of CSS. What is left of this item is the sprite, the margin and the link marks; none of it is blocked any more.
+
 **Link kinds are shape, not hue**, and all three marks trail so they are consistent with each other:
 
 - a link to another note takes the target's maturity sprout, in the target's topic hue;
@@ -573,9 +575,29 @@ Each of these was met in the prototype and each is invisible in a screenshot of 
 - **The invisible note.** A pad whose every cell landed on already-occupied cells places nothing, and that note is then neither visible nor hoverable. Search outward for a free cell, and **assert that the number of distinct notes on the tree equals the number published** — this is the assertion that caught both of the above.
 - **The vertical trunk.** A trunk whose sideways step is a fresh random number each step averages to vertical however wide the range. The lean has to persist across steps and reverse occasionally.
 
+### What shipped, 2026-08-31
+
+The generator, wired end to end: `modules/services/digital-garden/bonsai.py`, called by `publish-filter.py`, rendered on the landing page. The growth model is the prototype's, ported rather than reinterpreted — the branch-count rule reproduces all three numbers quoted above exactly (18 notes → 7 branches, 60 → 13, 200 → 18), and all four recorded bugs are prevented by construction, with the note-count assertion live in the build rather than left as a development aid.
+
+Four things the plan did not price, all of them decisions rather than surprises:
+
+- **The tree has to be the same tree every build.** The builder skips a rebuild when the staging tree hashes the same as last time, so a generator that reseeded itself would defeat that gate and rewrite the site on every tick. So the seed is fixed, and the PRNG is written out in the file rather than taken from `random`: CPython's Mersenne Twister is stable in practice, and "in practice" is not the right guarantee for something whose output is hashed. Mulberry32 is nine lines and makes the tree a function of this file alone.
+- **The markup travels through the staging tree, and is not a note.** The filter is the only thing that knows the published set, and the renderer is the only thing that knows Hugo — so the filter leaves `bonsai.html` in the staging tree and `lib/hugo.nix` moves it into `assets/` before Hugo looks at the content directory, which is the same division that already renames `index.md` to `_index.md`. Into assets rather than `layouts/_partials/` deliberately: a partial is *executed* as a template, and generated markup has no business going through a template engine. `resources.Get` also returns nothing when there is no tree, which is the whole of the "render a content tree that did not come from the filter" case.
+- **`publish-filter.py` and `bonsai.py` are one program in two files, which Nix does not hand you for free.** `${./publish-filter.py}` puts each file in a store path of its own, so the import does not resolve; the two are assembled into one directory, and that directory is now exposed from the module the way the renderer already was, so `garden-preview` cannot drift from the server.
+- **Item 15's filter change came with this one**, because the pad's colour is the note's topic and there was no topic to read. `note_topic` writes the note's folder, slugified, into frontmatter for every note. That is the piece the plan said these two items share; the sprite and the link marks are untouched.
+
+The **fifth bug**, found here and not in the prototype: the soil was never drawn. It went through the same bounds check as the foliage — the one that rejects everything at or below the soil line — so the colour was declared, the loop ran, and every cell of it was refused. Invisible in a screenshot for the same reason the other four were: you cannot see what is not there. The ground is now drawn on the row the trunk starts on, below the ceiling every other rule respects, because it is not something that grew.
+
+Two things were settled by rendering rather than by reasoning, which is item 1 doing its job: the soil's first colour pair (lotusWhite0 over winterYellow — the border tint and the diff ground, both picked by name) was a line you had to hunt for in light and absent in dark, and is now each theme's grey; and the fixture's three notes were re-filed into the vault's own folders, because a fixture whose notes all sat at the root drew its whole canopy in the no-topic fallback and proved nothing about the two hues the stylesheet declares.
+
 ### The taste pass, which is a second session
 
 The generator is one session; making the tree _look_ right is another, and it should not be rushed into the first. The known open problem is that at high note counts the canopy reads as fairy floss — a single ball on a stick. The levers are branch count against pad size against trunk length, and the judgement can only be made by generating many and looking. `garden-preview --fixture` plus a seed control is the loop.
+
+**Still open, and deliberately so.** The generator shipped with the prototype's numbers untouched, because those are the numbers that were judged by eye in the design session and re-tuning them here would be re-deciding by argument what was decided by looking. The loop is now cheaper than `--fixture`, though: `python3 modules/services/digital-garden/bonsai.py --notes 60 --seed 3 --spread 2.1` draws a tree in the terminal with no vault, no build and no browser in it, so "generate many and look" is one command in a shell loop. Two observations to start that session with, from rendering the real eighteen:
+
+- The ball-on-a-stick reading arrives earlier than "high note counts". At eighteen the canopy is already a mass sitting above a bare trunk, because every branch forks from the top 45% of the trunk and drops its foliage at the branch's own tip. Foliage lower down the tree, or fork points spread further down it, is the lever that has not been tried.
+- `SPREAD` (the multiplier on `sqrt(notes)`, 1.7) and the stylesheet's `font-size` clamp on `.bonsai` interact: a denser canopy reads better small and an open one reads better large, so the two want judging together rather than one at a time.
 
 ### Cost and risk
 

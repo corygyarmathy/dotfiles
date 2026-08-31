@@ -55,6 +55,10 @@
   --body-font:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji";
+  /* Code and the bonsai. The tree is drawn on a character grid, so it needs
+   * the same guarantee code does - every cell the same width - and the two
+   * have to be one value rather than two that happen to agree. */
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, monospace;
   --measure: 40rem;
   /* The margin columns either side of the prose: the rail on the left, the
    * sidenotes on the right. One value for both, because they are the same
@@ -474,7 +478,7 @@ hr {
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono-font);
   font-size: 0.9em;
   background: var(--code-bg);
   border-radius: 3px;
@@ -1038,6 +1042,147 @@ h4:hover > .heading-anchor,
   height: auto;
 }
 
+/* ── the bonsai ─────────────────────────────────────────────────────────── */
+
+/* The tree on the landing page: docs/plans/digital-garden-design.md, item 18.
+ * The trunk is the site, each branch carries several notes, and every
+ * published note is one foliage pad. It is not decoration - it is a picture of
+ * what the garden currently contains, drawn from the garden.
+ *
+ * Every character is already in the HTML. publish-filter.py grows the tree at
+ * build time and lib/hugo.nix hands the markup to home.html, so this block is
+ * styling static text and the script in baseof.html only reveals characters
+ * that are already there. Nothing here is generated in the browser.
+ *
+ * Two axes, and no third. The GLYPH carries maturity - `.` seedling, `*`
+ * sapling, `&` evergreen, with the pad growing in size along with it - and the
+ * HUE carries topic. That split is the 2026-08-31 decision: Kanagawa offers
+ * about eight usable hues, the callouts above have spent most of them, and so
+ * a second meaning has to be carried by shape rather than by colour. */
+
+.bonsai-plate {
+  /* Sized to the tree rather than to the measure, and centred. The tree is
+   * between about thirty and seventy characters wide depending on how much has
+   * been published, and centring the box it actually occupies is what keeps
+   * the composition centred as the garden grows. */
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 2.5rem;
+  overflow-x: auto;
+}
+
+.bonsai {
+  /* Not the code well. `pre` is styled as one further up, and a tinted rounded
+   * box around the tree would make the home page's one picture read as a
+   * terminal transcript of itself. */
+  background: none;
+  /* The last row is the soil, drawn in underscores, and an underscore sits
+   * below the baseline: with no padding at all the ground is clipped by the
+   * bottom of the element on some renderers. */
+  padding: 0 0 0.3em;
+  border-radius: 0;
+  overflow: visible;
+  margin: 0;
+
+  font-family: var(--mono-font);
+  /* Follows the viewport rather than being chosen once, because the tree's
+   * width is a function of the vault - it is as many characters wide as it
+   * grew, and nothing here can decide that. The floor is what keeps a full
+   * canopy on a phone; the ceiling is where a cell stops reading as a leaf and
+   * starts reading as a piece of punctuation. */
+  font-size: clamp(0.5rem, 1.7vw, 1rem);
+  /* A character cell is about twice as tall as it is wide before leading is
+   * added, and the pad geometry in bonsai.py is built on that ratio - it
+   * halves x when it orders a pad's cells by distance. Tightening the line box
+   * is the other half of that arithmetic: without it a pad meant to be round
+   * comes out as a tall column. */
+  line-height: 1.05;
+  color: light-dark(#836f4a, #938056); /* lotusYellow2 / boatYellow1 */
+}
+
+/* The ground the tree stands in. Each theme's grey, which is what makes it
+ * quieter than the wood without being invisible: the wood is the one saturated
+ * brown in the picture and the soil is not a colour at all. The first pair
+ * tried here was lotusWhite0 over winterYellow - the border tint and the diff
+ * ground, both chosen on the name rather than by looking - and rendered, the
+ * light one was a line you had to hunt for and the dark one was not there. */
+.bonsai .soil {
+  color: light-dark(#8a8980, #727169); /* lotusGray3 / fujiGray */
+}
+
+/* One hue per topic, declared as a variable rather than as a colour so that
+ * the foliage and the stage word in the caption take the same value from the
+ * same rule. A new shelf in the vault is one line here. Unscoped, because item
+ * 15 puts the same hue on links and marks elsewhere on the site.
+ *
+ * The names are the vault's folders, slugified - see `note_topic` in
+ * publish-filter.py, which is where the value in the markup comes from. */
+.topic-slip-box {
+  --topic: light-dark(#6f894e, #98bb6c); /* lotusGreen / springGreen */
+}
+
+.topic-lighting {
+  --topic: light-dark(#cc6d00, #ff9e3b); /* lotusOrange / roninYellow */
+}
+
+/* A note at the vault root has no shelf, so it gets no hue rather than a
+ * borrowed one. Muted is the honest answer and it still reads as foliage. */
+.bonsai .leaf,
+.bonsai-caption .stage {
+  color: var(--topic, var(--muted));
+}
+
+/* The foliage is navigation: pointing at any cell of a pad lights the whole
+ * pad and names the note, and a click opens it. `currentColor` rather than a
+ * token, so the highlight is the note's own hue in both themes and on either
+ * topic - one rule for every colour the canopy can be. */
+.bonsai [data-note] {
+  cursor: pointer;
+}
+
+.bonsai [data-note].lit {
+  background: color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 2px;
+}
+
+.bonsai-caption {
+  margin: 0.75rem auto 0;
+  max-width: 34rem;
+  /* Held open at the height of its tallest state, so that nothing below the
+   * tree moves as the caption changes under the pointer. */
+  min-height: 2.6em;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Nothing has written a caption, which means no script ran - so the box that
+ * was being held open for one is not held open for nothing. */
+.bonsai-caption:empty {
+  min-height: 0;
+  margin: 0;
+}
+
+.bonsai-caption b {
+  color: var(--strong);
+  font-weight: 600;
+}
+
+/* Mid-growth. The characters are in the markup either way; this is what lets
+ * the script put them on screen in the order the tree was drawn in, and it is
+ * applied BY the script, so a reader with no JavaScript is never handed a tree
+ * that something has to un-hide. */
+.bonsai .off {
+  visibility: hidden;
+}
+
+/* Where the captions' words live until one is pointed at. Data, not content:
+ * `hidden` already hides it, and this is the belt to that pair of braces. */
+.bonsai-notes {
+  display: none;
+}
+
 /* ── the notes index ────────────────────────────────────────────────────── */
 
 /* The generated /notes/ page: every published note, newest first, so nothing
@@ -1198,6 +1343,13 @@ pagefind-modal {
   .heading-anchor,
   .footnote-backref,
   .life {
+    display: none;
+  }
+
+  /* The tree prints - it is a picture of the garden, and that is as true on
+   * paper as on screen. Its caption does not: it is an invitation to point at
+   * something, and nothing on a sheet of paper can be pointed at. */
+  .bonsai-caption {
     display: none;
   }
 
