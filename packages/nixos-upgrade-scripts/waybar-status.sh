@@ -25,21 +25,21 @@ CURRENT="/run/current-system"
 BOOTED="/run/booted-system"
 
 emit() {
-  # jq handles escaping, so a tooltip containing a quote or newline cannot
-  # produce invalid JSON and blank the module.
-  jq -cn --arg text "$1" --arg tooltip "$2" --arg class "$3" \
-    '{text: $text, tooltip: $tooltip, class: $class}'
-  exit 0
+	# jq handles escaping, so a tooltip containing a quote or newline cannot
+	# produce invalid JSON and blank the module.
+	jq -cn --arg text "$1" --arg tooltip "$2" --arg class "$3" \
+		'{text: $text, tooltip: $tooltip, class: $class}'
+	exit 0
 }
 
 state_of() {
-  systemctl show -P ActiveState "$1" 2>/dev/null || echo unknown
+	systemctl show -P ActiveState "$1" 2>/dev/null || echo unknown
 }
 
 kernel_of() {
-  # Three symlinks; differing in any of them means a reboot is required. Brace
-  # expansion gives one readlink call.
-  readlink "$1"/{initrd,kernel,kernel-modules} 2>/dev/null || true
+	# Three symlinks; differing in any of them means a reboot is required. Brace
+	# expansion gives one readlink call.
+	readlink "$1"/{initrd,kernel,kernel-modules} 2>/dev/null || true
 }
 
 # --- in-flight states take precedence over anything derived ------------------
@@ -56,19 +56,19 @@ build_state="$(state_of nixos-upgrade-build.service)"
 # date", which is what falling through to the derived states would claim.
 
 if [ "$apply_state" = "active" ] || [ "$apply_state" = "activating" ]; then
-  emit "⟳" "Applying updates…" "applying"
+	emit "⟳" "Applying updates…" "applying"
 fi
 
 if [ "$build_state" = "active" ] || [ "$build_state" = "activating" ]; then
-  emit "󰔟" "Checking for updates in the background…" "building"
+	emit "󰔟" "Checking for updates in the background…" "building"
 fi
 
 if [ "$apply_state" = "failed" ]; then
-  emit "⚠" "Update failed to apply. Middle-click for logs." "error"
+	emit "⚠" "Update failed to apply. Middle-click for logs." "error"
 fi
 
 if [ "$build_state" = "failed" ]; then
-  emit "⚠" "Update failed to build. Middle-click for logs." "error"
+	emit "⚠" "Update failed to build. Middle-click for logs." "error"
 fi
 
 # --- what is pending --------------------------------------------------------
@@ -80,59 +80,59 @@ nix_pending=false
 reboot_required=false
 
 if [ -L "$NEXT_LINK" ]; then
-  next="$(readlink -f "$NEXT_LINK" 2>/dev/null || true)"
-  current="$(readlink -f "$CURRENT" 2>/dev/null || true)"
+	next="$(readlink -f "$NEXT_LINK" 2>/dev/null || true)"
+	current="$(readlink -f "$CURRENT" 2>/dev/null || true)"
 
-  if [ -n "$next" ] && [ "$next" != "$current" ]; then
-    nix_pending=true
+	if [ -n "$next" ] && [ "$next" != "$current" ]; then
+		nix_pending=true
 
-    # The same comparison nixos-upgrade makes: only a changed kernel, initrd or
-    # module set actually requires a reboot. A pure userspace change is applied
-    # by switching, and claiming otherwise trains you to ignore the indicator.
-    next_kernel="$(kernel_of "$next")"
-    if [ -n "$booted_kernel" ] && [ "$booted_kernel" != "$next_kernel" ]; then
-      reboot_required=true
-    fi
-  fi
+		# The same comparison nixos-upgrade makes: only a changed kernel, initrd or
+		# module set actually requires a reboot. A pure userspace change is applied
+		# by switching, and claiming otherwise trains you to ignore the indicator.
+		next_kernel="$(kernel_of "$next")"
+		if [ -n "$booted_kernel" ] && [ "$booted_kernel" != "$next_kernel" ]; then
+			reboot_required=true
+		fi
+	fi
 fi
 
 # Nothing new to apply, but the running system's kernel is not the booted one:
 # an update was applied earlier and the reboot has not happened yet.
 if [ "$nix_pending" = false ] && [ -n "$booted_kernel" ] && [ "$booted_kernel" != "$current_kernel" ]; then
-  emit "🔄" "Reboot required to finish applying an update" "reboot-needed"
+	emit "🔄" "Reboot required to finish applying an update" "reboot-needed"
 fi
 
 fw_count=0
 if command -v fwupdmgr >/dev/null 2>&1; then
-  fw_count="$(fwupdmgr get-updates --json 2>/dev/null | jq '.Devices | length' 2>/dev/null || echo 0)"
+	fw_count="$(fwupdmgr get-updates --json 2>/dev/null | jq '.Devices | length' 2>/dev/null || echo 0)"
 fi
 
 # --- report -----------------------------------------------------------------
 
 if [ "$nix_pending" = true ] || [ "$fw_count" -gt 0 ]; then
-  parts=""
-  if [ "$nix_pending" = true ]; then
-    parts="system update"
-  fi
+	parts=""
+	if [ "$nix_pending" = true ]; then
+		parts="system update"
+	fi
 
-  if [ "$fw_count" -gt 0 ]; then
-    if [ "$fw_count" -eq 1 ]; then
-      fw_text="1 firmware update"
-    else
-      fw_text="$fw_count firmware updates"
-    fi
-    if [ -n "$parts" ]; then
-      parts="$parts, $fw_text"
-    else
-      parts="$fw_text"
-    fi
-  fi
+	if [ "$fw_count" -gt 0 ]; then
+		if [ "$fw_count" -eq 1 ]; then
+			fw_text="1 firmware update"
+		else
+			fw_text="$fw_count firmware updates"
+		fi
+		if [ -n "$parts" ]; then
+			parts="$parts, $fw_text"
+		else
+			parts="$fw_text"
+		fi
+	fi
 
-  if [ "$reboot_required" = true ]; then
-    emit "🔄" "Ready to apply: $parts (reboot required). Click to apply." "reboot-needed"
-  fi
+	if [ "$reboot_required" = true ]; then
+		emit "🔄" "Ready to apply: $parts (reboot required). Click to apply." "reboot-needed"
+	fi
 
-  emit "📦" "Ready to apply: $parts. Click to apply." "ready"
+	emit "📦" "Ready to apply: $parts. Click to apply." "ready"
 fi
 
 emit "✓" "Up to date" "up-to-date"

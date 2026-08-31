@@ -242,7 +242,9 @@ class SopsManager:
         success = True
 
         for secret_file in secrets_files:
-            self.logger.substep(f"Re-keying: {secret_file.relative_to(self.config.flake_dir)}")
+            self.logger.substep(
+                f"Re-keying: {secret_file.relative_to(self.config.flake_dir)}"
+            )
 
             if self.config.dry_run:
                 continue

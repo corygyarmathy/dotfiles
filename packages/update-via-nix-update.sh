@@ -24,8 +24,8 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 
 if [ $# -lt 2 ]; then
-  echo "usage: $0 <nix-update-binary> <attr> [args...]" >&2
-  exit 2
+	echo "usage: $0 <nix-update-binary> <attr> [args...]" >&2
+	exit 2
 fi
 
 nix_update="$1"
@@ -34,7 +34,7 @@ attr="$1"
 shift
 
 version_of() {
-  nix eval --raw ".#packages.x86_64-linux.$attr.version"
+	nix eval --raw ".#packages.x86_64-linux.$attr.version"
 }
 
 before="$(version_of)"
@@ -45,9 +45,9 @@ log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
 if ! "$nix_update" --flake "$@" "$attr" >"$log" 2>&1; then
-  echo "nix-update failed for $attr:" >&2
-  cat "$log" >&2
-  exit 1
+	echo "nix-update failed for $attr:" >&2
+	cat "$log" >&2
+	exit 1
 fi
 
 after="$(version_of)"

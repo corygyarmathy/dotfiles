@@ -21,26 +21,26 @@ REGISTRY=https://registry.npmjs.org
 
 current=$(sed -n 's/^  version = "\(.*\)";$/\1/p' default.nix)
 if [ -z "$current" ]; then
-  echo "could not read current version from default.nix" >&2
-  exit 1
+	echo "could not read current version from default.nix" >&2
+	exit 1
 fi
 
 if [ $# -ge 1 ]; then
-  target="$1"
+	target="$1"
 else
-  target=$(curl -fsSL "$REGISTRY/$PKG" | jq -r '."dist-tags".latest')
+	target=$(curl -fsSL "$REGISTRY/$PKG" | jq -r '."dist-tags".latest')
 fi
 
 if [ "$target" = "$current" ]; then
-  echo "already at $current" >&2
-  exit 0
+	echo "already at $current" >&2
+	exit 0
 fi
 
 # npm's own integrity string is already SRI, which is what fetchurl wants.
 integrity=$(curl -fsSL "$REGISTRY/$PKG" | jq -r --arg v "$target" '.versions[$v].dist.integrity')
 if [ -z "$integrity" ] || [ "$integrity" = "null" ]; then
-  echo "no such version: $target" >&2
-  exit 1
+	echo "no such version: $target" >&2
+	exit 1
 fi
 
 tmp=$(mktemp -d)
@@ -51,21 +51,21 @@ tar xzf "$tmp/pkg.tgz" -C "$tmp"
 
 # --ignore-scripts: better-sqlite3's install hook would try to fetch a prebuilt
 # binary, and we only want the resolved dependency graph here anyway.
-( cd "$tmp/package" && npm install --package-lock-only --ignore-scripts >/dev/null 2>&1 )
+(cd "$tmp/package" && npm install --package-lock-only --ignore-scripts >/dev/null 2>&1)
 cp "$tmp/package/package-lock.json" ./package-lock.json
 
 deps_hash=$(nix run --extra-experimental-features 'nix-command flakes' \
-  nixpkgs#prefetch-npm-deps -- ./package-lock.json 2>/dev/null | tail -1)
+	nixpkgs#prefetch-npm-deps -- ./package-lock.json 2>/dev/null | tail -1)
 if [ -z "$deps_hash" ]; then
-  echo "prefetch-npm-deps produced no hash" >&2
-  exit 1
+	echo "prefetch-npm-deps produced no hash" >&2
+	exit 1
 fi
 
 sed -i \
-  -e "s|^  version = \".*\";$|  version = \"$target\";|" \
-  -e "s|^    hash = \"sha512-.*\";$|    hash = \"$integrity\";|" \
-  -e "s|^  npmDepsHash = \".*\";$|  npmDepsHash = \"$deps_hash\";|" \
-  default.nix
+	-e "s|^  version = \".*\";$|  version = \"$target\";|" \
+	-e "s|^    hash = \"sha512-.*\";$|    hash = \"$integrity\";|" \
+	-e "s|^  npmDepsHash = \".*\";$|  npmDepsHash = \"$deps_hash\";|" \
+	default.nix
 
 # Cheap guard against a sed that matched nothing: all three must now be present.
 grep -q "version = \"$target\";" default.nix
