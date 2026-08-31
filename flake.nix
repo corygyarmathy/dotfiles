@@ -236,7 +236,7 @@
       # for why.
       #
       # The second renders the theme's own fixture instead: every element the
-      # stylesheet styles, on three pages, which is what a visual change is
+      # stylesheet styles, on four pages, which is what a visual change is
       # judged against - the vault is a poor test of a stylesheet, because it
       # contains whatever it happens to contain.
       #
@@ -313,11 +313,12 @@
       # push when iterating on a service or recovering a host the automated
       # path cannot reach.
       #
-      # `sshUser = "deploy"` + `user = "root"` + `interactiveSudo`: deploy-rs
-      # connects as the dedicated deploy user (modules/nixos/deploy-rs.nix) and
-      # escalates to root through sudo, prompting for the deploy user's password
-      # (that host keeps `security.sudo.wheelNeedsPassword = true` and refuses
-      # root SSH).
+      # `sshUser = "deploy"` + `user = "root"`: deploy-rs connects as the
+      # dedicated deploy user (modules/nixos/deploy-rs.nix) and escalates to
+      # root through the scoped NOPASSWD sudo rule item 10 added - only the
+      # activation binary (and the magic-rollback confirmation `rm`) are
+      # reachable, and no password is asked (that host keeps
+      # `security.sudo.wheelNeedsPassword = true` and refuses root SSH).
       deploy = {
         nodes = {
           homelab01 = {
@@ -327,7 +328,6 @@
               user = "root";
               path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.homelab01;
             };
-            interactiveSudo = true;
           };
           homelab02 = {
             hostname = "homelab02";
@@ -336,7 +336,6 @@
               user = "root";
               path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.homelab02;
             };
-            interactiveSudo = true;
           };
         };
       };

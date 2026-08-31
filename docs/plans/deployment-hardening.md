@@ -16,7 +16,7 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 | 6   | `deploy-rs` interactively | small   | **done** 2026-08-30 - `homelab01` deployed end to end with `magicRollback` confirmation; `homelab02` still needs its bootstrap switch + first deploy |
 | 8   | Download-root canary      | small   | **done** 2026-08-30 - sentinel, alert, guard and tests landed |
 | 9   | Reachability from outside | small   | done - cross-host probes via the peer's public endpoints |
-| 10  | Deploy-user sudo on SSH keys | small | not started - expanded 2026-08-31 to also drop `deploy` from `wheel` and give it a dedicated key |
+| 10  | Deploy-user sudo on SSH keys | small | **done** 2026-08-31 - wheel dropped, sudo scoped to the activation path, password retired, dedicated `deploy@xps15` key landed, `checks/deploy-sudo` in the gate; the live `deploy` runs on both hosts remain |
 | 11  | Split the backup transport account | small | not started - move `restic-backup` off `coryg` onto a dedicated unprivileged `backup` account |
 | 12  | Hardware-backed admin key | small | not started - optional; move the human admin key to a hardware token |
 
@@ -773,6 +773,27 @@ Two checks to add when built: that `sudo -n` as `deploy` reaches `activate-rs` a
 ### Done when
 
 `deploy .#homelab01` (and `.=homelab02`) run with no sudo password prompt, `sudo -u deploy sudo -l` shows only `activate-rs`, the `users/deploy` secret in sops is retired, and `coryg`'s own sudo still asks for a password.
+
+### What landed
+
+Implemented on `feat/item10-deploy-sudo-key`. The approach above held, with two corrections found by reading the pinned deploy-rs and sudo source rather than trusting the sketch:
+
+- **The sudoers command path in the sketch does not exist.** `${config.system.build.activate}/bin/activate-rs` is not what deploy-rs escalates. deploy-rs's `activate.nixos` wraps the toplevel in a `buildEnv` named `activatable-nixos-system-<host>-<version>` and runs `<closure>/activate-rs` with subcommands `activate`, `wait` and `revoke`; the closure path changes every build. The rule is therefore a wildcard, `/nix/store/*/activate-rs` (matched by sudoers' glob machinery, spanning a single store component). There is also a fourth escalation the sketch missed: magicRollback's confirmation is not the activation binary at all, it is `sudo -u root rm /tmp/deploy-rs-canary-<hash>`, and it needs its own rule.
+- **The `rm` rule must name the resolved path, not a store path.** sudoers `command_matches` compares canonical parent directories before it gets to its inode fallback, so `${pkgs.coreutils}/bin/rm` would never match a user command resolved to `/run/current-system/sw/bin/rm`. The rule names that path, with args anchored as a regex (`^/tmp/deploy-rs-canary-[a-z0-9]*$`) because sudoers globs match across word boundaries and `*` in an argument matches `/`.
+
+**Two things the plan did not foresee, one in each half of the flow.** On the sudo side, both servers run `security.sudo.execWheelOnly = true` (`modules/nixos/user-security.nix`), which makes the setuid `sudo` wrapper executable by `wheel` only - so dropping `wheel` did not just confine deploy's sudo, it removed its ability to execute sudo at all. The module grants exec the way `execWheelOnly` intends: the wrapper group is pointed at the deploy user's own group, with `coryg` added to it, so exactly the two SSH accounts can exec sudo and deploy stays out of `wheel`. (Re-adding `wheel` would not work either: the `%wheel` rule is ordered before the scoped rule, so a wheel-member deploy would match password-required `sudo ALL` first.) On the copy side, `nix copy --to ssh-ng://deploy@host` pushes unsigned, locally-built closures and the receiving daemon only imports them for a trusted user; `modules/nixos/deploy-rs.nix` now grants `nix.settings.trusted-users` membership explicitly. Both are the same privilege deploy had via wheel, so nothing is widened - but a first pass that removed wheel without either would have failed every deploy, the sudo half at the first escalation and the copy half with `lacks a signature by a trusted key`.
+
+Landed:
+
+- `modules/nixos/deploy-rs.nix` - `wheel` gone, `hashedPasswordFile` and `sops.secrets."users/deploy"` gone, `security.sudo.extraRules` with the two NOPASSWD rules above, `nix.settings.trusted-users` membership, and the sudo-wrapper exec grant (the wrapper group becomes the deploy group, with `coryg` added to it) that replaces what wheel supplied against `execWheelOnly`.
+- `flake.nix` - `interactiveSudo` dropped from both `deploy.nodes`; the `deploy-rs` schema check accepts the omission.
+- `secrets/shared.yaml` - `users/deploy` deleted with `sops unset` (recipients unchanged); `modules/nixos/sops-nix.nix` drops the name from `sharedSecrets`.
+- `hosts/homelab01/default.nix`, `hosts/homelab02/default.nix` - the deploy account now authorizes a dedicated `deploy@xps15` key (`~/.ssh/deploy` on the laptop), not the human's `coryg@xps15`.
+- `modules/home/development/ssh.nix` - a `Host deploy@homelab01 deploy@homelab02` block offers only `~/.ssh/deploy`, so the personal key is never presented to the deploy account.
+- `secrets/operator.yaml` + `modules/home/security/sops-nix.nix` - the deploy key's private half is stored under `private_keys/deploy` (user-key-only, like `personal` and `github`) and declared so home-manager restores it to `~/.ssh/deploy` on the laptop.
+- `checks/deploy-sudo.nix` - a VM test that drives the real deploy-rs command shapes: `sudo -n` as `deploy` reaches an `activatable-nixos-system-…` closure's `activate-rs` (and runs it as root) and the scoped `rm`, and nothing else; `sudo -l` for `deploy` shows only the two rules; `coryg`'s `%wheel` rule still prompts; and the generated `nix.conf` still lists `deploy` among `trusted-users`. The test node sets `security.sudo.execWheelOnly = true` to match the servers, so the wrapper-exec grant above is exercised rather than assumed.
+
+The "done when" is met on the config side. The two live `deploy .#homelab01` / `.#homelab02` runs and the `sudo -u deploy sudo -l` on each host remain to be done against the promoted revision, as with every change to this pipeline.
 
 ---
 

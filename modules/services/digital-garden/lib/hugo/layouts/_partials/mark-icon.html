@@ -1,0 +1,17 @@
+{{/*
+  The maturity sprout for one note, referenced from _markup/render-link.html
+  for prose links and from _default/list.html for the /notes/ index. Emits the
+  <use> that names a symbol in mark-icons.html, or nothing for a maturity this
+  file does not know — which is the fallback that keeps a link to a page with
+  no stage rendering exactly as it did before item 15 of
+  docs/plans/digital-garden-design.md.
+
+  The sprite is filled with currentColor, so the mark's hue comes from the
+  topic-* class and the --topic rules in the stylesheet and this file has
+  nothing to say about colour. The shape is the maturity; the caller decides
+  the hue.
+*/}}
+{{- $maturity := .maturity | default "seedling" -}}
+{{- if in (slice "seedling" "sapling" "evergreen") $maturity -}}
+  <svg class="mark" aria-hidden="true"><use href="#mark-{{ $maturity }}" /></svg>
+{{- end -}}

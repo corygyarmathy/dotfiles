@@ -1,0 +1,45 @@
+{{/*
+  The growth-mark sprite, item 15 of docs/plans/digital-garden-design.md.
+  Three symbols, and each is the site's own favicon grown one stage: seedling
+  is the stem and one leaf, sapling adds the second, evergreen adds a crown.
+  Included by baseof.html only on pages where a mark rendered — the same
+  hasMark store flag the callout sprite gets from hasCallout — and referenced
+  from prose links and the /notes/ index by <use>.
+
+  Drawn as filled shapes, like the tab icon they descend from: at the size a
+  mark actually renders, a hairline disappears and a filled leaf does not.
+  Filled with currentColor, so the hue comes from the topic-* class and the
+  --topic rules in the stylesheet and this file knows nothing about colour.
+  The shape is the note's maturity and the colour is its topic, and the two
+  are decided in different places on purpose.
+
+  Symbols are hidden by making the whole sprite zero-size rather than
+  display:none, because the clone a <use> renders is drawn from the symbol in
+  the defining document.
+*/}}
+<svg xmlns="http://www.w3.org/2000/svg" class="mark-sprite" aria-hidden="true">
+  <symbol id="mark-seedling" viewBox="0 0 32 32">
+    <g fill="currentColor">
+      <path d="M14 29V16a2 2 0 0 1 4 0v13a2 2 0 0 1-4 0Z" />
+      <path d="M16 21c-6 0-10-4.5-10-10.5 6 0 10 4.5 10 10.5Z" />
+    </g>
+  </symbol>
+  <symbol id="mark-sapling" viewBox="0 0 32 32">
+    <g fill="currentColor">
+      <path d="M14 29V16a2 2 0 0 1 4 0v13a2 2 0 0 1-4 0Z" />
+      <path d="M16 21c-6 0-10-4.5-10-10.5 6 0 10 4.5 10 10.5Z" />
+      <path d="M16 17c0-6.5 4.5-11 11-11 0 6.5-4.5 11-11 11Z" />
+    </g>
+  </symbol>
+  <symbol id="mark-evergreen" viewBox="0 0 32 32">
+    <g fill="currentColor">
+      <path d="M14 29V16a2 2 0 0 1 4 0v13a2 2 0 0 1-4 0Z" />
+      <path d="M16 21c-6 0-10-4.5-10-10.5 6 0 10 4.5 10 10.5Z" />
+      <path d="M16 17c0-6.5 4.5-11 11-11 0 6.5-4.5 11-11 11Z" />
+      <circle cx="16" cy="7" r="3.4" />
+      <circle cx="10.5" cy="11" r="2.8" />
+      <circle cx="21.5" cy="11" r="2.8" />
+    </g>
+  </symbol>
+</svg>
+{{- /* newline omitted so the sprite sits flush against its neighbours */ -}}

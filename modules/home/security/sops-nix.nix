@@ -47,6 +47,9 @@ in
         "private_keys/personal" = {
           path = "${config.home.homeDirectory}/.ssh/id_ed25519_personal";
         };
+        "private_keys/deploy" = {
+          path = "${config.home.homeDirectory}/.ssh/deploy";
+        };
 
         # Example: Personal API token
         # "tokens/openai" = {

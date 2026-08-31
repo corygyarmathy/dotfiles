@@ -10,7 +10,7 @@ maturity: evergreen
 
 # Every Element
 
-The opening paragraph, which exists to be read at the measure the stylesheet caps prose to. It carries _emphasis_, **strong emphasis**, `inline code`, an ==Obsidian highlight==, a [link to another note](/another-note/), a [wikilink](/a-long-note/), and an [external link](https://gohugo.io) that should be marked as leaving the site. It also carries a footnote.[^1]
+The opening paragraph, which exists to be read at the measure the stylesheet caps prose to. It carries _emphasis_, **strong emphasis**, `inline code`, an ==Obsidian highlight==, a [[Another Note|link to another note]], a [[A Long Note|wikilink]], and an [external link](https://gohugo.io) that should be marked as leaving the site. It also carries a footnote.[^1] And a link to [a section below](#sidenotes), which is the same-page kind: the stylesheet underlines it with dots and gives it no sprout, because the link that stays in its own note has no destination note to describe.
 
 A second paragraph, so that the spacing between two paragraphs is visible and not inferred from the spacing between a paragraph and something else, and so that a footnote here is far enough from a footnote above it for the margin placement to be judged rather than assumed.[^2]
 

@@ -42,7 +42,7 @@
       # The published note links to the unpublished one, so the wikilink
       # rewriter is exercised rather than assumed.
       vault = pkgs.runCommand "garden-vault-fixture" { } ''
-        mkdir -p $out/essays $out/private
+        mkdir -p $out/essays $out/private $out/_Reference/Lighting $out/_Slip_Box
 
         cat > $out/essays/on-gates.md <<'NOTE'
         ---
@@ -61,6 +61,13 @@
 
         And to a heading inside it:
         [[On Boundaries#A Heading, With Punctuation -- and More]].
+
+        The marks are exercised by linking to notes that carry them: [[on-money|On Money]]
+        is the hand-written evergreen on the lighting shelf, [[on-sidenotes|On Sidenotes]] is
+        the sapling on the slip box, and [[On Boundaries]] is the neutral
+        seedling. And an [external site](https://example.invalid) exercises the
+        third link kind, while a [dead link](/no-such-page/) points at nothing
+        and must render as the plain anchor it always has.
 
         - [[On Boundaries]]
 
@@ -128,7 +135,7 @@
         # "Unrecognized Unicode character" - as a build-breaking error. It is
         # in the initial fixture rather than added later so that the very first
         # build has to survive it.
-        cat > $out/essays/on-money.md <<'NOTE'
+        cat > "$out/_Reference/Lighting/on-money.md" <<'NOTE'
         ---
         publish: true
         thesis: Prose about money is not maths.
@@ -160,7 +167,7 @@
         # stringified every element to the same value, coupled every paragraph
         # on the page into one bucket, and dragged notes like this one far from
         # the text that cites them.
-        cat > $out/essays/on-sidenotes.md <<'NOTE'
+        cat > "$out/_Slip_Box/on-sidenotes.md" <<'NOTE'
         ---
         publish: true
         ---
@@ -476,7 +483,7 @@
             ("/on-money/", "On Money"),
             ("/on-sidenotes/", "On Sidenotes"),
         ]:
-            assert f'<a href="{href}">{title}</a>' in page, \
+            assert re.search(f'<a href="{href}"[^>]*>{title}<svg class="mark"', page), \
                 f"{title} is not listed on /notes"
 
         # ... and served on the FIRST request, the same direct-200 pin the
@@ -496,9 +503,9 @@
         # Newest first. on-money is pinned to 2001 in the fixture; the other
         # notes are dated by the ledger on the day of the build, so the oldest
         # must sort below every one of them.
-        oldest = page.index('<a href="/on-money/">')
+        oldest = page.index('<a href="/on-money/"')
         for href in ["/on-gates/", "/on-boundaries/", "/on-sidenotes/"]:
-            assert page.index(f'<a href="{href}">') < oldest, \
+            assert page.index(f'<a href="{href}"') < oldest, \
                 f"{href} sorted below a note published in 2001"
 
         # The notes index is not in the feed: it is a section page, and the
@@ -1198,6 +1205,109 @@
             f"evergreen override proves nothing: {m.group(1)}"
         )
 
+    with subtest("the filter carries each note's topic into frontmatter"):
+        # Item 15: the topic hue is derived from the shelf a note lives on,
+        # and the filter writes that folder, slugified, into frontmatter as
+        # `topic` - the same value the bonsai's foliage reads. Two notes sit
+        # on the named shelves; on-gates stays in `essays`, which has no hue
+        # of its own; the landing page is at the root and gets the empty
+        # string, which is the honest no-topic answer rather than a made-up
+        # one.
+        head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/on-money.md")
+        assert re.search(r"^topic: lighting$", head, re.M), head
+        head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/on-sidenotes.md")
+        assert re.search(r"^topic: slip-box$", head, re.M), head
+        head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/on-gates.md")
+        assert re.search(r"^topic: essays$", head, re.M), head
+        head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/index.md")
+        assert re.search(r"^topic: \x27\x27$", head, re.M), head
+
+    with subtest("growth marks report maturity and topic on the /notes/ index"):
+        # Item 15's first use of the mark: the generated index shows at a
+        # glance what is finished. Each entry trails a mark whose SHAPE is the
+        # note's maturity stage and whose HUE is its topic - green for the
+        # slip box, orange for the lighting shelf, neutral for anything else.
+        # The shape is asserted by the symbol each <use> names, and the hue by
+        # the topic-* class the template wrote from the filter's frontmatter.
+        # on-money is the hand-written evergreen (orange), on-sidenotes the
+        # green sapling, on-gates the neutral sapling, and on-boundaries the
+        # neutral seedling.
+        page = served("/notes")
+        assert re.search(r'<a href="/on-money/" class="topic-lighting">On Money<svg class="mark"[^>]*><use href="#mark-evergreen"', page), \
+            "the on-money entry lost its orange evergreen mark"
+        assert re.search(r'<a href="/on-sidenotes/" class="topic-slip-box">On Sidenotes<svg class="mark"[^>]*><use href="#mark-sapling"', page), \
+            "the on-sidenotes entry lost its green sapling mark"
+        assert re.search(r'<a href="/on-gates/" class="topic-essays">On Gates<svg class="mark"[^>]*><use href="#mark-sapling"', page), \
+            "the on-gates entry lost its sapling mark"
+        assert re.search(r'<a href="/on-boundaries/" class="topic-essays">On Boundaries<svg class="mark"[^>]*><use href="#mark-seedling"', page), \
+            "the on-boundaries entry lost its seedling mark"
+        # Every symbol the entries reference is defined by the sprite on the
+        # same page - a mark that references a missing symbol draws nothing,
+        # which is the same silent failure as a link to an uncopied asset.
+        assert 'class="mark-sprite"' in page, "no mark sprite on the index"
+        for symbol in ["seedling", "sapling", "evergreen"]:
+            assert f'id="mark-{symbol}"' in page, \
+                f"a mark references #mark-{symbol}, which the sprite does not define"
+
+    with subtest("internal links carry the target's maturity and topic"):
+        # Item 15's second use of the mark: a link says whether it leads
+        # somewhere finished. The hook resolves the link back to the target
+        # page and reads its frontmatter, so the sprout is the TARGET's stage
+        # - on-money's hand-written evergreen included - and its hue is the
+        # target's shelf. on-boundaries is on the unnamed `essays` shelf,
+        # which has no hue: its link must still carry the sprout, and the
+        # stylesheet must have no rule for that topic - that absence is the
+        # neutral mark.
+        page = served("/on-gates")
+        assert re.search(r'<a href="/on-money/" data-maturity="evergreen" class="topic-lighting">', page), page[:1000]
+        assert 'href="#mark-evergreen"' in page
+        assert re.search(r'<a href="/on-sidenotes/" data-maturity="sapling" class="topic-slip-box">', page), page[:1000]
+        assert 'href="#mark-sapling"' in page
+        assert re.search(r'<a href="/on-boundaries/" data-maturity="seedling" class="topic-essays">', page), page[:1000]
+        # The same-page section link takes a dotted underline and no glyph,
+        # because there is no destination note to describe.
+        assert re.search(r'<a href="#some-section" class="link-section">', page), page[:1000]
+        # The external link keeps the arrow the stylesheet already emits; the
+        # hook must render it as a plain anchor with no sprout inside it.
+        assert re.search(r'<a href="https://example.invalid">[^<]*</a>', page), page[:1000]
+        # A link to a page that does not exist resolves to nothing, and the
+        # hook must render it exactly as the bare renderer did - a sprout for
+        # a page with no maturity would be a link that reports nothing.
+        dead = re.search(r'<a href="/no-such-page/">[^<]*</a>', page)
+        assert dead, page[:1000]
+        assert 'data-maturity' not in dead.group(0)
+        # And the sprite ships only where a mark rendered: on-gates has marks,
+        # on-boundaries has no outgoing markdown links and must not pay for
+        # one, and the home page's hand-written table of contents carries
+        # marks on each of its links.
+        assert 'class="mark-sprite"' in page
+        assert 'class="mark-sprite"' not in served("/on-boundaries"), \
+            "the mark sprite ships on a page with no marks"
+        assert 'class="mark-sprite"' in served("/"), \
+            "the home page's table-of-contents links should carry marks"
+
+    with subtest("the stylesheet draws the marks and their topic hues"):
+        # The marks are a visual element whose absence a build cannot report,
+        # so the stylesheet half is pinned like the callout icons: the glyph
+        # is sized and reads its hue from the --topic variable, the two named
+        # shelves carry their hues, and the same-page link is dotted - none
+        # of which a green gate would catch.
+        assert re.search(r'\.mark\s*{[^}]*width', css), "the mark glyph is not sized"
+        assert re.search(r'\.mark\s*{[^}]*color:\s*var\(--topic,\s*var\(--muted\)\)', css), \
+            "the mark no longer reads its hue from the topic variable"
+        assert re.search(r'\.topic-slip-box\s*{[^}]*--topic:\s*light-dark\(#6f894e,\s?#98bb6c\)', css), \
+            "the slip box topic is no longer green"
+        assert re.search(r'\.topic-lighting\s*{[^}]*--topic:\s*light-dark\(#cc6d00,\s?#ff9e3b\)', css), \
+            "the lighting topic is no longer orange"
+        assert re.search(r'a\.link-section\s*{[^}]*text-decoration-style:\s*dotted', css), \
+            "the same-page link is no longer dotted"
+        # The neutral mark is an ABSENCE, and an absence is exactly what a
+        # future edit reintroduces without noticing: a rule for the `essays`
+        # shelf (or any shelf the design has not named) would start colouring
+        # notes the design has decided stay hue-less.
+        assert not re.search(r'\.topic-essays', css), \
+            "an unnamed shelf has been given a hue"
+
     with subtest("a changed note's revision counter advances, its neighbours' do not"):
         # The ledger counts substantial rewrites per note: editing a note's
         # text changes its stored hash, which advances that note's `revisions`
@@ -1207,7 +1317,7 @@
         assert ledger["on-money"]["revisions"] == 0, ledger["on-money"]
 
         machine.succeed(
-            "printf '\\nMARKER-REVISED-BODY\\n' >> /var/lib/digital-garden/vault/essays/on-money.md"
+            "printf '\\nMARKER-REVISED-BODY\\n' >> /var/lib/digital-garden/vault/_Reference/Lighting/on-money.md"
         )
         machine.succeed("systemctl start digital-garden-build.service")
 

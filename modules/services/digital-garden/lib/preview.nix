@@ -19,7 +19,7 @@
 # vault is a poor thing to judge a stylesheet against: it contains whatever it
 # happens to contain, which today is nineteen notes of which ten have no
 # heading at all and five carry a single backlink. The fixture puts every
-# element the theme styles onto three pages, so a visual change is checked by
+# element the theme styles onto four pages, so a visual change is checked by
 # looking at those rather than by remembering which real note has a table in
 # it. It has its own dates ledger, so rendering it never touches the vault's.
 {
@@ -83,7 +83,7 @@ pkgs.writeShellApplication {
       --port N       port to serve on (default 8087)
       --once         render once and exit; do not serve or watch
       --fixture      render the theme's own fixture vault instead of yours:
-                     every element the stylesheet styles, on three pages
+                     every element the stylesheet styles, on four pages
 
     Renders the published subset of the vault exactly as the server does and
     serves it locally, re-rendering whenever the vault or the stylesheet
@@ -211,12 +211,16 @@ pkgs.writeShellApplication {
     # the old inode into oblivion and never fires again, so the first save
     # after startup would be the last one the preview ever noticed.
     #
-    # Dotfiles are excluded to match the filter, which ignores
-    # .obsidian/.git/.sync.lock. Without this, Obsidian's own churn in
-    # .obsidian re-renders the site continuously.
+    # Exclude the paths whose churn would re-render for no reason - Obsidian's
+    # own writes to .obsidian, git's to .git, and the .sync.lock marker -
+    # rather than every dotted path. An earlier version excluded all of them
+    # with '/\.', which also silenced a checkout under a dotted directory like
+    # .claude/worktrees/: the watched stylesheet there never re-rendered, and
+    # the loop this command exists to run silently stopped. The filter ignores
+    # all of these, so rendering for them would report work that did not happen.
     cssdir=$(dirname "$css")
     inotifywait -q -m -r -e modify,create,delete,move,close_write \
-      --exclude '/\.' --format '%w%f' "$vault/" "$cssdir/" \
+      --exclude '/(\.obsidian|\.git)(/|$)|\.sync\.lock$' --format '%w%f' "$vault/" "$cssdir/" \
       | while read -r changed; do
         # The watch is on the stylesheet's directory rather than the file (see
         # above), so it also fires for the editor's own scratch files - swap
