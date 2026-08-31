@@ -331,6 +331,11 @@ blockquote {
  * page into a patchwork. Types Obsidian treats as aliases of each other
  * share a hue; a type this file does not know gets --accent, not an error.
  *
+ * The label also carries the icon Obsidian gives the type (item 16): the
+ * title is a <use> into the sprite partial, stroked with currentColor, so it
+ * inherits the hue of the callout that carries it from the rule below and
+ * this block knows nothing about which type maps to which icon.
+ *
  * light-dark() keys off color-scheme, which the theme toggle sets, so each
  * hue is named once per theme rather than remapped in a separate block. */
 .callout {
@@ -362,12 +367,17 @@ blockquote {
 }
 .callout-tip,
 .callout-hint,
+.callout-important,
 .callout-success,
 .callout-check,
 .callout-done {
   --callout-accent: light-dark(#6f894e, #98bb6c); /* lotusGreen / springGreen */
 }
-.callout-important,
+/* Item 16's one mapping conflict, settled. The stylesheet used to group
+ * important WITH example on violet; Obsidian gives important the flame it
+ * gives tip, and example a list. "Match Obsidian" and "keep the hue
+ * grouping" disagreed on exactly this type, so the hue follows the icon:
+ * important is in the tip group above, and example keeps the violet alone. */
 .callout-example {
   --callout-accent: light-dark(#624c83, #957fb8); /* lotusViolet4 / oniViolet */
 }
@@ -402,11 +412,34 @@ blockquote {
   margin-bottom: 0;
 }
 
+/* The icon sits before the label, the same order Obsidian gives them, and
+ * aligns to the label's cap rather than its baseline — an icon at a text
+ * baseline floats a couple of pixels off the capital height. The gap is the
+ * distance between a glyph and the label's own letter-spacing. */
 .callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0 0 0.25rem;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--callout-accent);
+}
+
+.callout-icon {
+  flex-shrink: 0;
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* The sprite is zero-size but present, because the icon a <use> renders is
+ * cloned from the symbol in this document; display:none on the defining
+ * element would blank the clone in browsers that honour it. */
+.callout-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 /* Foldable callouts are <details>: the title row is the disclosure control. */

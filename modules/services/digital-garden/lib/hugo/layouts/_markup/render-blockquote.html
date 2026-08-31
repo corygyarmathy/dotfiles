@@ -16,17 +16,31 @@
   The type is not validated against a list - Obsidian lets a vault define its
   own callout types, and an unknown one simply gets the default accent from
   the stylesheet, with its own name on it.
+
+  The type is lowercased before it is used anywhere, because Obsidian's
+  callout types are case-insensitive and one spelling should not render
+  differently from another - a `> [!NOTE]` gets the same class, icon and
+  default title as `> [!note]`.
+
+  Item 16: the title carries the icon Obsidian gives the type, from
+  _partials/callout-icon.html, stroked in the callout's own hue. A type the
+  sprite does not know renders no icon and is otherwise unchanged. The
+  hasCallout store flag tells baseof.html to include the sprite only on pages
+  that actually rendered a callout - the same gating the KaTeX stylesheet
+  gets from hasMath.
 */}}
 {{ if eq .Type "alert" }}
-  {{ $title := .AlertTitle | default (title .AlertType) }}
+  {{ $.Page.Store.Set "hasCallout" true }}
+  {{ $type := lower .AlertType }}
+  {{ $title := .AlertTitle | default (title $type) }}
   {{ if eq .AlertSign "" }}
-    <div class="callout callout-{{ .AlertType }}">
-      <p class="callout-title">{{ $title }}</p>
+    <div class="callout callout-{{ $type }}">
+      <p class="callout-title">{{ partial "callout-icon.html" $type }}{{ $title }}</p>
       {{ .Text }}
     </div>
   {{ else }}
-    <details class="callout callout-{{ .AlertType }}"{{ if eq .AlertSign "+" }} open{{ end }}>
-      <summary class="callout-title">{{ $title }}</summary>
+    <details class="callout callout-{{ $type }}"{{ if eq .AlertSign "+" }} open{{ end }}>
+      <summary class="callout-title">{{ partial "callout-icon.html" $type }}{{ $title }}</summary>
       {{ .Text }}
     </details>
   {{ end }}

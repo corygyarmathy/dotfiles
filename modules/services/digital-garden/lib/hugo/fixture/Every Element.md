@@ -52,10 +52,16 @@ Headings wrap. The line-height they wrap at is set separately from the body's, a
 
 ## Callouts
 
-Obsidian's callout syntax, rendered by `_markup/render-blockquote.html`. Every type the stylesheet names a hue for appears here, because the point of the set is that it reads as one family and only the hue changes.
+Obsidian's callout syntax, rendered by `_markup/render-blockquote.html`. Every hue the stylesheet names appears here, because the point of the set is that it reads as one family and only the hue changes — and, since item 16, every distinct icon too, because the icon is the information the hue already carries, and the fixture exists to judge both by looking.
 
 > [!note] A note
 > The default type, and the one every unknown type falls back to.
+
+> [!info] An info
+> Shares the note's teal, but Obsidian gives it its own icon.
+
+> [!todo] A todo
+> Also in the teal group, with a check-circle where the note has a pencil.
 
 > [!abstract] An abstract
 > Also reachable as `summary` and `tldr`.
@@ -64,7 +70,13 @@ Obsidian's callout syntax, rendered by `_markup/render-blockquote.html`. Every t
 > Also `hint`, `success`, `check` and `done`.
 
 > [!important] Something important
-> Shares its hue with `example`.
+> Obsidian gives it the same flame as `tip`, so it shares the tip group's hue rather than `example`'s.
+
+> [!success] A success
+> The `check` mark, where `tip` and `important` carry the flame.
+
+> [!example] An example
+> The one type that keeps the violet on its own, marked with a list.
 
 > [!question] A question
 > Also `help` and `faq`.
@@ -73,7 +85,13 @@ Obsidian's callout syntax, rendered by `_markup/render-blockquote.html`. Every t
 > Also `caution` and `attention`.
 
 > [!failure] A failure
-> Also `fail`, `missing`, `danger`, `error` and `bug`.
+> Also `fail`, `missing`, `danger`, `error` and `bug` — which between them carry three more icons.
+
+> [!danger] A danger
+> A zap, where `failure` takes the cross.
+
+> [!bug] A bug
+> The third red icon, for the one type with its own shape.
 
 > [!quote] A quotation
 > Also `cite`. Rendered in the muted role rather than a hue of its own.

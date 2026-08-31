@@ -1,0 +1,45 @@
+{{/*
+  The icon for one callout type, referenced from
+  _markup/render-blockquote.html. Emits the <use> that names a symbol in
+  callout-icons.html, or nothing for a type the sprite does not know — which
+  is the fallback that keeps an unknown callout rendering exactly as it did
+  before item 16 of docs/plans/digital-garden-design.md.
+
+  The mapping is Obsidian's, and it is the whole of the item's value: the
+  vault is written in Obsidian, so the site renders the same information the
+  editor does. Aliases share one icon exactly as they share one hue. The
+  sprite is stroked with currentColor, so the icon takes the callout's own hue
+  without this file or the stylesheet having to name a colour.
+*/}}
+{{- $icon := index (dict
+  "note" "pencil"
+  "abstract" "clipboard-list"
+  "summary" "clipboard-list"
+  "tldr" "clipboard-list"
+  "info" "info"
+  "todo" "check-circle"
+  "tip" "flame"
+  "hint" "flame"
+  "important" "flame"
+  "success" "check"
+  "check" "check"
+  "done" "check"
+  "question" "help-circle"
+  "help" "help-circle"
+  "faq" "help-circle"
+  "warning" "alert-triangle"
+  "caution" "alert-triangle"
+  "attention" "alert-triangle"
+  "failure" "x"
+  "fail" "x"
+  "missing" "x"
+  "danger" "zap"
+  "error" "zap"
+  "bug" "bug"
+  "example" "list"
+  "quote" "quote"
+  "cite" "quote"
+) (lower .) -}}
+{{- if $icon -}}
+  <svg class="callout-icon" aria-hidden="true"><use href="#callout-icon-{{ $icon }}" /></svg>
+{{- end -}}

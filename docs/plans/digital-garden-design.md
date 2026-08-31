@@ -1,6 +1,6 @@
 # Plan: theme and navigation for the digital garden
 
-Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
+Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Item 16, the callout icons, was taken and is done on 2026-08-31 — the first of the 2026-08-31 set, per the sequencing that lets a small dependency-free item fill a short session. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
 
 | #   | Item                                | Size   | Depends on | Status      |
 | --- | ----------------------------------- | ------ | ---------- | ----------- |
@@ -19,7 +19,7 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-
 | 13  | Rename-stable ledger (defect)       | small  | -          | **done** 2026-08-31 (#118) |
 | 14  | Maturity: model, counter, override  | medium | 13         | **done** 2026-08-31 (#121) |
 | 15  | Growth marks, topic hue, link marks | small  | 14         | not started |
-| 16  | Callout icons on Obsidian's mapping | small  | -          | not started |
+| 16  | Callout icons on Obsidian's mapping | small  | -          | **done** 2026-08-31 |
 | 17  | A margin on every note              | medium | 14         | not started |
 | 18  | The bonsai                          | large  | 14         | not started |
 | 19  | The home page, composed once        | small  | 18         | not started |
@@ -523,6 +523,14 @@ The icons drawn for the prototype match Obsidian's _choices_ rather than Lucide'
 ### Cost and risk
 
 Two hours. No new failure mode: a type the sprite does not know renders exactly as it does today.
+
+### Shipped, 2026-08-31
+
+One sprite partial and one mapping partial, both in `layouts/_partials/`, and the render hook now drops a `<use>` into the callout title. The sprite is gated exactly as the KaTeX stylesheet is — a `hasCallout` store flag set in `render-blockquote.html` and read in `baseof.html` — so an iconless page ships no sprite at all, and a type the sprite does not know renders no icon, which is the fallback the plan priced in.
+
+The mapping conflict was settled as the plan said: `important` moved into the tip group's green (the flame) and `example` keeps the violet alone. The fixture grows an `example` callout and the five types the old one-per-hue set never showed (`info`, `todo`, `success`, `danger`, `bug`), so every distinct icon is on screen. The VM check pins the settlement in the stylesheet (the green and violet pairs, and the old `important, example` grouping by its absence) and pins the icons on the served page: the sprite present only where a callout rendered, and each `<use>` naming a symbol the sprite actually defines — the "link to an uncopied asset looks right and 404s" failure from item 11, met from the same-document side.
+
+Two facts worth recording. `pkgs.lucide` **does** exist in nixpkgs (0.563.0, riding flake.lock), so exact Lucide parity would have been a build-time copy exactly like KaTeX — it was not taken, because the prototype's own icons already matched Obsidian's choices and vendoring buys only geometry. And the type is now lowercased before it is used for the class, the icon and the default title, because Obsidian's callout types are case-insensitive and a `> [!NOTE]` should render exactly as `> [!note]` does; before this item the class silently depended on the marker's spelling.
 
 ## 17. A margin on every note (supersedes 12, absorbs 9)
 
