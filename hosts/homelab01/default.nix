@@ -236,6 +236,12 @@ in
       cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
     };
 
+    # The peer probes this host through its own `alive` endpoint
+    # (host-alive.nix), which is decoupled from any service. This host's
+    # tunnel routes both its own beacon and - because this host owns the
+    # tunnel - the peer's, which the `cg.publish` block below names.
+    host-alive.enable = true;
+
     monitoring = {
       enable = true;
       prometheus.enable = true;
@@ -254,6 +260,22 @@ in
       grafana.enable = true;
       zfs.enable = false;
       cloudflaredTarget = "${gateway}:20241";
+
+      # Reachability from outside this host (item 9 of
+      # docs/plans/deployment-hardening.md). This host's own probes
+      # (`httpProbes` above) run locally, so a change that cuts a host off from
+      # the network looks fine from the inside. These probe the peer instead,
+      # at the peer's own dedicated host-alive beacon (see
+      # modules/services/host-alive.nix) - a dependency-free 200-responder that
+      # is never moved or disabled with a service, so "homelab02 stops
+      # answering" here really means homelab02 is out of reach, not that one of
+      # its apps died. If it stops answering, this host - still up - pages.
+      remoteProbes = [
+        {
+          name = "homelab02";
+          url = "https://alive-homelab02.${domain}";
+        }
+      ];
 
       # httpProbes is not set: it defaults to every service this host
       # publishes. The two hosts used to hand-maintain overlapping lists that
@@ -447,6 +469,26 @@ in
     kavita.localOnly = false; # readers need it away from the LAN
     audiobookshelf.localOnly = false; # mobile apps stream from outside
     ntfy.localOnly = false; # push to phones on mobile data is the whole point
+
+    # This host's own host-alive beacon (modules/services/host-alive.nix).
+    # It is declared by the module with `localOnly` left to the host; it must
+    # be published publicly so the peer has a hostname to probe - whether that
+    # probe crosses the LAN or the tunnel depends on the resolver, not on this
+    # flag - hence `false` here.
+    alive.localOnly = false;
+
+    # The peer's host-alive beacon, published from here because this host owns
+    # the tunnel. Written here rather than by the module for the same reason
+    # grimmory is, but the port still comes from the peer's module - through
+    # this host's own `host-alive.port`, which the module pins equal across
+    # both servers (checks/publish.nix) - and the address from the fleet, so
+    # neither is transcribed.
+    alive-homelab02 = {
+      port = config.cg.service.host-alive.port;
+      upstream = storage.address;
+      probe = false;
+      localOnly = false; # the peer's beacon is published publicly, like any tunnel-routed service
+    };
 
     # Grimmory is the one service this host proxies without running: it lives
     # on the storage host, where the library is on local disk rather than the

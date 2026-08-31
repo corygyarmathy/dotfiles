@@ -131,9 +131,23 @@ groups:
 
   - name: services
     rules:
-      # HTTP probe failures
+      # HTTP probe failures. Scoped to a host's own probes (`job="blackbox-http"`
+      # named after the blackbox module, and not the peer's reachability
+      # probes, which carry `kind="remote"`). The remote ones are a host
+      # unreachable from outside, and are handled by
+      # HostUnreachableFromOutside - critical - rather than this warning.
+      #
+      # Scoping to a series (`kind!="remote"`) is not the same as scoping to an
+      # outage, but the two alerts are aimed at different things. The remote
+      # targets are the away host's dedicated host-alive beacons
+      # (host-alive.nix), so a plain service crash fires only this warning,
+      # while a host that is genuinely out of reach - which also takes every
+      # service it runs with it - co-fires the critical. That is intended: the
+      # warning stays accurate for a service failure and the critical adds the
+      # host-level line when the host itself is gone.
+
       - alert: ServiceDown
-        expr: probe_success == 0
+        expr: probe_success{job="blackbox-http",kind!="remote"} == 0
         for: 5m
         labels:
           severity: warning
@@ -141,6 +155,24 @@ groups:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#servicedown"
           summary: "Service unreachable"
           description: "{{ $labels.instance }} has been down for 5+ minutes"
+
+      # Reachability from outside the host (item 9 of the deployment-hardening
+      # plan). Every other probe in this file is made from the host it is
+      # watching: blackbox runs on the same box, so a machine cut off from its
+      # network still believes, locally, that everything is fine. These probes
+      # are made by the *peer* - a different machine that is presumed still up -
+      # against the public endpoints of this host, so it still answers when the
+      # affected one cannot. The instance label is the peer (the alerting
+      # host); the host label is who stopped answering.
+      - alert: HostUnreachableFromOutside
+        expr: probe_success{job="blackbox-http",kind="remote"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#hostunreachablefromoutside"
+          summary: "{{ $labels.host }} stopped answering from outside"
+          description: "{{ $labels.host }} is unreachable at {{ $labels.instance }} from its peer. Locally it may still believe it is fine - a firewall, interface or sshd change that cut it off. This may need a trip to the cupboard."
 
       # The blackbox probe keeps reading 200 while this is failing, because
       # Caddy serves the last good build. A failed builder is otherwise

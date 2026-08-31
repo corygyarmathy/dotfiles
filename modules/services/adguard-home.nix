@@ -93,7 +93,16 @@ let
     ++ map (mkRewrite storage) storageSubdomains
     ++ cfg.extraRewrites # add supplied rewrites
     ++ [
-      # Wildcard fallback - routes undefined subdomains to the gateway
+      # Wildcard fallback - routes undefined subdomains to the gateway.
+      #
+      # The host-alive beacons (`alive-<host>`, see host-alive.nix) are
+      # deliberately left to this wildcard rather than listed above: both
+      # resolve to the gateway's Caddy, so the peer's reachability probes cross
+      # the LAN instead of the public internet. That is a choice about which
+      # failure modes item 9 observes, not an accident - see the item 9
+      # "Deferred" section in docs/plans/deployment-hardening.md. If the beacons
+      # are ever meant to guarantee a public path, they must move out of the
+      # wildcard into an explicit Cloudflare-edge rewrite.
       {
         domain = "*.${domain}";
         answer = gateway;
