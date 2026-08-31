@@ -1,0 +1,141 @@
+name: automerge-nudge
+
+# Keep armed auto-merge PRs from deadlocking at BEHIND.
+#
+# `protect-main` sets `strict_required_status_checks_policy` - a PR must be up
+# to date with master before it can merge - and GitHub's auto-merge does not
+# update a branch on its own, so a PR with auto-merge armed and every check
+# green stops dead the moment master moves under it. The native fix for this,
+# the merge queue, is unavailable on this repo: it is owned by a user account,
+# and GitHub offers the merge queue only on organization-owned repositories (the
+# ruleset API rejects a `merge_queue` rule with a 422, and the UI shows no
+# "Require merge queue" rule). So this workflow does exactly what a stale armed
+# PR needs, the explicit way: it rebases the open PRs on the bot-owned `deps/*`
+# branches - the ones flake-update.yml and package-update.yml open - that are
+# armed for auto-merge and behind master, in least-recently-updated order, onto
+# master, stopping at the first success. It does not relax strict - strict is
+# what guarantees the tree that lands actually built as-of-the-merge - it
+# automates the step strict requires, which is what the "Update branch" click
+# used to be. The final merge is a squash either way, so the rebase only decides
+# the shape of the PR branch, not the history that lands.
+#
+# Scope: only `deps/*` branches, i.e. the branches FLAKE_UPDATE_TOKEN actually
+# owns. Dependabot rebases its own PRs, and GitHub stops Dependabot from
+# self-maintaining a branch once another actor force-pushes to it, so Dependabot
+# PRs are left for Dependabot (they are on `dependabot/*` heads anyway). Fork PRs
+# and human-armed PRs on other branches are left for a human: a rebase
+# force-pushes the head, and force-pushing a branch this token does not own is
+# not this job's call (and would fail red).
+#
+# Rebase, not merge: this repo prefers a clean linear PR branch (`--rebase`).
+# Rebase is safe here because each candidate head is a `deps/*` branch owned by
+# the same token - a force-push by that token keeps auto-merge armed (it only
+# disarms on a push by someone *without* write). A `deps/*` PR that conflicts on
+# rebase is skipped and left for a human to reconcile with the next version bump.
+#
+# Candidates are tried in order and the run stops at the first success, so one
+# PR that cannot be rebased does not starve the rest. A run that fails to rebase
+# every candidate exits non-zero so the deadlock is visible rather than silently
+# green (a silent success would hide a persistently-stuck PR).
+#
+# Token: FLAKE_UPDATE_TOKEN, not GITHUB_TOKEN. Updating a branch mints a new
+# head commit (a `pull_request: synchronize`), and GitHub suppresses workflow
+# runs for events raised by GITHUB_TOKEN - under GITHUB_TOKEN the required
+# `nixos ci` check would never run on the new head and the PR would go from
+# BEHIND-and-green to pending-forever: a worse deadlock than the one being
+# fixed. This is the mirror image of why flake-update.yml opens its PR with the
+# same token.
+#
+# This workflow fires on push/schedule/workflow_dispatch, not on Dependabot
+# events, so it reads FLAKE_UPDATE_TOKEN from *Actions* secrets - not the
+# Dependabot secret store that dependabot-auto-merge.yml needs.
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    # Every 15 minutes. One `gh pr list` call per run; scheduled workflows are
+    # delayed under load anyway, so a tighter cron buys nothing. The cron leg is
+    # load-bearing: a PR that is armed while already BEHIND (flakily, when a
+    # master push landed between the nightly open and arm) only the cron catches,
+    # because no future push arrives to nudge it.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Report which PR would be updated without updating it"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# One updater at a time. Two overlapping runs would both see the same BEHIND PR
+# and both race to update it; the update is idempotent but there is no value in
+# the racing.
+concurrency:
+  group: automerge-nudge
+  cancel-in-progress: false
+
+jobs:
+  nudge:
+    name: rebase the stale auto-merge PRs on deps/* branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Rebase the first stale deps/* auto-merge PR
+        env:
+          GH_TOKEN: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::FLAKE_UPDATE_TOKEN is empty. Add it under Settings > Secrets and variables > Actions. This workflow is triggered by push and schedule (not Dependabot), so it reads Actions secrets rather than Dependabot secrets."
+            exit 1
+          fi
+
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            echo "::notice::dry-run: reporting only, not updating any branch"
+          fi
+
+          # Open PRs targeting master, armed for auto-merge, behind the base, on a
+          # branch this token owns. `mergeStateStatus == BEHIND` is the exact state
+          # this workflow can fix; DIRTY (a conflict) and CLEAN (already current)
+          # are excluded - a rebase cannot resolve a conflict, and nothing behind a
+          # CLEAN PR needs doing. `isCrossRepository == false` and the `deps/`
+          # head prefix keep it to the branches FLAKE_UPDATE_TOKEN can
+          # legitimately force-push (Dependabot and human branches are
+          # deliberately left out). Sorted least recently updated first.
+          prs="$(gh pr list --base master --state open --limit 100 --repo corygyarmathy/dotfiles \
+            --json number,updatedAt,mergeStateStatus,autoMergeRequest,isCrossRepository,headRefName \
+            --jq '[.[] | select(
+                    (.mergeStateStatus == "BEHIND")
+                    and (.autoMergeRequest != null)
+                    and (.isCrossRepository == false)
+                    and (.headRefName | startswith("deps/"))
+                  )] | sort_by(.updatedAt) | .[].number // empty')"
+
+          if [ -z "$prs" ]; then
+            echo "::notice::no open auto-merge PR on a deps/* branch is behind master; nothing to do."
+            exit 0
+          fi
+
+          # Try each stale PR in order, stopping at the first rebase that succeeds,
+          # so one un-rebasable PR does not starve the others. Exit non-zero only if
+          # every candidate failed - that is the stuck-and-needs-a-human signal.
+          for pr in $prs; do
+            echo "::notice::rebasing PR #$pr onto master (behind master, auto-merge armed)"
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              exit 0
+            fi
+            if gh pr update-branch --rebase "$pr"; then
+              echo "::notice::PR #$pr rebased; its required checks now run on the new head"
+              exit 0
+            fi
+            echo "::warning::could not rebase PR #$pr; trying the next one"
+          done
+
+          echo "::error::no stale deps/* PR could be rebased - a conflict or a server-side rebase failure. The stale auto-merge PR or PRs need a human (recommend asking the updater to bump again, which registers the branch)."
+          exit 1
