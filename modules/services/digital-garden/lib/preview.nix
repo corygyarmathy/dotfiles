@@ -49,6 +49,10 @@ pkgs.writeShellApplication {
     pkgs.caddy
     pkgs.inotify-tools
     pkgs.coreutils
+    # For publish-filter.py's revision counter: against a git vault it seeds
+    # each new note's count from `git log --follow`, and the preview runs the
+    # same filter as the service.
+    pkgs.git
   ];
   text = ''
     vault=''${GARDEN_VAULT:-${defaultVault}}

@@ -127,6 +127,7 @@
         publish: true
         thesis: Prose about money is not maths.
         published: 2001-02-03
+        maturity: evergreen
         ---
 
         # On Money
@@ -1038,6 +1039,64 @@
             "fn:3 has an empty margin above it and must sit on its citation: "
             f"note={notes['fn:3']} cite={cites['fn:3']}"
         )
+
+    with subtest("every published note carries a computed maturity"):
+        # Item 14: the maturity model lives in publish-filter.py, which emits a
+        # stage and a score into every staged note's frontmatter. Nothing
+        # renders them yet - the margin that will is item 17 - so the contract
+        # to pin is the staging tree, where the filter wrote them.
+        staged = sorted(machine.succeed("ls /var/lib/digital-garden/content").split())
+        assert staged, "no staged notes to check maturity on"
+        for note in staged:
+            head = machine.succeed(f"sed -n '1,25p' /var/lib/digital-garden/content/{note}")
+            assert re.search(r"^maturity: (seedling|sapling|evergreen)$", head, re.M), (
+                f"{note} has no maturity stage:\n{head}"
+            )
+            assert re.search(r"^maturity_score: \d+(\.\d+)?$", head, re.M), (
+                f"{note} has no maturity score:\n{head}"
+            )
+
+    with subtest("a hand-written maturity wins over the computed score"):
+        # on-money is a short note with no links, sections or rewrites: its
+        # computed score is well below the sapling threshold. Its frontmatter
+        # says `maturity: evergreen`, and that hand-written stage must survive
+        # the filter unchanged - exactly as a hand-written `published:` beats
+        # the ledger. The score stays computed, so the override can be read
+        # next to what the model thinks.
+        head = machine.succeed("sed -n '1,25p' /var/lib/digital-garden/content/on-money.md")
+        assert re.search(r"^maturity: evergreen$", head, re.M), head
+        m = re.search(r"^maturity_score: ([0-9.]+)$", head, re.M)
+        assert m, "on-money lost its computed score"
+        assert float(m.group(1)) < 1.5, (
+            "on-money's score is not below the sapling threshold, so the "
+            f"evergreen override proves nothing: {m.group(1)}"
+        )
+
+    with subtest("a changed note's revision counter advances, its neighbours' do not"):
+        # The ledger counts substantial rewrites per note: editing a note's
+        # text changes its stored hash, which advances that note's `revisions`
+        # by one and nobody else's. The fixture vault has no git history, so
+        # every counter was seeded at zero on the first build.
+        ledger = json.loads(machine.succeed("cat /var/lib/digital-garden/dates.json"))
+        assert ledger["on-money"]["revisions"] == 0, ledger["on-money"]
+
+        machine.succeed(
+            "printf '\\nMARKER-REVISED-BODY\\n' >> /var/lib/digital-garden/vault/essays/on-money.md"
+        )
+        machine.succeed("systemctl start digital-garden-build.service")
+
+        # The watcher may also fire a build a few seconds later; it runs the
+        # same filter over the same state, so the counter settles at 1 either
+        # way - the second run sees the hash it recorded and bumps nothing.
+        ledger = json.loads(machine.succeed("cat /var/lib/digital-garden/dates.json"))
+        assert ledger["on-money"]["revisions"] == 1, (
+            f"on-money revisions did not advance: {ledger['on-money']}"
+        )
+        for neighbour in ["on-gates", "on boundaries", "on-sidenotes"]:
+            assert ledger[neighbour]["revisions"] == 0, (
+                f"{neighbour} revisions moved while its text did not: "
+                f"{ledger[neighbour]}"
+            )
 
     with subtest("a renamed note keeps its publication date"):
         # The ledger is keyed by the note's filename, so a rename used to
