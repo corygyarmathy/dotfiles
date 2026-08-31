@@ -446,6 +446,57 @@ blockquote {
   overflow: hidden;
 }
 
+/* ── growth marks ───────────────────────────────────────────────────────── */
+
+/* The mark is the site's own favicon, grown one stage at a time (item 15):
+ * seedling is the stem and one leaf, sapling adds the second, evergreen adds
+ * a crown. One sprite of three symbols in _partials/mark-icons.html, each a
+ * filled shape in currentColor, so this block supplies only the size and the
+ * hue. The shape is the note's maturity; the hue is its topic; the two are
+ * decided in different places on purpose.
+ *
+ * A mark appears on every internal link (the target's maturity, in the
+ * target's topic hue), on every /notes/ entry, and later in the margin
+ * (item 17). The three link kinds are told apart by shape, not hue — the
+ * decision that shaped this item — because Kanagawa gives about eight usable
+ * hues and the callouts have spent most of them: an internal link takes the
+ * target's sprout, a link to a section of the same note takes a dotted
+ * underline and no glyph, and an external link keeps the arrow above.
+ */
+
+/* The glyph itself, sized like a small inline icon. The hue is the topic,
+ * read from the same `.topic-*` class the bonsai's foliage carries — the
+ * `--topic` variable it sets is the one place a shelf-to-hue mapping lives,
+ * so a new shelf in the vault is one line of CSS for the tree and the marks
+ * together. A note with no shelf (an empty topic) has no class and no
+ * `--topic`, so the fallback is the muted role: the mark reports its
+ * maturity without shouting about it. */
+.mark {
+  color: var(--topic, var(--muted));
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  flex-shrink: 0;
+  vertical-align: -0.125em;
+}
+
+/* A link to a section of the note the reader is already on has no destination
+ * note to describe, so it takes no glyph — the kind is carried by the dotted
+ * underline alone, which reads as "a place in this note" next to the sprouts
+ * that mark other notes. */
+a.link-section {
+  text-decoration-style: dotted;
+}
+
+/* Same zero-size treatment as the callout sprite above, for the same reason:
+ * the clone a <use> renders comes from the symbol in the defining document. */
+.mark-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 /* Foldable callouts are <details>: the title row is the disclosure control. */
 summary.callout-title {
   cursor: pointer;
@@ -1397,6 +1448,12 @@ pagefind-modal {
    * instead, which is the same mark made with ink. */
   mark {
     text-decoration: underline;
+  }
+
+  /* The growth marks are ink too. A topic hue that reports a shelf on screen
+   * is just a shade of grey under toner, and the sheet stays in one voice. */
+  .mark {
+    color: #000;
   }
 
   /* Breaks that a page has no way to scroll past. A heading at the foot of a

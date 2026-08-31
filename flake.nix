@@ -236,7 +236,7 @@
       # for why.
       #
       # The second renders the theme's own fixture instead: every element the
-      # stylesheet styles, on three pages, which is what a visual change is
+      # stylesheet styles, on four pages, which is what a visual change is
       # judged against - the vault is a poor test of a stylesheet, because it
       # contains whatever it happens to contain.
       #
