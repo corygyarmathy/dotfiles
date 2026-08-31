@@ -76,6 +76,12 @@
         > [!question] A type with no GitHub equivalent
         > MARKER-CALLOUT-QUESTION
 
+        > [!important] The important flame
+        > MARKER-CALLOUT-IMPORTANT
+
+        > [!example] The example list
+        > MARKER-CALLOUT-EXAMPLE
+
         Some ==MARKER-HIGHLIGHT== prose.
 
         %% MARKER-COMMENT-SECRET %%
@@ -520,6 +526,24 @@
         assert "fonts.googleapis.com" not in css and "fonts.gstatic.com" not in css, \
             "the stylesheet fetches a font from a CDN"
 
+        # Item 16's one mapping conflict, settled in the stylesheet. Obsidian
+        # gives `important` the flame it gives `tip`, so important moved into
+        # the tip group's green, and `example` keeps the violet on its own -
+        # the two used to share a single violet rule. These pin the
+        # settlement rather than the colours: a drift back toward the old
+        # grouping, or a new grouping that splits the families differently,
+        # fails here.
+        assert re.search(r'\.callout-important[^}]*light-dark\(#6f894e,\s?#98bb6c\)', css), \
+            "important no longer shares the tip group's green"
+        assert re.search(r'\.callout-example\s*{[^}]*light-dark\(#624c83,\s?#957fb8\)', css), \
+            "example no longer holds the violet alone"
+        assert not re.search(r'\.callout-important,\s*\.callout-example', css), \
+            "important is grouped with example again"
+        # And the icon is sized to its label; its colour is inherited, never
+        # set here.
+        assert re.search(r'\.callout-icon\s*{[^}]*width', css), \
+            "the callout icon is not sized"
+
     with subtest("a table wraps to the page, and scrolls only when it cannot"):
         # Three independent failures are guarded here, each of which alone is a
         # bug, and two of which have actually shipped.
@@ -707,6 +731,33 @@
         # of still renders as a callout, under its own name.
         assert 'class="callout callout-question"' in page
         assert "A type with no GitHub equivalent" in page
+
+        # Item 16: each callout type carries the icon Obsidian gives it,
+        # stroked in the callout's own hue. The sprite ships only on pages
+        # that rendered a callout (the hasCallout store flag, the same gating
+        # the KaTeX stylesheet gets from hasMath), and every <use> names a
+        # symbol the sprite actually defines - an icon that references a
+        # missing symbol draws nothing, which is the same silent failure as a
+        # link to an uncopied asset.
+        assert 'class="callout-sprite"' in page, \
+            "no callout icon sprite on a page with callouts"
+        assert 'class="callout-sprite"' not in served("/"), \
+            "the icon sprite ships on pages with no callouts"
+        for icon in ["pencil", "flame", "alert-triangle", "help-circle", "list"]:
+            assert f'href="#callout-icon-{icon}"' in page, \
+                f"no {icon} callout icon on the page"
+            assert f'id="callout-icon-{icon}"' in page, \
+                f"a callout references #callout-icon-{icon}, which the sprite does not define"
+        # The conflict item 16 settled: important takes the flame, example the
+        # list - the two types that used to share a hue on violet.
+        assert 'class="callout callout-important"' in page
+        assert "MARKER-CALLOUT-IMPORTANT" in page
+        assert 'class="callout callout-example"' in page
+        assert "MARKER-CALLOUT-EXAMPLE" in page
+        # The icons are stroked in currentColor, so they inherit the callout's
+        # own hue from the title rule; a colour hard-coded in the sprite would
+        # undo the whole design.
+        assert 'stroke="currentColor"' in page
 
     with subtest("obsidian's internal-only syntax never leaves the vault"):
         page = served("/on-gates")

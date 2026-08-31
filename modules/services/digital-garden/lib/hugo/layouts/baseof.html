@@ -119,6 +119,18 @@
 
       <main>{{ block "main" . }}{{ end }}</main>
 
+      {{/*
+        The callout icon sprite, only where a callout rendered. The flag is
+        set by _markup/render-blockquote.html while the content above was
+        evaluated - which is why this sits after <main> rather than in the
+        head, where hasMath needs the .WordCount trick to arrive early. An
+        iconless page pays nothing for the sprite, the same deal the KaTeX
+        stylesheet gets from hasMath. See _partials/callout-icons.html.
+      */}}
+      {{ if .Page.Store.Get "hasCallout" }}
+        {{ partial "callout-icons.html" . }}
+      {{ end }}
+
       <footer>
         <hr />
         <p>&copy; {{ now.Year }} {{ site.Title }}</p>
