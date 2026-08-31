@@ -1,21 +1,59 @@
 {{ define "main" }}
   {{/*
-    The bonsai (docs/plans/digital-garden-design.md, item 18). Grown by
-    publish-filter.py and left in the staging tree as ready markup, which
-    lib/hugo.nix moves into assets; all this template does is inline it. That
-    is the whole reason the page ships no generator and no library - the
-    characters are already in the HTML by the time it is served, and the only
-    script involved reveals ones that are already there.
+    The landing page, composed once (docs/plans/digital-garden-design.md,
+    item 19). The name at scale, the site's own sentence and links under it,
+    the garden counted on the bottom edge, and the tree beside all of it —
+    one composition rather than a heading and a picture sharing a screen.
+
+    This IS the page's masthead: baseof.html renders none here, because a site
+    title in two sizes on one page is two mastheads. Every interior page keeps
+    the masthead it has, and the tools are shared between the two so that the
+    ids their scripts bind to exist exactly once per page.
+
+    The tree (item 18) is grown by publish-filter.py and left in the staging
+    tree as ready markup, which lib/hugo.nix moves into assets; all this
+    template does is inline it. That is the whole reason the page ships no
+    generator and no library — the characters are already in the HTML by the
+    time it is served, and the only script involved reveals ones that are
+    already there.
 
     `resources.Get` returns nothing when there is no tree, so a content tree
-    that came from somewhere other than the filter still renders a home page.
+    that came from somewhere other than the filter still renders a home page —
+    with the name and the colophon, which are read off the pages themselves.
 
     Outside <article>, deliberately. The article is what carries
     data-pagefind-body, and the tree's caption store holds the title of every
     note on the site - indexing it here would put the whole garden into the
     search results for the home page.
   */}}
-  {{ with resources.Get "bonsai.html" }}{{ .Content | safeHTML }}{{ end }}
+  <header class="nameplate">
+    <div class="nameplate-tools">{{ partial "masthead-tools.html" . }}</div>
+    <div class="nameplate-id">
+      <p class="nameplate-title">{{ site.Title }}</p>
+      {{/*
+        The site's own sentence, and the same one <meta name="description">,
+        the social card and the feed are given - `description.html` resolves it
+        once precisely so the page cannot say something different from what it
+        tells a search engine it says. It is one line of configuration, not
+        prose written for this composition.
+      */}}
+      {{ with partial "description.html" . }}
+        <p class="nameplate-blurb">{{ . }}</p>
+      {{ end }}
+      {{/*
+        The site's links, from the same `footerLinks` the footer renders, so
+        that "where else to find me" is one list in the host's configuration
+        and not two that drift. Nothing is rendered when none are configured.
+      */}}
+      {{ with site.Params.footerLinks }}
+        <ul class="nameplate-links">
+          {{ range . }}<li><a href="{{ .url }}">{{ .name }}</a></li>{{ end }}
+        </ul>
+      {{ end }}
+      {{ partial "colophon.html" . }}
+    </div>
+    {{ with resources.Get "bonsai.html" }}{{ .Content | safeHTML }}{{ end }}
+  </header>
 
   {{/*
     The landing page is a hand-written table of contents, not a generated list:
@@ -25,7 +63,9 @@
   {{/* Same wrapper as a note, with nothing in the margins to put there. The
        wide grid builds either way and the article is always its centre
        column, so the landing page's prose lands exactly where every note's
-       prose lands - which is the point of using the same wrapper. */}}
+       prose lands - which is the point of using the same wrapper. The
+       composition above is the one thing on this site that is wider than the
+       measure, and the prose beneath it is not. */}}
   <div class="layout">
     <article data-pagefind-body>
       <h1>{{ .Title }}</h1>

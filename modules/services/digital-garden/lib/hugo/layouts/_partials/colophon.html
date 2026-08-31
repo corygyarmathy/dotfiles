@@ -1,0 +1,27 @@
+{{/*
+  The garden, counted. Item 19's line under the site title, and every number
+  in it is item 14's model read back off the frontmatter the filter already
+  wrote — nothing here computes a stage, it only counts the ones published.
+
+  `site.RegularPages` is exactly the published notes: the landing page is the
+  home kind and /notes/ is a section list, so neither is in it. That is the
+  same set _default/list.html ranges over and the same set the bonsai above
+  grew from, which is why the count beside the tree is the count of the tree.
+
+  A hand-written `maturity:` the site does not recognise counts in the total
+  and in none of the three — the same rule the tree follows when it falls back
+  to the computed stage to draw a pad, since the note is published either way.
+  Three numbers summing to less than the total is then a typo made visible,
+  which is the useful way for that to fail.
+*/}}
+{{ $notes := site.RegularPages }}
+{{ $total := len $notes }}
+{{ $evergreen := len (where $notes "Params.maturity" "evergreen") }}
+{{ $sapling := len (where $notes "Params.maturity" "sapling") }}
+{{ $seedling := len (where $notes "Params.maturity" "seedling") }}
+<p class="colophon">
+  {{ $total }} {{ cond (eq $total 1) "note" "notes" }} &middot;
+  {{ $evergreen }} evergreen &middot;
+  {{ $sapling }} growing &middot;
+  {{ $seedling }} {{ cond (eq $seedling 1) "seedling" "seedlings" }}
+</p>

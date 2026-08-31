@@ -1279,6 +1279,74 @@
             "the bonsai's caption store is inside the indexed article"
         )
 
+    with subtest("the colophon counts the garden the tree grew from"):
+        # Item 19. The line under the name is item 14's model read back off the
+        # frontmatter the filter wrote, so the property worth pinning is not
+        # that it renders - it is that it agrees with what is published. A
+        # colophon claiming eighteen notes where nineteen are published is
+        # wrong in exactly the way a screenshot cannot show, and the way it
+        # would go wrong is the page set: site.RegularPages must be the notes,
+        # with the landing page and the generated /notes/ index outside it.
+        #
+        # Counted from the staging tree for the same reason the tree above is:
+        # earlier subtests have already published a note the fixture did not
+        # start with.
+        stages = []
+        staged = machine.succeed("ls /var/lib/digital-garden/content/*.md").split()
+        for note in staged:
+            # Not a note it counts, the same rule that keeps the landing page
+            # off the tree and out of the backlink graph.
+            if note.endswith("/index.md"):
+                continue
+            head = machine.succeed(f"sed -n '1,25p' {note}")
+            stage = re.search(r"^maturity: (\w+)$", head, re.M)
+            assert stage, f"{note} has no maturity to count:\n{head}"
+            stages.append(stage.group(1))
+
+        home = served("/")
+        line = re.search(r'<p class="colophon">(.*?)</p>', home, re.S)
+        assert line, "no colophon on the home page"
+        counted = re.search(
+            r"(\d+) notes? &middot;\s*(\d+) evergreen &middot;\s*"
+            r"(\d+) growing &middot;\s*(\d+) seedlings?",
+            line.group(1),
+        )
+        assert counted, f"the colophon does not read as a count: {line.group(1)!r}"
+        assert [int(n) for n in counted.groups()] == [
+            len(stages),
+            stages.count("evergreen"),
+            stages.count("sapling"),
+            stages.count("seedling"),
+        ], (counted.groups(), stages)
+        # Not vacuous: on-money's hand-written `maturity: evergreen` is the
+        # only thing that puts a note in that column, so a colophon counting
+        # computed stages instead of published ones would read zero here.
+        assert int(counted.group(2)) >= 1, "the hand-written evergreen is not counted"
+
+    with subtest("the composition belongs to the home page alone"):
+        # Item 19: one site title per page. The home page carries it at scale
+        # and baseof.html drops the small one there; every interior page is
+        # the masthead it has always been, and carries no composition.
+        home = served("/")
+        assert '<p class="nameplate-title">' in home, home[:400]
+        assert 'class="masthead-title"' not in home, (
+            "the home page carries the site title twice"
+        )
+        # And the composition is outside the indexed article, for the reason
+        # the bonsai's caption store is: a search for the site would otherwise
+        # return the home page for the words "notes evergreen growing".
+        assert home.index('class="nameplate"') < home.index("data-pagefind-body"), (
+            "the composition is inside the indexed article"
+        )
+
+        essay = served("/on-gates/")
+        assert 'class="masthead-title"' in essay, essay[:400]
+        # The bonsai is matched on its element rather than on the word: the
+        # script that grows it is inlined on every page and names the plate it
+        # looks for, and finding nothing is how it stays off an essay.
+        for stray in ['class="nameplate"', 'class="colophon"', 'class="bonsai-plate"']:
+            assert stray not in essay, f"an interior page rendered {stray}"
+
     with subtest("a renamed note keeps its publication date"):
         # The ledger is keyed by the note's filename, so a rename used to
         # look like a brand-new note: the old key disappears, the new key

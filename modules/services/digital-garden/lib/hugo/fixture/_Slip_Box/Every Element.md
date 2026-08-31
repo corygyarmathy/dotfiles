@@ -1,6 +1,11 @@
 ---
 publish: true
 thesis: Every element the theme styles, on one page, so a stylesheet change can be judged by looking.
+# Hand-written, and the fixture's reason for it is the fixture's reason for
+# everything: this is the note that has to render the evergreen glyph and the
+# evergreen count, and a three-note vault does not earn one on the model's own
+# terms. It exercises item 14's override at the same time.
+maturity: evergreen
 ---
 
 # Every Element

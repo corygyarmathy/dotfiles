@@ -69,6 +69,13 @@
    * as a column of its own, narrow enough that a note still reads as
    * belonging to the paragraph beside it. */
   --gutter: 3rem;
+  /* One line of the bonsai's caption: its own size times its own leading. The
+   * caption holds two of these open so that a long note's name does not move
+   * the page, and the colophon across the composition from it is lifted by
+   * one, so the two small grey lines that close the header sit on the same
+   * line as each other. Three rules have to agree about that number, so it is
+   * written once. */
+  --caption-line: calc(0.85rem * 1.3);
   color-scheme: light;
 }
 
@@ -205,6 +212,210 @@ footer {
 :root[data-theme="dark"] .icon-sun,
 :root[data-theme="light"] .icon-moon {
   display: none;
+}
+
+/* ── the home page ──────────────────────────────────────────────────────── */
+
+/* One composition: the name at scale, the garden counted under it, and the
+ * tree beside the pair — docs/plans/digital-garden-design.md, item 19. The
+ * landing page used to be an h1 and a list with a large tree above them,
+ * which was two unrelated things sharing a screen.
+ *
+ * This is where the 2026-08-31 decision spends its one purely visual change:
+ * the stylesheet has nothing above 1.75rem anywhere else, so the site has no
+ * scale contrast, and it is bought here and nowhere else. It does not reopen
+ * item 6 — the face is still the system stack, and a name at 4.25rem is a
+ * size rather than a change of voice. */
+
+/* The header is one grid: the words on the left, and the tools above the tree
+ * on the right. Everything that belongs to it is inside it, which is what lets
+ * the tools sit exactly over the tree's right edge instead of over whatever
+ * width a separate masthead happened to be capped at.
+ *
+ * Sized to its contents rather than to a token, and centred. The first cut of
+ * this pinned the band to `--measure + --gutter + --margin-col` and put the
+ * two columns at its two ends, which spread them 156px further apart than
+ * anything in them needed - the name and the tree stopped reading as one
+ * header and became a left-hand thing and a right-hand thing. The width now
+ * comes from the only two measurements the page actually has: a column wide
+ * enough to set the name and its sentence, and however wide the tree grew. */
+.nameplate {
+  display: grid;
+  grid-template-columns: minmax(0, 24rem) auto;
+  /* The tools have a row of their own across the top rather than a cell beside
+   * the name, so that the name and the tree BEGIN on the same line. Sharing
+   * the top row with the tools lifted the name a tool's height above the top
+   * of the tree, which is a stagger nothing else on the page explains. */
+  grid-template-areas:
+    "tools tools"
+    "id    tree";
+  /* The second row takes what is left, so the words run the full height of the
+   * band and the two columns finish together as well as start together. */
+  grid-template-rows: auto 1fr;
+  width: fit-content;
+  max-width: 100%;
+  column-gap: 3rem;
+  /* Both columns run the full height of the band rather than being centred
+   * in it. Centred, the name block floated in the middle of a tree twice its
+   * height and the three parts read as three elements that happened to be
+   * near each other; stretched, the two columns start and finish together and
+   * the header has a top edge and a bottom edge. What lands at the bottom of
+   * each is the same kind of thing: the colophon on one side, the tree's
+   * caption on the other, both small, both muted, one line each. */
+  align-items: stretch;
+  /* And the rule an interior page draws under its masthead, drawn here under
+   * the whole composition. It is what makes the tools, the name and the tree
+   * one header rather than three things above the prose. */
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  margin: 0 auto 3rem;
+}
+
+.nameplate-id {
+  grid-area: id;
+}
+
+.nameplate-tools {
+  grid-area: tools;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.nameplate .bonsai-plate {
+  grid-area: tree;
+}
+
+/* The name, the blurb and the count. Pushed to the two edges of the band so
+ * that the count lands on the same line as the tree's caption opposite it -
+ * both columns then start and finish together, and what closes each of them
+ * is one short muted line. */
+.nameplate-id {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Centred and stacked. The breakpoint is 60rem rather than the 48rem the two
+ * columns actually need, because "fits" and "reads" part company between the
+ * two: at 51rem the name and the tree do sit side by side, and what they look
+ * like is a word jammed against a tree with no margin either side. Stacked,
+ * all three parts centre on one axis, which is the same composition seen
+ * end-on rather than a different one. */
+@media (max-width: 60rem) {
+  .nameplate {
+    width: auto;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "tools"
+      "id"
+      "tree";
+    grid-template-rows: auto auto auto;
+    justify-items: center;
+    row-gap: 1.5rem;
+  }
+
+  .nameplate-tools {
+    justify-self: stretch;
+    margin-bottom: 0;
+  }
+
+  /* Centred as a block by the grid above, and centred as text in here. NOT on
+   * `.nameplate`: `text-align` inherits, and a centred `<pre>` centres every
+   * line of the tree independently - which is not a centred tree, it is a
+   * tree with its rows shuffled sideways into a spindle. */
+  .nameplate-id {
+    display: block;
+    text-align: center;
+  }
+
+  /* `text-align` does not reach a flex container's items, so the links need
+   * centring in their own terms once the column is centred. */
+  .nameplate-links {
+    justify-content: center;
+  }
+}
+
+.nameplate-title {
+  margin: 0;
+  /* The masthead title is 1.1rem, so this is the same words at roughly four
+   * times the size. It follows the viewport between the two ends: 4.25rem of
+   * a long name does not fit a phone, and the floor is the size at which it
+   * still reads as the page's mark rather than as a heading.
+   *
+   * The name wraps when the tree leaves it a narrow column, and that is the
+   * composition working rather than failing: both were rendered, and a name
+   * on one line beside a tall tree is a thin band of type with a hole under
+   * it, while two lines make a block that stands against the canopy. A
+   * smaller garden gives the name a wider column and it sets on one line
+   * again. `break-word` is for the title this file cannot see - a single very
+   * long word would otherwise push the tree off its own column. */
+  font-size: clamp(2.25rem, 6.5vw, 4.25rem);
+  overflow-wrap: break-word;
+  line-height: 1;
+  font-weight: 600;
+  /* Type set this large looks loose at the tracking that suits a 1.1rem
+   * masthead; a name is one word-group and should read as one. */
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+
+/* The site's one sentence about itself, under the name it belongs to. Sized
+ * between the name and the colophon because that is what it is between: it is
+ * read once, and it is not the count. */
+.nameplate-blurb {
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Where else to find me: the same links the footer carries, at the top of the
+ * one page that is about the site rather than about a note. One list in the
+ * configuration, so the two cannot drift apart.
+ *
+ * A list, not a paragraph of links: these are a set of destinations, and the
+ * markup should say so for the same reason the footer's does. */
+.nameplate-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.95rem;
+}
+
+/* Auto margin on the count rather than on whatever happens to sit above it:
+ * the name, the sentence and the links are all optional in one way or another,
+ * and this is the one element that is always last. Every spare pixel goes
+ * above it, which is what lands it on the band's bottom edge level with the
+ * tree's caption. The padding is the gap it needs when there are no spare
+ * pixels to take - the narrow layout, where this column is not a flex box and
+ * an auto margin is zero. */
+.nameplate-id .colophon {
+  margin-top: auto;
+  padding-top: 0.9rem;
+}
+
+/* The garden counted, from item 14's model — see _partials/colophon.html for
+ * where the numbers come from. Small, quiet and spaced: it is a caption to
+ * the name above it and to the tree beside it, and the two are the same
+ * count seen twice. Tabular figures so the digits sit in a row rather than
+ * shuffling with the vault. */
+.colophon {
+  margin: 0.9rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* In the composition the tree is a column, not a centred block with a page
+ * of its own: the grid places it and the gap below it is the composition's. */
+.nameplate .bonsai-plate {
+  margin: 0;
 }
 
 /* ── prose ──────────────────────────────────────────────────────────────── */
@@ -1064,11 +1275,17 @@ h4:hover > .heading-anchor,
   /* Sized to the tree rather than to the measure, and centred. The tree is
    * between about thirty and seventy characters wide depending on how much has
    * been published, and centring the box it actually occupies is what keeps
-   * the composition centred as the garden grows. */
+   * the composition centred as the garden grows.
+   *
+   * It does NOT scroll: `overflow-x` belongs on the tree below, which is the
+   * thing that can be too wide. It was here, and `overflow-x: auto` forces
+   * `overflow-y` to `auto` as well - so this box clipped its own last line,
+   * and the descenders of a wrapped caption were shaved off along the bottom
+   * edge. The caption is not the part that can overflow, and it should not
+   * have been inside the part that can. */
   width: fit-content;
   max-width: 100%;
   margin: 0 auto 2.5rem;
-  overflow-x: auto;
 }
 
 .bonsai {
@@ -1081,7 +1298,11 @@ h4:hover > .heading-anchor,
    * bottom of the element on some renderers. */
   padding: 0 0 0.3em;
   border-radius: 0;
-  overflow: visible;
+  /* A tree wider than the page scrolls in its own box, which is what the
+   * 1.25rem ceiling above is allowed to cost past about a hundred notes. The
+   * bottom padding is inside that box, so the soil's underscores still clear
+   * the edge. */
+  overflow-x: auto;
   margin: 0;
 
   font-family: var(--mono-font);
@@ -1097,10 +1318,18 @@ h4:hover > .heading-anchor,
    * vault ten times the size of this one, and paying for it today is what kept
    * the picture small. At 1.25rem every vault up to about a hundred notes
    * still fits; past that `.bonsai-plate` scrolls, which is what its
-   * `overflow-x` is for. Item 19 composes this page around the tree and may
-   * want the scale again - this is the size it should start from, not a
-   * decision that item has to undo. */
-  font-size: clamp(0.5rem, 2vw, 1.25rem);
+   * `overflow-x` is for. Item 19 composed the page around the tree at exactly
+   * this ceiling and did not want the scale again, so 1.25rem is where the
+   * question closed.
+   *
+   * The SLOPE is item 19's, and it is the number nobody had looked at. At 2vw
+   * a phone drew a thirty-two character tree about 150px wide, a smudge under
+   * a name three times its size - on the one layout where the tree has the
+   * whole width to itself, since the composition stacks there. 3.2vw makes it
+   * about 215px on a 375px screen and still cannot overflow: that is 45
+   * characters of plate, which is a two-hundred-note vault. Nothing above
+   * 625px moves, because the ceiling is already reached there. */
+  font-size: clamp(0.5rem, 3.2vw, 1.25rem);
   /* A character cell is about twice as tall as it is wide before leading is
    * added, and the pad geometry in bonsai.py is built on that ratio - it
    * halves x when it orders a pad's cells by distance. Tightening the line box
@@ -1157,10 +1386,35 @@ h4:hover > .heading-anchor,
 
 .bonsai-caption {
   margin: 0.75rem auto 0;
-  max-width: 34rem;
+  /* Zero width, then filled out to the plate: a caption must not be what
+   * decides how wide the plate is. `.bonsai-plate` is `fit-content`, and a
+   * caption free to be as wide as its longest note pushed the plate out to
+   * that width the moment a long note was pointed at - which, inside the
+   * composition's `auto` column, dragged the whole tree sideways as the
+   * pointer moved. A percentage min-width contributes nothing to intrinsic
+   * sizing, so the tree alone sizes the plate and the caption wraps to the
+   * tree. */
+  width: 0;
+  min-width: 100%;
   /* Held open at the height of its tallest state, so that nothing below the
-   * tree moves as the caption changes under the pointer. */
-  min-height: 2.6em;
+   * tree moves as the caption changes under the pointer. Two lines, because
+   * the caption now wraps to the tree's width rather than to its own.
+   *
+   * Anchored to the BOTTOM of that box, so the room held open for a second
+   * line is above the caption rather than below it. Below, it was a line of
+   * empty space between the header and the rule that closes it, and it left
+   * the caption off the line its opposite number - the colophon - sits on.
+   * Above, it is space under the tree, which is where a picture wants space
+   * anyway. A two-line caption then grows up into it and nothing moves.
+   *
+   * A column, because the caption's two lines are two elements - the name and
+   * the facts, see `to_html` in bonsai.py. In a row they would sit side by
+   * side and wrap wherever they ran out of tree. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: calc(2 * var(--caption-line));
   font-size: 0.85rem;
   line-height: 1.3;
   color: var(--muted);
@@ -1177,6 +1431,13 @@ h4:hover > .heading-anchor,
 .bonsai-caption b {
   color: var(--strong);
   font-weight: 600;
+}
+
+/* The second line: how long the note is and how far along it is. Its own
+ * element so the break between the name and the numbers is decided here
+ * rather than by wherever the text happened to run out of room. */
+.bonsai-meta {
+  display: block;
 }
 
 /* Mid-growth. The characters are in the markup either way; this is what lets
@@ -1432,3 +1693,5 @@ pagefind-modal {
     break-inside: avoid;
   }
 }
+
+

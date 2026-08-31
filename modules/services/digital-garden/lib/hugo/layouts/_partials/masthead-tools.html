@@ -1,0 +1,26 @@
+{{/*
+  Search and theme, the site's two controls. A partial because they appear in
+  two places that are not the same element: the masthead on every interior
+  page, and the home page's composition, which is that page's masthead and is
+  laid out as one grid (see home.html, item 19). Duplicating the markup would
+  duplicate the ids the scripts in baseof.html bind to, so there is one copy
+  and only one of the two places renders per page.
+
+  The controls are buttons, not boxes: a bordered field containing the word
+  "Search" reads as an input you can type into, and this one opens a dialog.
+*/}}
+<button
+  class="icon-button"
+  id="search-open"
+  aria-label="Search"
+  aria-haspopup="dialog"
+>
+  {{ partial "icon-search.html" . }}
+</button>
+{{/* The label is rewritten by the script in baseof.html, which is the only
+     thing that knows which of the three states the page is in. This one is
+     what a reader with no JavaScript gets, where the button does nothing
+     anyway. */}}
+<button class="icon-button" id="theme-toggle" aria-label="Change theme">
+  {{ partial "icon-theme.html" . }}
+</button>
