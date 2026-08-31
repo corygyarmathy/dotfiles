@@ -886,6 +886,10 @@
         page = machine.succeed("curl -s http://localhost:8086/no-such-note")
         assert '<aside class="life" aria-hidden="true">' in page, page[-800:]
         assert 'id="garden-life"' in page
+        # Centred beneath the message, in the body - not in a margin. The
+        # placement is the design, so it is pinned rather than assumed.
+        assert re.search(r'</p>\s*<aside class="life" aria-hidden="true">', page), \
+            "the life no longer sits directly beneath the message"
         assert "garden-life" not in served("/"), \
             "the life leaked onto the home page (two growing things is one too many)"
         assert "garden-life" not in served("/on-gates"), \

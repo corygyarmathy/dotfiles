@@ -2,9 +2,10 @@
   {{/*
     The 404 is the only page on this site with nothing to read, and it is the
     only page that gets something that reports nothing: a Game of Life, seeded
-    from an R-pentomino, painted in --border in the empty left margin (beneath
-    the prose on a narrow screen, the way the rail falls back). It is
-    deliberately nowhere else — in particular not on the home page, where two
+    from an R-pentomino, sitting in the middle of the prose directly beneath
+    the message — the centre of the page is its one piece of empty body, and
+    a thing that lives only to look cool belongs where the eye lands. It is
+    deliberately nowhere else, in particular not on the home page, where two
     growing things would be one too many.
 
     The script below is the whole feature. The cells are cells, not notes, so
@@ -14,10 +15,10 @@
     <article>
       <h1>Not found</h1>
       <p>There is no page at this address. Try the <a href="{{ "/" | relURL }}">index</a>.</p>
+      <aside class="life" aria-hidden="true">
+        <canvas id="garden-life" width="480" height="312"></canvas>
+      </aside>
     </article>
-    <aside class="life" aria-hidden="true">
-      <canvas id="garden-life" width="240" height="156"></canvas>
-    </aside>
   </div>
   {{/*
     Conway's Game of Life, about a kilobyte. The R-pentomino is the five-cell
@@ -59,10 +60,10 @@
       }
       function paint() {
         // Read fresh each frame so a theme change while the page is open
-        // repaints in the new --border with nothing to observe it. The literal
-        // is the light theme's border; it only shows if the stylesheet lost.
+        // repaints in the new --accent with nothing to observe it. The literal
+        // is the light theme's accent; it only shows if the stylesheet lost.
         ctx.fillStyle =
-          getComputedStyle(document.documentElement).getPropertyValue("--border") || "#e6e2c8";
+          getComputedStyle(document.documentElement).getPropertyValue("--accent") || "#4d699b";
         ctx.clearRect(0, 0, cv.width, cv.height);
         for (var r = 0; r < rows; r++)
           for (var c = 0; c < cols; c++)

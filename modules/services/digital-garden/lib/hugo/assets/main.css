@@ -1012,42 +1012,30 @@ h4:hover > .heading-anchor,
 
 /* ── ambient life ───────────────────────────────────────────────────────── */
 
-/* Game of Life on the 404, painted in --border, sitting in the empty left
- * margin the way the rail does. It is the one thing on this site that reports
- * nothing — the cells are cells, not notes — which is why it lives on the one
- * page that has nothing to read, and nowhere else: in particular not on the
- * home page, where a second growing thing would be one too many.
+/* Game of Life on the 404, painted in --accent on a --code-bg well, centred
+ * in the middle of the prose it follows. It is the one thing on this site
+ * that reports nothing — the cells are cells, not notes — which is why it
+ * lives on the one page that has nothing to read, and nowhere else: in
+ * particular not on the home page, where a second growing thing would be one
+ * too many.
  *
- * The narrow layout is the default, so below the breakpoint the aside falls
- * into the flow beneath the essay exactly as the rail does — same markup, one
- * piece of CSS deciding where it sits. */
+ * A well rather than bare cells, and accent rather than --border: in the
+ * site's quietest colour on the bare page the cells read as invisible, and
+ * this is the one page that can afford a thing that is merely cool. The well
+ * is the code well's, so the panel needs no new colour. */
 .life {
-  margin-top: 3rem;
+  width: fit-content;
+  margin: 2rem auto 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
 }
 
 .life canvas {
   display: block;
   max-width: 100%;
   height: auto;
-}
-
-@media (min-width: 80rem) {
-  .life {
-    grid-column: 1;
-    grid-row: 1;
-    /* The grid's align-items is baseline, which an empty aside resolves to
-     * its bottom edge — the canvas would hang from the title's baseline. The
-     * article starts at the top of the row, and so should this. */
-    align-self: start;
-    margin-top: 0;
-  }
-
-  .life canvas {
-    /* The margin column is exactly the canvas's own 240px at the default
-     * root size, so this is a 1:1 paint rather than a stretch; it only scales
-     * when the reader's root size moves the column. */
-    width: 100%;
-  }
 }
 
 /* ── the notes index ────────────────────────────────────────────────────── */
