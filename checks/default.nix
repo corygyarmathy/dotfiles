@@ -303,6 +303,14 @@ in
     inherit pkgs;
     lib = pkgs.lib;
   };
+  download-root-canary = testLib.mkTest ./download-root-canary.nix;
+  download-root-canary-script = import ./download-root-canary-script.nix {
+    inherit pkgs inputs self;
+  };
+  download-root-safety = import ./download-root-safety.nix {
+    inherit pkgs inputs self;
+    lib = pkgs.lib;
+  };
   grafana = testLib.mkTest ./grafana.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
 
