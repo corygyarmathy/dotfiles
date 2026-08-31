@@ -66,6 +66,17 @@ in
         default = "protonvpn";
         description = "VPN service provider for Gluetun";
       };
+
+      syncReadyTimeoutSeconds = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 90;
+        description = ''
+          How long `vpn-port-sync` waits for gluetun to report an active VPN
+          connection before skipping the run (polling every 5 seconds). A
+          skipped run retries on the next timer fire; a gluetun that never
+          connects is alerted separately by `GluetunVpnDisconnected`.
+        '';
+      };
     };
   };
 
@@ -260,6 +271,36 @@ in
           QB_USER=$(cat "$CREDENTIALS_DIRECTORY/qbt-user")
           QB_PASS=$(cat "$CREDENTIALS_DIRECTORY/qbt-pass")
           API_KEY=$(cat "$CREDENTIALS_DIRECTORY/gluetun-api-key" | sed 's/^HTTP_CONTROL_SERVER_API_KEY=//')
+
+          # Gate on gluetun actually being connected, not merely on its
+          # container unit being active. podman-gluetun.service reaches
+          # "active" as soon as the container has started; the WireGuard
+          # handshake and the port-forward request happen after that. On a cold
+          # boot this unit's OnBootSec fired inside that gap, exited 1, and sat
+          # in the `failed` state long enough for upgrade verification to read
+          # it as "the new generation came up broken" (2026-08-31).
+          #
+          # Connectivity is not this unit's to fail on: it is
+          # gluetun-health-exporter's business and already alerts as
+          # GluetunVpnDisconnected. So wait a bounded time, then skip the run
+          # rather than fail it - the timer fires again every 5 minutes.
+          STATUS=""
+          attempts=$(( ${toString cfg.vpn.syncReadyTimeoutSeconds} / 5 ))
+          while [ "$attempts" -gt 0 ]; do
+            attempts=$(( attempts - 1 ))
+            STATUS=$(curl -sf --max-time 5 -H "X-API-Key: $API_KEY" \
+              "http://localhost:8000/v1/vpn/status" 2>/dev/null \
+              | jq -r '.status // empty' 2>/dev/null)
+            if [ "$STATUS" = "running" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$STATUS" != "running" ]; then
+            echo "Gluetun did not connect within ${toString cfg.vpn.syncReadyTimeoutSeconds}s; skipping this run. Connectivity alerts separately as GluetunVpnDisconnected."
+            exit 0
+          fi
 
           FORWARDED_PORT=$(curl -sf -H "X-API-Key: $API_KEY" \
             "http://localhost:8000/v1/portforward" 2>/dev/null \
