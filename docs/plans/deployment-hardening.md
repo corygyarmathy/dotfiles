@@ -14,7 +14,7 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 | 4   | Behaviour tests           | large   | **harness + 3 tests landed** - `media-stack` waits on the container move |
 | 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
 | 6   | `deploy-rs` interactively | small   | **done** 2026-08-30 - `homelab01` deployed end to end with `magicRollback` confirmation; `homelab02` still needs its bootstrap switch + first deploy |
-| 8   | Download-root canary      | small   | not started - the replacement item 4 named and skipped   |
+| 8   | Download-root canary      | small   | **done** 2026-08-30 - sentinel, alert, guard and tests landed |
 | 9   | Reachability from outside | small   | not started - the last gap whose recovery is physical    |
 | 10  | Deploy-user sudo on SSH keys | small | not started - the security half of item 6, parked by the operator 2026-08-30 |
 
@@ -616,6 +616,17 @@ Detection rather than prevention, and it should be described that way wherever i
 ### Done when
 
 A sentinel file exists in the download root on both servers, its absence raises an alert through the existing rules, and deleting it by hand fires that alert.
+
+### What landed
+
+`modules/services/media-stack/download-root-canary.nix`, sized as the plan asks:
+
+- **Runtime canary.** `.download-root-canary` is primed and checked by the `download-root-canary` timer (first run 5min after boot, then 10min) and published as `download_root_canary_present` through `cg.service.monitoring.textfileCollector`. Only the store owner primes - homelab02's local ZFS - at most once per boot (a `/run` marker), so a wiping service is never handed its sentinel back, the oscillation trap the `for:` needs. homelab01 is the NFS client under a `root_squash` export and only observes: its root is squashed to nobody and cannot create or chown inside the 2775 tree, and so a client can never mask a wipe by re-priming. `DownloadRootCanaryMissing` (`for: 20m`, critical) is in `alert-rules.yml`, unit-tested by promtool, with a `docs/runbooks/media-stack.md` runbook.
+- **Static guard, honestly sized.** A NixOS assertion that no service-declared output/post-processing option covers `dataPath/downloads` or an ancestor of it, by path segment; today that means `cg.service.suwayomi.downloadPath` and `cg.service.shelfmark.ingestPath`, and new output options must register here. It runs on every host build. It cannot see the in-database paths that actually caused 07-25/07-27 - the header and the runbook say so plainly, which is the point the item's own ranking critique makes.
+- **Detection honesty about mounts.** ENOENT from an unmounted automount (the NFS server unreachable) is indistinguishable from a wiped root to a stat, so it is reported 1/unconfirmed, and a dead server pages through its own monitors rather than as data loss. A hung hard-mounted stat is bounded by `timeout(1)` and reported the same way; there is no boot-time `wantedBy` run whose stat could stall `multi-user.target` against a down server.
+- **Tests.** `checks/download-root-canary.nix` boots the canary in a VM and asserts the owner primes, reports 1, and re-arms on a fresh boot. `checks/download-root-canary-script.nix` runs the real script against fixture mountinfo and pins the owner-primes/client-observes/unmounted-store behaviour the VM cannot reach. `checks/download-root-safety.nix` pins the guard's segment boundary itself: it must trip for `/`, the download root, and its ancestor, and pass for a sibling like `/srv/media/downloadsX`.
+
+Both hosts get it with no host edits: the canary defaults on wherever media-stack and monitoring are enabled.
 
 ---
 

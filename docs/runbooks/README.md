@@ -8,7 +8,7 @@ notification lands on the right section directly.
 ## Index
 
 | Runbook | Covers |
-|---|---|
+| --- | --- |
 | [fleet-map.md](fleet-map.md) | What runs where - read once, keep in mind during any incident |
 | [node.md](node.md) | Host vitals: TargetDown, systemd units, disk/memory/CPU/temperature, unexpected reboots |
 | [zfs.md](zfs.md) | Pool health, checksum and I/O errors, scrubs |
@@ -17,6 +17,7 @@ notification lands on the right section directly.
 | [backups.md](backups.md) | Restic backup runs |
 | [vpn.md](vpn.md) | Gluetun VPN connectivity and port forwarding |
 | [digital-garden.md](digital-garden.md) | Garden build and Obsidian sync |
+| [media-stack.md](media-stack.md) | The download-root canary: a wiped/emptied shared download root |
 
 ## Conventions
 

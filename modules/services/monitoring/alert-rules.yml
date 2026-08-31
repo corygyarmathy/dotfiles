@@ -544,3 +544,29 @@ groups:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/vpn#gluetunportnotforwarded"
           summary: "Gluetun has no forwarded port on {{ $labels.instance }}"
           description: "VPN is connected but port forwarding returned 0 — qBittorrent will show as firewalled"
+  - name: media
+    rules:
+      # The download-root canary (modules/services/media-stack/download-root-canary.nix,
+      # item 8 of docs/plans/deployment-hardening.md). A primed sentinel in the
+      # shared download root is published as download_root_canary_present by the
+      # download-root-canary timer; the plan's "done when" is that deleting it by
+      # hand fires this alert.
+      #
+      # Detection, not prevention: the download root is a shared mutable directory
+      # several services are configured - in their own databases - to write to.
+      # What this promises is that it will not be quietly empty for long.
+      #
+      # `for: 20m` sits just above the check cadence (10m) plus one scrape
+      # interval, so a single bad scrape cannot fire it while a genuinely missing
+      # sentinel still alerts within the hour. The exporter publishes 1 (present
+      # or unconfirmed) rather than 0 while a mount is hung, so a dead NFS server
+      # pages through its own monitors, not here.
+      - alert: DownloadRootCanaryMissing
+        expr: download_root_canary_present == 0
+        for: 20m
+        labels:
+          severity: critical
+        annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/media-stack#downloadrootcanarymissing"
+          summary: "Download root canary missing on {{ $labels.instance }}"
+          description: "The sentinel file in the download root has been confirmed absent for 20+ minutes. Either the download root was wiped or emptied, or the sentinel was removed deliberately - a stopped canary timer cannot fire this alert (node_exporter keeps serving the last-written metric), so check the download-root-canary unit and then face a wiped root."

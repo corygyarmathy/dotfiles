@@ -15,6 +15,13 @@
 #     its unenriched self.
 #   - the annotation templates render the tail into the notification, and
 #     degrade to the journalctl pointer when there is no tail.
+#
+# And, for the download-root canary (item 8 of the hardening plan):
+#   - DownloadRootCanaryMissing must not fire while
+#     download_root_canary_present is 1, and must mature (after its `for:`)
+#     only on a sustained 0 - the distinguishing behaviour of its exporter,
+#     which re-creates the sentinel only once per boot and otherwise reports
+#     the truth of its absence.
 rule_files:
   - @RULES@
 
@@ -95,3 +102,40 @@ tests:
               runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosupgradefailed"
               summary: "NixOS upgrade failed on homelab02:9100"
               description: "The nixos-upgrade service has failed.\n\nRecent upgrade output:\nerror: hash mismatch in fixed-output derivation"
+
+  # The download-root canary rule: 1 stays silent, a sustained 0 fires only
+  # after `for: 20m`. The exporter primes the sentinel once per boot and does
+  # not re-create it, so a series that reads 0 is a genuine disappearance, but
+  # a single scrape could read it before the timer's next write - the `for:`
+  # is what keeps that from being a page.
+  - interval: 1m
+    input_series:
+      - series: 'download_root_canary_present{job="node",instance="homelab01:9100"}'
+        # present for the first five minutes, then gone: 5 + 22 = 27 samples,
+        # evals at 26m, 21 minutes into the 0-run - one minute past the 20m
+        # `for:` threshold, so a tightening of the boundary fails loudly here.
+        values: "1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+
+    alert_rule_test:
+      - eval_time: 26m
+        alertname: DownloadRootCanaryMissing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: node
+              instance: homelab01:9100
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/media-stack#downloadrootcanarymissing"
+              summary: "Download root canary missing on homelab01:9100"
+              description: "The sentinel file in the download root has been confirmed absent for 20+ minutes. Either the download root was wiped or emptied, or the sentinel was removed deliberately - a stopped canary timer cannot fire this alert (node_exporter keeps serving the last-written metric), so check the download-root-canary unit and then face a wiped root."
+
+  # Control: a present sentinel must not alert at any time.
+  - interval: 1m
+    input_series:
+      - series: 'download_root_canary_present{job="node",instance="homelab01:9100"}'
+        values: "1+0x30"
+
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: DownloadRootCanaryMissing
+        exp_alerts: []
