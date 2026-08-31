@@ -303,6 +303,7 @@ in
     inherit pkgs;
     lib = pkgs.lib;
   };
+  deploy-sudo = testLib.mkTest ./deploy-sudo.nix;
   download-root-canary = testLib.mkTest ./download-root-canary.nix;
   download-root-canary-script = import ./download-root-canary-script.nix {
     inherit pkgs inputs self;

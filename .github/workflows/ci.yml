@@ -172,6 +172,7 @@ jobs:
           - digital-garden-sync-health
           - deploy-schema
           - deploy-activate
+          - deploy-sudo
           - download-root-canary
           - download-root-canary-script
           - download-root-safety

@@ -36,6 +36,16 @@ in
           User = "coryg";
         };
 
+        # deploy-rs connects as `deploy@…` (item 10 of the hardening plan) and
+        # that account only accepts its own key, not the human's. Offer only
+        # the dedicated deploy key on those connections so the personal key is
+        # never presented to the deploy account.
+        "deploy@homelab01 deploy@homelab02" = {
+          User = "deploy";
+          IdentitiesOnly = true;
+          IdentityFile = [ "~/.ssh/deploy" ];
+        };
+
         "*" = {
           IdentityFile = [ "~/.ssh/id_ed25519_personal" ];
           AddKeysToAgent = "yes";
