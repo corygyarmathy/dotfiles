@@ -312,6 +312,41 @@ def coalesce_aliases(front):
     return out
 
 
+def carry_renames(ledger, published):
+    """Move a ledger entry across a rename, keyed by content hash.
+
+    The ledger is keyed by the note's filename (see `update_ledger`), so a
+    renamed note looks like a new one: its entry is never found, and
+    `published` silently resets to today. Detect the rename the way git
+    does, from the hash the ledger already stores: where exactly one ledger
+    key has disappeared and exactly one published key is new, and the two
+    share a content hash, they are the same note and the entry moves.
+
+    The 1:1 restriction is the whole of the safety argument. Two notes with
+    identical content are rare but possible — a stub duplicated as a
+    starting point — and a wrong carry is worse than a reset date, because
+    it would silently attribute one note's history to another. Anything that
+    is not an unambiguous pair stays a new note, which is exactly what
+    happens without this function.
+    """
+    new_by_hash = {}
+    for key in set(published) - set(ledger):
+        digest = hashlib.sha256(published[key][1].encode("utf-8")).hexdigest()
+        new_by_hash.setdefault(digest, []).append(key)
+    gone_by_hash = {}
+    for key, entry in ledger.items():
+        if key in published:
+            continue
+        if isinstance(entry, dict) and "hash" in entry:
+            gone_by_hash.setdefault(entry["hash"], []).append(key)
+    for digest, keys in new_by_hash.items():
+        if len(keys) != 1:
+            continue
+        gone = gone_by_hash.get(digest, [])
+        if len(gone) == 1:
+            ledger[keys[0]] = ledger.pop(gone[0])
+
+
 def update_ledger(ledger, key, text, today):
     """First sighting sets `published`; a changed note bumps `modified`.
 
@@ -322,6 +357,8 @@ def update_ledger(ledger, key, text, today):
     Keyed by the note's filename, deliberately not by its URL. The two are
     nearly the same string, and conflating them would mean that any future
     change to how a URL is derived silently re-dates every note on the site.
+    A rename moves the entry before this runs (see `carry_renames`), so the
+    changed key does not re-date the note.
     """
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     entry = ledger.get(key)
@@ -478,6 +515,13 @@ def main(argv):
             ledger = {}
     except (OSError, ValueError):
         ledger = {}
+
+    # A note that was renamed has a new key and no entry, which would re-date
+    # it. Carry the entry across before the write loop looks anything up, so
+    # a rename preserves `published` (and, from item 14 on, the revision
+    # counter). Runs against the filtered `published` set, so a note that was
+    # dropped as unparseable is not mistaken for a rename.
+    carry_renames(ledger, published)
 
     today = date.today().isoformat()
     tmp = staging.with_name(staging.name + ".new")

@@ -1038,5 +1038,49 @@
             "fn:3 has an empty margin above it and must sit on its citation: "
             f"note={notes['fn:3']} cite={cites['fn:3']}"
         )
+
+    with subtest("a renamed note keeps its publication date"):
+        # The ledger is keyed by the note's filename, so a rename used to
+        # look like a brand-new note: the old key disappears, the new key
+        # has no entry, and `published` silently reset to today. That is the
+        # defect this pins, and it is pinned by giving the note a date that
+        # is NOT today first.
+        #
+        # The first build dated every note today, so a naive "rename and
+        # assert the date is unchanged" would pass with or without the fix -
+        # a reset lands on today and today is what the note already had. The
+        # ledger is therefore seeded with a past date before the rename, and
+        # the assertion is that the renamed note still carries it.
+        machine.succeed(
+            "python3 - <<'PY'\n"
+            "import json\n"
+            'ledger = json.load(open("/var/lib/digital-garden/dates.json"))\n'
+            'assert "on-gates" in ledger, ledger\n'
+            'ledger["on-gates"]["published"] = "2001-01-01"\n'
+            'json.dump(ledger, open("/var/lib/digital-garden/dates.json", "w"))\n'
+            "PY"
+        )
+
+        # Rename the note in the vault. The rename changes both gates (the
+        # file list and the content tree), so the builder runs the filter
+        # rather than skipping. The watcher may also fire a build a few
+        # seconds later; it runs the same filter over the same state, so the
+        # result is the same either way.
+        machine.succeed(
+            "mv /var/lib/digital-garden/vault/essays/on-gates.md "
+            "/var/lib/digital-garden/vault/essays/on-gates-renamed.md"
+        )
+        machine.succeed("systemctl start digital-garden-build.service")
+
+        # The renamed note keeps the seeded date, in the ledger and on the
+        # page a reader sees.
+        ledger = json.loads(machine.succeed("cat /var/lib/digital-garden/dates.json"))
+        assert "on-gates-renamed" in ledger, ledger.keys()
+        assert ledger["on-gates-renamed"]["published"] == "2001-01-01", (
+            f"renamed note was re-dated: {ledger['on-gates-renamed']}"
+        )
+        assert "on-gates" not in ledger, "the old key lingered after the rename"
+        page = served("/on-gates-renamed")
+        assert 'datetime="2001-01-01"' in page, page[-400:]
   '';
 }
