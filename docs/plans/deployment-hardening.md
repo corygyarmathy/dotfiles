@@ -15,7 +15,7 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 | 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
 | 6   | `deploy-rs` interactively | small   | **done** 2026-08-30 - `homelab01` deployed end to end with `magicRollback` confirmation; `homelab02` still needs its bootstrap switch + first deploy |
 | 8   | Download-root canary      | small   | **done** 2026-08-30 - sentinel, alert, guard and tests landed |
-| 9   | Reachability from outside | small   | not started - the last gap whose recovery is physical    |
+| 9   | Reachability from outside | small   | done - cross-host probes via the peer's public endpoints |
 | 10  | Deploy-user sudo on SSH keys | small | not started - the security half of item 6, parked by the operator 2026-08-30 |
 
 ### Where this stands, 2026-08-16
@@ -650,6 +650,80 @@ Worth noting the interaction with item 6: `magicRollback` reverts a change that 
 
 Something not running on the affected host notices that the host has stopped answering, and says so somewhere a person will see.
 
+### Status: done (2026-08-30)
+
+Implemented as cross-host blackbox probes of a dedicated _host-alive beacon_
+on each server, decoupled from every service so the watch cannot decay when an
+app is moved or disabled:
+
+- Each server runs `cg.service.host-alive` (`modules/services/host-alive.nix`):
+  a dependency-free socat 200-responder on a fixed port, never tied to an app.
+  It is published (`alive-<host>.<domain>`) and routed through homelab01's
+  tunnel, which connects straight to it as a real origin.
+- homelab01 probes homelab02 at `alive-homelab02.gyarmathy.co`; homelab02 probes
+  homelab01 at `alive-homelab01.gyarmathy.co` — the peer's beacon, not a service.
+- New `cg.service.monitoring.remoteProbes` option (in
+  `modules/services/monitoring/monitoring.nix`) emits one blackbox target per
+  probe, labelled `kind="remote"` and `host=<away host>`, into the existing
+  `blackbox-http` scrape. No second monitoring stack was added.
+- New critical alert `HostUnreachableFromOutside`
+  (`probe_success{job="blackbox-http",kind="remote"} == 0 for 5m`) names the
+  away host. `ServiceDown` is scoped to `kind!="remote"` so the remote _series_
+  can never match the generic warning, and the CloudflareTunnelDown inhibition
+  is narrowed to `ServiceDown` only: `HostUnreachableFromOutside` is
+  deliberately _not_ inhibited, so the away-host beacon still pages when the
+  tunnel owner itself dies and its own tunnel metrics cannot reach an operator.
+- The `publish` check now pins that each server declares a probe of another
+  server through a fleet-public https URL, and that both servers' beacons sit
+  on the same port (the tunnel's route to the peer reads the routing host's own
+  `host-alive.port`); `alert-rules-unit` and the `monitoring` VM test pin the
+  wiring and alert behaviour, and a `host-alive` VM test boots the beacon and
+  asserts it answers 200 with its fixed body.
+- Runbook: `docs/runbooks/tunnel-and-probes.md` (`HostUnreachableFromOutside`).
+
+Because the remote target is the beacon rather than a service, `ServiceDown`
+and `HostUnreachableFromOutside` stay decoupled: a plain service crash (host
+still up) fires only the warning, and only a host that is genuinely out of
+reach — which also takes its services with it — co-fires both. This replaces
+an earlier version that rode homelab02's only public service, grimmory, where
+the two alerts could only co-fire because the same URL was both a local and a
+remote probe.
+
+The beacon's URL is public, but the path the probe takes to it is _not_ part
+of the guarantee: the fleet resolver answers `alive-*` with the LAN address
+(the wildcard in `adguard-home.nix`), so in practice the probe crosses the LAN
+to the peer's beacon through Caddy; if the probing host resolves publicly
+instead, the same URL rides the tunnel to Cloudflare's edge. Either way the
+_observer_ is a different machine, which is the property item 9 actually
+specifies ("not on the host"). The path only changes which failure modes are
+visible, and it is deliberately not promised anywhere in the config.
+
+### Deferred: genuine "reachable from the public internet"
+
+What landed above establishes that a different machine notices when a host
+stops answering. It does **not** guarantee the probe travels the public
+internet, because its path is a function of fleet DNS resolution, which is in
+turn a function of a router's DHCP that lives outside this repository. The
+probe usually crosses the LAN; a pure tunnel/egress outage on homelab01 is the
+one case it can miss (and that is separately watched by
+`CloudflareTunnelNoConnections` whenever that host can still push).
+
+Guaranteeing the tunnel path — so `HostUnreachableFromOutside` really means
+"not reachable from the public internet" — requires one of:
+
+- pinning the `alive-*` names to a Cloudflare edge IP in AdGuard
+  (`extraRewrites`): a hardcoded public IP the repository otherwise never
+  contains, and which pins the zone to one anycast address; or
+- a real split-DNS resolver (systemd-resolved with per-domain upstreams so
+  `alive-*.gyarmathy.co` resolves publicly while everything else stays on the
+  split-horizon AdGuard): the correct fix, but a broad, cross-cutting change
+  to the fleet's name resolution that risks the internal names prowlarr,
+  grimmory and shelfmark depend on.
+
+Both are out of scope for item 9 and worth their own planning. Until then the
+alert means "the peer cannot reach the host along the path its resolver
+chose", and the runbook's path notes cover reading it.
+
 ---
 
 ## 10. Deploy-account sudo on SSH keys instead of a hashed password
@@ -687,4 +761,4 @@ Two checks to add when built: that `sudo -n` as `deploy` actually reaches the ac
 
 ### Done when
 
-`deploy .#homelab01` (and `.=homelab02`) run with no sudo password prompt, the `users/deploy` secret in sops can be retired, and `coryg`'s own sudo still asks for a password.
+`deploy .#homelab01` (and `.=homelab02`) run with no sudo password prompt, the `users/deploy` secret in sops can be retired, and `coryg`'s own sudo still asks for a password
