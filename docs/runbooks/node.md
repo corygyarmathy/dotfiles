@@ -7,6 +7,7 @@ temperature, reboots. Context: [fleet-map.md](fleet-map.md).
 
 **Severity:** critical (buzzes) · **Fires when:** Prometheus cannot scrape a
 target for 5 minutes. `job="node"` means a host's node_exporter is unreachable
+
 - either the host is down or the network path broke.
 
 ### Do now

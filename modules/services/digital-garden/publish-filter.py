@@ -144,7 +144,9 @@ LEADING_H1 = re.compile(r"\A\s*#[ \t]+(.+?)[ \t]*\n+")
 # wikilinks have already become Markdown links, so there is one link syntax to
 # recognise here rather than two. The trailing slash is captured OUTSIDE the
 # slug so that the lookup key matches the one `theses` is built with.
-BARE_LINK_ITEM = re.compile(r"^([ \t]*[-*+][ \t]+)\[([^\]]*)\]\(/([^)#/]*)/?[^)]*\)[ \t]*$", re.M)
+BARE_LINK_ITEM = re.compile(
+    r"^([ \t]*[-*+][ \t]+)\[([^\]]*)\]\(/([^)#/]*)/?[^)]*\)[ \t]*$", re.M
+)
 # Unreserved URL characters (RFC 3986). Anything else is dropped rather than
 # percent-escaped: an escape in a path is not something anyone wants to read,
 # type, or see in a browser's address bar.
@@ -162,8 +164,19 @@ LONG_NOTE_WORDS = 500
 # Where embedded files are staged, and the first segment of their URL.
 ATTACHMENTS = "attachments"
 ATTACHMENT_SUFFIXES = {
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif",
-    ".pdf", ".mp4", ".webm", ".mp3", ".ogg", ".wav",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".avif",
+    ".pdf",
+    ".mp4",
+    ".webm",
+    ".mp3",
+    ".ogg",
+    ".wav",
 }
 
 
@@ -334,13 +347,15 @@ def main(argv):
         return 2
 
     # ---- pass 1: decide what is published -----------------------------------
-    published = {}     # stem(lower) -> (relative path, text)
-    attachments = {}   # stem(lower) -> path
-    taken = {}         # slug -> stem(lower), for collision detection
+    published = {}  # stem(lower) -> (relative path, text)
+    attachments = {}  # stem(lower) -> path
+    taken = {}  # slug -> stem(lower), for collision detection
     collisions = []
     skipped = 0
     for path in sorted(vault.rglob("*")):
-        if not path.is_file() or any(p.startswith(".") for p in path.relative_to(vault).parts):
+        if not path.is_file() or any(
+            p.startswith(".") for p in path.relative_to(vault).parts
+        ):
             continue
         if path.suffix.lower() in ATTACHMENT_SUFFIXES:
             attachments.setdefault(path.name.lower(), path)
@@ -376,9 +391,9 @@ def main(argv):
 
     # ---- pass 2: read frontmatter, so a thesis is known before anything is
     #              written and an unusable note is dropped before it is linked -
-    fronts = {}   # stem(lower) -> (frontmatter mapping, body)
-    theses = {}   # slug -> one-line claim, since a rewritten link carries a slug
-    titles = {}   # slug -> display title, for backlinks and for the write loop
+    fronts = {}  # stem(lower) -> (frontmatter mapping, body)
+    theses = {}  # slug -> one-line claim, since a rewritten link carries a slug
+    titles = {}  # slug -> display title, for backlinks and for the write loop
     for key, (rel, text) in sorted(published.items()):
         split = split_frontmatter(text)
         if split is None:
@@ -405,7 +420,7 @@ def main(argv):
         if embed:
             hit = attachments.get(key)
             if hit is None:
-                return alias or target          # embed of something not shipping
+                return alias or target  # embed of something not shipping
             used_attachments[hit] = True
             return f"![{alias or ''}](/{ATTACHMENTS}/{slugify(hit.name)})"
         # A fragment naming a block rather than a heading points at an id
@@ -422,13 +437,13 @@ def main(argv):
             # A block reference in the same note has nothing left to point
             # at, so it becomes plain text like any other unshippable target.
             if not heading:
-                return m.group(0)               # [[]] - not a link at all
+                return m.group(0)  # [[]] - not a link at all
             if anchor:
                 return f"[{alias or heading[1:]}]({anchor})"
             return alias or heading[1:].lstrip("^")
         if key in published:
             return f"[{alias or target}](/{slugify(published[key][0].stem)}/{anchor})"
-        return alias or target                  # link to an unpublished note
+        return alias or target  # link to an unpublished note
 
     # ---- pass 4: the backlink graph ----------------------------------------
     # Whole-graph, and therefore its own pass: a note's backlinks depend on the
@@ -438,21 +453,21 @@ def main(argv):
     # Resolution deliberately mirrors `rewrite` above - same key, same lookup
     # in `published` - because a backlink that does not agree with the forward
     # link it came from is worse than no backlink at all.
-    backlinks = {}   # target slug -> {source slug}
+    backlinks = {}  # target slug -> {source slug}
     for key, (rel, text) in sorted(published.items()):
         if rel.name.lower() == "index.md":
-            continue                            # see the module docstring
+            continue  # see the module docstring
         source = slugify(rel.stem)
         for m in LINK.finditer(text):
             embed, target, _heading, _alias = m.groups()
             if embed:
-                continue                        # an image is not a citation
+                continue  # an image is not a citation
             hit = published.get(target.strip().lower())
             if hit is None:
-                continue                        # unpublished, or not a note
+                continue  # unpublished, or not a note
             dest = slugify(hit[0].stem)
             if dest == source:
-                continue                        # a note does not cite itself
+                continue  # a note does not cite itself
             # A set, so a note that links to another five times is one entry.
             backlinks.setdefault(dest, set()).add(source)
 
@@ -481,7 +496,10 @@ def main(argv):
         # re-checked here having already parsed in pass 2.
         split = split_frontmatter(LINK.sub(rewrite, text))
         if split is None:
-            print(f"link rewriting broke the frontmatter, dropping: {rel}", file=sys.stderr)
+            print(
+                f"link rewriting broke the frontmatter, dropping: {rel}",
+                file=sys.stderr,
+            )
             skipped += 1
             continue
         front, body = split
@@ -574,7 +592,9 @@ def main(argv):
         # has to still satisfy the check that let the note through in the first
         # place, or it does not get written.
         if not PUBLISH_TRUE.search(head):
-            print(f"lost publish marker while rewriting, dropping: {rel}", file=sys.stderr)
+            print(
+                f"lost publish marker while rewriting, dropping: {rel}", file=sys.stderr
+            )
             skipped += 1
             continue
 
@@ -597,7 +617,9 @@ def main(argv):
 
     # Only after the tree is in place: a run that died above should not record
     # dates for notes that were never published.
-    ledger_path.write_text(json.dumps(ledger, indent=2, sort_keys=True), encoding="utf-8")
+    ledger_path.write_text(
+        json.dumps(ledger, indent=2, sort_keys=True), encoding="utf-8"
+    )
 
     print(
         f"published {written} notes, {len(used_attachments)} attachments"

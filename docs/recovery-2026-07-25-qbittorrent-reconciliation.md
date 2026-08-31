@@ -70,7 +70,7 @@ Per-torrent reconciliation, **using qBittorrent's own recheck as the verifier** 
 never trust a filename or size guess:
 
 | Case | Action |
-|---|---|
+| --- | --- |
 | Library holds a byte-identical copy | hardlink it → exact expected download path → force **recheck** → **resume** |
 | Recheck fails / no candidate | remove the stray hardlink(s) (library inode untouched), **delete** the torrent |
 
@@ -110,6 +110,7 @@ the library's copy fully intact. No `cp`, so no extra disk use.
 ## 6. Steps
 
 ### Phase 0 — prerequisites
+
 - Confirm `f24aa80` (readiness gate + NFS hardening) is **deployed** on homelab02.
 - Confirm qBittorrent is **fully loaded** (API torrent count == `.torrent` count in
   BT_backup). Do nothing until it is.
@@ -117,8 +118,10 @@ the library's copy fully intact. No `cp`, so no extra disk use.
   mistake during recovery is reversible (there were no snapshots before — fix that).
 
 ### Phase 1 — read-only analysis (no changes)
+
 For each errored torrent, list its files (name + size) and check whether a
 **same-size** candidate exists under the library roots. Produce a report:
+
 - count of torrents fully matchable (all files have a size candidate) → *likely re-linkable*
 - count partially matchable
 - count with no candidates → *likely delete*
@@ -126,8 +129,10 @@ For each errored torrent, list its files (name + size) and check whether a
 This gives real recoverable-vs-not numbers before building anything.
 
 ### Phase 2 — reconciliation script (dry-run first)
+
 Write it (bash, mirror the style/safety of the existing cleanup modules; or as a
 throwaway script — does not need to be a Nix module). Logic per errored torrent:
+
 1. Get expected files (path relative to `content_path`, + size).
 2. For each file, find library file(s) of identical size; if >1 candidate, verify
    by comparing a hash of the first + last few MB (cheap) before choosing.
@@ -136,24 +141,29 @@ throwaway script — does not need to be a Nix module). Logic per errored torren
 Review the dry-run output.
 
 ### Phase 3 — execute re-link
+
 For matched torrents: create parent dirs, `ln` (hardlink) library file → expected
 path, then `POST /torrents/recheck`. Wait for recheck to settle, then:
+
 - if progress == 100% → `POST /torrents/resume` (seeding restored)
 - if not → remove the hardlink(s) we just made (library safe), mark torrent for
   deletion.
 Work in **small batches** and re-verify between batches.
 
 ### Phase 4 — delete the unrecoverable
+
 Torrents with no matches (or that failed recheck): `POST /torrents/delete` with
 `deleteFiles=true` (removes the stub folder too). Log every deletion.
 
 ### Phase 5 — verify
+
 - qBittorrent: 0 torrents left in `missingFiles`/`error`; recovered ones seeding.
 - `zfs list tank` — space used should rise by the re-linked amount only if imports
   had been copies (with hardlinks it stays ~flat; that's expected and correct).
 - Once satisfied, keep or drop the `tank@pre-recovery-*` snapshot.
 
 ## 7. Edge cases / cautions
+
 - **Season packs / multi-file torrents:** only re-link if *all* files match;
   a partial pack won't recheck to 100%.
 - **Renames:** library names differ from torrent names (Sonarr/Radarr rename on
@@ -165,6 +175,7 @@ Torrents with no matches (or that failed recheck): `POST /torrents/delete` with
 - Do **not** run the old cleanup timers during recovery.
 
 ## 8. Pointers
+
 - Deleted-items manifest: `homelab01:/srv/arr/deleted_downloads_manifest_2026-07-25.txt`
 - Fix commit: `f24aa80` — readiness gate + NFS hardening
 - Cleanup modules (reference for API/login/hardlink patterns):
@@ -181,7 +192,7 @@ artefacts: `homelab02:~/qbt-recovery/`.
 ### 9.1 Outcome
 
 | | torrents | size |
-|---|---|---|
+| --- | --- | --- |
 | broken at start | 595 | 4.55 TiB |
 | **recovered** (proven byte-identical, re-linked) | **524** | **3.65 TiB** |
 | deleted as unrecoverable | 66 | 0.89 TiB |
@@ -394,7 +405,7 @@ meantime, and linking by the stale `content_path` would have put their files
 where qBittorrent no longer looks (the §9.2(4) trap, second-order).
 
 | | torrents | note |
-|---|---|---|
+| --- | --- | --- |
 | broken at start | 537 | 3.68 TiB, 529 in `missingFiles` |
 | verified byte-identical | 528 | vs 524 on 07-26 (library grew slightly) |
 | links created | 6542 | |
@@ -407,7 +418,7 @@ Three passes were needed; the numbers below are `/torrents/info` at the end, not
 script counters — see 11.2 for why the counters cannot be trusted.
 
 | | torrents |
-|---|---|
+| --- | --- |
 | total | 538 |
 | complete (`amount_left == 0`) | 511 |
 | actively seeding | 507 |
