@@ -45,6 +45,19 @@ checkout.
 6. Run the narrowest useful checks, then run the full relevant check when
    practical. Report commands, results, and any checks that could not run.
 
+## Formatting
+
+The opencode harness runs a formatter on a file after every write or edit
+(`nixfmt` for `.nix`, `black` for Python, `markdownlint-cli2` for Markdown).
+Treat that output as final:
+
+- Do not re-read a file and re-edit it purely to adjust formatting, and do not
+  run `nixfmt`/`nix fmt` yourself to polish an edit - the harness already
+  formatted it.
+- If `nix fmt -- --ci` fails, run `nix fmt` once, accept the resulting diff,
+  and stop. If it still disagrees after one pass, report the mismatch instead
+  of retrying.
+
 ## Validation
 
 Useful checks include:
