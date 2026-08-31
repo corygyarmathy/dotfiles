@@ -434,8 +434,11 @@ in
         GitHub = "https://github.com/corygyarmathy";
       };
       description = ''
-        Links shown in the site footer, as a name -> URL map. Empty by
-        default, which renders no list at all rather than an empty one.
+        Links shown in the site footer, and in the home page's header, as a
+        name -> URL map. Empty by default, which renders no list at all rather
+        than an empty one. One list rather than two so that "where else to
+        find me" cannot say different things at the top and the bottom of the
+        same page.
       '';
     };
 

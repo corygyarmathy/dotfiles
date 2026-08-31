@@ -98,24 +98,20 @@
   </head>
   <body>
     <div class="page">
-      <header class="masthead">
-        <a class="masthead-title" href="{{ "/" | relURL }}">{{ site.Title }}</a>
-        <button
-          class="icon-button"
-          id="search-open"
-          aria-label="Search"
-          aria-haspopup="dialog"
-        >
-          {{ partial "icon-search.html" . }}
-        </button>
-        {{/* The label is rewritten by the script below, which is the only
-             thing that knows which of the three states the page is in. This
-             one is what a reader with no JavaScript gets, where the button
-             does nothing anyway. */}}
-        <button class="icon-button" id="theme-toggle" aria-label="Change theme">
-          {{ partial "icon-theme.html" . }}
-        </button>
-      </header>
+      {{/*
+        Every page but the home page. The home page's masthead IS its
+        composition - the name at scale, the count, the tools and the tree in
+        one grid - so it renders its own in home.html (item 19) rather than
+        taking a small title here and a large one below, which would be two
+        mastheads on one page. The tools themselves are shared, so the ids the
+        scripts below bind to exist exactly once either way.
+      */}}
+      {{ if not .IsHome }}
+        <header class="masthead">
+          <a class="masthead-title" href="{{ "/" | relURL }}">{{ site.Title }}</a>
+          {{ partial "masthead-tools.html" . }}
+        </header>
+      {{ end }}
 
       <main>{{ block "main" . }}{{ end }}</main>
 

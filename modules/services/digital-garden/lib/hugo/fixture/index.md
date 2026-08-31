@@ -10,7 +10,7 @@ It is deliberately not the vault, and deliberately not the fixture in `checks/di
 
 The four notes are filed in the vault's own folders — `_Slip_Box` and `_Reference/Lighting` — with two left at the root. That is not organisation for its own sake: the folder is where a note's topic comes from, the topic is what colours its foliage on the bonsai above and its growth marks beside the prose, and a fixture whose notes all sat at the root would render one hue and prove nothing about the two the stylesheet declares. The notes at the root are the third case, a note with no shelf and so no hue.
 
-Which note goes where is decided the same way. `Every Element` is the longest and most linked, so it is the evergreen, and putting the biggest mass of foliage on a real topic is what makes the tree's main colour judgeable at a glance; the seedling — the smallest pad, six characters — is the one carrying the no-topic fallback, because that is the case that should be least of the picture.
+Which note goes where is decided the same way. `Every Element` is the longest and most linked, so it carries the hand-written `maturity: evergreen` — three notes cannot earn one on the model's own terms, and the glyph and the colophon's evergreen count both need a note that has it — and putting the biggest mass of foliage on a real topic is what makes the tree's main colour judgeable at a glance; the seedling — the smallest pad, six characters — is the one carrying the no-topic fallback, because that is the case that should be least of the picture.
 
 - [[Every Element]]
 - [[A Long Note]]

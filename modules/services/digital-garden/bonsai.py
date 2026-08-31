@@ -488,14 +488,20 @@ def to_html(tree, notes):
             )
         lines.append("".join(out))
 
+    # The note's name on one line and its facts on the next, always - not one
+    # run of text left to wrap where it fits. The caption is about as wide as
+    # the tree, which is narrow enough that a run like "... Optimum - 623 /
+    # words - sapling" breaks between a number and its unit, and a line that
+    # breaks somewhere different for every note reads as a mistake each time.
+    # Two lines is also exactly the room the stylesheet holds open for it.
     captions = []
     for index, note in enumerate(notes):
         topic = f" topic-{note.topic}" if note.topic else ""
         captions.append(
             f'<span data-note="{index}" data-url="{html.escape(note.url, quote=True)}">'
-            f"<b>{html.escape(note.title)}</b> &middot; "
-            f"{note.words:,} words &middot; "
-            f'<span class="stage{topic}">{note.stage}</span></span>'
+            f"<b>{html.escape(note.title)}</b>"
+            f'<span class="bonsai-meta">{note.words:,} words &middot; '
+            f'<span class="stage{topic}">{note.stage}</span></span></span>'
         )
 
     return (
