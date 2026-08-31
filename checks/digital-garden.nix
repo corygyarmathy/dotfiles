@@ -869,6 +869,60 @@
         machine.fail("curl -sf http://localhost:8086/no-such-note")
         assert len(machine.succeed("curl -s http://localhost:8086/no-such-note")) > 1000
 
+    with subtest("ambient life runs on the 404, and only there"):
+        # Item 20 of the design plan: a Game of Life seeded from an
+        # R-pentomino, painted in --border, on the one page that has nothing
+        # to read. The cells are cells, not notes, so it reports nothing and
+        # is confined to the 404 - in particular NOT on the home page, where
+        # two growing things would be one too many.
+        #
+        # The markup is pinned by grep; whether it RUNS, and pauses when it
+        # should, is behaviour, so the rest is asserted by running the page's
+        # own script in headless Chromium. The script writes its running state
+        # and its population back to the canvas as data-attributes for exactly
+        # this reason (see 404.html).
+        # The 404 body is read without curl's -f: the page IS a 404, and -f
+        # turns that status into a curl failure before the body is returned.
+        page = machine.succeed("curl -s http://localhost:8086/no-such-note")
+        assert '<aside class="life" aria-hidden="true">' in page, page[-800:]
+        assert 'id="garden-life"' in page
+        # Centred beneath the message, in the body - not in a margin. The
+        # placement is the design, so it is pinned rather than assumed.
+        assert re.search(r'</p>\s*<aside class="life" aria-hidden="true">', page), \
+            "the life no longer sits directly beneath the message"
+        assert "garden-life" not in served("/"), \
+            "the life leaked onto the home page (two growing things is one too many)"
+        assert "garden-life" not in served("/on-gates"), \
+            "the life leaked onto a reading page"
+
+        def life_dom(window, extra=""):
+            return machine.succeed(
+                "chromium --headless=new --no-sandbox --disable-gpu "
+                "--disable-dev-shm-usage --virtual-time-budget=10000 "
+                f"--window-size={window} {extra} --dump-dom "
+                "http://localhost:8086/no-such-note 2>/dev/null"
+            )
+
+        # Runs: in view, the interval is live and the population has grown
+        # from the five-cell seed - it evolved, rather than merely started.
+        dom = life_dom("1600,1200")
+        assert 'data-running="true"' in dom, "the life is not running while in view"
+        m = re.search(r'data-population="(\d+)"', dom)
+        assert m and int(m.group(1)) > 5, \
+            f"the life never left the R-pentomino seed: {m and m.group(1)}"
+
+        # Reduced motion: an ambient animation is exactly what the preference
+        # is for. The seed frame may be painted; the interval must not run.
+        quiet = life_dom("1600,1200", "--force-prefers-reduced-motion")
+        assert 'data-running="true"' not in quiet, \
+            "the life animates under prefers-reduced-motion"
+
+        # Scrolled out of view: on the narrow layout the canvas sits below the
+        # fold of a short window, so the IntersectionObserver stops it.
+        hidden = life_dom("400,50")
+        assert 'data-running="true"' not in hidden, \
+            "the life animates while scrolled out of view"
+
     with subtest("a change to the vault triggers a rebuild without the timer"):
         # The inotify watcher, not a timer, is what publishes a change. A new
         # published note must reach the served site with nobody starting the

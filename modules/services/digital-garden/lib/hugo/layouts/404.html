@@ -1,8 +1,125 @@
 {{ define "main" }}
+  {{/*
+    The 404 is the only page on this site with nothing to read, and it is the
+    only page that gets something that reports nothing: a Game of Life, seeded
+    from an R-pentomino, sitting in the middle of the prose directly beneath
+    the message — the centre of the page is its one piece of empty body, and
+    a thing that lives only to look cool belongs where the eye lands. It is
+    deliberately nowhere else, in particular not on the home page, where two
+    growing things would be one too many.
+
+    The script below is the whole feature. The cells are cells, not notes, so
+    the canvas is aria-hidden: it has nothing to say.
+  */}}
   <div class="layout">
     <article>
       <h1>Not found</h1>
       <p>There is no page at this address. Try the <a href="{{ "/" | relURL }}">index</a>.</p>
+      <aside class="life" aria-hidden="true">
+        <canvas id="garden-life" width="480" height="312"></canvas>
+      </aside>
     </article>
   </div>
+  {{/*
+    Conway's Game of Life, about a kilobyte. The R-pentomino is the five-cell
+    methuselah that spends over a thousand generations becoming gliders; on a
+    grid this small the gliders leave and the rest settles, and when the
+    population stops changing the whole thing reseeds — so there is always
+    life on the page.
+
+    Paused when the canvas leaves the viewport and when the reader has asked
+    for reduced motion; an ambient animation is exactly what that preference
+    is for. The running state and the population are written back to the
+    canvas as data-attributes because checks/digital-garden.nix drives this
+    page in headless Chromium and has to be able to read whether it animates.
+  */}}
+  <script>
+    (function () {
+      var cv = document.getElementById("garden-life");
+      if (!cv || !cv.getContext) return;
+      var ctx = cv.getContext("2d");
+      var cell = 6, cols = cv.width / cell, rows = cv.height / cell;
+      // The R-pentomino: .OO/OO./.O. One generation apart, the whole page is
+      // the R-pentomino's descendants, which is what "seeded from" means.
+      var seed = [[1, 0], [2, 0], [0, 1], [1, 1], [1, 2]];
+      // The eight neighbours, in a flat list so the count loop is three lines.
+      var nb = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+      var g, pop, gens = 0;
+
+      function fresh() {
+        var a = [];
+        for (var r = 0; r < rows; r++) a.push(new Array(cols).fill(0));
+        return a;
+      }
+      function reseed() {
+        g = fresh();
+        pop = seed.length;
+        gens = 0;
+        var x = (cols >> 1) - 2, y = (rows >> 1) - 1;
+        for (var i = 0; i < seed.length; i++) g[y + seed[i][1]][x + seed[i][0]] = 1;
+      }
+      function paint() {
+        // Read fresh each frame so a theme change while the page is open
+        // repaints in the new --accent with nothing to observe it. The literal
+        // is the light theme's accent; it only shows if the stylesheet lost.
+        ctx.fillStyle =
+          getComputedStyle(document.documentElement).getPropertyValue("--accent") || "#4d699b";
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        for (var r = 0; r < rows; r++)
+          for (var c = 0; c < cols; c++)
+            if (g[r][c]) ctx.fillRect(c * cell, r * cell, cell, cell);
+      }
+      function step() {
+        var next = fresh(), alive = 0;
+        for (var r = 0; r < rows; r++) {
+          for (var c = 0; c < cols; c++) {
+            var n = 0;
+            for (var i = 0; i < 8; i++) {
+              var rr = r + nb[i][0], cc = c + nb[i][1];
+              if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && g[rr][cc]) n++;
+            }
+            if (g[r][c] ? n === 2 || n === 3 : n === 3) {
+              next[r][c] = 1;
+              alive++;
+            }
+          }
+        }
+        g = next;
+        // On a bounded grid the gliders fly off the edges and the rest
+        // settles, so an unchanging population is death in practice. Reseed,
+        // or the page goes still within a minute.
+        gens = alive === pop ? gens + 1 : 0;
+        pop = alive;
+        if (gens > 40) reseed();
+        cv.dataset.population = pop;
+        paint();
+      }
+
+      var timer = null, running = false, visible = false;
+      var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      function sync() {
+        if (visible && !motion.matches) {
+          cv.dataset.running = "true";
+          if (!running) timer = setInterval(step, 60);
+          running = true;
+        } else {
+          delete cv.dataset.running;
+          if (running) clearInterval(timer);
+          running = false;
+          timer = null;
+        }
+      }
+      if ("IntersectionObserver" in window) {
+        new IntersectionObserver(function (entries) {
+          visible = entries[0].isIntersecting;
+          sync();
+        }).observe(cv);
+      } else {
+        visible = true;
+      }
+      reseed();
+      sync();
+      paint();
+    })();
+  </script>
 {{ end }}

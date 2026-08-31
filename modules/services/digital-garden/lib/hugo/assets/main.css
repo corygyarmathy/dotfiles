@@ -1010,6 +1010,34 @@ h4:hover > .heading-anchor,
   }
 }
 
+/* ── ambient life ───────────────────────────────────────────────────────── */
+
+/* Game of Life on the 404, painted in --accent on a --code-bg well, centred
+ * in the middle of the prose it follows. It is the one thing on this site
+ * that reports nothing — the cells are cells, not notes — which is why it
+ * lives on the one page that has nothing to read, and nowhere else: in
+ * particular not on the home page, where a second growing thing would be one
+ * too many.
+ *
+ * A well rather than bare cells, and accent rather than --border: in the
+ * site's quietest colour on the bare page the cells read as invisible, and
+ * this is the one page that can afford a thing that is merely cool. The well
+ * is the code well's, so the panel needs no new colour. */
+.life {
+  width: fit-content;
+  margin: 2rem auto 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+
+.life canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 /* ── the notes index ────────────────────────────────────────────────────── */
 
 /* The generated /notes/ page: every published note, newest first, so nothing
@@ -1164,10 +1192,12 @@ pagefind-modal {
   /* A search button and a theme toggle on a sheet of paper are icons that do
    * nothing; the heading anchors are a hover affordance for a hover that
    * cannot happen; and the arrow back to a footnote's reference is a jump on a
-   * page that is already in the reader's hand. */
+   * page that is already in the reader's hand. The 404's Game of Life is
+   * decoration that reports nothing, so it does not print either. */
   .icon-button,
   .heading-anchor,
-  .footnote-backref {
+  .footnote-backref,
+  .life {
     display: none;
   }
 
