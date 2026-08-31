@@ -353,6 +353,12 @@
         # generator was deciding the address after all.
         staged = sorted(machine.succeed("ls /var/lib/digital-garden/content").split())
         assert staged == [
+            # Not a note. The bonsai's markup, which the filter grows from the
+            # published set and lib/hugo.nix lifts out of the content tree
+            # before Hugo sees it. It is asserted in this list rather than
+            # excused from it, so that the list stays the exact contents of the
+            # staging tree and anything new here has to be named.
+            "bonsai.html",
             "index.md",
             "on-boundaries.md",
             "on-gates.md",
@@ -1150,16 +1156,31 @@
         # stage and a score into every staged note's frontmatter. Nothing
         # renders them yet - the margin that will is item 17 - so the contract
         # to pin is the staging tree, where the filter wrote them.
-        staged = sorted(machine.succeed("ls /var/lib/digital-garden/content").split())
+        staged = sorted(machine.succeed("ls /var/lib/digital-garden/content/*.md").split())
         assert staged, "no staged notes to check maturity on"
         for note in staged:
-            head = machine.succeed(f"sed -n '1,25p' /var/lib/digital-garden/content/{note}")
+            head = machine.succeed(f"sed -n '1,25p' {note}")
             assert re.search(r"^maturity: (seedling|sapling|evergreen)$", head, re.M), (
                 f"{note} has no maturity stage:\n{head}"
             )
             assert re.search(r"^maturity_score: \d+(\.\d+)?$", head, re.M), (
                 f"{note} has no maturity score:\n{head}"
             )
+            # Item 15's half of the same frontmatter pass, and the value the
+            # bonsai colours a note's foliage with: the folder the note came
+            # from, slugified. The landing page is at the vault root and has
+            # no folder, so an empty value is the correct one there.
+            # \x27\x27 is YAML's empty string, which is what a note at the
+            # vault root gets. Spelt in escapes because this Python lives
+            # inside a Nix indented string, where a pair of apostrophes is
+            # the terminator rather than two characters.
+            assert re.search(r"^topic: (\x27\x27|[a-z0-9-]+)$", head, re.M), (
+                f"{note} has no topic:\n{head}"
+            )
+        essay = machine.succeed(
+            "sed -n '1,25p' /var/lib/digital-garden/content/on-gates.md"
+        )
+        assert re.search(r"^topic: essays$", essay, re.M), essay
 
     with subtest("a hand-written maturity wins over the computed score"):
         # on-money is a short note with no links, sections or rewrites: its
@@ -1202,6 +1223,61 @@
                 f"{neighbour} revisions moved while its text did not: "
                 f"{ledger[neighbour]}"
             )
+
+    with subtest("the bonsai carries every published note and nothing else"):
+        # Item 18. The tree's whole claim is that it is a picture of the
+        # garden, so the property worth testing is not that it renders - it is
+        # that every published note is on it, exactly once as an identity and
+        # at least once as something a reader can point at.
+        #
+        # bonsai.py asserts the same thing at build time, which is what caught
+        # the two bugs recorded in the plan (a branch whose fork point landed
+        # past the end of the trunk, and a pad every cell of which fell on
+        # occupied ground). This is that assertion from the outside: on the
+        # served page, where a mistake in the markup or in the template would
+        # also show up.
+        # Counted from the staging tree rather than written down, because the
+        # subtests above have already published a note the fixture did not
+        # start with - and "every published note" is the claim, so the number
+        # has to come from what is published at this moment.
+        staged = machine.succeed("ls /var/lib/digital-garden/content/*.md").split()
+        # Less the landing page: a table of contents is not foliage on its own
+        # tree, the same rule that keeps it out of the backlink graph.
+        expected = len([p for p in staged if not p.endswith("/index.md")])
+
+        home = served("/")
+        on_tree = set(re.findall(r'<span class="leaf[^"]*" data-note="(\d+)"', home))
+        assert len(on_tree) == expected, (
+            f"{len(on_tree)} notes on the tree, {expected} published"
+        )
+
+        # One caption per note, and every pad's index resolves to one - the
+        # caption is what the hover names, and a pad pointing at a caption that
+        # is not there would be a dead cell on the tree.
+        captions = set(re.findall(r'<span data-note="(\d+)" data-url="([^"]+)"', home))
+        assert len(captions) == expected, captions
+        assert {index for index, _ in captions} == on_tree, (captions, on_tree)
+        # And each caption points at a page that exists, since a click on the
+        # foliage goes there.
+        for _, url in captions:
+            served(url)
+
+        # An enhancement, not a route. The tree carries no headings, no links
+        # and no tab stops; /notes/ is the accessible path and it is complete.
+        assert '<pre class="bonsai" aria-hidden="true">' in home, home[:400]
+
+        # The markup is a fragment of the home page, not a page. Hugo must
+        # never have seen it as content.
+        machine.fail(f"test -e {SITE}/bonsai.html")
+        machine.fail(f"test -e {SITE}/bonsai/index.html")
+
+        # And the caption store is outside <article>, so Pagefind - which
+        # indexes the element marked data-pagefind-body - does not put every
+        # note's title into the home page's search entry. Asserted on the
+        # index rather than on the page, because that is where it would show.
+        assert home.index('class="bonsai-notes"') < home.index("data-pagefind-body"), (
+            "the bonsai's caption store is inside the indexed article"
+        )
 
     with subtest("a renamed note keeps its publication date"):
         # The ledger is keyed by the note's filename, so a rename used to

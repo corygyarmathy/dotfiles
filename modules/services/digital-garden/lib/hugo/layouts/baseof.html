@@ -331,6 +331,116 @@
     </script>
 
     {{/*
+      The bonsai, on the landing page. Two jobs, both of them enhancements to
+      markup that is already complete and already correct without this script:
+
+      GROWTH. Every character of the tree is in the HTML that was served -
+      publish-filter.py grew it at build time. This hides them and puts them
+      back in the order the tree was drawn in, so the trunk rises before the
+      branches and the branches before their foliage. A reader who has asked
+      for less motion, or who has no JavaScript, gets the finished tree, which
+      is why the hiding is done here rather than in the stylesheet.
+
+      NAVIGATION. Each foliage cell carries the index of the note it grew from,
+      so pointing at one lights every cell of that note's pad and names it, and
+      a click opens the note. That is what makes a home page carrying a picture
+      of the garden better than one carrying a list of it.
+
+      The tree is aria-hidden and this stays an ENHANCEMENT rather than becoming
+      a route: a tab order made of single characters would be a far worse way to
+      reach a note than /notes/, which is the complete accessible path and is
+      already there. On a touch screen there is no hover, so a tap goes straight
+      to the note rather than revealing a caption nobody can trigger twice.
+    */}}
+    <script>
+      (function () {
+        var plate = document.querySelector(".bonsai-plate");
+        if (!plate) return;
+        var tree = plate.querySelector(".bonsai");
+        var caption = plate.querySelector(".bonsai-caption");
+        var store = plate.querySelector(".bonsai-notes");
+        if (!tree || !caption || !store) return;
+
+        var idle = "Point at any foliage to see the note it grew from.";
+        var lit = [];
+
+        function show(index) {
+          lit.forEach(function (cell) {
+            cell.classList.remove("lit");
+          });
+          lit = [];
+          var entry = index === null ? null : store.querySelector(
+            '[data-note="' + index + '"]'
+          );
+          if (!entry) {
+            caption.textContent = idle;
+            return;
+          }
+          lit = Array.prototype.slice.call(
+            tree.querySelectorAll('[data-note="' + index + '"]')
+          );
+          lit.forEach(function (cell) {
+            cell.classList.add("lit");
+          });
+          caption.innerHTML = entry.innerHTML;
+        }
+
+        tree.addEventListener("mouseover", function (e) {
+          var cell = e.target.closest ? e.target.closest("[data-note]") : null;
+          if (cell) show(cell.dataset.note);
+        });
+        tree.addEventListener("mouseleave", function () {
+          show(null);
+        });
+        tree.addEventListener("click", function (e) {
+          var cell = e.target.closest ? e.target.closest("[data-note]") : null;
+          if (!cell) return;
+          var entry = store.querySelector('[data-note="' + cell.dataset.note + '"]');
+          if (entry && entry.dataset.url) window.location.href = entry.dataset.url;
+        });
+        show(null);
+
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+        // In draw order, which the generator recorded per cell because the
+        // order a tree grows in is not the order a `<pre>` reads in - revealing
+        // in document order would wipe down the page instead of growing.
+        var cells = Array.prototype.slice
+          .call(tree.querySelectorAll("[data-grow]"))
+          .sort(function (a, b) {
+            return a.dataset.grow - b.dataset.grow;
+          });
+        cells.forEach(function (cell) {
+          cell.classList.add("off");
+        });
+
+        function done() {
+          cells.forEach(function (cell) {
+            cell.classList.remove("off");
+          });
+        }
+
+        // setInterval, not requestAnimationFrame: rAF does not fire in a
+        // background tab, and a reader who opens the site in one - middle
+        // click, a restored session - would come back to bare soil and watch
+        // the tree grow as if they had just arrived. And a timeout behind it,
+        // so that the one failure this can have (the interval never finishing)
+        // still ends with the whole tree on screen.
+        var at = 0;
+        var timer = setInterval(function () {
+          for (var n = 0; n < 8 && at < cells.length; n++, at++) {
+            cells[at].classList.remove("off");
+          }
+          if (at >= cells.length) clearInterval(timer);
+        }, 16);
+        setTimeout(function () {
+          clearInterval(timer);
+          done();
+        }, 6000);
+      })();
+    </script>
+
+    {{/*
       Sidenotes in the right margin. Hugo emits every footnote as a single
       list at the foot of the note -- `[^1]` becomes an endnote, which is the
       render it has always had and deliberately unchanged here. Moving them

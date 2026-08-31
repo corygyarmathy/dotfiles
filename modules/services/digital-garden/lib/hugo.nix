@@ -189,13 +189,34 @@ in
           mv "$work/content/index.md" "$work/content/_index.md"
         fi
 
+        # The bonsai. publish-filter.py grows it, because the tree is a picture
+        # of the published set and only the filter knows what that is; it leaves
+        # the markup in the staging tree because that is the one place between
+        # the filter and this script. It is not content — it is a fragment of
+        # the home page — so it is lifted out before Hugo looks at the content
+        # tree at all, exactly like the rename above and for the same reason:
+        # the filter has no business knowing Hugo's directory layout.
+        #
+        # Into assets rather than layouts/_partials, so that layouts/home.html
+        # can inline it with `resources.Get`. A partial is EXECUTED as a
+        # template, and generated markup should not be run through a template
+        # engine; an asset is read as data, and `resources.Get` returns nothing
+        # when the file is absent, which is the whole of the "render a garden
+        # that has no tree" case.
+        if [ -f "$work/content/bonsai.html" ]; then
+          mv "$work/content/bonsai.html" "$work/assets/bonsai.html"
+        fi
+
         # A generated /notes/ page lists everything published, so that nothing
         # on the site is reachable only by search or by a backlink — fourteen
         # of nineteen notes once were, and the landing page is deliberately
         # still the hand-written table of contents. Chrome, like the 404 and
         # the feed, so it is born here rather than in the vault or the staging
-        # tree: the staging tree is exactly the published set. Rendered by
-        # layouts/_default/list.html.
+        # tree: the staging tree's NOTES are exactly the published set, and
+        # nothing that is not one of them may be written as content. (The
+        # bonsai above is the one other file the filter leaves in that tree,
+        # and it is moved out of the content directory before this line runs
+        # for exactly that reason.) Rendered by layouts/_default/list.html.
         mkdir -p "$work/content/notes"
         cat > "$work/content/notes/_index.md" <<'EOF'
         ---

@@ -103,6 +103,18 @@ let
       ;
   };
 
+  # The publish filter, which is one program in two files: publish-filter.py
+  # imports bonsai.py. `${./publish-filter.py}` puts each file in a store path
+  # of its own, so the import would not resolve at run time - the two have to
+  # be assembled into one directory. Named file by file rather than copying
+  # `${./.}`, so that nothing else in this directory (the whole of lib/, a
+  # stray __pycache__) is dragged into the store and into the build stamp.
+  filter = pkgs.runCommand "digital-garden-filter" { } ''
+    mkdir -p "$out"
+    cp ${./publish-filter.py} "$out/publish-filter.py"
+    cp ${./bonsai.py} "$out/bonsai.py"
+  '';
+
   stateDir = "/var/lib/digital-garden";
   vaultDir = "${stateDir}/vault";
 
@@ -125,7 +137,7 @@ let
       # the derivation. Only the filter has to be named separately, because it
       # runs before the renderer is reached.
       renderer = toString renderer;
-      filter = toString ./publish-filter.py;
+      filter = toString filter;
     }
   );
 
@@ -214,7 +226,7 @@ let
       # The ledger lives outside the staging tree because it must survive it:
       # staging is rebuilt from scratch every run, and the first date a note was
       # seen is not recoverable from anywhere else.
-      python3 ${./publish-filter.py} "${vaultDir}" "${stateDir}/content" \
+      python3 ${filter}/publish-filter.py "${vaultDir}" "${stateDir}/content" \
         "${stateDir}/dates.json"
 
       # Defence in depth, and the reason it is here rather than in the
@@ -438,6 +450,21 @@ in
         exposed so that `nix run .#garden-preview` can run the very same one.
         Reading it from here rather than rebuilding it in the flake is what
         stops the preview and the server drifting apart.
+      '';
+    };
+
+    filter = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      internal = true;
+      default = filter;
+      defaultText = lib.literalMD "publish-filter.py and bonsai.py, in one directory";
+      description = ''
+        The publish filter, as a directory holding `publish-filter.py` and the
+        `bonsai.py` it imports. Exposed for the same reason `renderer` is: so
+        that `nix run .#garden-preview` runs the very same filter the server
+        does rather than a path assembled a second time in the flake, where the
+        two could drift apart without anything failing.
       '';
     };
 

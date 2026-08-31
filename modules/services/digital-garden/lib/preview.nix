@@ -26,6 +26,9 @@
   pkgs,
   lib,
   serve,
+  # The publish filter as a DIRECTORY, holding publish-filter.py and the
+  # bonsai.py it imports. Read out of the serving host's own config, like the
+  # renderer, so the preview cannot filter differently from the server.
   filter,
   renderer,
   styleSheet,
@@ -146,7 +149,8 @@ pkgs.writeShellApplication {
       local started
       started=$(date +%s%N)
       # Same filter, same arguments, same boundary as the service.
-      python3 ${filter} "$vault" "$state/content" "$cache/$ledger" || return 1
+      python3 ${filter}/publish-filter.py "$vault" "$state/content" \
+        "$cache/$ledger" || return 1
       ${lib.getExe renderer} "$state/content" "$state/public.new" "$css" \
         > "$state/render.log" 2>&1 || {
           echo "render failed:" >&2
