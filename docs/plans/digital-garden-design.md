@@ -1,6 +1,6 @@
 # Plan: theme and navigation for the digital garden
 
-Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
+Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
 
 | #   | Item                                | Size   | Depends on | Status      |
 | --- | ----------------------------------- | ------ | ---------- | ----------- |
@@ -10,13 +10,36 @@ Status: proposed 2026-08-27; decisions taken the same day, see _Decisions_ below
 | 4   | Right-hand rail: contents, backlinks| medium | 1          | **done** 2026-08-27 |
 | 5   | Link and image treatment            | small  | 2          | **done** 2026-08-27; the image mat reverted the same day |
 | 6   | Typography                          | small  | 2          | built and **reverted** 2026-08-27 |
-| 7   | Wikilink hover previews             | medium | -          | optional    |
-| 8   | Footnotes as sidenotes              | large  | 4          | optional    |
-| 9   | Reading time in the dateline        | small  | -          | optional    |
+| 7   | Wikilink hover previews             | medium | -          | optional, and less urgent after 15 |
+| 8   | Footnotes as sidenotes              | large  | 4          | **done** 2026-08-28 (#79) |
+| 9   | Reading time in the dateline        | small  | -          | **absorbed into 17** |
 | 10  | Polish: print, selection, motion    | small  | 2          | **done** 2026-08-27 |
 | 11  | Rendering gaps found by review      | small  | 1          | **done** 2026-08-28 |
-| 12  | The dateline in the empty margin    | small  | 4          | not started |
-| -   | Graph view                          | -      | -          | **rejected**, see below |
+| 12  | The dateline in the empty margin    | small  | 4          | **superseded by 17** |
+| 13  | Rename-stable ledger (defect)       | small  | -          | not started |
+| 14  | Maturity: model, counter, override  | medium | 13         | not started |
+| 15  | Growth marks, topic hue, link marks | small  | 14         | not started |
+| 16  | Callout icons on Obsidian's mapping | small  | -          | not started |
+| 17  | A margin on every note              | medium | 14         | not started |
+| 18  | The bonsai                          | large  | 14         | not started |
+| 19  | The home page, composed once        | small  | 18         | not started |
+| 20  | Ambient Life on the 404             | small  | -          | not started |
+| -   | Graph view                          | -      | -          | **rejected**, see below; the bonsai is not a revisit |
+
+## Decisions, 2026-08-31
+
+Taken against a set of live prototypes rather than against swatches or this document — the same discipline item 1 exists to enforce, one level up. The prototypes are published at <https://claude.ai/code/artifact/fe8c2380-306f-4cc5-89c3-4ec2a7a7f60d> and are the reference for items 14 through 20: every number in them was computed from the real vault, so they show what the site would actually look like rather than what it might.
+
+The 2026-08-27 decisions below all still stand. The three that were touched are named here.
+
+- **Stock photography is out, and so is generative decoration.** The brief was "the site is a little boring", and the rejected answer is a stock image. The accepted answer is that everything added must _report something true about the note it sits beside_ — a maturity mark, a topic hue, a proportional section map, a tree whose every leaf is a note. Hash-derived abstract artwork was proposed and rejected on the same grounds as stock photography: it is decoration with no referent, and it ages into a gimmick faster than a photograph does.
+- **Build-time diagram DSLs are rejected.** `d2` and `mermaid` were proposed for the Lighting notes and turned down: draw.io exports are already the working tool, and a DSL fights anything that is not its exact use case — network diagrams especially. The only improvement worth making is exporting with a transparent ground, which the stylesheet's own image comment already argues for.
+- **Bookish set pieces are rejected.** Drop caps, letterspaced small-caps openings and fleuron section breaks were proposed and turned down: they look right in books and translate badly to a web page. Callout icons survived that cut, because an icon that names a callout's type is information rather than ornament — that is item 16.
+- **Scale contrast is the one purely visual change accepted.** The stylesheet has nothing set above `1.75rem` and nothing below `0.8rem`, so the site has no scale contrast anywhere. Item 19 spends that on the home page only. This does **not** reopen item 6: the face is still the system stack, and a masthead at `4.25rem` is a size, not a change of voice.
+- **Link kinds are distinguished by shape, not by hue.** Kanagawa gives about eight usable hues and the callouts have spent most of them, so a third axis was needed. Hue carries topic (two values today), and link kind is carried by mark instead — see item 15. The first attempt put a dot _before_ an internal link, which was wrong twice over: it was inconsistent with the external arrow that trails, and a leading dot reads as a bullet.
+- **Maturity is computed, with a hand-written override that wins.** This follows the precedent `publish-filter.py` already sets for dates: the ledger is a default and not an authority, and frontmatter written by hand always wins. See item 14 for why the override is not optional.
+- **Evergreen is set at 5.00, and exactly one note qualifies.** This was checked against the real scores and accepted as an accurate reflection of the vault rather than treated as a threshold to be tuned until it flattered.
+- **The graph view stays rejected, and the bonsai is not a revisit of it.** See the rejection section at the foot of this document for why the two are different things.
 
 ## Decisions, 2026-08-27
 
@@ -270,13 +293,17 @@ Quartz's most-copied feature: hovering an internal link shows the target's openi
 
 Revised 2026-08-28: do the `title` version _first_ and treat the popover as a separate decision taken against it. The filter already resolves the graph and already knows every thesis, so the attribute is a few lines in `publish-filter.py` and nothing else — no CSS, no script, no new failure mode, and it works on a phone where a hover does not exist. If it turns out to be enough, the medium-sized half of this item never gets built; if it is not, the popover is built against something real rather than against a guess about what a reader wants from a link.
 
-## 8. Footnotes as sidenotes (optional, depends on 4)
+## 8. Footnotes as sidenotes (done 2026-08-28, depends on 4)
 
 Once the grid from item 4 exists, footnotes can be moved into the right margin beside the paragraph that cites them, Tufte-style, instead of collected at the bottom. The Lighting notes are heavily footnoted and this suits them. It is genuinely large: Hugo emits footnotes as a list at the end of the document, so they have to be relocated, and the vertical positioning of a sidenote against its reference is the part that never quite works. It also conflicts with item 4's rail — both want the right margin — so it would need a rule about which wins on a page that has both. Worth wanting, not worth doing before the rest of the list.
 
-## 9. Reading time in the dateline (optional)
+**Shipped 2026-08-28 in #79, and the table above said "optional" until 2026-08-31 — a bookkeeping error, corrected while adding items 13-20.** The margin conflict was resolved by not having one: the rail moved to the LEFT column and the sidenotes took the right, so neither needs the other to exist. The vertical positioning that "never quite works" took three follow-up commits to settle — overlap between notes cited from adjacent paragraphs, placement without waiting for a frame so a background tab does not open to a stack of unplaced notes, and capping the grid so the notes stay beside the prose on a wide monitor. All three are recorded in the comments in `baseof.html`, which is the right place for them. Item 17 inherits that geometry rather than changing it: it fills the left column, which is the one the rail already owns.
+
+## 9. Reading time in the dateline (absorbed into 17, 2026-08-31)
 
 `publish-filter.py` already counts words for `LONG_NOTE_WORDS`. Surfacing an estimate next to the date is a few lines. Given that half the notes are under 500 words, this may say more about the garden than is flattering, which is either a reason not to do it or the honest thing about a slip box.
+
+Taken, and not on its own: the reading time belongs in the margin rather than in the dateline, so it ships as part of item 17. The "more than is flattering" worry stands and was accepted — the same argument settled item 14's evergreen threshold, and in both cases the honest number was preferred to the flattering one.
 
 ## 10. Polish
 
@@ -370,7 +397,7 @@ There is still no skip link, and there should not be one. The masthead is one li
 
 Half a day, most of it in finding the table bug rather than fixing it. No risk: every rule is a stylesheet edit or a render hook, the publish boundary is untouched, and the two new assertions fail loudly if any of it is undone.
 
-## 12. The dateline in the empty margin (optional)
+## 12. The dateline in the empty margin (superseded by 17, 2026-08-31)
 
 ### The problem
 
@@ -384,13 +411,197 @@ Item 9's reading time, if it is ever taken, belongs in the same place and is the
 
 The thing to check by looking, and the reason this is not obviously right: on a page that _does_ have a rail, the dateline and the rail's first heading are then both in the left column, and two small grey blocks stacked in a margin may read as a sidebar — which is the thing the single-column layout was chosen to avoid.
 
+**Answered 2026-08-31, against a rendered margin carrying four blocks rather than two.** The worry does not materialise, and the reason is instructive: what makes a stack of grey blocks read as a sidebar is that the blocks are unlabelled and unordered. Given a small uppercase label each and an order that runs cheapest-fact-first — date, reading time, maturity, then the shape of the note, then who cites it — the same column reads as apparatus belonging to the essay. This item is therefore superseded by item 17, which does what it proposed and more; the diagnosis in _The problem_ above is unchanged and is still the reason to do it.
+
 ### Cost and risk
 
 An hour, and it is entirely reversible. The risk is the one above, and it is a judgement that can only be made against the rendered pages.
 
+## 13. Rename-stable ledger
+
+### The problem
+
+A live defect, found while looking for somewhere to keep a revision count. `update_ledger` is keyed on `path.stem.lower()` — the note's filename. Moving a note between folders is therefore safe, which is the property the docstring claims and it holds. **Renaming one is not**: the key changes, no entry is found, and the note is treated as seen for the first time. Its `published` date silently resets to today.
+
+That is already happening to dates. It matters more from item 14 onward, because a revision counter kept in the same ledger would reset with it, and a count of rewrites that resets whenever a title is improved is worse than no count at all.
+
+### Approach
+
+Rename detection, the way git does it, using the hash the ledger already stores. After the publish set is decided: collect the ledger keys that have disappeared and the keys that are new. Where exactly one disappeared key and exactly one new key share a content hash, they are the same note — carry the entry across to the new key.
+
+The 1:1 restriction is the whole of the safety argument. Two notes with identical content are rare but possible (a stub duplicated as a starting point), and a wrong carry is worse than a reset date: it would silently attribute one note's history to another. Anything that is not an unambiguous pair is treated as a new note, which is exactly today's behaviour.
+
+### What to verify
+
+The VM check grows one assertion: render a fixture, rename a note, render again, and assert `published` survived. Cheap to write and it pins the property rather than the implementation.
+
+### Cost and risk
+
+An hour. About ten lines in `publish-filter.py`, and it makes every later item's history durable.
+
+## 14. Maturity: the model, the counter, and the override
+
+### The problem
+
+Nothing on the site says how developed a note is, and four separate items downstream want to know: the index (15), the link marks (15), the margin (17) and the tree (18). It has to be computed rather than hand-maintained — a maturity stage that must be edited by hand on every note is a stage that will be wrong on most of them.
+
+### Approach
+
+A score in `publish-filter.py`, emitted into frontmatter as `maturity` (the stage) and `maturity_score` (the number, for debugging and for the margin). Components, with the weights the prototypes were tuned to:
+
+| Signal | Weight | Note |
+| --- | --- | --- |
+| Length | `min(words / 800, 1) * 2` | Saturating, not linear |
+| Backlinks | `1.2` each | The only signal that comes from outside the note |
+| Forward links | `0.5` each | Resolved against the published set |
+| Sections | `+1` if `##` count >= 3 | Structured rather than dumped |
+| Rewrites | `min(n, 4) * 0.35` | Commits whose diff exceeded 15 lines |
+
+Stages: sapling at `1.5`, evergreen at `5.0`. On the vault as it stands that gives six seedlings, eleven saplings and one evergreen.
+
+**Length saturates at 800 words on purpose.** A linear length term is what made two long unrevised notes outrank a short careful one, which is the failure that started this item. Past the saturation point, "longer" stops being evidence of anything.
+
+**The override is not optional, and here is the evidence.** Take the three notes with no sections, no backlinks and no forward links: _Frustrations in Pursuing a Goal_ (399 words), _Managing Your Manager_ (1,078) and _Relationship with Work_ (1,594). On every signal the vault can compute, other than length, they are identical. The author's judgement is that the first is the most refined of the three; git says it has four commits and not one of them changed more than fifteen lines, while _Relationship with Work_ has ten commits and four substantial rewrites. Both facts are true. _Refined_ and _revised_ are different properties and only the second one is recorded anywhere. So the computed stage is a default, and a hand-written `maturity:` in the note wins — exactly as a hand-written `published:` already beats the ledger.
+
+### The revision counter, and where history actually lives
+
+The ledger gains a `revisions` integer, bumped whenever the stored hash changes. That works for both values of `source`, survives forever, and after item 13 survives renames.
+
+It starts at zero for every existing note, which makes the signal worthless for about a year unless it is seeded. Git can seed it — the vault is a repository, `git log --follow` survives renames and moves, and counting commits whose diff exceeded fifteen lines gives the numbers used above. Two constraints decide how:
+
+- The builder fetches with `git clone --depth 1` and `git fetch --depth 1` (`digital-garden.nix`, the "get the vault" block). On the server there is exactly one commit, so there is no history to count.
+- `source` can be `obsidian-sync`, where there is no repository at all.
+
+**Recommended: deepen the clone, and treat git as a seed rather than a store.** Drop `--depth 1` (or use `--filter=blob:none`, which keeps the history and skips the file contents the counting does not need); seed `revisions` from `git log --follow` the first time a note is seen; bump it from the hash thereafter. Under `obsidian-sync` the seed is simply skipped and the counter accrues from first deploy, which is a worse signal but not a broken one. The alternative — never seeding — is defensible only if the counter is understood to mean "rewrites since the ledger began", and it should then be labelled that way rather than called a revision count.
+
+### What to verify
+
+The VM check asserts the mechanism, not the aesthetics: that `maturity` is emitted for every published note, that a hand-written `maturity:` in frontmatter survives the filter unchanged, and that a note whose text changes between two runs has its `revisions` incremented while its neighbours do not.
+
+### Cost and risk
+
+Half a day, and it is the session everything else waits on. The risk is over-tuning the weights against nineteen notes: they are a starting point, they are all in one table in one file, and 800 is the number most worth revisiting once the vault has grown.
+
+## 15. Growth marks, topic hue, and link marks
+
+### The problem
+
+Three separate wants, one sprite and one hue decision between them: an index that shows at a glance what is finished, a link that says whether it leads somewhere finished, and a page that shows which shelf a note came from.
+
+### Approach
+
+**The mark** is the site's own favicon, grown: seedling is the stem and one leaf, sapling adds the second, evergreen adds a crown. One SVG sprite of three symbols, a few hundred bytes, used in the index, in the margin (17) and on internal links.
+
+**The hue** carries topic and nothing else. `_Slip_Box` takes lotusGreen/springGreen, `_Reference/Lighting` takes lotusOrange/roninYellow. This needs the filter to carry the source directory into frontmatter, which item 3 already identified as a small change to `publish-filter.py` and is the only place these two items touch.
+
+**Link kinds are shape, not hue**, and all three marks trail so they are consistent with each other:
+
+- a link to another note takes the target's maturity sprout, in the target's topic hue;
+- a link to a section of the current note takes a dotted underline and no glyph, because there is no destination note to describe;
+- an external link keeps the `↗` the stylesheet already emits.
+
+This spends nothing from the hue budget, which was the objection that shaped it.
+
+### Cost and risk
+
+Two hours. The sprite and the CSS are small; the filter change is the same one item 3 deferred. Low risk, and every part of it is reversible in one file.
+
+## 16. Callout icons on Obsidian's mapping
+
+### The problem
+
+The callouts are distinguished by hue alone. Obsidian distinguishes them by icon as well, and the vault is written in Obsidian — so the site currently renders less information than the editor it came from.
+
+### Approach
+
+One SVG sprite, stroked with `currentColor` so each icon takes its callout's existing hue, referenced from `_markup/render-blockquote.html` where the type is already parsed. Roughly 1KB for the full set.
+
+**One mapping conflict to settle before building.** The stylesheet groups `important` with `example` on lotusViolet4/oniViolet. Obsidian does not: it gives `important` the flame — the same icon as `tip` — and `example` a list. So "match Obsidian" and "keep the current hue grouping" disagree on exactly one type. Matching Obsidian means `important` moves into the tip group and `example` keeps the violet on its own.
+
+The icons drawn for the prototype match Obsidian's _choices_ rather than Lucide's geometry. Exact parity would mean vendoring Lucide's SVGs at build time, the way KaTeX already is; whether nixpkgs carries them has not been checked, and it should be before that is promised.
+
+### Cost and risk
+
+Two hours. No new failure mode: a type the sprite does not know renders exactly as it does today.
+
+## 17. A margin on every note (supersedes 12, absorbs 9)
+
+### The problem
+
+Item 12's problem, restated with the numbers that make it worse: the rail renders on six of nineteen notes, so thirteen notes show an empty 15rem column on a wide screen, and the layout reads as _"this site has a rail when it has one"_.
+
+### Approach
+
+The margin becomes unconditional and its _contents_ conditional. Always present: the dateline, the reading time (item 9), and the maturity mark from item 15. Present when the note has them: the section map, and the backlinks the rail already carries.
+
+**The section map is item 4's contents list drawn to scale.** One block per `##` section, its height proportional to that section's word count, so the strip is a scale map of the document. The block for the section being read is picked out, and — this is what makes it better than a list — it _fills from the top as the reader moves through that section_, so the mark advances continuously instead of jumping a whole block at each boundary. The observer in `baseof.html` already tracks the current heading and can be reused; the within-section fraction is arithmetic on offsets.
+
+**The part this plan cannot price from the outside**: Hugo's `.Fragments.Headings` gives the heading tree but not the word count of each section. The cheap answer is to compute them in `publish-filter.py`, which already parses the body, and emit them as frontmatter alongside the headings. That should be confirmed before the session starts, because if it is wrong the item is larger than it looks.
+
+### Cost and risk
+
+Half a day. The risk that item 12 recorded — two grey blocks reading as a sidebar — was checked against a rendered margin and did not materialise; see the note under item 12 for why labels and ordering are what prevent it.
+
+## 18. The bonsai
+
+### The problem
+
+The site's one moment of visual interest, and the answer to the brief that started all this. Not decoration: a picture of the vault's actual state, in which the trunk is the site, each branch carries several notes, and every published note is one foliage pad whose glyph is its maturity and whose colour is its topic. Add a note and the tree grows; rewrite one and its pad changes.
+
+### Approach
+
+Generated at build time by a small module beside `publish-filter.py`, emitted as static markup — a few kilobytes of `<span>`-wrapped characters — so the page ships no generator and no library. The growth animation is one small script that reveals the characters in the order they were drawn; `prefers-reduced-motion` gets the finished tree.
+
+The growth model is `cbonsai`'s, with one rule changed. **Branch count grows as the square root of the note count and each branch carries several notes**, dropping each note's pad at its own point along its length. One shoot per note — the obvious rule — makes wood grow as fast as the canopy, and the tree becomes a thicket somewhere past sixty notes. Under the square-root rule eighteen notes get seven branches, sixty get thirteen, two hundred get eighteen: the canopy fills in while the wood barely changes, and every note keeps its own pad.
+
+**The foliage is navigation.** Each pad carries the index of the note it grew from, so pointing at one lights every character of that note's pad and names it, and a click opens the note. The tree stays `aria-hidden` and this stays an _enhancement_: eighteen tab stops made of single characters would be a worse route to a note than the `/notes/` index, which is already the complete accessible path. On a touch screen there is no hover, so a tap opens the note rather than revealing a caption first.
+
+### Four bugs already found, recorded so they are not rebuilt
+
+Each of these was met in the prototype and each is invisible in a screenshot of a single tree, which is why they are written down rather than left to be rediscovered.
+
+- **Foliage below the soil.** A branch leaving the trunk low down drifts downward until its pad lies on the ground beside the tree. Branches may sag by one row but never descend below where they left the trunk, nothing may be drawn at or below the soil line, and branches leave the upper half of the trunk only.
+- **The dropped branch.** The last branch's fork point, computed as a fraction of the trunk's length, landed one step past the end of it — so it never grew and the notes riding on it were silently absent. Clamp the fork points to the last trunk step.
+- **The invisible note.** A pad whose every cell landed on already-occupied cells places nothing, and that note is then neither visible nor hoverable. Search outward for a free cell, and **assert that the number of distinct notes on the tree equals the number published** — this is the assertion that caught both of the above.
+- **The vertical trunk.** A trunk whose sideways step is a fresh random number each step averages to vertical however wide the range. The lean has to persist across steps and reverse occasionally.
+
+### The taste pass, which is a second session
+
+The generator is one session; making the tree _look_ right is another, and it should not be rushed into the first. The known open problem is that at high note counts the canopy reads as fairy floss — a single ball on a stick. The levers are branch count against pad size against trunk length, and the judgement can only be made by generating many and looking. `garden-preview --fixture` plus a seed control is the loop.
+
+### Cost and risk
+
+A day for the generator, and a second session of unknown length for the taste pass. The risk is the second one: this is the only item on the list where "correct" and "good" are different questions, and the plan should not pretend the second is estimable.
+
+## 19. The home page, composed once
+
+### The problem
+
+The landing page is an `h1` and a list. It is also the page that carries the tree, and a large tree next to a small heading is two unrelated things sharing a screen.
+
+### Approach
+
+One composition: the site title at roughly `4.25rem`, a colophon line counting the garden from item 14's model — _"18 notes, 1 evergreen, 11 growing, 6 seedlings"_ — and the tree beside it, growing once on arrival. Home page only; interior pages keep the masthead they have.
+
+A grey SVG seedling set behind the title was prototyped and dropped: the fix for a weak mark is not a better mark but not having two plants on one page. The tree is the mark.
+
+This is the item that spends the scale contrast the decision above allows, and it does not reopen item 6 — the face is the system stack at a larger size.
+
+### Cost and risk
+
+Two hours, and it is the largest change in how the site feels for the least code on this list.
+
+## 20. Ambient Life on the 404
+
+Conway's Game of Life, seeded from an R-pentomino, running quietly in `--border` on the 404 page. About a kilobyte, paused when scrolled out of view and when `prefers-reduced-motion` is set.
+
+It is the one thing on this list that reports nothing — the cells are cells, not notes — which is why it is confined to the page where the reader has nothing to read. It is deliberately **not** on the home page: two growing things on one screen is one too many, the same argument that removed the seedling from item 19.
+
 ## Rejected: a graph view
 
 The canonical Quartz feature, and it should not be built here. Nineteen nodes with six edges is not a graph, it is a list with extra steps — the rendered picture would be five connected Lighting notes and thirteen dots. It needs a rendering library, which means either a build-time network fetch or vendoring a canvas library into a site that currently ships zero bytes of framework, and it works badly on the phones that most of this site's readers will use. Items 3 and 4 deliver what a reader actually wants from a graph view, which is "what else is near this", at a fraction of the cost. Revisit at a hundred notes if the link density has gone up with them.
+
+**Still rejected, 2026-08-31, and item 18 is not a revisit of it.** The two get confused because both put a picture of the garden on the home page, so the distinction is worth stating. A graph view draws the _edges_ — it is a picture of the link structure, and this vault's link structure is six edges across nineteen notes, which is the thing that is not worth drawing. The bonsai draws no edges at all: it is a picture of the _set_ of notes and of each note's own properties, which is information the vault genuinely has and has a lot of. Both of the practical objections above also fall away — it needs no rendering library, because it is characters, and it works on a phone, because it is text that scrolls in its own box. If the link density ever does go up, the graph view becomes worth reconsidering on its own merits and the bonsai has no bearing on that decision either way.
 
 ## Sequencing
 
@@ -407,3 +618,23 @@ That held for items 2, 4 and 5, and stopped holding at item 6, which added two a
 Item 11 was not sequenced at all — it came out of a review on 2026-08-28 and every part of it was a defect or a gap rather than a design decision, so it was taken immediately and in four commits rather than one PR per item. It moved the line above again, in the same direction item 6 moved it: two more assertions now guard properties the screenshots cannot, because _"the build was clean, the CSS was present, the table rendered, and the page was wrong"_ is the failure this project keeps meeting and the only one the gate can be taught to catch.
 
 Item 12 depends on item 4 and on nothing else, and is worth doing at the same time as item 9 if item 9 is ever taken, since both put a small grey line in the same place. Item 3, taken 2026-08-30, made "reachable only by search or by a backlink" a sentence in the past tense: fourteen of nineteen notes used to be reachable that way, and none is now.
+
+## Sequencing, 2026-08-31: one item per session
+
+Items 13 to 20 are scoped to be taken **one per session**, deliberately, because the context needed to do any one of them well is much smaller than the context needed to hold all eight. Each names its own files, its own verification and its own open questions, so a session can start from this document and the prototype sheet without replaying the design conversation.
+
+The order is fixed by dependencies for the first two and by taste after that.
+
+1. **Item 13, the rename-stable ledger.** First, and on its own, because it is a live defect rather than a feature: every day it is not fixed is a day a renamed note can lose its publication date. It touches one function and it makes everything after it durable.
+2. **Item 14, maturity.** The hinge. Items 15, 17, 18 and 19 all read what this session computes, and none of them can be built honestly before it exists. It is also the session that decides the clone depth question, which is the only decision here that reaches outside `publish-filter.py`.
+3. **Item 16, callout icons.** Out of dependency order on purpose: it depends on nothing, it is small, and it is a good session to take when there is not room for a large one. Settle the `important` mapping conflict first.
+4. **Item 15, growth marks and link marks.** Small, and the first session where item 14's work becomes visible on the site.
+5. **Item 17, the margin.** Medium. Confirm the per-section word count question before starting; if the answer is not "compute it in the filter", re-price the item.
+6. **Item 18a, the bonsai generator.** Large. Build to the four recorded bugs and the equal-count assertion, and stop when the tree is correct rather than when it is beautiful.
+7. **Item 18b, the bonsai taste pass.** Unestimated by design. Generate many, look at them, tune the three levers.
+8. **Item 19, the home page.** Last, because it wants the tree finished.
+9. **Item 20, the 404.** Any time; it depends on nothing and blocks nothing.
+
+Item 7 is the only optional item still outstanding — item 8 shipped on 2026-08-28 and the table has been corrected. It is less urgent after item 15 — the maturity sprout on an internal link already answers most of "is this worth following", which was the value the hover preview was reaching for — so if it is ever taken it should be taken as the `title` version first, and judged against a site that already has the marks.
+
+The rule from the top of this document still governs all of it: **each item is its own PR, per the usual gate, and the gate is not evidence for any of this.** The VM check can assert that maturity is emitted, that a rename preserves a date, that every published note appears on the tree — properties, all of them. Whether the tree looks like a bonsai and whether the margin looks like apparatus rather than a sidebar are questions only the screenshots can answer, and item 1 exists so that they can be asked cheaply.
