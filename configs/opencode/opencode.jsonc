@@ -93,6 +93,18 @@
     "markdownlint-cli2": {
       "command": ["markdownlint-cli2", "--fix", "$FILE"],
       "extensions": [".md"]
+    },
+
+    // The CI gate (`nix fmt -- --ci`, ci.yml) resolves the flake's `formatter`
+    // output - nixfmt-tree built from the nixpkgs pinned in flake.lock. The
+    // built-in nixfmt would use whatever is on PATH (host-installed from the
+    // unstable channel), which can drift from the gate. Delegate to the flake's
+    // own formatter so auto-format output is byte-identical to what CI accepts,
+    // even across flake.lock bumps: `nix fmt -- $FILE` hands the single file to
+    // nixfmt-tree, which resolves its tree root from the enclosing git repo.
+    "nixfmt": {
+      "command": ["nix", "fmt", "--", "$FILE"],
+      "extensions": [".nix"]
     }
   },
 
