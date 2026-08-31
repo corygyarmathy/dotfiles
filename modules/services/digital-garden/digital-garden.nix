@@ -62,7 +62,10 @@
 # The filter also FLATTENS published notes to the root, so a URL is /some-essay/
 # and stays that way when the vault is reorganised, and derives `published:`
 # dates from a ledger at ${stateDir}/dates.json rather than asking for them to
-# be written by hand. Both are explained in publish-filter.py.
+# be written by hand. The same ledger counts each note's substantial rewrites
+# (`revisions`, seeded from git history when the vault is a repository) and the
+# filter turns that into a computed `maturity:` stage. Both are explained in
+# publish-filter.py.
 #
 # Secrets required, depending on `source` (which file they live in is decided
 # by cg.sops-nix; see secrets/README.md):
@@ -151,12 +154,26 @@ let
           ''
             export GIT_SSH_COMMAND="ssh -i ${stateDir}/deploy-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
             if [ -d "${vaultDir}/.git" ]; then
-              git -C "${vaultDir}" fetch --depth 1 origin "${cfg.branch}"
+              # A plain fetch on a shallow clone stays shallow (the history the
+              # revision counter needs is never fetched), and --unshallow
+              # errors on a complete repo - so deepen only when shallow. That
+              # is a one-time transition: clones made before this change are
+              # depth 1, and every clone after it is full.
+              if [ "$(git -C "${vaultDir}" rev-parse --is-shallow-repository)" = "true" ]; then
+                git -C "${vaultDir}" fetch --unshallow origin "${cfg.branch}"
+              else
+                git -C "${vaultDir}" fetch origin "${cfg.branch}"
+              fi
               git -C "${vaultDir}" reset --hard "origin/${cfg.branch}"
               git -C "${vaultDir}" clean -fdx
             else
               rm -rf "${vaultDir}"
-              git clone --depth 1 --branch "${cfg.branch}" "${cfg.vaultRepo}" "${vaultDir}"
+              # Full history, not depth 1. The vault is a small notes repo, and
+              # publish-filter.py seeds each note's revision counter from
+              # `git log --follow` - a depth-1 clone has exactly one commit to
+              # count, so the counter would be worthless wherever this source
+              # is used.
+              git clone --branch "${cfg.branch}" "${cfg.vaultRepo}" "${vaultDir}"
             fi
           ''
         else

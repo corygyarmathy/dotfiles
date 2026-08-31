@@ -70,6 +70,19 @@ generator to render. Frontmatter written by hand always wins, so the ledger is a
 not an authority — which also means losing the ledger costs you nothing that
 matters.
 
+Maturity is derived the same way. The ledger also counts substantial rewrites
+(`revisions`), seeded from the vault's git history the first time a note is
+seen (`git log --follow`, counting commits whose diff to the note exceeded
+fifteen lines) and bumped whenever the note's hash changes; where there is no
+repository, the counter simply starts at zero. Each note is then given a
+`maturity_score` — a weighted sum of length, backlinks, forward links, `##`
+sections and revisions, in one table in one file so the weights can be tuned —
+and a `maturity:` stage cut from it (seedling below 1.5, sapling to 5.0,
+evergreen from there). A hand-written `maturity:` in the note wins over the
+computed stage, exactly as a hand-written `published:` already beats the
+ledger; `maturity_score` is always the computed number, for debugging and for
+the margin that will show it.
+
 `thesis:` is the note's claim in one sentence. It becomes the page description
 and the RSS item's summary, and it is appended to any list item elsewhere that
 is nothing but a link to the note — so an index or hub page reads as claims,
@@ -100,6 +113,7 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import sys
 import unicodedata
 from datetime import date
@@ -178,6 +192,24 @@ ATTACHMENT_SUFFIXES = {
     ".ogg",
     ".wav",
 }
+# A level-2 ATX heading: `##` NOT followed by a third `#`, so `###` does not
+# count. The maturity model and the rail both care about `##` only - a `###`
+# is a subsection, not a section.
+H2_HEADING = re.compile(r"^##(?!#)[ \t]+", re.M)
+# The maturity model, in one place so the weights are one edit. These are the
+# numbers the 2026-08-31 prototypes were tuned to; they are a starting point,
+# not a finding (see docs/plans/digital-garden-design.md, item 14). The stage
+# cuts: seedling below MATURITY_SAPLING, sapling up to MATURITY_EVERGREEN.
+MATURITY_SAPLING = 1.5
+MATURITY_EVERGREEN = 5.0
+# The length term saturates at this many words. A linear length term let two
+# long unrevised notes outrank a short careful one, which is the failure that
+# started the model: past the saturation point, longer stops being evidence of
+# anything.
+MATURITY_LENGTH_SATURATION = 800
+# A commit counts as a substantial rewrite only when its diff to the note
+# exceeds this many lines (added + deleted).
+REWRITE_LINES = 15
 
 
 def slugify(name):
@@ -312,6 +344,93 @@ def coalesce_aliases(front):
     return out
 
 
+def git_revisions(vault, rel):
+    """Count substantial rewrites of a note from its git history, or 0.
+
+    The seed for the ledger's revision counter. A commit counts when the note's
+    own diff in it exceeds REWRITE_LINES lines (added + deleted), which is the
+    line that separates a rewrite from a touch-up. `--follow` survives renames,
+    the same property `carry_renames` gets from the content hash, so the count
+    is stable under the renames that would otherwise reset it.
+
+    Returns 0 rather than raising when there is no history to count in: the
+    vault may be an obsidian-sync mirror with no `.git` directory, or git may
+    not be on PATH (the preview without this package in its runtime inputs).
+    The counter then accrues from first deploy, which is a worse signal but
+    not a broken one.
+    """
+    if shutil.which("git") is None or not (vault / ".git").exists():
+        return 0
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(vault),
+                "log",
+                "--follow",
+                "--numstat",
+                "--format=",
+                "--",
+                rel.as_posix(),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return 0
+    if out.returncode != 0:
+        return 0
+    rewrites = 0
+    for line in out.stdout.splitlines():
+        added, sep, rest = line.partition("\t")
+        deleted, _, _ = rest.partition("\t")
+        # `--numstat` writes `-\t-` for a binary file; skipping those is the
+        # same decision as not counting them.
+        if sep and added.isdigit() and deleted.isdigit():
+            if int(added) + int(deleted) > REWRITE_LINES:
+                rewrites += 1
+    return rewrites
+
+
+def maturity_score(words, backlinks, forward, sections, revisions):
+    """The number behind the maturity stage, as the plan lists its parts.
+
+    Components, with the weights the prototypes were tuned to:
+
+      length:    min(words / 800, 1) * 2  - saturating, not linear
+      backlinks: 1.2 each                 - the only signal from outside
+      forward:   0.5 each                 - resolved against the published set
+      sections:  +1 if the note has >= 3 `##`s - structured, not dumped
+      rewrites:  min(n, 4) * 0.35         - substantial commits
+
+    Rounded to three decimals so a computed score is stable in the emitted
+    frontmatter - a raw float sum can carry binary noise out to a sixteenth
+    decimal, which is a debugging number nobody asked to read.
+
+    The weights are all here, in one table in one file, so tuning them is one
+    edit and one commit. 800 is the number most worth revisiting once the vault
+    has grown.
+    """
+    score = min(words / MATURITY_LENGTH_SATURATION, 1.0) * 2
+    score += 1.2 * backlinks
+    score += 0.5 * forward
+    if sections >= 3:
+        score += 1
+    score += min(revisions, 4) * 0.35
+    return round(score, 3)
+
+
+def maturity_stage(score):
+    """seedling below 1.5, sapling from 1.5, evergreen at 5.0."""
+    if score >= MATURITY_EVERGREEN:
+        return "evergreen"
+    if score >= MATURITY_SAPLING:
+        return "sapling"
+    return "seedling"
+
+
 def carry_renames(ledger, published):
     """Move a ledger entry across a rename, keyed by content hash.
 
@@ -347,12 +466,26 @@ def carry_renames(ledger, published):
             ledger[keys[0]] = ledger.pop(gone[0])
 
 
-def update_ledger(ledger, key, text, today):
+def update_ledger(ledger, key, text, today, seed_revisions=0):
     """First sighting sets `published`; a changed note bumps `modified`.
 
     The hash covers the note as it was READ, not as it is written below, so a
     note's date does not move because some *other* note was published and its
     links here turned back into links.
+
+    The ledger also carries `revisions`, a count of substantial rewrites, which
+    is the signal `maturity_score` reads. It is seeded the first time a note is
+    seen and bumped once per hash change after that. The seed comes from git
+    (see `git_revisions`); where there is no repository the seed is 0 and the
+    counter accrues from first deploy.
+
+    The bump applies only to entries that already carried a counter. An entry
+    written by an older version of the filter has no `revisions`, and seeding
+    it from git is exactly right rather than approximate: git already counts
+    every commit in its history, including the one that produced the current
+    hash, so the seed is not followed by the bump. This is what makes the
+    counter land on the real number for notes published before it existed,
+    instead of treating a year of history as rewrites-since-yesterday.
 
     Keyed by the note's filename, deliberately not by its URL. The two are
     nearly the same string, and conflating them would mean that any future
@@ -363,9 +496,21 @@ def update_ledger(ledger, key, text, today):
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     entry = ledger.get(key)
     if not isinstance(entry, dict) or "published" not in entry:
-        entry = {"published": today, "modified": today, "hash": digest}
+        ledger[key] = {
+            "published": today,
+            "modified": today,
+            "hash": digest,
+            "revisions": seed_revisions,
+        }
+        return ledger[key]
+    revisions = entry.get("revisions")
+    if revisions is None:
+        revisions = seed_revisions
     elif entry.get("hash") != digest:
+        revisions = revisions + 1
+    if entry.get("hash") != digest:
         entry = {**entry, "modified": today, "hash": digest}
+    entry["revisions"] = revisions
     ledger[key] = entry
     return entry
 
@@ -508,6 +653,17 @@ def main(argv):
             # A set, so a note that links to another five times is one entry.
             backlinks.setdefault(dest, set()).add(source)
 
+    # Maturity reads the graph in both directions. Backlinks are who cites this
+    # note; forward links are who this note cites, which is the transpose of
+    # `backlinks` - every (target, source) edge above is a link from source to
+    # target. The index is absent from both directions: it was skipped as a
+    # source in the loop above, so it has no edges for the transpose to count
+    # either, and a table of contents carries no maturity signal of its own.
+    forward_links = {}  # source slug -> how many published notes it links to
+    for dest, sources in backlinks.items():
+        for source in sources:
+            forward_links[source] = forward_links.get(source, 0) + 1
+
     # ---- pass 5: derive dates, then write a flat tree and swap it in --------
     try:
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
@@ -569,11 +725,25 @@ def main(argv):
         # ran - the H1 is stripped here, but it is not decided here.
         front["title"] = titles[slug]
 
-        entry = update_ledger(ledger, key, text, today)
+        entry = ledger.get(key)
+        # Seed the revision counter from git only when the ledger has nothing
+        # to bump: a brand-new note, or an entry written before the counter
+        # existed. Every other run passes 0 and `update_ledger` either keeps
+        # the count or advances it by one, so the seed (a git log walk) is paid
+        # once per note, not once per build.
+        needs_seed = not (
+            isinstance(entry, dict) and isinstance(entry.get("revisions"), int)
+        )
+        seed = git_revisions(vault, rel) if needs_seed else 0
+        entry = update_ledger(ledger, key, text, today, seed)
+
+        # The word count is a signal for maturity, so it is computed for every
+        # note, index included - the overlong report below is what stays
+        # essay-only.
+        words = len(body.split())
         # The landing page is a table of contents, not an essay: it has no
         # publication date worth showing and owes nobody a thesis.
         if rel.name.lower() != "index.md":
-            words = len(body.split())
             if words > LONG_NOTE_WORDS:
                 overlong.append((rel, words))
             # As real YAML dates, so they match a hand-written `published:` and
@@ -591,6 +761,23 @@ def main(argv):
                 front["description"] = str(thesis).strip()
             if not thesis:
                 no_thesis.append(rel)
+
+        # Maturity is computed here because it needs the whole graph (from
+        # pass 4) and the ledger (the revision counter just updated above),
+        # neither of which exists earlier. A hand-written `maturity:` in the
+        # note wins over the computed stage, exactly as a hand-written
+        # `published:` beats the ledger; `maturity_score` is always the computed
+        # number, so the override can sit next to what the model thinks.
+        score = maturity_score(
+            words=words,
+            backlinks=len(backlinks.get(slug, ())),
+            forward=forward_links.get(slug, 0),
+            sections=len(H2_HEADING.findall(body)),
+            revisions=entry["revisions"],
+        )
+        front["maturity_score"] = score
+        if "maturity" not in front:
+            front["maturity"] = maturity_stage(score)
 
         # A list item that is only a link gets the target's thesis appended, so
         # an index or hub page reads as claims rather than as bare titles, and
