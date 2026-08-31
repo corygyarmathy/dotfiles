@@ -412,6 +412,72 @@ in
       description = "HTTP endpoints to probe with blackbox_exporter";
     };
 
+    # Reachability from outside the affected host (item 9 of
+    # docs/plans/deployment-hardening.md).
+    #
+    # `httpProbes` covers what this host itself serves, and blackbox runs on
+    # the same host - so a change that cuts a host off from the network leaves
+    # every probe green, because locally everything is fine. That is the one
+    # gap whose recovery is physical, and nothing on the host can notice it.
+    #
+    # This is the other host's view: each server probes the *peer's* dedicated
+    # host-alive beacon (a published, dependency-free 200-responder, see
+    # modules/services/host-alive.nix) and the peer's own Prometheus - a
+    # different machine, presumed still up - evaluates and pages. Empty by
+    # default so a host that wants no remote reachability monitoring declares
+    # nothing; both fleet servers set it.
+    #
+    # The probe URL is the beacon's public hostname, but the path the probe
+    # takes to reach it is *not* part of the guarantee. The fleet resolver
+    # answers `alive-*` with the LAN address (the wildcard in
+    # adguard-home.nix), so in practice the probe crosses the LAN to the peer's
+    # beacon through Caddy; if the probing host resolves publicly instead, the
+    # same URL rides the tunnel to Cloudflare's edge. Either way the *observer*
+    # is a different machine, which is the property item 9 needs. The path only
+    # changes which failure modes are visible, and the repo does not control
+    # it (the resolver a host uses is handed out by the router's DHCP, outside
+    # this repository). True public-internet reachability - guaranteeing the
+    # tunnel path - is deferred as a future item in the hardening plan.
+    #
+    # Deliberately just hostnames, per the plan's "not a second monitoring
+    # stack": the probes reuse the existing blackbox exporter, and the alert
+    # they feed reuses the rule/runbook machinery. Nothing here needs a new
+    # service, a token, or a store path.
+    remoteProbes = lib.mkOption {
+      type = lib.types.listOf (
+        lib.types.submodule {
+          options = {
+            name = lib.mkOption {
+              type = lib.types.str;
+              description = "Name of the away host being probed";
+            };
+            url = lib.mkOption {
+              type = lib.types.str;
+              description = "Public URL of the away host's host-alive beacon";
+            };
+          };
+        }
+      );
+      default = [ ];
+      example = [
+        {
+          name = "homelab02";
+          url = "https://alive-homelab02.gyarmathy.co";
+        }
+      ];
+      description = ''
+        The peer's host-alive beacon (see modules/services/host-alive.nix),
+        probed by this host so a machine cut off from its network is noticed
+        by a different machine that is still up. Each entry is a name and the
+        beacon's public URL - not one of the peer's real services, so the
+        watch does not decay when a service is moved or disabled. The URL is
+        public, but the path the probe takes to it is a function of fleet DNS
+        resolution (LAN via the wildcard, or public via the tunnel) and is not
+        part of the guarantee; what is guaranteed is that the observer is
+        another host, so it can still page when the affected one cannot.
+      '';
+    };
+
     cloudflaredTarget = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -609,7 +675,29 @@ in
                 {
                   targets = map (p: p.url) cfg.httpProbes;
                 }
-              ];
+              ]
+              # The peer's endpoints, one target per probe so each carries
+              # which away host it is watching. `kind="remote"` lets
+              # HostUnreachableFromOutside select exactly these and keeps
+              # `ServiceDown` scoped to a host's own probes - without the
+              # label, a failing away-host series would match both rules.
+              # `host` is who the probe is watching, and is what
+              # HostUnreachableFromOutside names.
+              #
+              # The remote target is the away host's dedicated host-alive
+              # beacon (modules/services/host-alive.nix), not one of its real
+              # services, so `ServiceDown` and HostUnreachableFromOutside stay
+              # distinct: a crashed app fires only the warning, while a host
+              # that is actually out of reach (which also takes every service
+              # it runs with it) may co-fire the critical with any of its
+              # services' own warnings. That is the intended separation.
+              ++ (map (p: {
+                targets = [ p.url ];
+                labels = {
+                  kind = "remote";
+                  host = p.name;
+                };
+              }) cfg.remoteProbes);
               relabel_configs = [
                 {
                   source_labels = [ "__address__" ];
@@ -772,9 +860,18 @@ in
                 }
 
                 # A dead tunnel breaks every published service at once; the
-                # dozen resulting probe failures say nothing the tunnel alert
-                # does not. Probes that fail while the tunnel is healthy are
-                # unaffected and still page normally.
+                # dozen resulting ServiceDown failures say nothing the tunnel
+                # alert does not. Probes that fail while the tunnel is healthy
+                # are unaffected and still page normally.
+                #
+                # HostUnreachableFromOutside is deliberately *not* inhibited
+                # here. It is the item-9 away-host beacon, and the tunnel owner
+                # is exactly the host whose loss matters most: if homelab01
+                # (which owns the tunnel) dies or loses egress, its own
+                # cloudflared is gone with it, so the tunnel alert - whose
+                # metric lives on that host - may itself never reach an
+                # operator. The peer's reachability beacon is the one signal
+                # that still can, so a tunnel outage must never silence it.
                 {
                   source_matchers = [
                     "alertname =~ CloudflareTunnel(Down|ServiceFailed|NoConnections)"

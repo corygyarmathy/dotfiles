@@ -216,6 +216,22 @@ in
       zfs.enable = true;
       cloudflaredTarget = "${gateway}:20241";
 
+      # Reachability from outside this host (item 9 of
+      # docs/plans/deployment-hardening.md). This host's own probes
+      # (`httpProbes` above) run locally, so a change that cuts a host off from
+      # the network looks fine from the inside. These probe the peer instead,
+      # at the peer's own dedicated host-alive beacon (see
+      # modules/services/host-alive.nix) - a dependency-free 200-responder,
+      # served by homelab01's tunnel, that is never moved or disabled with a
+      # service. If it stops answering, homelab01 is out of reach and this
+      # host - still up - pages.
+      remoteProbes = [
+        {
+          name = "homelab01";
+          url = "https://alive-homelab01.${domain}";
+        }
+      ];
+
       vpn.enable = true;
 
       # httpProbes is not set: it defaults to every service this host
@@ -274,6 +290,12 @@ in
       cloudflareTokenFile = config.sops.templates."caddy-cloudflare-env".path;
 
     };
+
+    # The peer probes this host through its own `alive` beacon
+    # (host-alive.nix), a dependency-free 200-responder decoupled from every
+    # service. The beacon itself runs here; the tunnel owner publishes and
+    # routes it.
+    host-alive.enable = true;
 
     # -------------------------------------------------------------------------
     # DNS (AdGuard Home)
