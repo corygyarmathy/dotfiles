@@ -1,10 +1,10 @@
 # Plan: hardening the deployment pipeline
 
-Status: extended 2026-08-24 with items 8 and 9, neither of which is new work so much as work item 4 named and did not do. Item 10 added 2026-08-30 as the parked security half of item 6. Revised 2026-08-16 to follow [ADR 0002](../adr/0002-protect-at-activation-not-in-the-rollout.md), which retires the staged rollout and moves protection to activation time. Supersedes the earlier version of this plan, whose "health-gate the canary promotion" item is dropped along with the canary itself.
+Status: extended 2026-08-24 with items 8 and 9, neither of which is new work so much as work item 4 named and did not do. Item 10 added 2026-08-30 as the parked security half of item 6. Items 11 and 12 added 2026-08-31 after a review of the sudo and SSH-key posture. Revised 2026-08-16 to follow [ADR 0002](../adr/0002-protect-at-activation-not-in-the-rollout.md), which retires the staged rollout and moves protection to activation time. Supersedes the earlier version of this plan, whose "health-gate the canary promotion" item is dropped along with the canary itself.
 
 Already in place, and assumed by everything below: the deployment metrics in `modules/services/monitoring/deploy-metrics.nix` and the `NixosDeployFailed` / `NixosDeployStale` / `NixosRebootPending` rules in `modules/services/monitoring/alert-rules.yml`. No new monitoring work is required to start.
 
-Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md), plus two added on 2026-08-24 and one parked on 2026-08-30. The first two are small and independent; the rest can proceed in any order once they are in.
+Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md), plus two added on 2026-08-24, one parked on 2026-08-30, and two added on 2026-08-31. The first two are small and independent; the rest can proceed in any order once they are in.
 
 | #   | Item                      | Size    | Status                                                   |
 | --- | ------------------------- | ------- | -------------------------------------------------------- |
@@ -16,7 +16,9 @@ Six pieces originally; five now, since service confinement moved out to [ADR 000
 | 6   | `deploy-rs` interactively | small   | **done** 2026-08-30 - `homelab01` deployed end to end with `magicRollback` confirmation; `homelab02` still needs its bootstrap switch + first deploy |
 | 8   | Download-root canary      | small   | **done** 2026-08-30 - sentinel, alert, guard and tests landed |
 | 9   | Reachability from outside | small   | done - cross-host probes via the peer's public endpoints |
-| 10  | Deploy-user sudo on SSH keys | small | not started - the security half of item 6, parked by the operator 2026-08-30 |
+| 10  | Deploy-user sudo on SSH keys | small | not started - expanded 2026-08-31 to also drop `deploy` from `wheel` and give it a dedicated key |
+| 11  | Split the backup transport account | small | not started - move `restic-backup` off `coryg` onto a dedicated unprivileged `backup` account |
+| 12  | Hardware-backed admin key | small | not started - optional; move the human admin key to a hardware token |
 
 ### Where this stands, 2026-08-16
 
@@ -728,17 +730,21 @@ chose", and the runbook's path notes cover reading it.
 
 ## 10. Deploy-account sudo on SSH keys instead of a hashed password
 
-_Added 2026-08-30, parked by the operator during item 6 - the deploy works, and this is the security half to revisit separately._
+_Added 2026-08-30, parked by the operator during item 6 - the deploy works, and this is the security half to revisit separately. Expanded 2026-08-31 after a review of the sudo and SSH-key posture: the original sketch left `deploy` in `wheel`, which would have defeated the confinement it sets out to build._
 
 ### The problem
 
 Item 6 deploys with `interactiveSudo` against a `deploy` account whose password hash is stored in sops (`users/deploy` in `secrets/shared.yaml`). deploy-rs itself warns on every run that an interactive sudo password is weaker than key-bound sudo. The SSH hop to the host already uses the laptop's key; the sudo hop to root is the remaining password.
 
-The obstacle is that servers set `security.sudo.wheelNeedsPassword = true` and the deploy account is a wheel member - so today, disabling the prompt for it means weakening sudo for `coryg` too, which is not acceptable.
+There is a second problem the original sketch missed, and it is the larger one. The deploy account is a `wheel` member (`modules/nixos/deploy-rs.nix`), and `wheelNeedsPassword` controls only _whether sudo prompts_, not _scope_. A wheel member can already `sudo ALL`; the password is the only thing standing between the deploy account and full root. So the fleet's weakest credential - a hashed password in sops, typed by a human once per deploy - currently gates the widest escalation. Confining to the activation binary therefore means removing `deploy` from `wheel`, not just adding a `NOPASSWD` line on top of it.
 
 ### Approach
 
-Keep `wheelNeedsPassword` true for the human, and give the `deploy` account a passwordless-sudo exception scoped to exactly what deploy-rs runs, via a dedicated sudoers rule that does not touch the `%wheel` policy:
+Keep `wheelNeedsPassword` true for the human, and rebuild the deploy account so the scoped exception is the _only_ sudo it has. Four changes, of which dropping `wheel` is the load-bearing one:
+
+**Drop `wheel`.** Remove `extraGroups = [ "wheel" ]` from `modules/nixos/deploy-rs.nix`. The `NOPASSWD` rule below is meaningless while wheel membership still grants `sudo ALL` with a password.
+
+**Scope the escalation to `activate-rs`**, via a dedicated sudoers rule that does not touch the `%wheel` policy:
 
 ```nix
 security.sudo.extraRules = [
@@ -749,16 +755,74 @@ security.sudo.extraRules = [
 ];
 ```
 
-Confirmed against deploy-rs: the escalation is only the profile activation binary (`activate-rs`), so a `NOPASSWD` on that one path closes the last password without opening the account to arbitrary sudo. Then `interactiveSudo` can be dropped from the `deploy.nodes` block, removing the per-deploy prompt and the hashed password requirement.
+Confirmed against deploy-rs: the escalation is only the profile activation binary (`activate-rs`). A `NOPASSWD` on that one path closes the last password without opening the account to arbitrary sudo.
 
-Two checks to add when built: that `sudo -n` as `deploy` actually reaches the activation command, and that `sudo` still prompts for `coryg` afterwards (a `%wheel` rule must not be accidentally overridden).
+**Retire the password.** With the scoped rule in place `deploy` needs no password at all: drop `hashedPasswordFile` and `sops.secrets."users/deploy"` from `modules/nixos/deploy-rs.nix`, delete `users/deploy` from `secrets/shared.yaml`, and remove `interactiveSudo` from the `deploy.nodes` block in `flake.nix`.
+
+**Give `deploy` its own key.** It currently authorizes the laptop's personal key (`coryg@xps15`), the same key on the human `coryg` account. Add a dedicated `deploy@xps15` key so deploy access can be revoked without rotating the admin key - the same one-key-per-role principle as item 11.
+
+Two checks to add when built: that `sudo -n` as `deploy` reaches `activate-rs` and nothing else, and that `sudo` still prompts for `coryg` afterwards (a `%wheel` rule must not be accidentally overridden).
 
 ### Explicitly not
 
 - `NOPASSWD` for all of `%wheel`.
 - Allowing the `deploy` user `ALL` commands - the whole point is confining to the activation path.
 - Reconsidering `wheelNeedsPassword` globally - it is a deliberate server posture.
+- Leaving `deploy` in `wheel` - the confinement is the whole point, and wheel membership is what defeats it.
 
 ### Done when
 
-`deploy .#homelab01` (and `.=homelab02`) run with no sudo password prompt, the `users/deploy` secret in sops can be retired, and `coryg`'s own sudo still asks for a password
+`deploy .#homelab01` (and `.=homelab02`) run with no sudo password prompt, `sudo -u deploy sudo -l` shows only `activate-rs`, the `users/deploy` secret in sops is retired, and `coryg`'s own sudo still asks for a password.
+
+---
+
+## 11. Split the backup transport account off `coryg`
+
+_Added 2026-08-31 from the item-10 review - the same role-aggregation argument applied to the backup path._
+
+### The problem
+
+`coryg` is one account doing three jobs: the human admin, the SSH admin target, and the unattended backup transport. Restic connects cross-server as `sftp:coryg@…` (the `cross-server` repositories in both host files), and the key it presents - root's `/root/.ssh/id_backup`, whose public half is authorized under the comment `restic-backup` - is authorized on the `coryg` account on the peer (`hosts/homelab01/default.nix:87`, `hosts/homelab02/default.nix:98`).
+
+That makes an unattended, automated credential a login for the admin account. A compromised `restic-backup` key - used on a schedule, on both servers, never requiring a human - lands the attacker on `coryg`, one sudo-password guess from root. The three jobs want three threat models, and the backup one wants the least privilege of the three.
+
+### Approach
+
+A dedicated unprivileged `backup` account and group that only the peer's restic key can reach, with no sudo and no interactive shell:
+
+- `users.users.backup` - `isSystemUser`, no `wheel`, home under `/var/lib/backup`. Restic's sftp backend talks to the sftp subsystem, which sshd provides without a login shell, so the default `nologin` shell should suffice - verify before relying on it.
+- Move the peer's `restic-backup` key off `coryg` and onto `backup`, on both servers.
+- Point the `cross-server` repositories at `sftp:backup@…` instead of `sftp:coryg@…`.
+- Give `backup` write access to its incoming path (`/srv/backups/<peer>`), which today is implied by `coryg` owning the tree. A dedicated `backup` group owns that directory (group-write), with `coryg` added to it so the human can still read a restore source; the account itself is confined to that one path.
+
+### Explicitly not
+
+- A wheel or sudo-capable backup account - the point is a file-copy account and nothing else.
+- Touching the private-key side (`backups/ssh/private-key` stays root's, as it is today); only the authorized destination and the repository user change.
+
+### Done when
+
+Cross-server snapshots still run end to end, `backup` cannot `sudo`, and the `restic-backup` key is gone from `coryg`'s authorized keys on both servers.
+
+---
+
+## 12. Hardware-backed key for the human admin
+
+_Added 2026-08-31 - optional, and different in kind from items 10 and 11: a change to the laptop's key management rather than to fleet configuration._
+
+### The problem
+
+The human admin key is a plain on-disk file (`~/.ssh/id_ed25519_personal` in `modules/home/development/ssh.nix:40`), even though the workstation already runs `gpg-agent` with SSH support (`profiles/workstation.nix:67`). A stolen or exfiltrated private key is reusable until it is noticed and revoked; a hardware token makes exfiltration much harder and adds per-use confirmation for the admin's own sudo.
+
+### Approach
+
+Generate the admin key on a hardware token (YubiKey/GPG smartcard) and point the SSH config at the agent-provided key instead of the on-disk file. The fleet side needs no change - the existing `coryg@xps15` entries are simply replaced by the new key's public half on both servers and the laptop's other destinations.
+
+### Explicitly not
+
+- Touching the service keys (`restic-backup`, `deploy`) - those stay on-disk; hardware tokens are for the human, not for unattended processes.
+- A requirement on the deployment pipeline - this is personal key hygiene, tracked here only because it changes which key the fleet trusts.
+
+### Done when
+
+The on-disk `id_ed25519_personal` is no longer used for admin SSH to the fleet, and the hardware key is the one authorized for `coryg`.
