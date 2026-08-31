@@ -211,12 +211,16 @@ pkgs.writeShellApplication {
     # the old inode into oblivion and never fires again, so the first save
     # after startup would be the last one the preview ever noticed.
     #
-    # Dotfiles are excluded to match the filter, which ignores
-    # .obsidian/.git/.sync.lock. Without this, Obsidian's own churn in
-    # .obsidian re-renders the site continuously.
+    # Exclude the paths whose churn would re-render for no reason - Obsidian's
+    # own writes to .obsidian, git's to .git, and the .sync.lock marker -
+    # rather than every dotted path. An earlier version excluded all of them
+    # with '/\.', which also silenced a checkout under a dotted directory like
+    # .claude/worktrees/: the watched stylesheet there never re-rendered, and
+    # the loop this command exists to run silently stopped. The filter ignores
+    # all of these, so rendering for them would report work that did not happen.
     cssdir=$(dirname "$css")
     inotifywait -q -m -r -e modify,create,delete,move,close_write \
-      --exclude '/\.' --format '%w%f' "$vault/" "$cssdir/" \
+      --exclude '/(\.obsidian|\.git)(/|$)|\.sync\.lock$' --format '%w%f' "$vault/" "$cssdir/" \
       | while read -r changed; do
         # The watch is on the stylesheet's directory rather than the file (see
         # above), so it also fires for the editor's own scratch files - swap
