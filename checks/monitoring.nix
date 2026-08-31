@@ -97,6 +97,19 @@
           }
         ];
 
+        # Item 9: reachability from outside the host. The sandbox has no
+        # network and this is a single machine, so the "remote" endpoint is
+        # the same localhost one - what is under test is the wiring, not real
+        # reachability: that a remoteProbe produces a blackbox scrape labelled
+        # kind="remote" with the away host's name, which is what the peer
+        # reachability alert selects on.
+        remoteProbes = [
+          {
+            name = "peer-host";
+            url = "http://localhost:9090/-/healthy";
+          }
+        ];
+
         alertmanager = {
           enable = true;
 
@@ -216,6 +229,19 @@
               return bool(result) and result[0]["value"][1] == "1"
 
           retry(node_up, timeout=timedelta(seconds=180))
+
+      with subtest("a remote probe is scraped and labelled for the away host"):
+          # Item 9: reachability from outside the host. The remoteProbe must
+          # reach blackbox and come back labelled kind="remote" with the away
+          # host's name - that label is what HostUnreachableFromOutside selects
+          # on, and dropping it would silently turn every away-host outage into
+          # a missed page (the remote probe would look like an ordinary local
+          # one, which ServiceDown now deliberately ignores via kind!="remote").
+          def remote_ok(_):
+              result = query('probe_success{job="blackbox-http",kind="remote",host="peer-host"}')
+              return bool(result) and result[0]["value"][1] == "1"
+
+          retry(remote_ok, timeout=timedelta(seconds=180))
 
       with subtest("deployment metrics reach Prometheus"):
           # NOT wait_for_unit: nixos-deploy-metrics is a Type=oneshot without

@@ -22,6 +22,18 @@
 #     only on a sustained 0 - the distinguishing behaviour of its exporter,
 #     which re-creates the sentinel only once per boot and otherwise reports
 #     the truth of its absence.
+#
+#   - item 9: reachability from outside the host. The remote-probe alert must
+#     fire for a probe labelled kind="remote" while that same series stays out
+#     of the generic ServiceDown (the kind!="remote" scoping), and ServiceDown
+#     must still fire for a host's own unlabelled probe, so the scope change
+#     did not disable normal probing. The remote targets are the away host's
+#     dedicated host-alive beacons (modules/services/host-alive.nix), which
+#     are never also this host's own local-probed service, so the two rules
+#     are decoupled: a service crash fires only the warning, and only a host
+#     that is genuinely out of reach - which also takes its services with it -
+#     co-fires both. The last two fixtures pin that separation so nobody
+#     re-couples them.
 rule_files:
   - @RULES@
 
@@ -139,3 +151,120 @@ tests:
       - eval_time: 30m
         alertname: DownloadRootCanaryMissing
         exp_alerts: []
+  # Item 9 - reachability from outside the host. A remote probe (of the away
+  # host's dedicated host-alive beacon) failing must fire the critical
+  # HostUnreachableFromOutside and must NOT also fire the generic ServiceDown
+  # for that same series (the kind!="remote" scoping); and a host's own
+  # unlabelled probe must keep firing ServiceDown.
+  - interval: 1m
+    input_series:
+      # The peer's beacon goes dark while this host itself appears fine.
+      - series: 'probe_success{job="blackbox-http",kind="remote",host="homelab01",instance="https://alive-homelab01.gyarmathy.co"}'
+        values: "0+0x20"
+      # This host's own (unlabelled) probe stays green - the exact reason the
+      # remote line is needed at all.
+      - series: 'probe_success{job="blackbox-http",instance="https://sonarr.gyarmathy.co"}'
+        values: "1+0x20"
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HostUnreachableFromOutside
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox-http
+              kind: remote
+              host: homelab01
+              instance: https://alive-homelab01.gyarmathy.co
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#hostunreachablefromoutside"
+              summary: "homelab01 stopped answering from outside"
+              description: "homelab01 is unreachable at https://alive-homelab01.gyarmathy.co from its peer. Locally it may still believe it is fine - a firewall, interface or sshd change that cut it off. This may need a trip to the cupboard."
+      # The scoping keeps the same (remote) series out of the generic warning:
+      # a series must not match both rules.
+      - eval_time: 10m
+        alertname: ServiceDown
+        exp_alerts: [ ]
+
+  # ServiceDown must still fire for a host's own unlabelled probe.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",instance="https://sonarr.gyarmathy.co"}'
+        values: "0+0x20"
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: blackbox-http
+              instance: https://sonarr.gyarmathy.co
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#servicedown"
+              summary: "Service unreachable"
+              description: "https://sonarr.gyarmathy.co has been down for 5+ minutes"
+
+  # The real host-down shape: the away host's dedicated alive beacon (a remote
+  # probe) and a service that host runs (a local probe, a *different* URL) go
+  # dark together, because a host that is out of reach takes its services with
+  # it. Both rules fire for the one outage - the intended co-fire when the host
+  # itself is gone.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",kind="remote",host="homelab02",instance="https://alive-homelab02.gyarmathy.co"}'
+        values: "0+0x20"
+      - series: 'probe_success{job="blackbox-http",instance="https://grimmory.gyarmathy.co"}'
+        values: "0+0x20"
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HostUnreachableFromOutside
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox-http
+              kind: remote
+              host: homelab02
+              instance: https://alive-homelab02.gyarmathy.co
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#hostunreachablefromoutside"
+              summary: "homelab02 stopped answering from outside"
+              description: "homelab02 is unreachable at https://alive-homelab02.gyarmathy.co from its peer. Locally it may still believe it is fine - a firewall, interface or sshd change that cut it off. This may need a trip to the cupboard."
+      - eval_time: 10m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: blackbox-http
+              instance: https://grimmory.gyarmathy.co
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#servicedown"
+              summary: "Service unreachable"
+              description: "https://grimmory.gyarmathy.co has been down for 5+ minutes"
+
+  # The decoupling, the whole point of the host-alive beacon: a service crash
+  # while the host itself is fine fires only ServiceDown - the away host's
+  # alive beacon stays green, so no critical for it.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",kind="remote",host="homelab01",instance="https://alive-homelab01.gyarmathy.co"}'
+        values: "1+0x20"
+      - series: 'probe_success{job="blackbox-http",instance="https://garden.gyarmathy.co"}'
+        values: "0+0x20"
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: blackbox-http
+              instance: https://garden.gyarmathy.co
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/tunnel-and-probes#servicedown"
+              summary: "Service unreachable"
+              description: "https://garden.gyarmathy.co has been down for 5+ minutes"
+      - eval_time: 10m
+        alertname: HostUnreachableFromOutside
+        exp_alerts: [ ]
