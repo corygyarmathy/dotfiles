@@ -446,6 +446,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = config.cg.service.reverse-proxy.enable;
+        message = "digital-garden requires the reverse proxy to be enabled (cg.service.reverse-proxy.enable = true) - it publishes a Caddy vhost and relies on Caddy for TLS";
+      }
+    ];
+
     cg.publish.digital-garden = {
       subdomain = "garden";
       port = cfg.port;

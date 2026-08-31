@@ -42,7 +42,7 @@ in
             - ${immichRoot}/upload:/usr/src/app/upload
             - /etc/localtime:/etc/localtime:ro
           env_file:
-            - /etc/immich/.env
+            - ${config.sops.templates."immich-env".path}
           ports:
             - 2283:2283
           depends_on:
@@ -58,7 +58,7 @@ in
           volumes:
             - ${immichRoot}/model-cache:/cache
           env_file:
-            - /etc/immich/.env
+            - ${config.sops.templates."immich-env".path}
           restart: unless-stopped
           healthcheck:
             disable: false
@@ -104,22 +104,34 @@ in
           restart: unless-stopped
     '';
 
-    # Create the .env file for Immich
-    # IMPORTANT: Change the DB_PASSWORD before first run!
-    environment.etc."immich/.env".text = ''
-      # Database
-      DB_PASSWORD=changeme-use-sops-for-real-deployment
-      DB_USERNAME=postgres
-      DB_DATABASE_NAME=immich
+    # The .env file Immich's containers read. The database password comes from
+    # sops rather than a literal: a default password in a module is the kind of
+    # thing that survives being enabled, so there is deliberately none. The
+    # secret name is declared here, and checks/secrets.nix fails the gate if it
+    # is missing from the file the host reads - which is what turns "enable
+    # immich" into a request for a real password rather than a working install.
+    sops.secrets."immich/db-password" = {
+      mode = "0400";
+      restartUnits = [ "immich.service" ];
+    };
 
-      # Immich settings
-      UPLOAD_LOCATION=${immichRoot}/upload
-      IMMICH_VERSION=${immichVersion}
+    sops.templates."immich-env" = {
+      content = ''
+        # Database
+        DB_PASSWORD=${config.sops.placeholder."immich/db-password"}
+        DB_USERNAME=postgres
+        DB_DATABASE_NAME=immich
 
-      # Optional: Hardware acceleration
-      # Uncomment if you want to use Intel Quick Sync for video transcoding
-      # IMMICH_FFMPEG_HW_ACCEL=vaapi
-    '';
+        # Immich settings
+        UPLOAD_LOCATION=${immichRoot}/upload
+        IMMICH_VERSION=${immichVersion}
+
+        # Optional: Hardware acceleration
+        # Uncomment if you want to use Intel Quick Sync for video transcoding
+        # IMMICH_FFMPEG_HW_ACCEL=vaapi
+      '';
+      mode = "0400";
+    };
 
     # Systemd service to manage Immich via docker-compose
     systemd.services.immich = {
