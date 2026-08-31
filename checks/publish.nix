@@ -180,12 +180,110 @@ let
       rule: "${name}: ${rule.hostname} is in the tunnel but this host's Caddy does not serve it"
     ) unserved;
 
+  # ==========================================================================
+  # 3. Every server is watched from outside itself (item 9 of the
+  #    deployment-hardening plan)
+  # ==========================================================================
+  #
+  # `httpProbes` runs on the host it is watching, so a host cut off from its
+  # network still believes it is fine. That gap is covered by `remoteProbes` -
+  # the peer's public endpoints, probed by a different machine that is still
+  # up. The point of this check is that the wiring cannot silently decay:
+  #
+  #   - a host that stops declaring remoteProbes loses its outside-the-host
+  #     watch entirely, with a clean build and no symptom to explain it;
+  #   - a remoteProbe pointing at anything that is not an actual public
+  #     hostname would page on the first quiet night for a reason unrelated to
+  #     reachability;
+  #   - a remoteProbe watching the wrong host (itself, or a workstation that is
+  #     never expected to answer) would alert about nothing real;
+  #   - a duplicate name or URL silently double-scrapes the same target.
+  #
+  # So each fleet server must name a peer, and every URL must resolve to a
+  # subdomain this fleet deliberately exposes (`localOnly = false`). A word on
+  # what it deliberately does *not* verify: `cg.publish` records the routing
+  # owner - the host whose tunnel/Caddy serve the subdomain - not the host that
+  # runs the service. With the single tunnel on homelab01, every public
+  # subdomain is routed by homelab01 even when its service (grimmory, storage)
+  # runs on homelab02, so "who owns the subdomain" cannot prove "who runs it".
+  # The runner association lives in the service modules, not `cg.publish`, and
+  # is intentionally out of scope. The check therefore pins that the graph is a
+  # real cross-server pair through a public https hostname - it cannot confirm
+  # the URL runs on the named peer, and the host config comments carry that
+  # promise instead.
+  # The real fleet's host configs, and the hosts it marks as servers.
+  # Hoisted so both the cross-host port pin and the remote-probe invariant
+  # read the same servers - no one host is pinned as the source of truth, so
+  # the checks keep covering the fleet if a host is renamed or replaced.
+  hosts = self.nixosConfigurations;
+
+  serverNames = lib.attrNames (
+    lib.filterAttrs (n: fleetHosts: (fleetHosts.${n} or { }).kind == "server") (
+      lib.mapAttrs (_: h: h.config.cg.fleet.hosts) hosts
+    )
+  );
+
+  # The two servers' host-alive beacons (modules/services/host-alive.nix) must
+  # sit on the same port, because the tunnel owner's route to the peer reads
+  # its *own* `host-alive.port`. With the shared module default both agree by
+  # construction; pinning it here means moving one without the other is a
+  # check failure rather than a silently dead beacon.
+  alivePortDiffer =
+    lib.length (lib.unique (map (n: hosts.${n}.config.cg.service.host-alive.port) serverNames)) != 1;
+
+  remoteFailures =
+    let
+      # The subdomains this fleet serves to the internet, from whichever host
+      # declares them. Both servers' public entries live on the tunnel owner
+      # because that is where the tunnel is; sourced from the whole fleet so a
+      # future host that publishes its own public service is covered too.
+      publicSet = lib.genAttrs (lib.concatMap (
+        n:
+        lib.mapAttrsToList (_: svc: svc.subdomain) (
+          lib.filterAttrs (_: svc: !svc.localOnly) hosts.${n}.config.cg.publish
+        )
+      ) serverNames) (_: true);
+
+      checkHost =
+        name:
+        let
+          cfg = hosts.${name}.config;
+          remote = cfg.cg.service.monitoring.remoteProbes;
+          ownName = cfg.networking.hostName;
+          peerNames = lib.remove name serverNames;
+        in
+        lib.optional (cfg.cg.service.monitoring.enable && remote == [ ])
+          "${name}: monitoring is on but it declares no remoteProbes - it has no outside-the-host reachability watch"
+        ++ lib.concatMap (
+          p:
+          let
+            isHttps = lib.hasPrefix "https://" p.url;
+            selfHost = lib.removeSuffix ".${cfg.cg.fleet.domain}" (lib.removePrefix "https://" p.url);
+            nameOnce = lib.length (lib.filter (q: q.name == p.name) remote) == 1;
+            urlOnce = lib.length (lib.filter (q: q.url == p.url) remote) == 1;
+          in
+          lib.optional (p.name == ownName) "${name}: remoteProbe watches itself (${p.name})"
+          ++ lib.optional (
+            !(lib.elem p.name peerNames)
+          ) "${name}: remoteProbe names '${p.name}' which is not another fleet server"
+          ++ lib.optional (!nameOnce) "${name}: remoteProbe '${p.name}' is declared more than once"
+          ++ lib.optional (!urlOnce) "${name}: remoteProbe URL ${p.url} is declared more than once"
+          ++ lib.optional (!isHttps) "${name}: remoteProbe URL is not https: ${p.url}"
+          ++ lib.optional (
+            isHttps && !(builtins.hasAttr selfHost publicSet)
+          ) "${name}: remoteProbe URL is not a public hostname: ${p.url}"
+        ) remote;
+    in
+    lib.concatMap checkHost serverNames;
+
   failures =
     fixtureFailures
     ++ lib.concatMap hostFailures [
       "homelab01"
       "homelab02"
-    ];
+    ]
+    ++ remoteFailures
+    ++ lib.optional alivePortDiffer "server host-alive ports disagree - the tunnel owner's route to the peer reads its own host's port, so both servers must match";
 in
 pkgs.runCommand "check-publish"
   {
@@ -198,6 +296,14 @@ pkgs.runCommand "check-publish"
       fixture: ${toString (lib.length fixtureProbes)} probes, ${toString (lib.length fixtureIngress)} ingress rules
       homelab01: ${toString (lib.length (lib.attrNames self.nixosConfigurations.homelab01.config.cg.publish))} published
       homelab02: ${toString (lib.length (lib.attrNames self.nixosConfigurations.homelab02.config.cg.publish))} published
+      remote probes: ${
+        toString (
+          lib.length (
+            self.nixosConfigurations.homelab01.config.cg.service.monitoring.remoteProbes
+            ++ self.nixosConfigurations.homelab02.config.cg.service.monitoring.remoteProbes
+          )
+        )
+      }
     '';
   }
   ''

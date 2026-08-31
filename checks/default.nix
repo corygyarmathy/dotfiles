@@ -312,6 +312,7 @@ in
     lib = pkgs.lib;
   };
   grafana = testLib.mkTest ./grafana.nix;
+  host-alive = testLib.mkTest ./host-alive.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
 
   # Not a VM: what it asserts is a shape in the generated configuration, and

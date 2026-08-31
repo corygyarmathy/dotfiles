@@ -176,6 +176,7 @@ jobs:
           - download-root-canary-script
           - download-root-safety
           - grafana
+          - host-alive
           - monitoring
           - publish
           - reverse-proxy
