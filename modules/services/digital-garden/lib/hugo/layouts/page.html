@@ -8,7 +8,9 @@
   <div class="layout">
     <article data-pagefind-body>
       <h1>{{ .Title }}</h1>
-      {{ partial "dateline.html" . }}
+      {{/* `facts: true` — the narrow-width copy of the margin. See the
+           partial, and the .dateline / .margin-facts swap in the stylesheet. */}}
+      {{ partial "dateline.html" (dict "page" . "facts" true) }}
       {{ .Content }}
     </article>
     {{ partial "rail.html" . }}

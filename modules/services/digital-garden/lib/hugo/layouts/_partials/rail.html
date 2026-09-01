@@ -1,64 +1,149 @@
 {{/*
-  The left-hand rail: where a reader is in this note, and what else points at
-  it. Both belong beside the prose rather than beneath it — a reader who wants
-  to know what cites a note wants it while reading, not four screens below
-  where they stopped.
+  The left-hand margin, on every note now (item 17) rather than only on the
+  ones with a table of contents or a backlink. The column is unconditional and
+  its CONTENTS are conditional: the dates, the reading time and the maturity
+  mark are always there, the section map appears when a note is sectioned
+  enough for a map to mean anything, and the backlinks appear when another
+  note cites this one.
+
+  The order runs cheapest fact first — dates, reading time, maturity, then the
+  shape of the note, then who cites it — and every fact carries a small
+  uppercase label. That is what keeps the column reading as apparatus
+  belonging to the essay rather than as a sidebar: unlabelled and unordered
+  they are a sidebar, and labelled in this order they read as the essay's own
+  margin.
+
+  THE SECTION MAP IS A TABLE OF CONTENTS FIRST. The first cut of item 17 drew
+  it as a vertical strip of blocks whose HEIGHTS were proportional to their
+  word counts, with the names revealed on hover. That put two variables on one
+  axis: vertical extent had to carry both "how big is this section" and "how
+  much room does its name need", and the vault settles that fight in favour of
+  neither. The longest note has fourteen `##`s running from 790 words to 66, a
+  12:1 ratio; give the 66-word section the line its name needs and the strip is
+  eleven hundred pixels tall, and size it to fit and the name has four pixels.
+  It shipped sized-to-fit, and the contents list stopped being readable.
+
+  So the two variables go on two axes, which is the same move item 15 made when
+  it put maturity on shape and topic on hue. The NAME is a plain line of text,
+  always legible, never behind a hover. The SIZE is the width of a rule
+  underneath it — a bar chart lying on its side, where a 12:1 ratio is 20px
+  against 240px and reads at a glance. And the READING is the fill of that
+  rule, left to right: the sections above the one being read are filled, the
+  one being read fills as the reader moves through it, and the ones below are
+  empty. One object that is a contents list, a scale map of the document, and a
+  progress bar, with nothing hidden and nothing competing.
+
+  `--widest` is the largest word count on the page and `--w` is each section's,
+  so the stylesheet divides the two and this template does no arithmetic. The
+  word counts come from publish-filter.py's `sections` frontmatter — Hugo's
+  `.Fragments.Headings` knows the heading tree but not the words under each
+  heading. The script in baseof.html writes `--fill`.
 
   Rendered as a sibling of <article> in the same grid, and NOT inside it, for
   the same reason backlinks.html always sat outside: these are other notes'
-  words and a list of this one's own headings, and indexing either would make a
-  search for a phrase return the page that listed it rather than the page that
-  said it.
+  words, a list of this one's own headings, and facts about it, and indexing
+  any of them would make a search for a phrase return the page that listed it
+  rather than the page that said it.
 
-  The whole element is skipped when it would be empty, which today is most
-  pages: of nineteen published notes, ten have no `##` at all and five carry a
-  backlink. An empty box in the margin is worse than an empty margin.
-
-  There is exactly one copy of this markup. Below the breakpoint the grid
-  collapses and this falls back into the flow beneath the article, which is the
-  layout the site served before the rail existed - so the narrow case is CSS,
-  not a second partial that has to be kept in step.
+  Below the breakpoint the grid collapses and this falls back into the flow
+  beneath the article, which is the layout the site served before the rail
+  existed. The dateline is the one fact the article still carries — a note's
+  date belongs above its prose on a phone, not beneath the whole essay — so at
+  the narrow width the margin's own dates are hidden and the article's dateline
+  shows, and at the wide width the two swap. One piece of markup, both
+  layouts, the swap made in CSS.
 */}}
 {{ $page := . }}
-{{/*
-  Top-level sections only - `##`, never `###`. The longest note in the vault
-  has twenty-nine headings and thirteen sections: the sections fit a viewport
-  and the headings do not, and a rail that scrolls inside itself is a
-  compromise rather than a design. Three is the threshold, because a contents
-  list of one or two entries restates the page rather than offering a way
-  around it.
-
-  The descent below is not decoration. Hugo wraps the heading tree in a
-  SYNTHETIC root - Level 0, empty Title - whenever a page's headings do not
-  start at H1, which here is always: publish-filter.py lifts a note's leading
-  H1 out of the body to become the title, so every note's markdown begins at
-  `##`. Without it .Fragments.Headings is a slice of one on every page, the
-  count is never three, and the contents list silently never renders anywhere -
-  which is exactly what it did until a page with twelve visible sections
-  reported one.
-*/}}
-{{ $sections := .Fragments.Headings }}
-{{ if and $sections (eq (index $sections 0).Level 0) }}
-  {{ $sections = (index $sections 0).Headings }}
+{{/* Top-level sections only - `##`, never `###`, read from the `sections`
+     frontmatter publish-filter.py wrote (which is also where the word counts
+     live). Three is the threshold: a map of one or two sections restates the
+     page rather than offering a way around it. */}}
+{{ $sections := .Params.sections }}
+{{ $showMap := ge (len $sections) 3 }}
+{{/* The longest section on this page, which is the bar that runs the full
+     width of the column; every other bar is drawn as a fraction of it. Taken
+     over the page rather than over the site, because the map answers "how is
+     THIS note apportioned", and normalising against the site's longest section
+     would draw every short note as a row of stubs. */}}
+{{ $widest := 1 }}
+{{ range $sections }}
+  {{ if gt .words $widest }}{{ $widest = .words }}{{ end }}
 {{ end }}
-{{ $showToc := ge (len $sections) 3 }}
-{{/* Truthiness rather than a length: a note with no backlinks has no
-     `backlinks` key at all, and `len` on the missing value is an error and not
-     a zero. */}}
-{{ $showBacklinks := .Params.backlinks }}
-
-{{ if or $showToc $showBacklinks }}
-  <aside class="rail">
-    {{ if $showToc }}
-      <nav class="rail-nav" aria-labelledby="rail-toc-title">
-        <h2 id="rail-toc-title">On this page</h2>
-        <ul>
-          {{ range $sections }}
-            <li><a href="#{{ .ID }}">{{ .Title }}</a></li>
-          {{ end }}
-        </ul>
-      </nav>
+{{/* The updated date is a fact only when it is a different day: "published and
+     modified on the same date" is noise, and a label reading UPDATED over the
+     publication date would be a lie. Computed once here so the markup below
+     stays a straight list of facts. */}}
+{{ $updated := and (not .Lastmod.IsZero) (ne (.Lastmod.Format "2006-01-02") (.Date.Format "2006-01-02")) }}
+{{/* At the narrow width the facts and the section map are both hidden — the
+     facts because the dateline under the title carries them there, the map
+     because a contents list of the page you are already on, placed BELOW that
+     page, is navigation nobody can use. So the backlinks are the only thing
+     this column has to say down there, and a note that is cited by nothing has
+     an empty <aside> with a top border: a rule across the page above the
+     footer, separating the essay from nothing at all. The class hides it, and
+     the wide width puts it back. */}}
+<aside class="rail{{ if not .Params.backlinks }} rail-wide-only{{ end }}">
+  <dl class="margin-facts">
+    <div class="margin-fact margin-fact-date">
+      <dt>Published</dt>
+      <dd>
+        <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2 Jan 2006" }}</time>
+      </dd>
+    </div>
+    {{ if $updated }}
+      <div class="margin-fact margin-fact-date">
+        <dt>Updated</dt>
+        <dd>
+          <time datetime="{{ .Lastmod.Format "2006-01-02" }}">{{ .Lastmod.Format "2 Jan 2006" }}</time>
+        </dd>
+      </div>
     {{ end }}
-    {{ with $page }}{{ partial "backlinks.html" . }}{{ end }}
-  </aside>
-{{ end }}
+    {{ with .Params.reading_time }}
+      <div class="margin-fact">
+        <dt>Reading time</dt>
+        <dd>{{ . }} min</dd>
+      </div>
+    {{ end }}
+    {{ with .Params.maturity }}
+      {{/* The same mark the /notes/ index and every internal link carry, from
+           the same sprite: the shape is this note's maturity and the hue is
+           this note's topic, exactly as item 15 decided. The topic-* class is
+           what carries the hue — the mark itself is drawn in currentColor —
+           so a note on the Lighting shelf gets its mark in the shelf's orange
+           here and on every page that links to it, and a note with no shelf
+           falls back to --muted. */}}
+      {{ $.Page.Store.Set "hasMark" true }}
+      <div class="margin-fact margin-fact-maturity">
+        <dt>Maturity</dt>
+        <dd{{ with $page.Params.topic }} class="topic-{{ . }}"{{ end }}>
+          {{ partial "mark-icon.html" (dict "maturity" .) }}
+          <span>{{ . }}</span>
+        </dd>
+      </div>
+    {{ end }}
+  </dl>
+  {{ if $showMap }}
+    <nav class="rail-nav section-map" aria-labelledby="rail-toc-title">
+      <h2 id="rail-toc-title">Sections</h2>
+      <ol class="section-map-list" style="--widest: {{ $widest }}">
+        {{ range $sections }}
+          <li>
+            <a href="#{{ .id }}" style="--w: {{ .words }}">
+              <span class="section-map-name">{{ .title }}</span>
+              {{/* aria-hidden: the bar restates the words under a heading and
+                   the reader's progress through it, and neither is something
+                   a screen reader should read out between one section name
+                   and the next. The name is the whole accessible content of
+                   the link, as it was when this was a plain contents list. */}}
+              <span class="section-map-bar" aria-hidden="true">
+                <span class="section-map-fill"></span>
+              </span>
+            </a>
+          </li>
+        {{ end }}
+      </ol>
+    </nav>
+  {{ end }}
+  {{ with $page }}{{ partial "backlinks.html" . }}{{ end }}
+</aside>
+{{- /* newline omitted so the margin sits flush against its neighbours */ -}}

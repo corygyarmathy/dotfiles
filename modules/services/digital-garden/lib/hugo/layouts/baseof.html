@@ -281,59 +281,183 @@
       - it is a list of links either way - so everything here is guarded and
       anything missing simply leaves it as one.
 
-      The observation band is the top fifth of the viewport, which is where a
-      reader's eye is when they have just arrived at a section, rather than the
-      whole window: with a full-height root every heading on a short page is
-      "visible" at once and the highlight never moves. When nothing is in the
-      band - mid-section, which is most of the time - the current section is
-      the last heading that has passed above the viewport.
+      Since item 17 the same current section drives the margin's section map,
+      which is a contents list, a scale map and a progress bar at once. The
+      current entry is picked out by the .current class that already
+      highlighted the contents list, and every entry's BAR is filled: full
+      above the current one, a fraction on it, empty below. So the strip
+      reports progress through the whole note and not only through the
+      section, and it advances continuously rather than jumping a bar at each
+      boundary.
+
+      ALL OF IT HANGS OFF ONE READING LINE, and that is the whole design. The
+      first cut had two: an IntersectionObserver band across the top fifth of
+      the viewport decided WHICH section was current, and the viewport's top
+      edge decided HOW FAR THROUGH it the reader was. Two lines a fifth of a
+      screen apart, and every fault that came back was one of them:
+
+      - a section became current a fifth of a screen before its bar started to
+        fill, so the progress looked like it began late;
+      - and it snapped to full when the NEXT heading reached the band, a fifth
+        of a screen before that heading reached the top - on a 347px section
+        that is 64% of the bar arriving at once;
+      - and scrolling up fast, several headings sit in the band together and
+        the observer batches their entries, so the choice flipped between
+        frames and the highlight flickered. Scrolling down it did not, because
+        headings leave the band from the top in order.
+
+      One line fixes all three by construction: a section becomes current at
+      the instant its heading crosses the line, which is the same instant the
+      previous section's bar reaches exactly full. The line is monotonic in
+      the scroll position, so there is nothing for the highlight to flicker
+      between, and the observer is gone with the band it existed to define.
+
+      The line sits a fifth of a viewport below the top, which is where a
+      reader's eye is rather than the very edge - the same reasoning the band
+      was chosen for, kept as geometry instead of as an observer.
+
+      AND IT HAS TO REACH THE END OF THE ARTICLE. A line a fixed distance
+      below the viewport's top cannot: the page stops scrolling with a whole
+      screen of content still below the line, so every heading in that last
+      screenful is unreachable and never becomes current at all. That is not
+      a corner case - it is most short notes. Of the three sectioned notes in
+      the vault, two have their last heading past the furthest the line can
+      reach (Lighting Colour Selection's at 3729 against a 3011 limit,
+      Effective Lighting's at 2910 against 2538), and on both of them the
+      final section never highlighted and its bar never filled.
+
+      So over the last screenful of scrolling the line accelerates to land
+      exactly on the foot of the article at the exact scroll limit - the
+      reader's attention moving down the viewport, because the page can no
+      longer move under it. Before that stretch the term is zero and the line
+      is undistorted, so the acceleration is confined to the region that
+      needs it and the rest of the document reads one-to-one.
     */}}
     <script>
       (function () {
         var nav = document.querySelector(".rail-nav");
-        if (!nav || !window.IntersectionObserver) return;
+        var article = document.querySelector("article");
+        if (!nav || !article) return;
 
-        var links = {};
-        var headings = [];
+        // Each section link is paired with the heading it points at: the link
+        // to mark and to write the fill onto, the heading to measure. Kept in
+        // document order, because the progress below is "everything above the
+        // current one has been read", which is an order and not a lookup.
+        var sections = [];
         nav.querySelectorAll("a[href^='#']").forEach(function (a) {
           var id = decodeURIComponent(a.hash.slice(1));
           var heading = document.getElementById(id);
           if (!heading) return;
-          links[id] = a;
-          headings.push(heading);
+          sections.push({ link: a, heading: heading });
         });
-        if (!headings.length) return;
+        if (!sections.length) return;
 
-        var current = null;
-        function mark(id) {
-          var next = id ? links[id] : null;
-          if (next === current) return;
-          if (current) current.classList.remove("current");
-          if (next) next.classList.add("current");
-          current = next;
+        var current = -1;
+        var mapped = !!nav.querySelector(".section-map-list");
+
+        // The reading line, in document coordinates. See the note above: one
+        // line for both jobs, a fifth of a viewport down, accelerating over
+        // the last screenful so that it lands on the foot of the article at
+        // the scroll limit.
+        //
+        // `span` is deliberately the smaller of a viewport and the whole
+        // scrollable distance: on a page barely taller than the window the
+        // acceleration must not start above the top of the document, or the
+        // line arrives at the end before the reader has scrolled at all. On a
+        // page that does not scroll it is zero and the term drops out.
+        function readingLine(scrollY, articleEnd) {
+          var height = window.innerHeight;
+          var limit = Math.max(
+            0,
+            document.documentElement.scrollHeight - height
+          );
+          var line = scrollY + height * 0.2;
+          var unreachable = articleEnd - (limit + height * 0.2);
+          var span = Math.min(height, limit);
+          if (unreachable > 0 && span > 0) {
+            var ramp = (scrollY - (limit - span)) / span;
+            line += unreachable * Math.max(0, Math.min(1, ramp));
+          }
+          return line;
         }
 
-        var inBand = {};
-        var observer = new IntersectionObserver(
-          function (entries) {
-            entries.forEach(function (e) {
-              inBand[e.target.id] = e.isIntersecting;
-            });
-            for (var i = 0; i < headings.length; i++) {
-              if (inBand[headings[i].id]) return mark(headings[i].id);
+        // One pass, and every measurement is taken before any style is
+        // written: a custom property written onto a link invalidates style,
+        // and the next getBoundingClientRect would have to flush layout to
+        // answer, so reading and writing interleaved would force one layout
+        // per section per frame.
+        function update() {
+          var scrollY = window.scrollY || window.pageYOffset || 0;
+          var tops = [];
+          var i;
+          for (i = 0; i < sections.length; i++) {
+            tops.push(sections[i].heading.getBoundingClientRect().top + scrollY);
+          }
+          var articleEnd = article.getBoundingClientRect().bottom + scrollY;
+          var line = readingLine(scrollY, articleEnd);
+
+          // The current section is the last one whose heading the line has
+          // passed; -1 while the reader is still above the first heading, in
+          // the note's opening prose, where no section is being read.
+          var next = -1;
+          for (i = sections.length - 1; i >= 0; i--) {
+            if (tops[i] <= line) {
+              next = i;
+              break;
             }
-            for (var j = headings.length - 1; j >= 0; j--) {
-              if (headings[j].getBoundingClientRect().top < 0) {
-                return mark(headings[j].id);
-              }
+          }
+          if (next !== current) {
+            if (current >= 0) sections[current].link.classList.remove("current");
+            if (next >= 0) sections[next].link.classList.add("current");
+            current = next;
+          }
+          if (!mapped) return;
+
+          // A section runs from its own heading to the next one, and the last
+          // runs to the foot of the article - which the line now reaches, so
+          // the last bar completes at the bottom of the page rather than
+          // stopping short of it.
+          for (i = 0; i < sections.length; i++) {
+            var fill;
+            if (i > current) {
+              fill = 0;
+            } else if (i < current) {
+              fill = 1;
+            } else {
+              var start = tops[i];
+              var end = i + 1 < sections.length ? tops[i + 1] : articleEnd;
+              fill = end > start ? (line - start) / (end - start) : 1;
             }
-            mark(null);
-          },
-          { rootMargin: "0px 0px -80% 0px" }
-        );
-        headings.forEach(function (h) {
-          observer.observe(h);
-        });
+            sections[i].link.style.setProperty(
+              "--fill",
+              Math.max(0, Math.min(1, fill)).toFixed(3)
+            );
+          }
+        }
+
+        // Called straight from the scroll handler rather than coalesced onto
+        // requestAnimationFrame, which was tried and withdrawn. The browser
+        // already delivers at most one scroll event per frame, so the
+        // coalescing bought nothing - and it cost correctness, because the
+        // "a frame is already queued" flag it needs is only ever cleared by
+        // the frame running. A hidden tab suspends animation frames, so a
+        // page scrolled while it was in the background came back with the
+        // flag latched on and the map dead for the rest of its life. A plain
+        // call has no state to latch.
+        window.addEventListener("scroll", update, { passive: true });
+        window.addEventListener("resize", update);
+
+        // Every offset here is measured, so anything that changes the
+        // article's height invalidates all of them - an image arriving, a
+        // webfont swapping, a <details> being opened. None of those fire
+        // scroll or resize, and this is the observer that replaces the
+        // IntersectionObserver the band needed: it watches the one box whose
+        // size the whole calculation depends on.
+        if (window.ResizeObserver) {
+          new ResizeObserver(update).observe(article);
+        }
+        window.addEventListener("load", update);
+        update();
       })();
     </script>
 

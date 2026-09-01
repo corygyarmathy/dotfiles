@@ -1,6 +1,7 @@
 ---
 publish: true
 thesis: A note long enough to scroll, sectioned enough to have a table of contents.
+maturity: sapling
 ---
 
 # A Long Note
