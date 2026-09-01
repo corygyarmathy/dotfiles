@@ -337,6 +337,14 @@
         siteTitle = "Test Garden";
         siteDescription = "A test garden.";
         baseUrl = "garden.test.invalid";
+        # One of each kind, because the option now has two: an entry with a
+        # URL is a link, and an entry without one renders as muted text so a
+        # destination that does not exist yet can still hold its place. Both
+        # halves are asserted, in the header and in the footer.
+        footerLinks = {
+          GitHub = "https://github.com/example/test";
+          Resume = "";
+        };
       };
 
       # The module asserts cg.service.reverse-proxy.enable is on (declared by
@@ -1995,6 +2003,28 @@
             "the composition is inside the indexed article"
         )
 
+        # The header's link list, and the placeholder rule. An entry with no
+        # URL renders as muted text and not as a link, so a section can show
+        # its shape before every destination exists - the alternative being a
+        # 404 shipped on purpose. GitHub has a URL; Projects and Resume do not
+        # yet.
+        links = re.search(r'<ul class="nameplate-links">(.*?)</ul>', home, re.S)
+        assert links, "the header has no link list"
+        assert re.search(
+            r'<a href="https://github\.com/[^"]+">GitHub</a>', links.group(1)
+        ), links.group(1)
+        assert '<span class="link-placeholder">Resume</span>' in links.group(1), (
+            "an entry with no URL is not rendered as a placeholder"
+        )
+        assert 'href=""' not in links.group(1), (
+            "an entry with no URL is rendered as a link to nowhere"
+        )
+        # The same rule in the footer, which renders the same list: a
+        # placeholder that was a link in one of the two places would be the
+        # exact drift the shared list exists to prevent.
+        footer = re.search(r"<footer.*?</footer>", home, re.S).group(0)
+        assert '<span class="link-placeholder">Resume</span>' in footer, footer
+
         essay = served("/on-gates/")
         assert 'class="masthead-title"' in essay, essay[:400]
         # The bonsai is matched on its element rather than on the word: the
@@ -2002,6 +2032,79 @@
         # looks for, and finding nothing is how it stays off an essay.
         for stray in ['class="nameplate"', 'class="colophon"', 'class="bonsai-plate"']:
             assert stray not in essay, f"an interior page rendered {stray}"
+
+    with subtest("the home page's header is anchored to the page's own grid"):
+        # The header used to share a CENTRE with the page and not a single
+        # EDGE: at 1440px every interior masthead's rule ran from 400px to
+        # 1040px, exactly the article column, and the nameplate ran from 305px
+        # to 1135px. Nothing on the page lined up with either of its ends, and
+        # a band that lines up with nothing reads as floating over the page
+        # rather than as part of it. That is a geometry fault, invisible to a
+        # grep and obvious in a screenshot, so it is measured here.
+        #
+        # Two edges, which are the only two vertical lines this layout has:
+        # the header begins on the article column's left edge - so the name
+        # sits directly above the first line of prose - and ends on the wide
+        # grid's right edge.
+        machine.succeed(
+            "mkdir -p /tmp/np && "
+            "cp /var/lib/digital-garden/public/index.html /tmp/np/page.html && "
+            "cp /var/lib/digital-garden/public/main.*.css /tmp/np/"
+        )
+        machine.succeed(
+            "cat > /tmp/np/probe.js <<'PROBE'\n"
+            'function box(sel) {\n'
+            '  var el = document.querySelector(sel);\n'
+            '  if (!el) return "MISSING";\n'
+            '  var r = el.getBoundingClientRect();\n'
+            '  return Math.round(r.left) + "," + Math.round(r.right);\n'
+            "}\n"
+            'var marker = document.createElement("div");\n'
+            'marker.id = "NP-MEAS";\n'
+            'marker.textContent = "@@" + [box(".nameplate"), box(".layout > article"),\n'
+            '  box(".layout")].join("|") + "@@";\n'
+            'document.body.appendChild(marker);\n'
+            "PROBE"
+        )
+        machine.succeed(
+            "python3 - <<'PY'\n"
+            "import re\n"
+            'p = "/tmp/np/page.html"\n'
+            "s = open(p).read()\n"
+            'probe = open("/tmp/np/probe.js").read()\n'
+            'css = re.search(r"main\\.[0-9a-f]+\\.css", s)\n'
+            'assert css, "no fingerprinted stylesheet on the home page"\n'
+            's = re.sub(r\'href="/main\\.[0-9a-f]+\\.css"\', \'href="\' + css.group(0) + \'"\', s)\n'
+            's = s.replace("</body>", "<script>" + probe + "</" + "script>" + "</body>", 1)\n'
+            'open(p, "w").write(s)\n'
+            "PY"
+        )
+        dom = machine.succeed(
+            "chromium --headless=new --no-sandbox --disable-gpu "
+            "--disable-dev-shm-usage --allow-file-access-from-files "
+            "--virtual-time-budget=30000 --window-size=1600,1200 "
+            "--dump-dom file:///tmp/np/page.html 2>/dev/null"
+        )
+        m = re.search(r'id="NP-MEAS">@@(.*?)@@', dom, re.S)
+        assert m, "the nameplate probe never ran"
+        parts = m.group(1).split("|")
+        assert "MISSING" not in parts, f"the probe could not find a box: {parts}"
+        header, article, grid = [
+            tuple(int(n) for n in part.split(",")) for part in parts
+        ]
+        # A pixel of slack, because a fractional layout rounds.
+        assert abs(header[0] - article[0]) <= 1, (
+            f"the header does not begin on the prose's left edge: {header} vs {article}"
+        )
+        assert abs(header[1] - grid[1]) <= 1, (
+            f"the header does not end on the page grid's right edge: {header} vs {grid}"
+        )
+        # And it is genuinely wider than the prose - the assertion above would
+        # also pass if the header had simply been capped at the measure, which
+        # is a different design and would leave no room for the tree.
+        assert header[1] - header[0] > article[1] - article[0] + 100, (
+            f"the header is no wider than the prose it sits over: {header}, {article}"
+        )
 
     with subtest("a renamed note keeps its publication date"):
         # The ledger is keyed by the note's filename, so a rename used to

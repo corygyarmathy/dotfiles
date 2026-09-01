@@ -47,7 +47,7 @@
       */}}
       {{ with site.Params.footerLinks }}
         <ul class="nameplate-links">
-          {{ range . }}<li><a href="{{ .url }}">{{ .name }}</a></li>{{ end }}
+          {{ range . }}<li>{{ partial "site-link.html" . }}</li>{{ end }}
         </ul>
       {{ end }}
       {{ partial "colophon.html" . }}

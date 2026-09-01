@@ -143,7 +143,7 @@
         <p>&copy; {{ now.Year }} {{ site.Title }}</p>
         <ul>
           {{ range site.Params.footerLinks }}
-            <li><a href="{{ .url }}">{{ .name }}</a></li>
+            <li>{{ partial "site-link.html" . }}</li>
           {{ end }}
           <li><a href="{{ "notes/" | relURL }}">All notes</a></li>
           {{ with site.Home.OutputFormats.Get "rss" }}<li><a href="{{ .Permalink }}">RSS</a></li>{{ end }}

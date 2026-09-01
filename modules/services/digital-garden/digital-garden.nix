@@ -432,6 +432,7 @@ in
       default = { };
       example = {
         GitHub = "https://github.com/corygyarmathy";
+        Resume = "";
       };
       description = ''
         Links shown in the site footer, and in the home page's header, as a
@@ -439,6 +440,11 @@ in
         than an empty one. One list rather than two so that "where else to
         find me" cannot say different things at the top and the bottom of the
         same page.
+
+        An entry whose URL is the empty string renders as muted text instead
+        of a link, so a destination that does not exist yet can still take its
+        place in the list. Filling the URL in turns it into an ordinary link
+        with no other change. See `_partials/site-link.html`.
       '';
     };
 
