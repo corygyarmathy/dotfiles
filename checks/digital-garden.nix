@@ -2022,8 +2022,11 @@
         # The same rule in the footer, which renders the same list: a
         # placeholder that was a link in one of the two places would be the
         # exact drift the shared list exists to prevent.
-        footer = re.search(r"<footer.*?</footer>", home, re.S).group(0)
-        assert '<span class="link-placeholder">Resume</span>' in footer, footer
+        footer = re.search(r"<footer.*?</footer>", home, re.S)
+        assert footer, "the home page has no footer"
+        assert '<span class="link-placeholder">Resume</span>' in footer.group(0), (
+            footer.group(0)
+        )
 
         essay = served("/on-gates/")
         assert 'class="masthead-title"' in essay, essay[:400]
