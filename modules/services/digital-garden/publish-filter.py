@@ -950,7 +950,7 @@ def main(argv):
             # a stage the tree can draw, so the computed one stands and the
             # note is still on the tree.
             stage = front["maturity"]
-            if stage not in bonsai.LEAF:
+            if stage not in bonsai.LEAF_CHARS:
                 stage = maturity_stage(score)
             grown.append(
                 bonsai.Note(
