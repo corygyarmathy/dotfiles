@@ -83,6 +83,15 @@ computed stage, exactly as a hand-written `published:` already beats the
 ledger; `maturity_score` is always the computed number, for debugging and for
 the margin that will show it.
 
+The margin (item 17 of the design plan) is fed here too, because it is the
+same parsing the maturity model already does. Every note is given a
+`word_count`, a `reading_time` (both from the body the filter actually emits),
+and a `sections` list — one entry per `##`, carrying the heading's `id` (the
+`anchorize` rule, which agrees with Hugo's ids for the headings Obsidian
+produces), its title, and the words under it down to the next `##`. Hugo's
+`.Fragments.Headings` knows the heading tree but not how much text sits under
+each heading, and this is the only place that knows the word counts.
+
 `thesis:` is the note's claim in one sentence. It becomes the page description
 and the RSS item's summary, and it is appended to any list item elsewhere that
 is nothing but a link to the note — so an index or hub page reads as claims,
@@ -475,6 +484,39 @@ def maturity_stage(score):
     return "seedling"
 
 
+def section_weights(body):
+    """One (id, title, words) per `##` section, for the margin's scale map.
+
+    A section runs from its `##` heading to the next one (or the end of the
+    note), `###` subsections and their text included — a subsection belongs to
+    the section it sits under. The id is `anchorize`'d, the same rule the
+    wikilink rewriter already uses for heading fragments, so the margin's
+    href="#id" lands on the id Hugo actually emits. Duplicate headings get no
+    suffix here, the same caveat `anchorize` records for wikilinks: a section
+    title used twice in one note makes both blocks point at the first, which
+    is a writing problem rather than a rendering one. This is the part of the
+    margin that cannot be priced from the templates: Hugo's
+    `.Fragments.Headings` gives the tree without the words, and only the
+    filter has the body.
+    """
+    matches = list(H2_HEADING.finditer(body))
+    out = []
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
+        line_end = body.find("\n", match.end())
+        if line_end == -1:
+            line_end = len(body)
+        title = body[match.end() : line_end].strip()
+        out.append(
+            {
+                "id": anchorize(title),
+                "title": title,
+                "words": len(body[match.end() : end].split()),
+            }
+        )
+    return out
+
+
 def carry_renames(ledger, published):
     """Move a ledger entry across a rename, keyed by content hash.
 
@@ -848,6 +890,16 @@ def main(argv):
             return f"{m.group(0).rstrip()} — {thesis}"
 
         body = BARE_LINK_ITEM.sub(annotate, body)
+
+        # The margin, item 17. Computed from the body as it is about to be
+        # written (the theses just appended included), so the map is a map of
+        # what the reader will see. `word_count` and `reading_time` come from
+        # the same `words` the maturity model read, one number used twice
+        # rather than two numbers that drift apart. Emitted for every note,
+        # index included, exactly as maturity is.
+        front["sections"] = section_weights(body)
+        front["word_count"] = words
+        front["reading_time"] = max(1, (words + 199) // 200)
 
         # Sorted by title rather than by date. Which note happened to be
         # written first is not a fact about the note being read, and ordering

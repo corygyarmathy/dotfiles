@@ -31,7 +31,7 @@
           <li>
             <h2 class="note-index-title"><a href="{{ .RelPermalink }}"{{ with .Params.topic }} class="topic-{{ . }}"{{ end }}>{{ .Title }}{{ partial "mark-icon.html" (dict "maturity" .Params.maturity) }}</a></h2>
             {{ with .Description }}<p class="note-index-thesis">{{ . }}</p>{{ end }}
-            {{ partial "dateline.html" . }}
+            {{ partial "dateline.html" (dict "page" .) }}
           </li>
         {{ end }}
       </ol>

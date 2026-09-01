@@ -45,6 +45,12 @@
   --text: #545464;     /* lotusInk1  */
   --strong: #43436c;   /* lotusInk2  */
   --accent: #4d699b;   /* lotusBlue4 */
+  /* "You are here": the section being read, in the margin's contents map
+   * and in the fill of that section's bar. Its own role rather than a
+   * borrowed one — see the note on .rail a.current below for why the two
+   * themes disagree here, which is the one place in this stylesheet they
+   * do. Lotus can keep the accent; Wave cannot. */
+  --reading: #4d699b;  /* lotusBlue4 */
   /* The site title. Kanagawa's statement/keyword hue — the role an
    * identifier-with-emphasis plays in the editor — and this repository's own
    * secondary accent (rofi's accent2, waybar's secondary). One brand title,
@@ -107,6 +113,8 @@
    * headroom and uses it, which is why the two blocks disagree here. */
   --strong: #dcd7ba;   /* fujiWhite */
   --accent: #7e9cd8;   /* crystalBlue */
+  --reading: #e6c384;  /* carpYellow — NOT crystalBlue, which is 1.18:1 from
+                        * this theme's --muted and so stops reading as a state */
   --brand: #d27e99;    /* sakuraPink — the statement/keyword role, see Lotus above */
   color-scheme: dark;
 }
@@ -448,10 +456,50 @@ blockquote {
   margin: 0 0 1rem;
 }
 
+/* The note's facts on one line under its title, and below the breakpoint that
+ * is the whole margin: the column falls beneath the article there, and facts a
+ * reader meets after the essay are facts they have stopped needing. See
+ * _partials/dateline.html, and the .margin-facts swap further down.
+ *
+ * Wrapping rather than scrolling or truncating, because on a phone the line is
+ * four facts wide and the viewport is not. `align-items: baseline` so a
+ * wrapped second line sits on the same rhythm, and the maturity mark rides the
+ * text baseline rather than the line box. */
 .dateline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.45em;
+  row-gap: 0.15rem;
   margin: -0.25rem 0 1.5rem;
   color: var(--muted);
   font-size: 0.875rem;
+}
+
+/* The separator is drawn here rather than emitted by the template, which is
+ * what lets the line be assembled from whichever facts a note happens to have.
+ * A template that decides its own separators has to know which fact is first,
+ * and every one of them is optional except the date; the selector knows it
+ * without being told, and a leading "·" becomes unwriteable rather than merely
+ * avoided.
+ *
+ * It hangs off the fact BEFORE it rather than the one after, which matters
+ * only when the line wraps — and on a phone it does, because four facts are
+ * wider than the viewport. Each separator is inside its own flex item, so it
+ * wraps with that item: put it on the following fact and a wrapped line opens
+ * with a stray "·" under the title, which is the thing this rule exists to
+ * make impossible. Trailing the line above is the byline convention anyway. */
+.dateline > span:not(:last-child)::after {
+  content: "\00b7";
+  margin-left: 0.45em;
+}
+
+/* The maturity fact carries the mark, so it is the one span whose contents
+ * need laying out rather than simply flowing. The gap is what separates the
+ * glyph from the word; the hue comes from the topic-* class on the span, the
+ * same one the margin and every internal link use. */
+.dateline .mark {
+  margin-right: 0.3em;
 }
 
 /* An underline, not a tinted box. The box was a legible affordance and a bad
@@ -650,7 +698,8 @@ blockquote {
 /* The sprite is zero-size but present, because the icon a <use> renders is
  * cloned from the symbol in this document; display:none on the defining
  * element would blank the clone in browsers that honour it. */
-.callout-sprite {
+.callout-sprite,
+.sprout-sprite {
   position: absolute;
   width: 0;
   height: 0;
@@ -1029,22 +1078,29 @@ h4:hover > .heading-anchor,
   }
 }
 
-/* ── the rail ───────────────────────────────────────────────────────────── */
+/* ── the margin ──────────────────────────────────────────────────────────── */
 
-/* Where you are in this note, and what else points at it. One piece of markup
- * with two layouts: beneath the article by default, and in the left margin
- * once there is a margin to put it in (the sidenotes claim the right). See
- * layouts/_partials/rail.html.
+/* A margin on every note (item 17), its contents conditional. One piece of
+ * markup with two layouts: beneath the article by default, and in the left
+ * margin once there is a margin to put it in (the sidenotes claim the right).
+ * See layouts/_partials/rail.html.
  *
  * The default is the narrow one, so the layout the site served before the rail
  * existed is the one that needs no media query to produce. Set apart from the
- * essay rather than continuing it: these are other notes' words and a list of
- * this one's parts, and a reader who has reached the end of a piece should be
- * able to see where the piece ends. */
+ * essay rather than continuing it: these are other notes' words, facts about
+ * this one, and a list of its parts, and a reader who has reached the end of a
+ * piece should be able to see where the piece ends. */
 .rail {
   margin-top: 3rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
+}
+
+/* A margin with nothing to show at this width — see the note in rail.html.
+ * The rule above is a separator, and a separator with nothing after it is a
+ * stray line across the foot of the page. */
+.rail-wide-only {
+  display: none;
 }
 
 .rail h2 {
@@ -1065,7 +1121,149 @@ h4:hover > .heading-anchor,
   margin-bottom: 0.35rem;
 }
 
-/* A contents list of the page you are already on is navigation, not reading,
+/* The margin's "cheapest fact first" apparatus — the dates, the reading time,
+ * the maturity mark — each a small uppercase label over a value. That is what
+ * keeps the column reading as belonging to the essay rather than as a sidebar:
+ * labelled and ordered, it is apparatus; unlabelled and unordered, it is a
+ * sidebar. */
+.margin-facts {
+  margin: 0 0 1.75rem;
+}
+
+.margin-fact {
+  margin: 0 0 0.6rem;
+}
+
+.margin-fact dt {
+  margin: 0 0 0.1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.margin-fact dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+/* The facts are the article's at the narrow width and the margin's at the wide
+ * one, and the swap is all of them rather than the dates alone. Half a swap is
+ * what this was first: the dates moved up to the dateline and the reading time
+ * and the maturity stayed in the margin, which at the narrow width is BELOW
+ * the essay — so a note's own facts arrived split in two, half above the prose
+ * and half after it, and the half that came after was reached only by a reader
+ * who had already finished reading. The whole set now sits under the title
+ * there and in the column here, one copy visible at a time.
+ *
+ * Published and Updated are two facts with two labels rather than one label
+ * over "31 Aug 2026 · updated 1 Sep 2026", which is a label that names half
+ * of its own value. Every other row here is one label over one value, and the
+ * dates were the only place that rule was broken. */
+.margin-facts {
+  display: none;
+}
+
+.margin-fact-maturity dd {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ── the section map ─────────────────────────────────────────────────────── */
+
+/* The note's table of contents, drawn so that it also reports the shape of the
+ * document and how far through it the reader is. Three facts on three
+ * channels, which is the split that makes it work:
+ *
+ *   the NAME     is text, always legible, never behind a hover;
+ *   the WIDTH    of the rule beneath it is that section's share of the note;
+ *   the FILL     of that rule, left to right, is how much of it has been read.
+ *
+ * The first cut of this put size and legibility on the same axis — a vertical
+ * strip of blocks with heights proportional to word counts — and the vault
+ * settled that fight in favour of neither: the longest note runs from 790
+ * words to 66 in fourteen sections, so the small block was four pixels tall
+ * and its name had to be hidden behind the pointer. A contents list you have
+ * to hover to read is not a contents list. Widths have room a column of text
+ * does not: 12:1 is 20px against 240px, and both are visible at once.
+ *
+ * The proportions come from the words publish-filter.py counted: `--w` per
+ * section, `--widest` the largest on the page, and the division happens here
+ * rather than in the template. The script in baseof.html writes `--fill`. */
+.section-map-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.section-map-list li {
+  margin: 0;
+}
+
+.section-map-list a {
+  display: block;
+  padding: 0 0 0.55rem;
+}
+
+.section-map-name {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+/* The track: the section's share of the note, as a fraction of its longest
+ * section. `min-width` so that a section short enough to round to nothing
+ * still leaves a mark — a section that exists and is tiny is a fact about the
+ * note, and a bar of zero width would report it as absent. */
+.section-map-bar {
+  display: block;
+  width: calc(var(--w, 1) / var(--widest, 1) * 100%);
+  min-width: 8px;
+  height: 4px;
+  margin-top: 0.3rem;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+}
+
+/* The fill: how much of this section has been read. Sections above the one
+ * being read are full, the one being read fills as the reader moves through
+ * it, and the ones below are empty — so the strip is a progress bar for the
+ * whole note as well as for the section, and it completes at the foot of the
+ * page because the last bar completes there.
+ *
+ * scaleX from the left rather than an animated width, so the browser can keep
+ * it on the compositor while the page scrolls. The global reduced-motion rule
+ * at the foot of this file collapses the transition to nothing; the fill is
+ * still correct at every scroll position, it just arrives without easing. */
+.section-map-fill {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--muted) 80%, transparent);
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left;
+  transition: transform 0.1s linear;
+}
+
+/* Read is grey and being-read is the reading hue, so "where I am" is told from
+ * "where I have been" by colour and not only by the ragged edge of a partial
+ * fill. The hue is the same one the current section's NAME takes below, which
+ * is the 2026-08-27 decision about "you are here" applied to the bar as well
+ * as to the text. */
+.section-map-list a.current .section-map-fill {
+  background: var(--reading);
+}
+
+.section-map-list a:hover .section-map-bar,
+.section-map-list a:focus-visible .section-map-bar {
+  background: color-mix(in srgb, var(--muted) 38%, transparent);
+}
+
+/* A contents map of the page you are already on is navigation, not reading,
  * and duplicating the page's own headings beneath it is the one thing the
  * narrow layout should NOT do. Backlinks are different: they are the only
  * place those notes appear. */
@@ -1136,6 +1334,12 @@ h4:hover > .heading-anchor,
     grid-row: 1;
   }
 
+  /* Whatever the narrow width had nothing to show, this width does: every
+   * note has facts, so the column is never empty out here. */
+  .rail-wide-only {
+    display: block;
+  }
+
   .rail {
     grid-column: 1;
     /* See the article's note above: row 1 keeps the rail at the top, beside
@@ -1162,6 +1366,22 @@ h4:hover > .heading-anchor,
   .rail-nav {
     display: block;
     margin-bottom: 2rem;
+  }
+
+  /* The facts move into the margin at the wide width: the column's stacked
+   * copy shows and the article's line hides, so the same fact is never on the
+   * page twice. They sit at the top of the column, where the first label is
+   * the line that baseline-aligns with the title.
+   *
+   * Scoped to `.layout > article >` so it is the NOTE's dateline that hides.
+   * The /notes/ index puts one inside every entry, several levels deeper, and
+   * those are the only facts those rows carry. */
+  .margin-facts {
+    display: block;
+  }
+
+  .layout > article > .dateline {
+    display: none;
   }
 
   /* No bullets and no indent out here: the rail is a column of its own and the
@@ -1194,7 +1414,7 @@ h4:hover > .heading-anchor,
   }
 
   .rail a.current {
-    color: light-dark(#4d699b, #e6c384); /* lotusBlue4 / carpYellow */
+    color: var(--reading);
   }
 
   .rail a:hover {

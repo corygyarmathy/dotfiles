@@ -1,13 +1,61 @@
 {{/*
-  The publication date, and the last edit only when it is a different day —
-  "published and modified on the same date" is noise on an essay.
+  The note's facts on one line, under its title.
+
+  Called two ways, because the two callers want different amounts of it:
+
+  - `page.html` passes `facts: true` and gets the whole line — the dates, the
+    reading time and the maturity mark. This is the NARROW-WIDTH copy of the
+    margin: below the breakpoint the margin falls beneath the article, and a
+    note's own facts belong above its prose rather than under the whole essay,
+    where a reader meets them only after they have stopped needing them. At
+    the wide width this line hides and the margin's stacked copy shows, so the
+    same fact is never on the page twice.
+
+  - `_default/list.html` passes the page alone and gets the dates only. An
+    index entry already carries its own maturity mark on its title, and a
+    reading time on every one of twenty-one rows is noise rather than
+    information.
+
+  Each fact is its own <span> and the separators are drawn by CSS — see
+  `.dateline > span + span::before`. That is what lets the line be assembled
+  from whichever facts a note happens to have without any of them needing to
+  know whether it is first: a leading "·" is the failure mode of a template
+  that decides separators for itself, and there is no way to write one here
+  that cannot produce it.
+
+  The last edit shows only when it is a different day — "published and
+  modified on the same date" is noise on an essay.
 */}}
-{{ if not .Date.IsZero }}
+{{ $page := .page }}
+{{ $facts := .facts }}
+{{ if not $page.Date.IsZero }}
   <p class="dateline">
-    <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2 Jan 2006" }}</time>
-    {{ if and (not .Lastmod.IsZero) (ne (.Lastmod.Format "2006-01-02") (.Date.Format "2006-01-02")) }}
-      &middot; updated
-      <time datetime="{{ .Lastmod.Format "2006-01-02" }}">{{ .Lastmod.Format "2 Jan 2006" }}</time>
+    <span>
+      <time datetime="{{ $page.Date.Format "2006-01-02" }}">{{ $page.Date.Format "2 Jan 2006" }}</time>
+    </span>
+    {{ if and (not $page.Lastmod.IsZero) (ne ($page.Lastmod.Format "2006-01-02") ($page.Date.Format "2006-01-02")) }}
+      <span>
+        updated
+        <time datetime="{{ $page.Lastmod.Format "2006-01-02" }}">{{ $page.Lastmod.Format "2 Jan 2006" }}</time>
+      </span>
+    {{ end }}
+    {{ if $facts }}
+      {{ with $page.Params.reading_time }}
+        <span>{{ . }} min read</span>
+      {{ end }}
+      {{ with $page.Params.maturity }}
+        {{/* The same mark, sprite and topic hue the margin's stacked copy
+             uses, so a note's maturity is drawn one way wherever it appears.
+             The flag is set here as well as in rail.html because this is a
+             second place the mark can render, and a mark whose sprite was
+             never shipped draws nothing at all. Safe to set on $page: `facts`
+             is only ever true from page.html, where $page IS the page being
+             rendered — the index passes other pages, and draws no mark. */}}
+        {{ $page.Store.Set "hasMark" true }}
+        <span{{ with $page.Params.topic }} class="topic-{{ . }}"{{ end }}>
+          {{ partial "mark-icon.html" (dict "maturity" .) }}{{ . }}
+        </span>
+      {{ end }}
     {{ end }}
   </p>
 {{ end }}

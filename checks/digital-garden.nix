@@ -242,6 +242,55 @@
         - [[On Boundaries]]
         NOTE
 
+        # A note with enough `##` sections for the margin's scale map to
+        # render (the threshold is three), with sections of DELIBERATELY
+        # different lengths. A map drawn to scale is a map of the shape of a
+        # note, and a fixture whose sections are all one size could never
+        # show the proportionality being wrong.
+        cat > $out/essays/on-sections.md <<'NOTE'
+        ---
+        publish: true
+        thesis: MARKER-THESIS-SECTIONS
+        ---
+
+        # On Sections
+
+        MARKER-SECTIONS-BODY
+
+        ## The longest section
+
+        This section is deliberately the longest on the page, so its block in
+        the scale map has to be the tallest. That means several sentences of
+        prose that exist for no reason other than to make the word count
+        grow, and to make sure the difference between this section and the
+        others is large enough to be measured rather than assumed.
+
+        A second paragraph in the same section, for the same reason: the map
+        is drawn to scale, and a scale that cannot be measured is a scale
+        that cannot be wrong. More words here mean a taller block there.
+
+        And a third, because two paragraphs of padding might still be too
+        close to the next section for the assertion to mean anything. The
+        shortest section below exists so this one has something obvious to be
+        taller than.
+
+        ## A middle one
+
+        A section of middling length, so the map has three different block
+        heights rather than two. It needs a little more prose to sit between
+        the longest and the shortest.
+
+        ## The shortest
+
+        One line.
+
+        ## A second middle one
+
+        Back up toward the longer end, so the map is not monotonic: a scale
+        map that just grew downward would be a list drawn as bars, and a
+        fixture exists to catch the shape being wrong, not merely the heights.
+        NOTE
+
         cat > $out/private/rates-and-figures.md <<'NOTE'
         ---
         publish: false
@@ -370,6 +419,7 @@
             "on-boundaries.md",
             "on-gates.md",
             "on-money.md",
+            "on-sections.md",
             "on-sidenotes.md",
           ], staged
 
@@ -456,6 +506,7 @@
             ("on-gates", "MARKER-PUBLISHED-BODY"),
             ("on-boundaries", "MARKER-BOUNDARIES-BODY"),
             ("on-money", "MARKER-MONEY-BODY"),
+            ("on-sections", "MARKER-SECTIONS-BODY"),
             ("on-sidenotes", "MARKER-SIDENOTES-BODY"),
         ]:
             assert marker in served(f"/{slug}"), f"{slug} was not rendered"
@@ -481,6 +532,7 @@
             ("/on-gates/", "On Gates"),
             ("/on-boundaries/", "On Boundaries"),
             ("/on-money/", "On Money"),
+            ("/on-sections/", "On Sections"),
             ("/on-sidenotes/", "On Sidenotes"),
         ]:
             assert re.search(f'<a href="{href}"[^>]*>{title}<svg class="mark"', page), \
@@ -523,15 +575,24 @@
         href = re.search(r'href="([^"]*main\.[^"]*\.css)"', served("/"))
         assert href, "no fingerprinted stylesheet linked from the home page"
         css = served(href.group(1))
-        for selector in [".masthead", ".page", "--pf-border", ".note-index"]:
+        for selector in [".masthead", ".page", "--pf-border", ".note-index", ".section-map-list", ".margin-facts"]:
             assert selector in css, f"{selector} missing from the stylesheet"
         # The rail's "you are here" marker gets its own hue in Wave (carpYellow)
         # so it stays distinct from the purple --muted links around it; pin it so
         # that value cannot drift back toward crystalBlue, which the muted
-        # change made indistinguishable (1.18:1).
+        # change made indistinguishable (1.18:1). Since item 17 the hue has two
+        # call sites - the current section's NAME and the fill of its bar - so
+        # it is a role variable rather than a literal, and what is pinned is the
+        # variable's value in each theme plus the fact that both sites read it.
+        assert re.search(r"--reading:\s*#4d699b", css), \
+            "the light theme's --reading is no longer lotusBlue4"
+        assert re.search(r"--reading:\s*#e6c384", css), \
+            "the dark theme's --reading is no longer carpYellow"
+        assert re.search(r"\.rail a\.current\s*{[^}]*var\(--reading\)", css), \
+            ".rail a.current no longer takes the reading hue"
         assert re.search(
-            r"\.rail a\.current\s*{[^}]*light-dark\(#4d699b,\s?#e6c384\)", css
-        ), ".rail a.current no longer uses lotusBlue4/carpYellow"
+            r"\.section-map-list a\.current \.section-map-fill\s*{[^}]*var\(--reading\)", css
+        ), "the current section's bar fill no longer takes the reading hue"
         # And it asks nobody else for anything. The whole toolchain is offline
         # by construction; an @import or a font CDN named here undoes that in
         # one line, and it would still render perfectly on a machine with a
@@ -1189,6 +1250,435 @@
         )
         assert re.search(r"^topic: essays$", essay, re.M), essay
 
+    with subtest("every staged note carries what the margin needs to draw"):
+        # Item 17's filter side: the margin is unconditional, so the data it
+        # always shows - the reading time and the scale map's per-section word
+        # counts - has to be on every note, not only the ones that happen to
+        # have a table of contents. The sections list carries the id the filter
+        # computed for each `##` heading, which is the string the margin's
+        # href="#id" has to land on, so it is pinned against Hugo's rendering
+        # in the margin subtest below rather than assumed here.
+        for note in ["index.md", "on-gates.md", "on-money.md", "on-sections.md"]:
+            head = machine.succeed(f"sed -n '1,40p' /var/lib/digital-garden/content/{note}")
+            assert re.search(r"^word_count: \d+$", head, re.M), f"{note} has no word_count:\n{head}"
+            assert re.search(r"^reading_time: \d+$", head, re.M), f"{note} has no reading_time:\n{head}"
+            assert re.search(r"^sections:", head, re.M), f"{note} has no sections:\n{head}"
+
+        # The one sectioned note carries the map's raw material, each entry the
+        # heading's id, title and the words under it.
+        head = machine.succeed("sed -n '1,60p' /var/lib/digital-garden/content/on-sections.md")
+        entries = re.findall(r"^  (id|title|words): (.+)$", head, re.M)
+        assert entries, f"on-sections has no section entries:\n{head}"
+        words = [int(w) for k, w in entries if k == "words"]
+        assert len(words) >= 3, f"on-sections has fewer than three sections: {words}"
+        assert len(set(words)) == len(words), (
+            f"the fixture's section lengths are not distinct, so the scale map "
+            f"cannot prove proportionality: {words}"
+        )
+
+    with subtest("the margin is on every note, whatever it has to say"):
+        # Item 17's point: the left margin used to render only on the six of
+        # nineteen notes that had a table of contents or a backlink, and the
+        # other thirteen showed an empty 15rem column on a wide screen. Now the
+        # column is unconditional and its CONTENTS are conditional, so even a
+        # note with neither sections nor backlinks - on-money is exactly that -
+        # renders the margin and its facts.
+        page = served("/on-money")
+        assert '<aside class="rail">' in page, "no margin on a bare note"
+        assert "Reading time" in page
+        assert "Maturity" in page
+        # The reading time is the margin's own estimate, computed by the
+        # filter from the same word count the maturity model reads.
+        assert "<dd>1 min</dd>" in page, page[-600:]
+        # on-money carries a hand-written `maturity: evergreen`, so the margin
+        # must show the evergreen mark - the same override the maturity
+        # subtest above pins in the staging tree, here on the page. The mark is
+        # item 15's, from item 15's sprite: one sprite for the margin, the
+        # /notes/ index and every internal link, so a maturity is drawn the
+        # same way wherever it appears.
+        assert 'href="#mark-evergreen"' in page, page[-600:]
+        # And it takes the note's own topic hue. on-money sits on the Lighting
+        # shelf, so the mark's <dd> carries that shelf's class - the one place
+        # a shelf-to-hue mapping lives, shared with the bonsai's foliage.
+        assert re.search(r'<dd class="topic-lighting">', page), (
+            "the margin's maturity mark does not carry the note's topic hue"
+        )
+        assert '<nav class="rail-nav section-map"' not in page, \
+            "on-money has no `##` sections, so the section map must not render"
+        # The conditional half proved in the other direction on the same page:
+        # on-gates cites on-money (item 15 added that link to exercise the
+        # marks), so its margin carries backlinks even though it carries no map.
+        assert 'class="backlinks"' in page, \
+            "on-money is cited by on-gates, so its margin must carry backlinks"
+
+        # And the case the item exists for: a note with NEITHER a map nor a
+        # backlink still renders the margin and its facts, rather than an empty
+        # column. on-gates has one `##` and is cited by nothing - index is
+        # excluded as a backlink source - so it is the barest page the fixture
+        # has. Before item 17 this note showed a 15rem hole on a wide screen.
+        bare = served("/on-gates")
+        # `rail-wide-only` because nothing cites on-gates: the aside is here in
+        # the markup and hidden at the narrow width, where it would otherwise
+        # be an empty box with a rule on top. See the swap subtest below.
+        assert re.search(r'<aside class="rail(?: rail-wide-only)?">', bare), \
+            "no margin on the barest note"
+        assert "<dt>Published</dt>" in bare
+        assert "<dt>Reading time</dt>" in bare
+        assert "<dt>Maturity</dt>" in bare
+        assert 'class="backlinks"' not in bare, \
+            "on-gates is cited by nothing, so the backlinks must not render"
+
+        # The mark's sprite is the one asset the margin needs, gated exactly as
+        # the callout sprite is: present where a mark rendered, absent on a
+        # page that draws none - a page that names a symbol the sprite does not
+        # define, or a sprite that is never shipped, draws a mark that is
+        # invisible to a screenshot and wrong to a reader.
+        assert 'class="mark-sprite"' in page
+        assert 'id="mark-seedling"' in page
+
+        # The dates are two facts with two labels, not one label over both.
+        # A note whose ledger entry has moved on carries an Updated row; the
+        # label naming half its own value was the shape this replaced.
+        assert "<dt>Published</dt>" in page, page[-600:]
+
+    with subtest("the scale map is drawn to scale, and every block lands"):
+        # The section map is the contents list drawn to scale: one block per
+        # `##` section, its height proportional to that section's word count,
+        # the current section picked out and filling as the reader moves. Two
+        # properties are asserted: the map renders only when there are enough
+        # sections for it to mean anything (on-sections has four, on-gates has
+        # one and must have no map), and every block's href lands on the id the
+        # filter computed - the "link to nowhere" failure that the wikilink
+        # test guards, met from the margin's side.
+        page = served("/on-sections")
+        m = re.search(r'class="section-map-list" style="--widest: (\d+)"', page)
+        assert m, "no section map on a note with four sections"
+        # Every bar is drawn as a fraction of the page's longest section, so
+        # the normalising number has to be exactly that and not, say, the
+        # site's longest - which would draw every short note as a row of stubs.
+        rows = re.findall(
+            r'<a href="#([^"]+)" style="--w: (\d+)">\s*'
+            r'<span class="section-map-name">([^<]+)</span>',
+            page,
+        )
+        assert len(rows) == 4, f"expected four entries, got {rows}"
+        assert int(m.group(1)) == max(int(w) for _f, w, _t in rows), (
+            f"--widest {m.group(1)} is not the largest section: {rows}"
+        )
+        for frag, _w, title in rows:
+            assert f'id="{frag}"' in page, \
+                f"section map href #{frag} ({title}) lands on no heading id"
+        # THE NAME IS IN THE MARKUP, not behind a hover. The first cut of the
+        # map hid the names and revealed them on pointer, because the blocks
+        # were sized by word count and the small ones had four pixels to draw
+        # a name in; a contents list you have to hover to read is not a
+        # contents list, and this is the assertion that keeps it one.
+        for _f, _w, title in rows:
+            assert title.strip(), f"a section map entry has no name: {rows}"
+        # And the entries carry distinct weights - a map whose sections all
+        # weigh the same would be a list. The fixture's sections are
+        # deliberately different lengths; see on-sections.md.
+        weights = {int(w) for _f, w, _t in rows}
+        assert len(weights) == 4, f"the four entries are not distinct: {weights}"
+        assert 'class="section-map-bar"' in page
+        assert 'class="section-map-fill"' in page
+
+        # A note with a single `##` must render no map: the column stays, the
+        # contents are conditional.
+        assert '<nav class="rail-nav section-map"' not in served("/on-gates")
+
+    with subtest("the facts swap whole between the two layouts"):
+        # A note's facts exist twice in the HTML, once per layout, and exactly
+        # one copy is visible at a time. The swap is ALL of them: the first cut
+        # moved only the dates onto the dateline and left the reading time and
+        # the maturity in the margin, which at the narrow width sits BELOW the
+        # essay - so the facts arrived split in half, and the half that came
+        # after the prose was reached only by a reader who had finished it.
+        #
+        # The visibility is CSS rather than markup, so it is pinned in the
+        # stylesheet like the rail's current-section hue is; the CONTENTS are
+        # markup and are pinned on the page.
+        page = served("/on-sections")
+        line = re.search(r'<p class="dateline">(.*?)</p>', page, re.S)
+        assert line, "a note has no dateline to carry its facts at the narrow width"
+        line = line.group(1)
+        assert "min read" in line, f"the note's dateline has no reading time:\n{line}"
+        assert re.search(r'href="#mark-', line), \
+            f"the note's dateline has no maturity mark:\n{line}"
+
+        # And the /notes/ index gets the dates only. Its rows already carry a
+        # maturity mark on each title, and a reading time on every one of them
+        # is noise - the same partial, told to say less.
+        index = served("/notes/")
+        for entry in re.findall(r'<p class="dateline">(.*?)</p>', index, re.S):
+            assert "min read" not in entry, f"an index row grew a reading time:\n{entry}"
+            assert "#mark-" not in entry, f"an index row grew a second mark:\n{entry}"
+
+        css_link = re.search(r'href="([^"]*main\.[^"]*\.css)"', served("/"))
+        assert css_link, "no fingerprinted stylesheet to assert the swap on"
+        css_served = served(css_link.group(1))
+        assert re.search(r'\.layout\s*>\s*article\s*>\s*\.dateline\s*{[^}]*display:\s*none', css_served), \
+            "the article's dateline is not hidden at the wide width"
+        assert re.search(r'\.margin-facts\s*{[^}]*display:\s*none', css_served), \
+            "the margin's facts are not hidden at the narrow width"
+
+        # At the narrow width the facts and the map are both hidden, so a note
+        # nothing cites has an empty <aside> - and the border that separates it
+        # from the essay becomes a rule across the page with nothing after it.
+        # on-gates is cited by nothing; on-money is cited by on-gates.
+        assert 'class="rail rail-wide-only"' in served("/on-gates"), \
+            "an uncited note's margin is not hidden at the narrow width"
+        assert 'class="rail"' in served("/on-money"), \
+            "a cited note's margin is hidden at the narrow width, losing its backlinks"
+
+    with subtest("the section map is drawn to scale, and its names are readable"):
+        # Two properties that grep cannot see, and both of them are the point
+        # of the redesign. The bar widths are computed by the browser from the
+        # --w weights against --widest, so only a rendered layout can say
+        # whether the map is drawn to scale. And the NAMES have to be
+        # measurably on screen: the first cut of this item sized the blocks by
+        # word count on the vertical axis, which left the smallest section four
+        # pixels tall and forced its name behind a hover, and a contents list
+        # you have to hover to read is not a contents list. Reading selectors
+        # would not have caught either failure; a screenshot caught the first
+        # one, and this is that screenshot turned into a gate.
+        #
+        # The page is copied off the served tree and the probe appended,
+        # exactly as the sidenote probe is; the fingerprinted stylesheet link
+        # is rewritten from an absolute root path to a same-directory one so
+        # the @media (min-width: 80rem) rules that reveal the map actually
+        # apply on file://, and chromium is given a wide viewport.
+        machine.succeed(
+            "mkdir -p /tmp/sm && "
+            "cp /var/lib/digital-garden/public/on-sections/index.html /tmp/sm/page.html && "
+            "cp /var/lib/digital-garden/public/main.*.css /tmp/sm/"
+        )
+        machine.succeed(
+            "cat > /tmp/sm/probe.js <<'PROBE'\n"
+            'var parts = [];\n'
+            'document.querySelectorAll(".section-map-list a").forEach(function (a) {\n'
+            '  var w = a.style.getPropertyValue("--w").trim();\n'
+            '  var bar = a.querySelector(".section-map-bar").getBoundingClientRect();\n'
+            '  var name = a.querySelector(".section-map-name");\n'
+            '  var box = name.getBoundingClientRect();\n'
+            '  var vis = window.getComputedStyle(name);\n'
+            '  parts.push([w, bar.width, box.height, vis.opacity, vis.visibility].join(":"));\n'
+            "});\n"
+            'var list = document.querySelector(".section-map-list");\n'
+            'var marker = document.createElement("div");\n'
+            'marker.id = "SM-MEAS";\n'
+            'marker.textContent = "@@" + parts.join("|") + "|TRACK:" + list.getBoundingClientRect().width + "@@";\n'
+            'document.body.appendChild(marker);\n'
+            "PROBE"
+        )
+        machine.succeed(
+            "python3 - <<'PY'\n"
+            "import re\n"
+            'p = "/tmp/sm/page.html"\n'
+            "s = open(p).read()\n"
+            'probe = open("/tmp/sm/probe.js").read()\n'
+            'css = re.search(r"main\\.[0-9a-f]+\\.css", s)\n'
+            'assert css, "no fingerprinted stylesheet on the section-map page"\n'
+            's = re.sub(r\'href="/main\\.[0-9a-f]+\\.css"\', \'href="\' + css.group(0) + \'"\', s)\n'
+            's = s.replace("</body>", "<script>" + probe + "</" + "script>" + "</body>", 1)\n'
+            'open(p, "w").write(s)\n'
+            "PY"
+        )
+
+        dom = machine.succeed(
+            "chromium --headless=new --no-sandbox --disable-gpu "
+            "--disable-dev-shm-usage --allow-file-access-from-files "
+            "--virtual-time-budget=30000 --window-size=1600,1200 "
+            "--dump-dom file:///tmp/sm/page.html 2>/dev/null"
+        )
+        m = re.search(r'id="SM-MEAS">@@(.*?)@@', dom, re.S)
+        assert m, "the section-map probe never ran"
+        items = m.group(1).split("|")
+        track_tail = items.pop()
+        assert track_tail.startswith("TRACK:"), f"probe lost its track width: {track_tail}"
+        track = float(track_tail.split("TRACK:")[1])
+        assert track > 100, f"the map is not laid out in the margin column: {track}"
+
+        rows = []
+        for item in items:
+            w, bar, height, opacity, visibility = item.split(":")
+            rows.append((int(w), float(bar), float(height), float(opacity), visibility))
+        assert len(rows) == 4, f"expected four entries, measured {rows}"
+
+        # EVERY NAME IS ON SCREEN. Not transparent, not collapsed, not
+        # visibility:hidden - the three ways a label disappears while its
+        # markup stays in the page and passes a grep.
+        for w, _bar, height, opacity, visibility in rows:
+            assert height >= 10, f"a section name has no height: {rows}"
+            assert opacity == 1.0, f"a section name is transparent: {rows}"
+            assert visibility == "visible", f"a section name is hidden: {rows}"
+
+        # Nothing falls below the visible floor, and the longest section fills
+        # the column: the map is normalised against this page's own longest
+        # section, so its bar is the full track.
+        assert all(bar >= 8 for _w, bar, _h, _o, _v in rows), \
+            f"a bar fell below min-width: {rows}"
+        widest = max(rows, key=lambda r: r[0])
+        assert abs(widest[1] - track) < 2, \
+            f"the longest section's bar does not fill the track: {widest} of {track}"
+
+        # And it is drawn to scale: every bar's width is proportional to its
+        # section's word count. A bar pinned to the min-width floor is excluded,
+        # since the floor is a shape the map makes on purpose; the rest must
+        # agree within a fifth.
+        ratios = [bar / w for w, bar, _h, _o, _v in rows if bar > 10]
+        assert len(ratios) >= 3, f"too few measurable bars: {rows}"
+        assert (max(ratios) - min(ratios)) / min(ratios) < 0.2, (
+            f"bar widths are not proportional to word counts: {rows}"
+        )
+
+    with subtest("the reading line reaches every section and the foot of the note"):
+        # The scroll-spy is arithmetic on offsets, and arithmetic on offsets is
+        # exactly the thing that looks right in the source and is wrong on the
+        # page. Three faults were reported against the first version of it and
+        # all three are gated here, by sweeping the whole scrollable range and
+        # asserting properties of the sequence rather than of one position.
+        #
+        # THE LAST SECTION HAS TO BE REACHABLE. The reading line sits below the
+        # viewport's top, so a line at a fixed offset stops a whole screenful
+        # short of the document's end and every heading in that screenful never
+        # becomes current at all. Two of the three sectioned notes in the real
+        # vault were in exactly that state - the last section never highlighted
+        # and its bar never filled - and nothing in the markup or the stylesheet
+        # showed it.
+        #
+        # THE HANDOVER HAS TO BE CONTINUOUS. Deciding the current section by one
+        # rule and the fill by another leaves a gap between them, and the bar
+        # crosses that gap in one jump when the next section takes over. With a
+        # single reading line the bar reaches full at the instant of handover,
+        # so the remainder at each handover should be zero - it is asserted
+        # against the sweep's own step size, which is the resolution this can
+        # be measured at.
+        #
+        # AND IT HAS TO BE MONOTONIC. The current section going backwards while
+        # the page scrolls forwards is what a reader sees as flicker: the old
+        # version chose the topmost heading inside an observation band, and
+        # scrolling up puts several headings in that band at once.
+        machine.succeed(
+            "mkdir -p /tmp/sc && "
+            "cp /var/lib/digital-garden/public/on-sections/index.html /tmp/sc/page.html && "
+            "cp /var/lib/digital-garden/public/main.*.css /tmp/sc/"
+        )
+        # The sweep dispatches synthetic scroll events. Headless chromium moves
+        # the scroll position but does not run the rendering steps that deliver
+        # a real scroll event, so driving the page's own handler is the only way
+        # to exercise it here - and it is the same handler a reader's scroll
+        # calls, not a reimplementation of it.
+        machine.succeed(
+            "cat > /tmp/sc/probe.js <<'PROBE'\n"
+            'window.addEventListener("load", function () {\n'
+            "  var limit = document.documentElement.scrollHeight - window.innerHeight;\n"
+            '  var links = [].slice.call(document.querySelectorAll(".section-map-list a"));\n'
+            "  var tops = [];\n"
+            "  for (var t = 0; t < links.length; t++) {\n"
+            "    var id = decodeURIComponent(links[t].hash.slice(1));\n"
+            "    tops.push(document.getElementById(id).getBoundingClientRect().top);\n"
+            "  }\n"
+            '  var artEnd = document.querySelector("article").getBoundingClientRect().bottom;\n'
+            "  var out = [];\n"
+            "  for (var s = 0; s <= 200; s++) {\n"
+            "    var y = Math.round((limit * s) / 200);\n"
+            "    window.scrollTo(0, y);\n"
+            '    window.dispatchEvent(new Event("scroll"));\n'
+            "    var cur = -1;\n"
+            "    var fills = [];\n"
+            "    for (var i = 0; i < links.length; i++) {\n"
+            '      if (links[i].classList.contains("current")) cur = i;\n'
+            '      fills.push(parseFloat(links[i].style.getPropertyValue("--fill") || "0"));\n'
+            "    }\n"
+            "    out.push([y, cur, fills]);\n"
+            "  }\n"
+            '  var d = document.createElement("div");\n'
+            '  d.id = "SWEEP";\n'
+            '  d.textContent = "@@" + JSON.stringify({\n'
+            "    limit: limit, tops: tops, artEnd: artEnd, samples: out\n"
+            '  }) + "@@";\n'
+            "  document.body.appendChild(d);\n"
+            "});\n"
+            "PROBE"
+        )
+        machine.succeed(
+            "python3 - <<'PY'\n"
+            "import re\n"
+            'p = "/tmp/sc/page.html"\n'
+            "s = open(p).read()\n"
+            'probe = open("/tmp/sc/probe.js").read()\n'
+            'css = re.search(r"main\\.[0-9a-f]+\\.css", s)\n'
+            'assert css, "no fingerprinted stylesheet on the section-map page"\n'
+            's = re.sub(r\'href="/main\\.[0-9a-f]+\\.css"\', \'href="\' + css.group(0) + \'"\', s)\n'
+            's = s.replace("</body>", "<script>" + probe + "</" + "script>" + "</body>", 1)\n'
+            'open(p, "w").write(s)\n'
+            "PY"
+        )
+
+        # A short viewport, so that a four-section fixture note actually has a
+        # scrollable range to sweep. The width still has to clear the 80rem
+        # breakpoint, or the map is display:none and there is nothing to read.
+        dom = machine.succeed(
+            "chromium --headless=new --no-sandbox --disable-gpu "
+            "--disable-dev-shm-usage --allow-file-access-from-files "
+            "--virtual-time-budget=60000 --window-size=1600,480 "
+            "--dump-dom file:///tmp/sc/page.html 2>/dev/null"
+        )
+        m = re.search(r'id="SWEEP">@@(.*?)@@', dom, re.S)
+        assert m, "the scroll sweep never ran"
+        sweep = json.loads(m.group(1))
+        samples = sweep["samples"]
+        tops = sweep["tops"]
+        count = len(tops)
+        assert count == 4, f"expected four sections to sweep, got {count}"
+        # The sweep proves nothing on a page that cannot scroll.
+        assert sweep["limit"] > 200, (
+            f"on-sections does not scroll at this viewport ({sweep['limit']}px), "
+            "so the reading line is never exercised"
+        )
+        step = samples[1][0] - samples[0][0]
+
+        # Every section gets a turn. This is the reported fault, and the one
+        # that only shows on notes whose last heading lies in the final
+        # screenful - which is most short notes.
+        seen = {c for _y, c, _f in samples if c >= 0}
+        missing = [i for i in range(count) if i not in seen]
+        assert not missing, f"sections that never become current: {missing}"
+
+        # At the foot of the page the note is finished: the last section is
+        # current and every bar is full. This is the progress bar completing.
+        last_y, last_cur, last_fills = samples[-1]
+        assert last_cur == count - 1, (
+            f"at the bottom the current section is {last_cur}, not the last"
+        )
+        assert all(f >= 0.999 for f in last_fills), (
+            f"at the bottom the bars are not all full: {last_fills}"
+        )
+
+        # Monotonic: the mark never travels back up the list while the reader
+        # travels down the page.
+        previous = -2
+        for y, cur, _f in samples:
+            assert cur >= previous, f"the current section went backwards at y={y}"
+            previous = cur
+
+        # Continuous: a bar is already full when the next section takes over,
+        # so nothing jumps. Measured in document pixels against the sweep's own
+        # step, because a coarser sweep can only ever resolve the remainder to
+        # within one step of scrolling.
+        for i in range(1, len(samples)):
+            _py, prev_cur, prev_fills = samples[i - 1]
+            _y, cur, _fills = samples[i]
+            if cur > prev_cur >= 0:
+                end = tops[prev_cur + 1] if prev_cur + 1 < count else sweep["artEnd"]
+                span = end - tops[prev_cur]
+                remainder = (1.0 - prev_fills[prev_cur]) * span
+                assert remainder <= 2 * step, (
+                    f"section {prev_cur} jumped {remainder:.0f}px to full when "
+                    f"section {cur} took over (one sweep step is {step}px)"
+                )
+
     with subtest("a hand-written maturity wins over the computed score"):
         # on-money is a short note with no links, sections or rewrites: its
         # computed score is well below the sapling threshold. Its frontmatter
@@ -1276,13 +1766,19 @@
         dead = re.search(r'<a href="/no-such-page/">[^<]*</a>', page)
         assert dead, page[:1000]
         assert 'data-maturity' not in dead.group(0)
-        # And the sprite ships only where a mark rendered: on-gates has marks,
-        # on-boundaries has no outgoing markdown links and must not pay for
-        # one, and the home page's hand-written table of contents carries
-        # marks on each of its links.
+        # And the sprite ships only where a mark rendered. Since item 17 that
+        # is every NOTE, because the margin draws the note's own maturity even
+        # when its prose links to nothing - on-boundaries used to be the "no
+        # outgoing links, no sprite" case and now legitimately carries one. The
+        # gate still has to hold somewhere, or a page could name a symbol the
+        # sprite never defines and draw a mark invisible to a screenshot; the
+        # 404 is the page that draws no mark at all, having neither a margin
+        # nor links.
         assert 'class="mark-sprite"' in page
-        assert 'class="mark-sprite"' not in served("/on-boundaries"), \
-            "the mark sprite ships on a page with no marks"
+        assert 'class="mark-sprite"' in served("/on-boundaries"), \
+            "a note's own maturity mark ships without its sprite"
+        assert 'class="mark-sprite"' not in served("/404.html"), \
+            "the mark sprite ships on a page that draws no mark"
         assert 'class="mark-sprite"' in served("/"), \
             "the home page's table-of-contents links should carry marks"
 
