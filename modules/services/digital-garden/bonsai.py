@@ -72,10 +72,17 @@ import math
 import sys
 
 # One published note, as the tree needs to know it. `stage` is one of the three
-# keys of LEAF_CHARS below and `topic` is a CSS-class-safe label or the empty
-# string; publish-filter.py, which builds these, is what guarantees both, so
-# nothing here has to defend against a hand-written `maturity: mature`.
-Note = collections.namedtuple("Note", "title url words stage topic")
+# keys of LEAF_CHARS below, `topic` is a CSS-class-safe label or the empty
+# string, and `hue` is the shelf's slot in the stylesheet's ring, as a string,
+# or the empty string; publish-filter.py, which builds these, is what
+# guarantees all three, so nothing here has to defend against a hand-written
+# `maturity: mature`.
+#
+# `topic` and `hue` are both carried because they are two facts: the shelf's
+# NAME, which is what the markup can be read against and is fixed by the vault,
+# and its slot in the palette, which depends on what other shelves exist. Only
+# the second one carries the colour.
+Note = collections.namedtuple("Note", "title url words stage topic hue")
 
 # The default seed. Any value draws a tree - that is the point of the rewrite -
 # so this is no longer load-bearing the way it was when only some seeds worked.
@@ -648,9 +655,11 @@ def to_html(tree, notes):
             blanks = 0
             classes = f"{cell.kind} sh-{cell.shade}"
             if cell.note is not None:
-                topic = notes[cell.note].topic
-                if topic:
-                    classes += f" topic-{topic}"
+                note = notes[cell.note]
+                if note.topic:
+                    classes += f" topic-{note.topic}"
+                if note.hue:
+                    classes += f" hue-{note.hue}"
             note_attr = "" if cell.note is None else f' data-note="{cell.note}"'
             out.append(
                 f'<span class="{classes}"{note_attr} data-grow="{cell.grew}">'
@@ -667,6 +676,7 @@ def to_html(tree, notes):
     captions = []
     for index, note in enumerate(notes):
         topic = f" topic-{note.topic}" if note.topic else ""
+        topic += f" hue-{note.hue}" if note.hue else ""
         captions.append(
             f'<span data-note="{index}" data-url="{html.escape(note.url, quote=True)}">'
             f"<b>{html.escape(note.title)}</b>"
@@ -713,15 +723,8 @@ def _synthetic(count, seed):
         stage = (
             "evergreen" if words > 1200 else "sapling" if words > 380 else "seedling"
         )
-        notes.append(
-            Note(
-                f"Note {i + 1}",
-                f"/note-{i + 1}/",
-                words,
-                stage,
-                "slip-box" if rng() > 0.28 else "lighting",
-            )
-        )
+        shelf, hue = ("slip-box", "2") if rng() > 0.28 else ("lighting", "5")
+        notes.append(Note(f"Note {i + 1}", f"/note-{i + 1}/", words, stage, shelf, hue))
     return notes
 
 

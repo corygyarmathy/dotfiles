@@ -1,0 +1,40 @@
+{{- /*
+  The class attribute that gives an element its shelf's hue, or nothing at all
+  for a note at the vault root. Takes a PAGE and returns an attribute.
+
+  TWO classes, because they are two facts and they change on different clocks.
+  `topic-<shelf>` is the shelf's NAME: fixed by the vault, stable forever, and
+  what the markup can be read and asserted against. `hue-<n>` is which slot of
+  the stylesheet's eight-hue ring that shelf occupies, which is decided by
+  `assign_topic_hues` in publish-filter.py from a hash of the name. Only the
+  second one carries a colour; the first carries identity.
+
+  A partial rather than four copies of the same expression, because it WAS four
+  copies, and adding a second class to an expression written out four times is
+  exactly the edit that gets made in three places. Every element on the site
+  that takes a topic hue comes through here: the link marks (item 15), the
+  notes index, the rail and the dateline.
+
+  Takes a page rather than a topic string, so a caller cannot pass one of the
+  two values and forget the other.
+
+  `return` and `safeHTMLAttr`, not printed output, and this is the part that is
+  not obvious. An attribute NAME is a context Go's html/template will not let
+  an ordinary partial's output into: it cannot prove the string is not an
+  injected attribute, so it substitutes `ZgotmplZ` and the class silently
+  disappears from every page. Returning it marked as an attribute is the fix,
+  and doing it here rather than at each call site means no caller can forget -
+  which matters because forgetting produces a page that renders fine and is
+  quietly missing all its colour.
+
+  `hue` is a string in the frontmatter and not a number, for a reason recorded
+  in publish-filter.py: `with` treats the integer zero as false, so a numeric
+  slot 0 would render no hue at all for whichever shelf landed there.
+*/ -}}
+{{- $out := "" -}}
+{{- with .Params.topic -}}
+  {{- $hue := "" -}}
+  {{- with $.Params.hue -}}{{- $hue = printf " hue-%s" . -}}{{- end -}}
+  {{- $out = printf " class=\"topic-%s%s\"" . $hue -}}
+{{- end -}}
+{{- return ($out | safeHTMLAttr) -}}

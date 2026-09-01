@@ -1667,19 +1667,69 @@ h4:hover > .heading-anchor,
   color: color-mix(in oklab, var(--base, var(--wood)) 72%, black);
 }
 
-/* One hue per topic, declared as a variable rather than as a colour so that
- * the foliage and the stage word in the caption take the same value from the
- * same rule. A new shelf in the vault is one line here. Unscoped, because item
- * 15 puts the same hue on links and marks elsewhere on the site.
+/* ── the topic hue ring ──────────────────────────────────────────────────
  *
- * The names are the vault's folders, slugified - see `note_topic` in
- * publish-filter.py, which is where the value in the markup comes from. */
-.topic-slip-box {
+ * One hue per shelf, declared as a variable rather than as a colour so that
+ * the foliage, the link marks and the stage word in the caption all take the
+ * same value from the same rule. Unscoped, because item 15 puts the same hue
+ * on links and marks elsewhere on the site.
+ *
+ * This used to be two rules NAMED for two folders - `.topic-slip-box` and
+ * `.topic-lighting` - and every other shelf fell through to `--muted`. So the
+ * vault could not grow a folder without this file growing a rule, which is
+ * backwards: which shelves exist is a fact about the vault this morning, and
+ * the stylesheet has no business knowing it. A ring of eight slots and a
+ * `hue-N` class per note replaces it, and publish-filter.py decides which
+ * shelf takes which slot from a hash of the shelf's own name - see
+ * `assign_topic_hues` there for why a hash and not a sorted position.
+ *
+ * Eight because that is roughly what Kanagawa has that holds up as text on
+ * both grounds, which is the same count the callouts above are drawn from and
+ * the reason two meanings could never both be carried by colour on this site.
+ * Every one of these is already spoken for somewhere else - the callouts have
+ * six of them, links have crystalBlue and the site's name has sakuraPink - and
+ * that reuse is accepted rather than worked around: a shelf's hue and a
+ * callout's hue never appear in the same place, and the alternative is inventing
+ * colours that are not in the palette.
+ *
+ * Kanagawa's yellows are NOT in the ring, and that is the one exclusion with a
+ * reason rather than a preference: carpYellow and lotusYellow2 are within a
+ * few percent of the trunk's own boatYellow1. A shelf drawn in them puts
+ * foliage and wood in one colour, and the tree stops having a structure to
+ * read. It was tried, rendered, and is the reason this list is eight hues out
+ * of a possible nine.
+ *
+ * The ORDER, on the other hand, is arbitrary - slots are handed out by hash,
+ * so no reader ever sees this list as a sequence. Being arbitrary, it is
+ * chosen: `slip-box` hashes to slot 4 and `lighting` to slot 2, so green and
+ * orange sit there and the two shelves this vault publishes today keep the
+ * colours they have always had. Nothing downstream depends on that, and a
+ * future shelf will land wherever its own name puts it. */
+.hue-0 {
+  --topic: light-dark(#624c83, #957fb8); /* lotusViolet4 / oniViolet */
+}
+.hue-1 {
+  --topic: light-dark(#b35b79, #d27e99); /* lotusPink / sakuraPink */
+}
+.hue-2 {
+  --topic: light-dark(#cc6d00, #ff9e3b); /* lotusOrange / roninYellow */
+}
+.hue-3 {
+  --topic: light-dark(#4d699b, #7e9cd8); /* lotusBlue4 / crystalBlue */
+}
+.hue-4 {
   --topic: light-dark(#6f894e, #98bb6c); /* lotusGreen / springGreen */
 }
-
-.topic-lighting {
-  --topic: light-dark(#cc6d00, #ff9e3b); /* lotusOrange / roninYellow */
+.hue-5 {
+  --topic: light-dark(#597b75, #7aa89f); /* lotusAqua / waveAqua2 */
+}
+/* waveRed, not autumnRed: autumnRed is Wave's diff colour and is dark enough
+ * on sumiInk3 that foliage drawn in it stops reading as foliage. */
+.hue-6 {
+  --topic: light-dark(#c84053, #e46876); /* lotusRed / waveRed */
+}
+.hue-7 {
+  --topic: light-dark(#5a7785, #658594); /* lotusTeal3 / dragonBlue */
 }
 
 /* A note at the vault root has no shelf, so it gets no hue rather than a
