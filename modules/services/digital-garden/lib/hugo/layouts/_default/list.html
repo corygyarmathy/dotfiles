@@ -29,7 +29,7 @@
         {{ .Page.Store.Set "hasMark" true }}
         {{ range site.RegularPages.ByDate.Reverse }}
           <li>
-            <h2 class="note-index-title"><a href="{{ .RelPermalink }}"{{ with .Params.topic }} class="topic-{{ . }}"{{ end }}>{{ .Title }}{{ partial "mark-icon.html" (dict "maturity" .Params.maturity) }}</a></h2>
+            <h2 class="note-index-title"><a href="{{ .RelPermalink }}"{{ partial "topic-class.html" . }}>{{ .Title }}{{ partial "mark-icon.html" (dict "maturity" .Params.maturity) }}</a></h2>
             {{ with .Description }}<p class="note-index-thesis">{{ . }}</p>{{ end }}
             {{ partial "dateline.html" (dict "page" .) }}
           </li>

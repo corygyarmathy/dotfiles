@@ -42,7 +42,7 @@
   {{- $maturity := $target.Params.maturity }}
   {{- if in (slice "seedling" "sapling" "evergreen") $maturity }}
     {{- $.Page.Store.Set "hasMark" true }}
-    <a href="{{ .Destination }}" data-maturity="{{ $maturity }}"{{ with $target.Params.topic }} class="topic-{{ . }}"{{ end }}>{{ .Text }}{{ partial "mark-icon.html" (dict "maturity" $maturity) }}</a>
+    <a href="{{ .Destination }}" data-maturity="{{ $maturity }}"{{ partial "topic-class.html" $target }}>{{ .Text }}{{ partial "mark-icon.html" (dict "maturity" $maturity) }}</a>
   {{- else }}
     <a href="{{ .Destination }}">{{ .Text }}</a>
   {{- end }}

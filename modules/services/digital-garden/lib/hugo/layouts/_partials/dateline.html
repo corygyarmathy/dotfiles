@@ -52,7 +52,7 @@
              is only ever true from page.html, where $page IS the page being
              rendered — the index passes other pages, and draws no mark. */}}
         {{ $page.Store.Set "hasMark" true }}
-        <span{{ with $page.Params.topic }} class="topic-{{ . }}"{{ end }}>
+        <span{{ partial "topic-class.html" $page }}>
           {{ partial "mark-icon.html" (dict "maturity" .) }}{{ . }}
         </span>
       {{ end }}

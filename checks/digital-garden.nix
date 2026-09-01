@@ -1298,9 +1298,10 @@
         # same way wherever it appears.
         assert 'href="#mark-evergreen"' in page, page[-600:]
         # And it takes the note's own topic hue. on-money sits on the Lighting
-        # shelf, so the mark's <dd> carries that shelf's class - the one place
-        # a shelf-to-hue mapping lives, shared with the bonsai's foliage.
-        assert re.search(r'<dd class="topic-lighting">', page), (
+        # shelf, so the mark's <dd> carries that shelf's name and its slot in
+        # the stylesheet's hue ring - the same pair the bonsai's foliage and
+        # every internal link carry, all of them from _partials/topic-class.
+        assert re.search(r'<dd class="topic-lighting hue-2">', page), (
             "the margin's maturity mark does not carry the note's topic hue"
         )
         assert '<nav class="rail-nav section-map"' not in page, \
@@ -1695,42 +1696,65 @@
             f"evergreen override proves nothing: {m.group(1)}"
         )
 
-    with subtest("the filter carries each note's topic into frontmatter"):
+    with subtest("the filter carries each note's topic and hue into frontmatter"):
         # Item 15: the topic hue is derived from the shelf a note lives on,
         # and the filter writes that folder, slugified, into frontmatter as
-        # `topic` - the same value the bonsai's foliage reads. Two notes sit
-        # on the named shelves; on-gates stays in `essays`, which has no hue
-        # of its own; the landing page is at the root and gets the empty
-        # string, which is the honest no-topic answer rather than a made-up
-        # one.
-        head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/on-money.md")
-        assert re.search(r"^topic: lighting$", head, re.M), head
-        head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/on-sidenotes.md")
-        assert re.search(r"^topic: slip-box$", head, re.M), head
-        head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/on-gates.md")
-        assert re.search(r"^topic: essays$", head, re.M), head
+        # `topic` - the same value the bonsai's foliage reads. The landing
+        # page is at the root and gets the empty string, which is the honest
+        # no-topic answer rather than a made-up one.
+        #
+        # `hue` beside it is the shelf's slot in the stylesheet's ring, from a
+        # hash of the shelf's OWN name - so `essays`, which used to fall
+        # through to grey because nothing had written it a rule, now has a
+        # colour like every other shelf without this file or the stylesheet
+        # knowing it exists. That is the whole point of the ring.
+        #
+        # The numbers are the hashes, and they are written out rather than
+        # recomputed here on purpose: recomputing them would assert that the
+        # filter agrees with itself, which it cannot fail to do. These say the
+        # mapping has not silently moved under a reader who has learned it.
+        for note, topic, hue in [
+            ("on-money", "lighting", "2"),
+            ("on-sidenotes", "slip-box", "4"),
+            ("on-gates", "essays", "6"),
+        ]:
+            head = machine.succeed(
+                f"sed -n '1,30p' /var/lib/digital-garden/content/{note}.md"
+            )
+            assert re.search(rf"^topic: {topic}$", head, re.M), head
+            assert re.search(rf"^hue: \x27{hue}\x27$", head, re.M), head
         head = machine.succeed("sed -n '1,30p' /var/lib/digital-garden/content/index.md")
         assert re.search(r"^topic: \x27\x27$", head, re.M), head
+        # No shelf, no slot. A note at the root gets neither, rather than
+        # borrowing slot 0 - which a numeric default would have handed it.
+        assert re.search(r"^hue: \x27\x27$", head, re.M), head
 
     with subtest("growth marks report maturity and topic on the /notes/ index"):
         # Item 15's first use of the mark: the generated index shows at a
         # glance what is finished. Each entry trails a mark whose SHAPE is the
-        # note's maturity stage and whose HUE is its topic - green for the
-        # slip box, orange for the lighting shelf, neutral for anything else.
-        # The shape is asserted by the symbol each <use> names, and the hue by
-        # the topic-* class the template wrote from the filter's frontmatter.
-        # on-money is the hand-written evergreen (orange), on-sidenotes the
-        # green sapling, on-gates the neutral sapling, and on-boundaries the
-        # neutral seedling.
+        # note's maturity stage and whose HUE is its topic - green for the slip
+        # box, orange for the lighting shelf, and now a hue for every other
+        # shelf too rather than grey. The shape is asserted by the symbol each
+        # <use> names, and the hue by the pair of classes _partials/topic-class
+        # wrote from the filter's frontmatter: the shelf's NAME, which is what
+        # this file can read, and its RING SLOT, which is what carries colour.
         page = served("/notes")
-        assert re.search(r'<a href="/on-money/" class="topic-lighting">On Money<svg class="mark"[^>]*><use href="#mark-evergreen"', page), \
+        assert re.search(r'<a href="/on-money/" class="topic-lighting hue-2">On Money<svg class="mark"[^>]*><use href="#mark-evergreen"', page), \
             "the on-money entry lost its orange evergreen mark"
-        assert re.search(r'<a href="/on-sidenotes/" class="topic-slip-box">On Sidenotes<svg class="mark"[^>]*><use href="#mark-sapling"', page), \
+        assert re.search(r'<a href="/on-sidenotes/" class="topic-slip-box hue-4">On Sidenotes<svg class="mark"[^>]*><use href="#mark-sapling"', page), \
             "the on-sidenotes entry lost its green sapling mark"
-        assert re.search(r'<a href="/on-gates/" class="topic-essays">On Gates<svg class="mark"[^>]*><use href="#mark-sapling"', page), \
+        assert re.search(r'<a href="/on-gates/" class="topic-essays hue-6">On Gates<svg class="mark"[^>]*><use href="#mark-sapling"', page), \
             "the on-gates entry lost its sapling mark"
-        assert re.search(r'<a href="/on-boundaries/" class="topic-essays">On Boundaries<svg class="mark"[^>]*><use href="#mark-seedling"', page), \
+        assert re.search(r'<a href="/on-boundaries/" class="topic-essays hue-6">On Boundaries<svg class="mark"[^>]*><use href="#mark-seedling"', page), \
             "the on-boundaries entry lost its seedling mark"
+        # `ZgotmplZ` is what Go's html/template writes when it will not let a
+        # value into the context it was placed in, and an attribute NAME is one
+        # of those contexts: the class attribute here comes out of a partial,
+        # and a partial that returned a plain string would land every mark on
+        # this page as `ZgotmplZ` with no build error at all. It is asserted
+        # across the whole site, not just here, because that failure is silent
+        # and total.
+        assert "ZgotmplZ" not in page, "a template value was rejected by the escaper"
         # Every symbol the entries reference is defined by the sprite on the
         # same page - a mark that references a missing symbol draws nothing,
         # which is the same silent failure as a link to an uncopied asset.
@@ -1744,16 +1768,17 @@
         # somewhere finished. The hook resolves the link back to the target
         # page and reads its frontmatter, so the sprout is the TARGET's stage
         # - on-money's hand-written evergreen included - and its hue is the
-        # target's shelf. on-boundaries is on the unnamed `essays` shelf,
-        # which has no hue: its link must still carry the sprout, and the
-        # stylesheet must have no rule for that topic - that absence is the
-        # neutral mark.
+        # target's shelf. on-boundaries is on the `essays` shelf, which under
+        # the hue ring has a colour of its own like every other shelf; it used
+        # to be the case that this link had to be grey, because the stylesheet
+        # named two shelves and no more.
         page = served("/on-gates")
-        assert re.search(r'<a href="/on-money/" data-maturity="evergreen" class="topic-lighting">', page), page[:1000]
+        assert re.search(r'<a href="/on-money/" data-maturity="evergreen" class="topic-lighting hue-2">', page), page[:1000]
         assert 'href="#mark-evergreen"' in page
-        assert re.search(r'<a href="/on-sidenotes/" data-maturity="sapling" class="topic-slip-box">', page), page[:1000]
+        assert re.search(r'<a href="/on-sidenotes/" data-maturity="sapling" class="topic-slip-box hue-4">', page), page[:1000]
         assert 'href="#mark-sapling"' in page
-        assert re.search(r'<a href="/on-boundaries/" data-maturity="seedling" class="topic-essays">', page), page[:1000]
+        assert re.search(r'<a href="/on-boundaries/" data-maturity="seedling" class="topic-essays hue-6">', page), page[:1000]
+        assert "ZgotmplZ" not in page, "a template value was rejected by the escaper"
         # The same-page section link takes a dotted underline and no glyph,
         # because there is no destination note to describe.
         assert re.search(r'<a href="#some-section" class="link-section">', page), page[:1000]
@@ -1791,18 +1816,43 @@
         assert re.search(r'\.mark\s*{[^}]*width', css), "the mark glyph is not sized"
         assert re.search(r'\.mark\s*{[^}]*color:\s*var\(--topic,\s*var\(--muted\)\)', css), \
             "the mark no longer reads its hue from the topic variable"
-        assert re.search(r'\.topic-slip-box\s*{[^}]*--topic:\s*light-dark\(#6f894e,\s?#98bb6c\)', css), \
-            "the slip box topic is no longer green"
-        assert re.search(r'\.topic-lighting\s*{[^}]*--topic:\s*light-dark\(#cc6d00,\s?#ff9e3b\)', css), \
-            "the lighting topic is no longer orange"
         assert re.search(r'a\.link-section\s*{[^}]*text-decoration-style:\s*dotted', css), \
             "the same-page link is no longer dotted"
-        # The neutral mark is an ABSENCE, and an absence is exactly what a
-        # future edit reintroduces without noticing: a rule for the `essays`
-        # shelf (or any shelf the design has not named) would start colouring
-        # notes the design has decided stay hue-less.
-        assert not re.search(r'\.topic-essays', css), \
-            "an unnamed shelf has been given a hue"
+
+        # The hue RING. The stylesheet used to name two shelves - green for
+        # `slip-box`, orange for `lighting` - and every other folder fell
+        # through to --muted, so publishing from a new folder was a code
+        # change. It is now eight numbered slots, and publish-filter.py hands
+        # one to each shelf from a hash of the shelf's name.
+        #
+        # The whole ring is pinned, because a missing slot is invisible until
+        # a shelf happens to hash to it: the failure is one shelf silently
+        # grey, months after the edit that caused it, on a vault the author of
+        # the edit did not have.
+        for slot in range(8):
+            assert re.search(rf'\.hue-{slot}\s*{{[^}}]*--topic:\s*light-dark\(', css), \
+                f"the hue ring has no slot {slot}"
+        # The two the vault publishes from today keep the colours they have
+        # always had. The ring's ORDER is arbitrary - slots go out by hash -
+        # so it was chosen to land these two where they already were, and
+        # this is the assertion that says so on purpose.
+        assert re.search(r'\.hue-4\s*{[^}]*--topic:\s*light-dark\(#6f894e,\s?#98bb6c\)', css), \
+            "slip-box hashes to slot 4, which is no longer green"
+        assert re.search(r'\.hue-2\s*{[^}]*--topic:\s*light-dark\(#cc6d00,\s?#ff9e3b\)', css), \
+            "lighting hashes to slot 2, which is no longer orange"
+        # And no slot may be one of Kanagawa's yellows. They are within a few
+        # percent of the trunk's own boatYellow1, so a shelf drawn in one puts
+        # foliage and wood in a single colour and the tree loses its
+        # structure. That is why the ring is eight hues and not nine.
+        assert not re.search(r'--topic:\s*light-dark\(#77713f|--topic:[^;]*#e6c384', css), \
+            "a hue slot has been given a yellow, which is the trunk's own colour"
+        # The old named rules are gone, not merely unused: leaving one behind
+        # would beat the ring for any shelf it named, and only for that shelf.
+        # Matched as a RULE - the selector with its brace - because the
+        # stylesheet ships its comments, and the block above names both of the
+        # rules it replaced in prose.
+        assert not re.search(r'\.topic-[a-z-]+\s*{', css), \
+            "a shelf is still coloured by name rather than by its ring slot"
 
     with subtest("a changed note's revision counter advances, its neighbours' do not"):
         # The ledger counts substantial rewrites per note: editing a note's

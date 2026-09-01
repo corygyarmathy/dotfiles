@@ -187,6 +187,11 @@ SLUG_DROP = re.compile(r"[^a-z0-9._~-]")
 # rule from SLUG_DROP on purpose - see `note_topic` for why an address and a
 # label are not the same string.
 TOPIC_DROP = re.compile(r"[^a-z0-9]+")
+# How many hues the stylesheet's `.hue-*` ring has. Kanagawa offers about this
+# many that hold up as text on both grounds, which is why the ring is this long
+# and not longer - see `assign_topic_hues`, and the `--hue-*` block in main.css
+# where the eight are declared. The two have to agree about this number.
+TOPIC_HUES = 8
 # Runs of two or more hyphens, which Goldmark's typographer turns into dashes
 # before a heading id is computed. See `anchorize`.
 DASH_RUN = re.compile(r"-{2,}")
@@ -279,6 +284,46 @@ def note_topic(rel):
     if rel.parent == Path("."):
         return ""
     return TOPIC_DROP.sub("-", rel.parent.name.lower()).strip("-")
+
+
+def assign_topic_hues(topics):
+    """Which slot in the stylesheet's hue ring each shelf takes.
+
+    The two shelves this vault publishes from used to be two hand-written
+    rules in main.css, and every other folder fell through to `--muted`. That
+    made "publish from a new folder" a code change, which is the wrong shape
+    for a fact the filter already knows: the shelves are whatever the vault
+    happens to contain this morning.
+
+    The slot comes from a HASH OF THE SHELF'S OWN NAME rather than from its
+    position in a sorted list, and that is the whole design. Handing hues out
+    in name order is simpler and has no collisions, but it makes every shelf's
+    colour a function of every OTHER shelf: publishing a folder called
+    `essays` would renumber everything after it, and a reader who has learned
+    that orange means lighting would find it means something else. Hashed, a
+    shelf's hue is fixed by its name and by nothing else, so it survives every
+    future folder.
+
+    Collisions are the price. Two names can want the same slot, and then the
+    second one to be reached takes the next free slot going up the ring - so
+    the one case where publishing a new shelf can recolour an existing one is
+    when the new name both collides with it and sorts before it. With eight
+    slots that is uncommon and it is bounded; the alternative, two shelves
+    drawn in one hue forever, is worse and is not bounded. Past eight shelves
+    every slot is taken and hues are shared, which is the honest thing for a
+    ring of eight to do.
+    """
+    used = {}
+    for topic in sorted(topics):
+        want = hashlib.sha256(topic.encode("utf-8")).digest()[0] % TOPIC_HUES
+        for step in range(TOPIC_HUES):
+            slot = (want + step) % TOPIC_HUES
+            if slot not in used.values():
+                break
+        else:
+            slot = want
+        used[topic] = slot
+    return used
 
 
 def resolve_title(front, body, rel):
@@ -678,6 +723,15 @@ def main(argv):
     # survives as a link to a page that will not exist.
     published = {key: v for key, v in published.items() if key in fronts}
 
+    # Every shelf the published set came from, and the hue ring slot each one
+    # takes. Computed here because it needs the WHOLE set - a collision is
+    # resolved against the other shelves, so no per-note pass can decide it -
+    # and because everything downstream of this line wants the answer: the
+    # frontmatter, the link marks, and the tree.
+    hues = assign_topic_hues(
+        {note_topic(rel) for rel, _ in published.values()} - {""}
+    )
+
     # ---- pass 3: rewrite links, gather the attachments actually used --------
     used_attachments = {}
 
@@ -871,11 +925,24 @@ def main(argv):
         if "maturity" not in front:
             front["maturity"] = maturity_stage(score)
 
-        # Which shelf the note came from. Emitted for every note, index
-        # included: it is a fact about the file either way, and a key that is
-        # present on some notes and absent on others is a key every consumer
-        # has to special-case.
+        # Which shelf the note came from, and which hue that shelf draws in.
+        # Emitted for every note, index included: it is a fact about the file
+        # either way, and a key that is present on some notes and absent on
+        # others is a key every consumer has to special-case.
+        #
+        # TWO keys, because they are two different facts and only one of them
+        # is stable. `topic` is the shelf's name and is what the markup can be
+        # read and asserted against; `hue` is which slot of the palette it
+        # happens to occupy, which depends on the other shelves. A template
+        # that wanted to colour by name would have to know every name.
+        #
+        # `hue` is a STRING and not a number, and the empty string is "no
+        # shelf". Go templates treat the integer zero as false, so `{{ with
+        # .Params.hue }}` on a number would silently drop the class for every
+        # note in whichever shelf landed on slot 0 - a bug that shows up as
+        # one shelf being grey and only if that slot is occupied.
         front["topic"] = note_topic(rel)
+        front["hue"] = str(hues[front["topic"]]) if front["topic"] else ""
 
         # A list item that is only a link gets the target's thesis appended, so
         # an index or hub page reads as claims rather than as bare titles, and
@@ -959,6 +1026,7 @@ def main(argv):
                     words=words,
                     stage=stage,
                     topic=front["topic"],
+                    hue=front["hue"],
                 )
             )
 
