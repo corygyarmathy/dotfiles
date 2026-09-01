@@ -209,8 +209,14 @@ in
       enable = true;
       baseUrl = "garden.${domain}";
       siteTitle = "Cory Gyarmathy";
+      # An empty URL renders as muted text rather than as a link, so these two
+      # hold their place in the header's link list until they have somewhere
+      # to point - rather than shipping two 404s or two stub pages to stand in
+      # for them. Fill in a URL and it becomes an ordinary link.
       footerLinks = {
         GitHub = "https://github.com/corygyarmathy";
+        Projects = "";
+        Resume = "";
       };
       source = "obsidian-sync";
 

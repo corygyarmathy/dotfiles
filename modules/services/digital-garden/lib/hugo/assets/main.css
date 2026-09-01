@@ -249,7 +249,20 @@ footer {
  * enough to set the name and its sentence, and however wide the tree grew. */
 .nameplate {
   display: grid;
-  grid-template-columns: minmax(0, 24rem) auto;
+  /* The name's column has a FLOOR, not just a ceiling, and the floor is there
+   * for a big VAULT rather than a small screen. Both tracks can shrink - the
+   * tree's `overflow-x` makes its minimum content width near zero - so when
+   * the tree is wider than the band leaves room for, the grid is free to take
+   * the space out of either, and it takes it out of the words: the column
+   * falls below the name's own width and `overflow-wrap: break-word` does
+   * what it is there for and splits the title across two lines with a stray
+   * letter on the second. Today's tree is about 420px and there is room for
+   * both; a vault three times the size draws one twice that.
+   *
+   * The tree is the right thing to squeeze, because squeezing it means
+   * scrolling it, which is exactly what its `overflow-x` is for. A name is
+   * not scrollable and a broken name is not a name. */
+  grid-template-columns: minmax(20rem, 24rem) auto;
   /* The tools have a row of their own across the top rather than a cell beside
    * the name, so that the name and the tree BEGIN on the same line. Sharing
    * the top row with the tools lifted the name a tool's height above the top
@@ -263,14 +276,19 @@ footer {
   width: fit-content;
   max-width: 100%;
   column-gap: 3rem;
-  /* Both columns run the full height of the band rather than being centred
-   * in it. Centred, the name block floated in the middle of a tree twice its
-   * height and the three parts read as three elements that happened to be
-   * near each other; stretched, the two columns start and finish together and
-   * the header has a top edge and a bottom edge. What lands at the bottom of
-   * each is the same kind of thing: the colophon on one side, the tree's
-   * caption on the other, both small, both muted, one line each. */
-  align-items: stretch;
+  /* Both columns start at the top, and whatever height the tree has over the
+   * words is left at the FOOT of the words.
+   *
+   * This was `stretch`, with an auto margin pushing the colophon down, so
+   * that the count landed on the same line as the tree's caption opposite it
+   * and the two columns finished together as well as starting together. What
+   * that actually produced was a hole: the tree is far taller than four short
+   * lines of type, so about a hundred pixels of slack was dumped between the
+   * links and the count, in the middle of the column, reading as something
+   * missing rather than as space. Slack at the bottom of a text block is
+   * invisible; slack in the middle of one is a mistake. The two small grey
+   * lines no longer align, and that is the cheaper of the two costs. */
+  align-items: start;
   /* And the rule an interior page draws under its masthead, drawn here under
    * the whole composition. It is what makes the tools, the name and the tree
    * one header rather than three things above the prose. */
@@ -344,6 +362,36 @@ footer {
   }
 }
 
+/* Side by side, but not yet wide enough for the page to have margin columns.
+ * The header still starts where the prose starts - that is the anchor the
+ * whole composition hangs on, and it is worth as much here as it is at full
+ * width - but there is no grid to finish against, so it simply runs to the
+ * edge of the page and is capped there.
+ *
+ * The cap is exactly "from the prose's left edge to the container's right
+ * edge". Without it the header keeps its natural width and hangs off the
+ * right of the page.
+ *
+ * 72rem and not 60rem, which is where the two columns first appear. Anchoring
+ * COSTS width: a centred header may use the whole page, and one that starts at
+ * the prose's left edge gives up half the difference between the page and the
+ * measure before it begins. At 1000px that left about 300px for the name,
+ * which is narrower than "Gyarmathy" is at that viewport's type size, and the
+ * title broke across two lines with a lone "y" on the second. Between 60rem
+ * and here the header stays centred - it shares only a centre with the page,
+ * which is the thing this rule exists to fix, but a header that fits and is
+ * centred beats one that is anchored and broken.
+ *
+ * Overridden wholesale by the `min-width: 80rem` block further down, which is
+ * where the page grows margins and the header gets a right-hand anchor. */
+@media (min-width: 72rem) {
+  .nameplate {
+    margin-left: calc((100% - var(--measure)) / 2);
+    margin-right: 0;
+    max-width: calc((100% + var(--measure)) / 2);
+  }
+}
+
 .nameplate-title {
   margin: 0;
   /* The masthead title is 1.1rem, so this is the same words at roughly four
@@ -394,15 +442,23 @@ footer {
   font-size: 0.95rem;
 }
 
-/* Auto margin on the count rather than on whatever happens to sit above it:
- * the name, the sentence and the links are all optional in one way or another,
- * and this is the one element that is always last. Every spare pixel goes
- * above it, which is what lands it on the band's bottom edge level with the
- * tree's caption. The padding is the gap it needs when there are no spare
- * pixels to take - the narrow layout, where this column is not a flex box and
- * an auto margin is zero. */
+/* A destination that does not exist yet: the same list, in the muted grey the
+ * rest of the site uses for text that is there to be read rather than acted
+ * on. It has to be legible - it is naming a real thing that is coming - and it
+ * has to be plainly not a link, which is the whole reason it is not one.
+ *
+ * No underline, no cursor change, no hover: everything a link does, it does
+ * not do. See _partials/site-link.html for why an empty URL renders this and
+ * not a link to a page that would 404. */
+.link-placeholder {
+  color: var(--muted);
+}
+
+/* The count follows the links directly. It used to take `margin-top: auto` so
+ * that every spare pixel in the column went above it and it landed level with
+ * the tree's caption - see `align-items` on .nameplate for why that trade is
+ * off. */
 .nameplate-id .colophon {
-  margin-top: auto;
   padding-top: 0.9rem;
 }
 
@@ -1323,6 +1379,42 @@ h4:hover > .heading-anchor,
      * to the first line of prose, which looks a shade better and is correct
      * only for as long as every title fits on one line. */
     align-items: baseline;
+  }
+
+  /* The home page's header, anchored to the grid above.
+   *
+   * This is the fix for "the header feels disconnected from the page", and
+   * the cause turned out not to be its width. At 1440px every interior page's
+   * masthead rule runs from 400px to 1040px - exactly the article column, so
+   * it begins and ends on the prose beneath it. The nameplate ran from 305px
+   * to 1135px: it shared a CENTRE with the page and not a single EDGE, so
+   * there was nothing on the page for either end of it to land on, and a band
+   * that lines up with nothing reads as floating over the page rather than as
+   * part of it.
+   *
+   * It now starts where the prose starts and ends where the page's widest
+   * element ends - the article column's left edge, and the grid's right edge,
+   * which are the only two vertical lines this layout has. The rule under it
+   * spans exactly that, so the composition has two anchors instead of none,
+   * and the name sits directly above the first line of prose.
+   *
+   * The arithmetic is the grid's own, written out rather than inherited,
+   * because the header is not inside .layout: the offset is where the grid's
+   * left edge falls in this container plus one margin column and one gutter,
+   * and the width is everything from there to the grid's right edge. Both
+   * terms are the same tokens .layout is built from, so the two cannot drift.
+   *
+   * Only out here. Below this breakpoint the page is a single centred column
+   * with no margins and so no vertical lines to anchor to, and a centred
+   * header is the right answer for a centred page. */
+  .nameplate {
+    width: calc(var(--measure) + var(--margin-col) + var(--gutter));
+    max-width: 100%;
+    margin-left: calc(
+      (100% - (var(--measure) + 2 * (var(--margin-col) + var(--gutter)))) / 2 +
+        var(--margin-col) + var(--gutter)
+    );
+    margin-right: 0;
   }
 
   .layout > article {
