@@ -1607,17 +1607,64 @@ h4:hover > .heading-anchor,
    * is the other half of that arithmetic: without it a pad meant to be round
    * comes out as a tall column. */
   line-height: 1.05;
-  color: light-dark(#836f4a, #938056); /* lotusYellow2 / boatYellow1 */
+  --wood: light-dark(#836f4a, #938056); /* lotusYellow2 / boatYellow1 */
+  color: var(--wood);
 }
 
-/* The ground the tree stands in. Each theme's grey, which is what makes it
- * quieter than the wood without being invisible: the wood is the one saturated
- * brown in the picture and the soil is not a colour at all. The first pair
- * tried here was lotusWhite0 over winterYellow - the border tint and the diff
- * ground, both chosen on the name rather than by looking - and rendered, the
- * light one was a line you had to hunt for and the dark one was not there. */
-.bonsai .soil {
-  color: light-dark(#8a8980, #727169); /* lotusGray3 / fujiGray */
+/* The ground the tree stands in, and the pot it stands in it in. Each theme's
+ * grey, which is what makes them quieter than the wood without being
+ * invisible: the wood is the one saturated brown in the picture and these are
+ * not a colour at all. The first pair tried here was lotusWhite0 over
+ * winterYellow - the border tint and the diff ground, both chosen on the name
+ * rather than by looking - and rendered, the light one was a line you had to
+ * hunt for and the dark one was not there. */
+.bonsai .soil,
+.bonsai .pot {
+  --base: light-dark(#8a8980, #727169); /* lotusGray3 / fujiGray */
+}
+
+/* ── light and shade ─────────────────────────────────────────────────────
+ *
+ * One light source, from the upper left, over the whole tree. bonsai.py works
+ * out which of three tiers each character falls in and writes it as a class;
+ * this is where that becomes a colour.
+ *
+ * This is the other half of the answer to "the tree is too flat" - the first
+ * half being the glyph SETS in bonsai.py. A mass of one flat colour reads as a
+ * shape whatever its outline is; three lightnesses over the same hue read as a
+ * form. It is also what makes the trunk a cylinder rather than a stroke, since
+ * its lit edge and its shadowed edge are drawn as different tiers of the same
+ * brown.
+ *
+ * Every cell declares what it is MADE of as `--base` and nothing else, and the
+ * three rules below are the only ones that set a colour. That indirection is
+ * load-bearing: `currentColor` cannot do this job, because in a `color`
+ * declaration it means the value INHERITED from the parent - which here is the
+ * `<pre>`'s brown - so a leaf shaded from `currentColor` comes out a lighter
+ * brown rather than a lighter green.
+ *
+ * Mixed from `--base` rather than declared as three colours per hue, so this
+ * stays three rules however many topics the vault grows - see the `--hue-*`
+ * ring. `oklab` because sRGB mixing toward white desaturates on the way and
+ * the highlight comes out chalky; oklab keeps the hue and moves the lightness,
+ * which is what a highlight is.
+ *
+ * The two ratios are not symmetric, and are the numbers to move if a theme
+ * looks wrong. Each theme has one tier working against its own background -
+ * the highlight in Lotus, where lighter means closer to the paper, and the
+ * shadow in Wave, where darker means closer to the page - so both deltas are
+ * kept modest rather than pushed until they are obvious in whichever theme
+ * happened to be on screen. */
+.bonsai span {
+  color: var(--base, var(--wood));
+}
+
+.bonsai .sh-lit {
+  color: color-mix(in oklab, var(--base, var(--wood)) 80%, white);
+}
+
+.bonsai .sh-shade {
+  color: color-mix(in oklab, var(--base, var(--wood)) 72%, black);
 }
 
 /* One hue per topic, declared as a variable rather than as a colour so that
@@ -1636,8 +1683,15 @@ h4:hover > .heading-anchor,
 }
 
 /* A note at the vault root has no shelf, so it gets no hue rather than a
- * borrowed one. Muted is the honest answer and it still reads as foliage. */
-.bonsai .leaf,
+ * borrowed one. Muted is the honest answer and it still reads as foliage.
+ *
+ * The foliage declares what it is made of and lets the three tiers above
+ * colour it; the caption's stage word takes the hue flat, because a word is
+ * not a lit surface. */
+.bonsai .leaf {
+  --base: var(--topic, var(--muted));
+}
+
 .bonsai-caption .stage {
   color: var(--topic, var(--muted));
 }
