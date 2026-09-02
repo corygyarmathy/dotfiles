@@ -84,10 +84,8 @@
   --gutter: 3rem;
   /* One line of the bonsai's caption: its own size times its own leading. The
    * caption holds two of these open so that a long note's name does not move
-   * the page, and the colophon across the composition from it is lifted by
-   * one, so the two small grey lines that close the header sit on the same
-   * line as each other. Three rules have to agree about that number, so it is
-   * written once. */
+   * the page as the pointer crosses the foliage. Two rules have to agree about
+   * that number, so it is written once. */
   --caption-line: calc(0.85rem * 1.3);
   color-scheme: light;
 }
@@ -182,26 +180,156 @@ footer {
 
 /* ── masthead ───────────────────────────────────────────────────────────── */
 
+/* ONE bar, on every page (item 21). The site's name, where else to find me,
+ * and the two controls, with a rule under them.
+ *
+ * It replaces a pair: this bar on the interior pages and a composition of its
+ * own on the landing page, which carried the same name at 2rem with the same
+ * links and the same two icons. Two headers is two heights - 1.1rem of name
+ * against 2rem of it - so the row at the top of the window changed size, and
+ * the name, the icons and the rule under them all moved, every time a reader
+ * went from the landing page to a note or back. That is the commonest journey
+ * on the site and it was the one that flinched.
+ *
+ * The blend keeps this bar's FORMAT - one line, one rule - and takes the
+ * landing page's LINKS, at a size between the two. 1.25rem rather than
+ * 1.1rem: this row is now the whole of the site's identity on every page,
+ * where the old one was a small label under an assumption that the landing
+ * page carried the identity elsewhere.
+ *
+ * `container-type: inline-size` makes the bar the containment context the
+ * link rules below query. The bar's width is min(measure, viewport - padding)
+ * rather than the viewport's, and it is the bar running out of room that
+ * decides how many links fit - so the question is asked of the box that has
+ * the answer. */
 .masthead {
+  container-type: inline-size;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  /* Between the GROUPS - the name, the links, the tools. Each group sets its
+   * own internal gap, which is tighter. */
+  gap: 1.25rem;
   padding-bottom: 0.75rem;
   margin-bottom: 2rem;
   border-bottom: 1px solid var(--border);
 }
 
+/* An <a> on every page and the <h1> on the home page, which is why the
+ * heading's own margin is reset here: the landing page's title used to be an
+ * h1 over the prose and is now this, so the page keeps a heading without
+ * carrying the site's name twice. See baseof.html. */
 .masthead-title {
+  /* Grows to push the links and the tools to the right edge, and is the one
+   * item in the row allowed to SHRINK: `min-width: 0` releases the flex
+   * item's automatic minimum so that a name too long for the bar is cut with
+   * an ellipsis rather than shouldering the links off the page. Everything
+   * else in the row is nowrap and holds its size. */
   flex-grow: 1;
-  font-size: 1.1rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  font-size: 1.25rem;
   font-weight: 600;
+  line-height: 1.2;
   color: var(--brand);
   text-decoration: none;
   white-space: nowrap;
 }
 
-.masthead-title:hover {
+a.masthead-title:hover {
   text-decoration: underline;
+}
+
+/* Where else to find me, from the same `footerLinks` the footer renders. A
+ * list, not a paragraph of links: these are a set of destinations and the
+ * markup should say so, for the same reason the footer's does.
+ *
+ * THEY DROP, THEY DO NOT WRAP. On the old landing page this list was allowed
+ * to fold onto a second line, which turned the bar into a block on a phone -
+ * the one width where the header should cost least. Here the row is fixed at
+ * one line and the links leave it one at a time as the bar narrows.
+ *
+ * From the LEFT, because the list is ordered least-important first (the
+ * footer reads in the same direction), so the first thing to go is the first
+ * thing named. Which link that is belongs to the host's configuration and not
+ * to this file - `footerLinks` is a map and Hugo ranges it in key order - so
+ * these rules name POSITIONS and never names.
+ *
+ * THE LINKS GO BEFORE THE NAME DOES. The name is the one item in the bar that
+ * can be squeezed, so if a step fires late the reader sees "Cory Gyarma..."
+ * with three links still beside it - the site's identity cut to keep its
+ * chrome, which is exactly backwards. That shipped once, from steps measured
+ * off a screenshot: the bar needs 396.5px to hold two links and the second
+ * step was set at 384.
+ *
+ * The widths are now measured in the browser, off the rendered bar - the
+ * title's own text width from a Range over its contents, each link's
+ * offsetWidth, the tools, and the row's gap between them:
+ *
+ *   3 links  158.5 + 20 + (62 + 20 + 57 + 20 + 57) + 20 + 64  =  478.5px
+ *   2 links  158.5 + 20 +           (57 + 20 + 57) + 20 + 64  =  396.5px
+ *   1 link   158.5 + 20 +                      57  + 20 + 64  =  319.5px
+ *
+ * and each step sits about a rem above its number: 31, 26 and 21rem. The slack
+ * is what carries the numbers off this machine - `system-ui` is a different
+ * face on every platform, and the same fourteen characters are a few per cent
+ * wider here (DejaVu) than in SF or Segoe UI, so measuring on the widest of
+ * them and rounding up is what makes the order hold everywhere.
+ *
+ * The title can still shrink, as the last thing that happens rather than the
+ * first: past the final step there are no links left to give, and a site name
+ * longer than a bar has to end somewhere. An ellipsis is a better failure than
+ * a bar that overflows the page, which is what a name that cannot shrink at
+ * all would do. checks/digital-garden.nix sweeps the bar from 280 to 720px in
+ * a live browser and asserts the name is never the thing that gives way. */
+.masthead-links {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+@container (max-width: 31rem) {
+  .masthead-links > li:nth-child(-n + 1) {
+    display: none;
+  }
+}
+
+@container (max-width: 26rem) {
+  .masthead-links > li:nth-child(-n + 2) {
+    display: none;
+  }
+}
+
+@container (max-width: 21rem) {
+  .masthead-links {
+    display: none;
+  }
+}
+
+/* A destination that does not exist yet: the same list, in the muted grey the
+ * rest of the site uses for text that is there to be read rather than acted
+ * on. It has to be legible - it is naming a real thing that is coming - and it
+ * has to be plainly not a link, which is the whole reason it is not one.
+ *
+ * No underline, no cursor change, no hover: everything a link does, it does
+ * not do. See _partials/site-link.html for why an empty URL renders this and
+ * not a link to a page that would 404. */
+.link-placeholder {
+  color: var(--muted);
+}
+
+/* The two controls travel as one group, with the tight gap two icons want
+ * rather than the row's gap between groups. */
+.masthead-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* The controls are buttons, not boxes. A bordered field containing the word
@@ -239,232 +367,83 @@ footer {
 
 /* ── the home page ──────────────────────────────────────────────────────── */
 
-/* One composition: the name at scale, the garden counted under it, and the
- * tree beside the pair — docs/plans/digital-garden-design.md, item 19. The
- * landing page used to be an h1 and a list with a large tree above them,
- * which was two unrelated things sharing a screen.
+/* What is left of the landing page's composition once the masthead above
+ * became the site's only header (item 21): the tree, and the garden counted
+ * under it. The name, the links and the tools are in that bar with every
+ * other page's, and the page's <h1> is the name in it.
  *
- * This is where the 2026-08-31 decision spends its one purely visual change:
- * the stylesheet has nothing above 1.75rem anywhere else, so the site has no
- * scale contrast, and it is bought here and nowhere else. It does not reopen
- * item 6 — the face is still the system stack, and a name at 4.25rem is a
- * size rather than a change of voice. */
-
-/* The header is a masthead BAR and a picture under it.
+ * The same span as the masthead and as the prose - the measure, centred - so
+ * the picture begins and ends on the two lines everything else on the page
+ * begins and ends on. Past 80rem those are the article column's edges (see
+ * the grid below: the arithmetic makes `max-width: measure; margin: auto` land
+ * exactly there), which is what the old header needed a rule of its own to
+ * reach.
  *
- * The composition this replaces set the name beside the tree, and the fault it
- * had was geometric rather than decorative: the band ran from the article
- * column's left edge to the wide grid's RIGHT edge, 18rem past where every
- * line of prose below it stops. The reasoning for that right-hand anchor was
- * that it ends "where the page's widest element ends" - but the home page
- * carries no sidenotes, so nothing else on it ever reaches that edge, and the
- * rule under the header closed on a line that is never drawn. A band anchored
- * to an empty column reads as hanging off the page, which is what it was.
- *
- * The header is now exactly the article column, at every width. That is the
- * same span as the masthead rule on every interior page, so the home page
- * stops being the one page whose header is a different width from its body,
- * and nothing can hang off it because there is nothing to its right.
- *
- * Inside it, the two parts stop competing. The words are a BAR - the row the
- * tools already had, with the name and the links moved into it - and the tree
- * has the whole measure under it. The name giving up its column is the trade
- * this composition makes and the one the old one would not: the tree is the
- * page's subject, the name is its label, and sizing them as peers is what
- * left one column full and the other half empty.
- *
- * Three text blocks became one. The blurb is gone (see home.html), and the
- * count moved under the tree, where it captions the picture it counts. */
-.nameplate {
-  display: grid;
-  /* The bar: name hard left, links and tools together on the right, and the
-   * measure's worth of space between them. The tree and the count then span
-   * the whole of it. */
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    "title .     links tools"
-    "tree  tree  tree  tree"
-    "count count count count";
-  /* Centre, not baseline. Baseline sets the name, the links and the icons on
-   * one line - but an icon has no letterforms, so its box BOTTOM lands on the
-   * text baseline and it rides half a line above the words beside it. What
-   * the eye compares here is the optical middle of a 2rem name, a 1rem link
-   * and an 18px glyph, which is what centring aligns. It is also what
-   * `.masthead` does on every interior page. */
-  align-items: center;
-  /* Stretch, not centre. `.bonsai-plate` is an inline-size container, so its
-   * own contents cannot size it: under `justify-items: center` the track
-   * shrinks to fit a box whose width depends on the track, the whole thing
-   * resolves to zero and the tree disappears. */
-  justify-items: stretch;
-  column-gap: 1.25rem;
-  width: auto;
+ * AND NO RULE UNDER IT. There was one, and it was the old header's - the line
+ * that closed the composition the name and the tree were both inside. With
+ * the header out of it, a rule here separates the picture from the sentences
+ * that introduce it, which is the one pair on this page that belongs
+ * together. */
+.garden {
   max-width: var(--measure);
-  /* And the rule an interior page draws under its masthead, drawn here under
-   * the whole composition. */
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid var(--border);
   margin: 0 auto 3rem;
 }
 
-/* The wrapper stops being a box so the name and the links can join the bar as
- * grid items of the header itself, without the template having to un-group
- * what it groups for good reasons. Inherited properties still pass THROUGH
- * `display: contents`, which is why the alignment below is set here rather
- * than on each child. */
-.nameplate-id {
-  display: contents;
-  text-align: left;
-}
-
-.nameplate-title {
-  grid-area: title;
-  /* Held on one line: the bar's middle column is what gives way first, and a
-   * name that wraps inside a bar turns the row into a block. Released again
-   * at the phone width below, where the bar breaks up anyway. */
-  white-space: nowrap;
-}
-
-.nameplate-links {
-  grid-area: links;
-  justify-content: flex-end;
-}
-
-.nameplate-tools {
-  grid-area: tools;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  justify-self: end;
-  /* The old composition gave the tools a band of their own and a rag of space
-   * under it. In a bar that margin is part of what is being centred, so it
-   * lifts the icons off the line the words sit on. */
-  margin-bottom: 0;
-}
-
-/* Below this the bar cannot hold the name and three links on one line. It
- * breaks into name-and-tools over links, which is the same reading order at
- * the same left edge - not a different composition. Nothing centres. */
-@media (max-width: 34rem) {
-  .nameplate {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "title tools"
-      "links links"
-      "tree  tree"
-      "count count";
-    row-gap: 0.75rem;
-  }
-
-  .nameplate-title {
-    white-space: normal;
-  }
-
-  .nameplate-links {
-    justify-content: flex-start;
-  }
-}
-
-.nameplate-title {
-  margin: 0;
-  /* The interior masthead's title is 1.1rem, so this is the same words at
-   * about twice the size: enough that the landing page is plainly the landing
-   * page, not so much that it competes with the picture under it. It was
-   * 4.25rem, which is what the name costs when it is a column of its own
-   * rather than a line in a bar.
-   *
-   * `break-word` is for the title this file cannot see - a single very long
-   * word would otherwise push the bar past the measure. */
-  font-size: clamp(1.5rem, 4vw, 2rem);
-  overflow-wrap: break-word;
-  line-height: 1.1;
-  font-weight: 600;
-  /* Type set this large looks loose at the tracking that suits a 1.1rem
-   * masthead; a name is one word-group and should read as one. */
-  letter-spacing: -0.02em;
-  color: var(--brand);
-}
-
-/* Where else to find me: the same links the footer carries, at the top of the
- * one page that is about the site rather than about a note. One list in the
- * configuration, so the two cannot drift apart.
- *
- * A list, not a paragraph of links: these are a set of destinations, and the
- * markup should say so for the same reason the footer's does. */
-.nameplate-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.95rem;
-}
-
-/* A destination that does not exist yet: the same list, in the muted grey the
- * rest of the site uses for text that is there to be read rather than acted
- * on. It has to be legible - it is naming a real thing that is coming - and it
- * has to be plainly not a link, which is the whole reason it is not one.
- *
- * No underline, no cursor change, no hover: everything a link does, it does
- * not do. See _partials/site-link.html for why an empty URL renders this and
- * not a link to a page that would 404. */
-.link-placeholder {
-  color: var(--muted);
-}
-
-/* The count sits under the tree, on the caption's own line, because it is the
- * one line of text on this page that describes the PICTURE: eighteen notes is
- * exactly what the eighteen clumps of foliage are. Beside the name it was a
- * fourth block of masthead copy; under the tree it is a plate's label, and
- * the caption and the count read as one two-line note about the picture.
- *
- * Centred here and nowhere else. The bar above it is set to the two edges of
- * the measure and the tree fills that measure; a picture's caption centres on
- * the picture. */
-.nameplate .colophon {
-  grid-area: count;
-  margin: 0;
-  text-align: center;
-}
-
-/* The garden counted, from item 14's model — see _partials/colophon.html for
- * where the numbers come from. Small, quiet and spaced: it is a caption to
- * the name above it and to the tree beside it, and the two are the same
- * count seen twice. Tabular figures so the digits sit in a row rather than
- * shuffling with the vault. */
-.colophon {
-  margin: 0.9rem 0 0;
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-/* In the composition the tree is not a centred block with a page of its own:
- * the grid places it and the space around it is the composition's.
- *
- * `container-type: inline-size` is the whole of the fix for "the tree does not
- * fill its column". The plate's width now comes from the grid track, and the
- * TYPE is sized from the plate below - so the picture's right edge and the
- * header's right edge are the same line at every viewport and for every
- * vault. Before this the band was sized by the layout and the tree by the
- * viewport, and nothing made the two agree: at 1440px the picture stopped
- * 74px short of its own rule.
+/* `container-type: inline-size` is the whole of the fix for "the tree does not
+ * fill its column". The plate's width comes from this box, and the TYPE is
+ * sized from the plate - so the picture's right edge and the prose's right
+ * edge are the same line at every viewport and for every vault. Before this
+ * the band was sized by the layout and the tree by the viewport, and nothing
+ * made the two agree: at 1440px the picture stopped 74px short of its own
+ * rule.
  *
  * The top margin is bigger than it looks. The crown's first row has ink in it
  * from the very top of the box, so the gap the reader sees above the tree is
  * this number almost exactly; the gap BELOW is padded by an empty line box -
  * see .bonsai's margin-block-end. */
-.nameplate .bonsai-plate {
-  grid-area: tree;
+.garden .bonsai-plate {
   container-type: inline-size;
   width: auto;
   min-width: 0;
   max-width: none;
   overflow: visible;
-  margin: 2.5rem 0 0;
+  margin: 1.5rem 0 0;
+}
+
+/* The count sits under the tree, on the caption's own line, because it is the
+ * one line of text on this page that describes the PICTURE: eighteen notes is
+ * exactly what the eighteen clumps of foliage are.
+ *
+ * Centred here and nowhere else. The tree fills the measure; a picture's
+ * caption centres on the picture. */
+.garden .colophon {
+  text-align: center;
+}
+
+/* The garden counted, from item 14's model — see _partials/colophon.html for
+ * where the numbers come from. Tabular figures so the digits sit in a row
+ * rather than shuffling with the vault.
+ *
+ * IT IS NOT THE CAPTION, AND IT MUST NOT LOOK LIKE IT. Directly above it sits
+ * `.bonsai-caption`, which is the same size and was the same grey, so the two
+ * read as one four-line block - and they are not one thing: the caption is
+ * what the pointer is on right now, empty until the reader moves it, and this
+ * is a standing fact about the whole garden. Same colour, same size, one
+ * line apart, and nothing on the page said which was which.
+ *
+ * So the count takes --text and the caption keeps --muted. That is the right
+ * way round: the transient thing is the quieter one, and the fact that is
+ * always true is the one set in the colour the page's own prose is set in.
+ * The extra space above is the second half of the separation - a gap wider
+ * than the leading inside either of them, so that the two never read as
+ * consecutive lines of one paragraph. */
+.colophon {
+  margin: 1.4rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── prose ──────────────────────────────────────────────────────────────── */
@@ -1003,6 +982,23 @@ mark {
  * right at every width without anything having to measure the table. */
 .table-container {
   overflow-x: auto;
+  /* Room above and below, and more of it than the paragraph rhythm gives.
+   *
+   * A table had none at all: the rule set `overflow-x` and nothing else, so
+   * the box took whatever margin its neighbour happened to have below it - and
+   * a callout's is 1rem, the same 1rem that separates two paragraphs of one
+   * argument. A table and the callout under it therefore sat at the spacing of
+   * two sentences and read as ONE object with a tinted foot, which is
+   * precisely what they are not. The vault makes this common rather than rare:
+   * the markdown formatter used on these notes closes the blank line around a
+   * table, so a table and whatever follows it arrive as adjacent blocks with
+   * no authored separation for the page to inherit.
+   *
+   * 1.5rem, not more: a table is part of the argument around it and should not
+   * read as an interlude. It is enough to be plainly a gap rather than a line
+   * of leading, which is the whole job. Margins collapse, so a table between
+   * two paragraphs takes 1.5rem at each end rather than 1.5 plus their 1. */
+  margin: 1.5rem 0;
   background:
     linear-gradient(to right, var(--bg) 60%, transparent) left / 2rem 100% no-repeat
       local,
@@ -1366,49 +1362,25 @@ h4:hover > .heading-anchor,
     align-items: baseline;
   }
 
-  /* The home page's header, anchored to the grid above.
+  /* The home page's header used to need a rule here, anchoring it to this
+   * grid, and it does not any more: it is not a header of its own, it is the
+   * masthead every page carries (item 21).
    *
-   * This is the fix for "the header feels disconnected from the page", and
-   * the cause turned out not to be its width. At 1440px every interior page's
-   * masthead rule runs from 400px to 1040px - exactly the article column, so
-   * it begins and ends on the prose beneath it. The nameplate ran from 305px
-   * to 1135px: it shared a CENTRE with the page and not a single EDGE, so
-   * there was nothing on the page for either end of it to land on, and a band
-   * that lines up with nothing reads as floating over the page rather than as
-   * part of it.
+   * That header's fault is worth keeping, because it is what the arithmetic
+   * below avoids. At 1440px every interior masthead ran from 400px to 1040px
+   * - exactly the article column, so it began and ended on the prose beneath
+   * it. The landing page's ran from 305px to 1135px: it shared a CENTRE with
+   * the page and not a single EDGE, so there was nothing on the page for
+   * either end of it to land on, and a band that lines up with nothing reads
+   * as floating over the page.
    *
-   * The first fix for that anchored the left end to the prose and the right
-   * end to the grid's right edge. It was half right, and the half it got
-   * wrong is why this reads differently now: the home page carries no
-   * sidenotes, so nothing on it ever reaches that right edge. The header's
-   * right end - and the rule under it - closed 288px past the last character
-   * of every paragraph below, on a line the page never draws. Anchored to an
-   * empty column, it read as hanging off the page rather than as floating
-   * over it, which is a different fault at the same address.
-   *
-   * It now begins AND ends on the article column: the same two lines every
-   * interior page's masthead rule uses, and the only two this layout has that
-   * anything is ever set against. `max-width: var(--measure)` on the base
-   * rule already fixes the width, so all this does is stop the header
-   * centring itself in the page and set its left edge on the prose.
-   *
-   * The arithmetic is the grid's own, written out rather than inherited,
-   * because the header is not inside .layout: the offset is where the grid's
-   * left edge falls in this container, plus one margin column and one gutter.
-   * Both terms are the same tokens .layout is built from, so the two cannot
-   * drift.
-   *
-   * Only out here. Below this breakpoint the page is a single centred column
-   * with no margins and so no vertical lines to anchor to, and the header
-   * centres with the prose it sits over - which is the same relationship, on
-   * a page that has only one edge to have it with. */
-  .nameplate {
-    margin-left: calc(
-      (100% - (var(--measure) + 2 * (var(--margin-col) + var(--gutter)))) / 2 +
-        var(--margin-col) + var(--gutter)
-    );
-    margin-right: 0;
-  }
+   * `max-width: var(--measure); margin-inline: auto` lands on the article
+   * column by itself out here, and not by luck. The masthead's left edge is
+   * (W - measure)/2; the article's is (W - (measure + 2*(margin + gutter)))/2
+   * + margin + gutter, and the two reduce to the same expression. So the one
+   * declaration on the base rule holds the masthead, the tree and the prose to
+   * the same two vertical lines at every width past this breakpoint, with no
+   * second copy of the grid's arithmetic to keep in step. */
 
   .layout > article {
     grid-column: 2;
@@ -2133,8 +2105,15 @@ pagefind-modal {
    * nothing; the heading anchors are a hover affordance for a hover that
    * cannot happen; and the arrow back to a footnote's reference is a jump on a
    * page that is already in the reader's hand. The 404's Game of Life is
-   * decoration that reports nothing, so it does not print either. */
+   * decoration that reports nothing, so it does not print either.
+   *
+   * The masthead's links go with them. They are three words naming places
+   * that cannot be reached from paper, and the rule that prints a URL after a
+   * link is scoped to the article on purpose - so printing them would put
+   * three dead words above every essay. The name stays: it says whose sheet
+   * this is. */
   .icon-button,
+  .masthead-links,
   .heading-anchor,
   .footnote-backref,
   .life {

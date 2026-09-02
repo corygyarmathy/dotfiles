@@ -99,19 +99,56 @@
   <body>
     <div class="page">
       {{/*
-        Every page but the home page. The home page's masthead IS its
-        composition - the same bar as this one, carrying the site's links as
-        well, with the tree under it - so it renders its own in home.html
-        (item 19) rather than taking a title here and another below, which
-        would be two mastheads on one page. The tools themselves are shared,
-        so the ids the scripts below bind to exist exactly once either way.
+        ONE masthead, on every page including the home page (item 21). It used
+        to be two: this bar on the interior pages, and a composition of its own
+        in home.html that carried the same name at twice the size along with
+        the site's links. Two headers meant two heights, and the difference was
+        visible as movement in the name, the icons and the rule under them
+        every time a reader crossed between the landing page and a note - which
+        is the commonest navigation this site has.
+
+        So the bar is the blend the two asked for. It keeps the interior
+        page's format - one line, the rule under it - and takes the home
+        page's links, at a size between the two: 1.25rem rather than 1.1rem,
+        because this row is now the whole of the site's identity on every page
+        and the old one was set to be ignorable.
+
+        The home page's remaining composition is the tree, which home.html
+        renders under this. The tools are still a partial rather than markup
+        here, but the reason has changed: they used to appear in one of two
+        places and now they appear in one, so the partial is simply where they
+        are written.
+
+        The name is a LINK on every page but the home one, where it is the
+        page's <h1>. That is not a flourish: the landing page's own title had
+        been an h1 over the prose under the tree, and removing it (item 21)
+        would have left the page with no heading at all. The site's name is
+        what that page is about, so it takes the heading it always should
+        have had, and a link pointing at the page it is on is not written.
       */}}
-      {{ if not .IsHome }}
-        <header class="masthead">
+      <header class="masthead">
+        {{ if .IsHome }}
+          <h1 class="masthead-title">{{ site.Title }}</h1>
+        {{ else }}
           <a class="masthead-title" href="{{ "/" | relURL }}">{{ site.Title }}</a>
-          {{ partial "masthead-tools.html" . }}
-        </header>
-      {{ end }}
+        {{ end }}
+        {{/*
+          Where else to find me, from the same `footerLinks` the footer
+          renders, so that the answer is one list in the host's configuration
+          and not two that drift. Nothing renders when none are configured.
+
+          They drop from the LEFT as the bar runs out of room, rather than
+          wrapping onto a second line - see `.masthead-links` in the
+          stylesheet for why, and for why the order is the configuration's
+          business.
+        */}}
+        {{ with site.Params.footerLinks }}
+          <ul class="masthead-links">
+            {{ range . }}<li>{{ partial "site-link.html" . }}</li>{{ end }}
+          </ul>
+        {{ end }}
+        {{ partial "masthead-tools.html" . }}
+      </header>
 
       <main>{{ block "main" . }}{{ end }}</main>
 

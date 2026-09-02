@@ -402,6 +402,8 @@ Three ways out, and the choice is a taste decision rather than a measurement:
 
 The first is the recommendation. Nothing is blocked on it.
 
+**Settled, 2026-09-03, by item 21 and not on purpose.** The masthead's name went to 1.25rem because one bar now carries the site's identity on every page and 1.1rem was sized to be ignorable. 20px at weight 600 is past the 18.66px where the large-text allowance starts, so the floor that applies is 3:1 and Lotus's `--brand` clears it at 3.73:1. The hue is unchanged and the decision that chose it stands; what moved was the size, which is the way out this section recommended.
+
 ### Deliberately not changed
 
 The Chroma comment rule keeps fujiGray at 3.67:1 against sumiInk0. That one is genuinely a comment, on code the stylesheet already sets at lower contrast on purpose — the syntax block says so in as many words — and changing it would cost more editor parity than it buys.
@@ -887,6 +889,68 @@ One thing the build made obvious that the plan did not say: on a bounded grid th
 
 Both pauses are behaviour, so the VM check runs the page in headless Chromium rather than grepping for it: the script writes its running state and population back to the canvas as data-attributes, and the check reads those to assert it runs, that it pauses under `prefers-reduced-motion`, and that it pauses out of view — plus the plan's own "not on the home page" pinned as a negative, and the centred-beneath-the-message placement pinned as a positive. No cost over the estimate; the Chromium machinery was already in the test.
 
+## 21. One masthead, and eight things found by reading the site
+
+### The problem
+
+Reported 2026-09-03, after the site had been read rather than looked at. Eight complaints. Two of them are about the header and they resolve together, so they are taken as one:
+
+- **The top row changes height between the home page and a note.** Item 19 gave the landing page a composition of its own, so the site had two headers: a 1.1rem name in a bar on every interior page, and a 2rem name in a bar of its own on the home page. Navigating between them moved the name, the icons and the rule under them. That is the commonest journey the site has, and it was the one that flinched.
+- **The two headers should be one, and it should be the interior one.** Keep the bar's format — one line, a rule under it — take the home page's links into it, and set the type slightly larger so the row is legible rather than ignorable.
+- **The links must not fold onto a second line on a phone.** On the landing page they wrapped, which turned a bar into a block at the one width where a header should cost least. They should drop instead, from the left, since the list is ordered least-important-first.
+
+Then, on the home page:
+
+- **The caption and the colophon read as one thing.** _"Point at any foliage to see the note it grew from"_ and _"18 notes · 1 evergreen · 11 growing · 6 seedlings"_ sat one line apart at the same size in the same grey. They are not one thing: the first is whatever the pointer is on right now, empty until the reader moves it, and the second is a standing fact about the whole garden.
+- **The rule under the tree should go**, and **the landing page's `<h1>` should go** — _"another thing the reader has to get through before they reach the page's content"_.
+
+And on a note:
+
+- **The facts push the prose down when the margin collapses**, which makes crossing the breakpoint feel harsh.
+- **They wrap onto a second line on a phone** whenever a note has been edited, because a publication date, an edit date, a reading time and a maturity are wider than 390px. Show the edit date and cut the publication date.
+
+And everywhere:
+
+- **A table merges with whatever follows it.** Reported against a real note, where a table and the callout under it read as one object with a tinted foot.
+
+### Approach
+
+**One bar, rendered by `baseof.html` for every page, home included.** The name at 1.25rem — between the two sizes it replaces — with the links from `footerLinks` and the two controls to the right of them, and the rule under it. `home.html` keeps the tree and nothing else; the second header is gone rather than reconciled, which is what makes the heights equal by construction instead of by two numbers kept in step.
+
+The name is a link on every page and the `<h1>` on the home page. Removing the landing page's own title would otherwise leave that page with no heading at all, and the site's name is what the page is about, so it takes the heading it should always have had. A link pointing at the page it is on is not written.
+
+**The links drop from the left, and the question is asked of the bar.** `container-type: inline-size` on `.masthead` and three `@container` steps, at 30, 24 and 19.5rem, measured off the rendered bar: with this name and these three links it needs 468px for all of them, 382px for two and 308px for one. The viewport is the wrong thing to ask — the bar is capped at the measure and padded, so it is the bar that runs out of room — and the widths are specific to the words in it, which is why the title is the one item in the row allowed to shrink: a longer name in the host's configuration meets an ellipsis rather than pushing the links off the page.
+
+**The colophon takes `--text` and the caption keeps `--muted`,** with a wider gap between them. That is the right way round: the transient line is the quieter one and the standing fact is set in the ink the page's prose is set in. In Wave the two are a warm cream against a violet grey, in Lotus a blue-black against a warm grey, and in both the difference is a hue rather than only a value.
+
+**One date on a note, at the narrow width.** `dateline.html` drops the publication date when the note has been edited and the line is carrying the whole margin. Which of the two to cut is not a close call: a reader arriving at a note wants to know how current it is, and the edit date answers that. The margin still carries both at the wide width, where there is a column to carry them in. The `/notes/` index keeps both — its rows have two facts rather than four, and there the publication date is what orders the page.
+
+That also settles the harsh transition, and it settles it by making the thing that appears smaller rather than by reserving space for it. Reserving space was the alternative and it was rejected: it costs a permanent blank row between the title and the first paragraph on every desktop note page, which is a fixed price paid on every read to smooth an event that happens while dragging a window.
+
+**A table gets 1.5rem above and below it.** It had none at all — the rule set `overflow-x` and nothing else — so a table took whatever the block after it happened to have above it, and a callout's is 1rem, the same 1rem that separates two paragraphs of one argument. The vault makes that adjacency common rather than rare: the markdown formatter these notes are written with closes the blank line around a table, so a table and what follows it arrive with no authored separation for the page to inherit. The fixture grew the case — a table butted directly against a callout — because it is now a thing the spacing has to survive.
+
+### Shipped, 2026-09-03
+
+The rule under the masthead sits at the same pixel row on the home page, a note and `/notes/` — measured at 1440px, row 104 on all three.
+
+Assertions were added to the VM check and two rewritten, all of them for properties a screenshot cannot hold still: that the home page carries the site's name exactly once and as an `<h1>`, that an interior page carries it as a link and carries the same link list, that the masthead is a container and that something drops a link when it runs out of room, that `.masthead-links` cannot wrap, that a table container has a margin, that a note whose edit date differs from its publication date shows the edit on the dateline and both in the margin, and — added by the correction below — that the bar never cuts the name while a link is still shown. The geometry probe that pinned the old header to the article column now pins the masthead and the tree to it, and the arithmetic it was testing is no longer a rule of its own: `max-width: var(--measure); margin-inline: auto` reduces to the article column's offset out past 80rem, so one declaration holds the bar, the picture and the prose to the same two vertical lines.
+
+The masthead's links do not print. They are three words naming places that cannot be reached from paper, and the rule that prints a URL after a link is scoped to the article on purpose.
+
+### The links went second, 2026-09-03
+
+Reported on the first pass and fixed on the same day: at about 430px the name came out as _"Cory Gyarma…"_ with three links still beside it. The name is the one item in the bar that can be squeezed, so if a step fires late that is what the reader loses — the site's identity cut to keep its chrome, which is exactly backwards.
+
+The cause was arithmetic, not architecture. The steps were estimated off a screenshot, and the estimates were low: the bar needs **396.5px** to hold two links and the second step was set at 384, so there was a forty-pixel window where two links were still asked for and the name paid for them. The widths are now measured in the browser — the title's own text width from a `Range` over its contents, each link's `offsetWidth`, the tools, and the row gap between them — giving 478.5 / 396.5 / 319.5px for three, two and one link, and each step sits about a rem above its number at 31 / 26 / 21rem. The slack is what carries the numbers off this machine: `system-ui` is a different face on every platform, and measuring on the widest of them and rounding up is what makes the order hold everywhere.
+
+The name can still shrink, as the last thing that happens rather than the first. Past the final step there are no links left to give, and a name that could not shrink at all would answer "no room" with a bar hanging off the page — which is a worse failure than an ellipsis, and a failure this site has already met once with tables.
+
+**And the order is now a test rather than a screenshot**, because it is true or false at every width and the fault lived in a forty-pixel window between two steps. `checks/digital-garden.nix` sweeps the bar from 280 to 720px in one page load — a clone of the masthead in a box of each width, which works because the clone carries `.masthead` and so is its own container — and asserts at every one of them that the name's text is never wider than the box it was given and that the row never overflows the bar. Never cut says the links go first; never overflow says the answer to "no room" is not a bar off the edge of the page.
+
+### Cost and risk
+
+One session, plus the correction above. The risk is the three container steps, which are measured against one site title and three link names and will be wrong for a fourth link or a much longer name — wrong in the direction of an ellipsis on the name rather than of a broken bar, which is why the shrink is there. `@container` needs Chrome 105, Safari 16 or Firefox 110; the tree's plate has depended on container queries since item 19, so this adds no floor the site did not already have.
+
 ## Rejected: a graph view
 
 The canonical Quartz feature, and it should not be built here. Nineteen nodes with six edges is not a graph, it is a list with extra steps — the rendered picture would be five connected Lighting notes and thirteen dots. It needs a rendering library, which means either a build-time network fetch or vendoring a canvas library into a site that currently ships zero bytes of framework, and it works badly on the phones that most of this site's readers will use. Items 3 and 4 deliver what a reader actually wants from a graph view, which is "what else is near this", at a fraction of the cost. Revisit at a hundred notes if the link density has gone up with them.
@@ -924,6 +988,8 @@ The order is fixed by dependencies for the first two and by taste after that.
 7. **Item 18b, the bonsai taste pass.** Unestimated by design. Generate many, look at them, tune the three levers. Done 2026-08-31; the three levers were the wrong three, and the trunk was the one that mattered.
 8. **Item 19, the home page.** Last, because it wants the tree finished. Done 2026-08-31; the tree being finished is what decided the composition's width, so the sequencing earned its keep.
 9. **Item 20, the 404.** Any time; it depends on nothing and blocks nothing.
+
+Item 21 was not sequenced either, for item 11's reason: every part of it came from reading the finished site, and eight corrections that all land on the header and on the spacing around it are one session rather than eight PRs.
 
 Item 7 is the only optional item still outstanding — item 8 shipped on 2026-08-28 and the table has been corrected. It is less urgent after item 15 — the maturity sprout on an internal link already answers most of "is this worth following", which was the value the hover preview was reaching for — so if it is ever taken it should be taken as the `title` version first, and judged against a site that already has the marks.
 

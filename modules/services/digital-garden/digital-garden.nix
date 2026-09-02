@@ -435,11 +435,16 @@ in
         Resume = "";
       };
       description = ''
-        Links shown in the site footer, and in the home page's header, as a
-        name -> URL map. Empty by default, which renders no list at all rather
-        than an empty one. One list rather than two so that "where else to
-        find me" cannot say different things at the top and the bottom of the
-        same page.
+        Links shown in the site footer, and in the masthead at the top of
+        every page, as a name -> URL map. Empty by default, which renders no
+        list at all rather than an empty one. One list rather than two so that
+        "where else to find me" cannot say different things at the top and the
+        bottom of the same page.
+
+        The masthead drops them from the LEFT as it runs out of room, rather
+        than wrapping them onto a second line, so the order here is an order
+        of increasing importance: whatever sorts first is the first thing a
+        narrow window loses. Hugo ranges the map in key order.
 
         An entry whose URL is the empty string renders as muted text instead
         of a link, so a destination that does not exist yet can still take its
