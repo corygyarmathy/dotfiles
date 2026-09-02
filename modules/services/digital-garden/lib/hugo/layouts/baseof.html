@@ -467,10 +467,13 @@
 
       GROWTH. Every character of the tree is in the HTML that was served -
       publish-filter.py grew it at build time. This hides them and puts them
-      back in the order the tree was drawn in, so the trunk rises before the
-      branches and the branches before their foliage. A reader who has asked
-      for less motion, or who has no JavaScript, gets the finished tree, which
-      is why the hiding is done here rather than in the stylesheet.
+      back on the clock, in the order the tree actually grew: the pot first,
+      because a pot is the one thing here that was not grown, then the trunk
+      rising out of it, then each branch leaving the trunk as the trunk passes
+      its height, then each pad opening off the branch that carries it. A
+      reader who has asked for less motion, or who has no JavaScript, gets the
+      finished tree, which is why the hiding is done here rather than in the
+      stylesheet.
 
       NAVIGATION. Each foliage cell carries the index of the note it grew from,
       so pointing at one lights every cell of that note's pad and names it, and
@@ -533,9 +536,14 @@
 
         if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-        // In draw order, which the generator recorded per cell because the
-        // order a tree grows in is not the order a `<pre>` reads in - revealing
-        // in document order would wipe down the page instead of growing.
+        // In GROWTH order, which is not document order and is not draw order
+        // either. bonsai.py works out when each character grew from the tree's
+        // own geometry - the pot is set down first, the trunk rises out of it,
+        // each branch leaves the trunk as the trunk passes its height, and each
+        // pad opens outward from the branch carrying it - and writes it as
+        // data-grow, 0 to 1000 across the whole animation. So the lower pads
+        // are in leaf while the apex is still rising, and nothing here has to
+        // know anything about trees.
         var cells = Array.prototype.slice
           .call(tree.querySelectorAll("[data-grow]"))
           .sort(function (a, b) {
@@ -544,30 +552,50 @@
         cells.forEach(function (cell) {
           cell.classList.add("off");
         });
+        // Turns on the per-character fade, and is taken off again at the end so
+        // that the hover highlight is instant rather than easing in.
+        tree.classList.add("growing");
 
         function done() {
           cells.forEach(function (cell) {
             cell.classList.remove("off");
           });
+          tree.classList.remove("growing");
         }
+
+        // Paced by the CLOCK and not by a count of characters. Counting was
+        // what made the trunk arrive as one object: it is about fifty cells of
+        // three hundred, so at a fixed eight per frame it was over in a tenth
+        // of a second whatever the generator meant it to be. Against the clock
+        // the trunk gets the half of the animation the generator gave it, a big
+        // vault grows in the same time as a small one, and a machine that
+        // cannot keep up drops cells in bigger steps instead of taking longer.
+        var GROWTH = 2600;
+        var start = Date.now();
 
         // setInterval, not requestAnimationFrame: rAF does not fire in a
         // background tab, and a reader who opens the site in one - middle
         // click, a restored session - would come back to bare soil and watch
-        // the tree grow as if they had just arrived. And a timeout behind it,
-        // so that the one failure this can have (the interval never finishing)
-        // still ends with the whole tree on screen.
+        // the tree grow as if they had just arrived. Against the clock they get
+        // the finished tree instead, because the time passed while they were
+        // away. And a timeout behind it, so that the one failure this can have
+        // (the interval never finishing) still ends with the whole tree up.
         var at = 0;
         var timer = setInterval(function () {
-          for (var n = 0; n < 8 && at < cells.length; n++, at++) {
-            cells[at].classList.remove("off");
+          var reached = ((Date.now() - start) / GROWTH) * 1000;
+          while (at < cells.length && +cells[at].dataset.grow <= reached) {
+            cells[at++].classList.remove("off");
           }
-          if (at >= cells.length) clearInterval(timer);
-        }, 16);
+          if (at >= cells.length) {
+            clearInterval(timer);
+            // After the last characters have finished fading up, not with them.
+            setTimeout(done, 1000);
+          }
+        }, 32);
         setTimeout(function () {
           clearInterval(timer);
           done();
-        }, 6000);
+        }, GROWTH + 4000);
       })();
     </script>
 

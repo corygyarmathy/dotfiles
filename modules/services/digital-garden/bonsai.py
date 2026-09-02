@@ -59,14 +59,22 @@ plan's "taste pass" needs:
 Determinism is a requirement rather than a nicety. The builder skips a rebuild
 when the staging tree hashes the same as last time (see digital-garden.nix), so
 a tree that reseeded itself on every run would defeat that gate and rewrite the
-site hourly for no reason. Hence a fixed default seed and a PRNG written out
-here in full: `random` is deterministic for a given CPython but is not promised
-to be stable across versions, and this has to draw the same tree in five years'
-time.
+site hourly for no reason. That is a requirement to be a FUNCTION OF THE VAULT,
+though, and it was met for a while by the weaker thing of being a constant - so
+every build drew the same tree, and the garden could only widen it. The seed is
+now a hash of the published set (`seed_from`), which satisfies the gate exactly
+as a constant did and also makes the tree what it claims to be: write a note
+and you get a different tree, not the old one with one more clump on it. Change
+nothing and it is the same tree it was this morning, forever.
+
+Hence also a PRNG written out here in full: `random` is deterministic for a
+given CPython but is not promised to be stable across versions, and this has to
+draw the same tree from the same vault in five years' time.
 """
 
 import argparse
 import collections
+import hashlib
 import html
 import math
 import sys
@@ -84,8 +92,13 @@ import sys
 # the second one carries the colour.
 Note = collections.namedtuple("Note", "title url words stage topic hue")
 
-# The default seed. Any value draws a tree - that is the point of the rewrite -
-# so this is no longer load-bearing the way it was when only some seeds worked.
+# What `grow` falls back to when it is called without a seed. Nothing on the
+# site takes it: `render` seeds every tree from the notes themselves, which is
+# what makes the tree a picture of THIS vault rather than a fixed drawing (see
+# `seed_from`). It is here so that `grow` can be called on its own - from a
+# test, or from a session spent looking at trees - without inventing a number.
+# Any value draws a tree, which is the point of the outline-first rewrite, so
+# this is not load-bearing the way it was when only some seeds worked.
 DEFAULT_SEED = 7
 
 # A character cell is about this many times taller than it is wide, once the
@@ -160,6 +173,36 @@ STAGE_WEIGHT = {"seedling": 6, "sapling": 12, "evergreen": 20}
 TRUNK_CHARS = "|:;"
 BRANCH_CHARS = "~-="
 
+# ---- the growth timeline ---------------------------------------------------
+#
+# Every cell carries WHEN it grew, as a number between 0 and 1, and the page
+# reveals the tree in that order. This is the one thing on the tree that is not
+# geometry, and it is worth stating why it is computed rather than counted.
+#
+# It used to be a counter bumped once per character placed, so the order the
+# reader saw was the order this file happens to draw in - the whole trunk, then
+# the crown scanned bottom-to-top like a raster, then the pot. Three of those
+# four facts are wrong about a tree. The trunk arrived as one object because it
+# is 50 cells out of 300 and the reveal was paced by COUNT; the foliage swept in
+# rows because that is the order the crown's cells are enumerated in, not the
+# order foliage opens in; and the pot came last, when a pot is the one thing on
+# the picture that was there before the tree.
+#
+# So the times below are a botanical timeline instead. The pot is set down, the
+# trunk rises out of it, each branch leaves the trunk AT THE MOMENT the trunk
+# passes its height, and each pad opens outward from the branch that carries
+# it. The lower pads are therefore in leaf while the apex is still rising,
+# which is the thing that makes it read as growth rather than as a wipe.
+#
+# The numbers are a proportion of the whole animation and not seconds - how
+# long the whole thing takes is the page's business, and baseof.html sets it -
+# so what these fix is the SHAPE of the growth, which is the part this file
+# knows about.
+POT_SET = 0.09  # the pot and its soil, sweeping out from under the trunk
+TRUNK_FROM, TRUNK_TO = 0.06, 0.55  # the trunk, rising base to apex
+BRANCH_SPAN = 0.10  # a branch reaching out, once the trunk has passed it
+LEAF_SPAN = 0.42  # a pad opening, from the branch's end outward
+
 
 def mulberry32(seed):
     """A 32-bit PRNG, written out so the tree is stable forever.
@@ -197,8 +240,11 @@ class Cell:
         # "lit", "mid" or "shade" - where this cell sits relative to the one
         # light source over the tree. The stylesheet turns it into a lightness.
         self.shade = shade
-        # Position in the order the tree was drawn, which is the order the
-        # growth animation reveals it in.
+        # When this cell grew, 0 at the start of the animation and 1 at the
+        # end - see the growth timeline above. NOT the order it was drawn in:
+        # the order this file draws in is chosen so that foliage can cover the
+        # wood it hangs from, which is a fact about painting and not about
+        # growing. `to_html` rescales these onto 0..1000 for the markup.
         self.grew = grew
 
 
@@ -228,6 +274,15 @@ def grow(notes, seed=DEFAULT_SEED):
         return chars[int(rng() * len(chars))]
 
     count = len(notes)
+    # An empty garden, and not a hypothetical one: publish-filter.py writes the
+    # tree unconditionally so that unpublishing everything leaves an empty
+    # plate rather than last build's tree, which is exactly the path that
+    # reaches this. Everything below divides by the crown's radius, and the
+    # crown of a garden with nothing in it has a radius of zero - so this used
+    # to take the whole build down with a ZeroDivisionError.
+    if not count:
+        return Tree([], 0, 0)
+
     pads = max(MIN_PADS, min(MAX_PADS, round(math.sqrt(count) * PAD_A)))
 
     # ---- how big the crown is ---------------------------------------------
@@ -467,10 +522,8 @@ def grow(notes, seed=DEFAULT_SEED):
     oy = height - 4
 
     grid = [[None] * width for _ in range(height)]
-    drawn = 0
 
-    def place(x, y, char, kind, note=None, shade="mid"):
-        nonlocal drawn
+    def place(x, y, char, kind, note=None, shade="mid", at=0.0):
         col, row = round(x) + ox, oy - round(y)
         # Only the pot may be drawn below the soil line; nothing that grew may.
         floor = height - 1 if kind in ("pot", "soil") else oy
@@ -484,9 +537,13 @@ def grow(notes, seed=DEFAULT_SEED):
         # can ever hide another.
         if held is not None and not (kind == "leaf" and held.kind == "wood"):
             return False
-        grid[row][col] = Cell(char, kind, note, shade, drawn)
-        drawn += 1
+        grid[row][col] = Cell(char, kind, note, shade, at)
         return True
+
+    def trunk_time(y):
+        """When the trunk's growing tip passes height `y`."""
+        reached = max(0.0, min(1.0, y / trunk_h))
+        return TRUNK_FROM + (TRUNK_TO - TRUNK_FROM) * reached
 
     # ---- the wood ---------------------------------------------------------
     # Drawn before the foliage, so the structure is never buried by it. The
@@ -499,6 +556,15 @@ def grow(notes, seed=DEFAULT_SEED):
         y, x = t * trunk_h, trunk_x(t)
         dx = 0.0 if previous is None else x - previous
         previous = x
+        # The soil row takes the FIRST step and no other. Steps are about
+        # four tenths of a row apart, so two of them land on the ground, and
+        # the second one carries the lean: on a trunk with any movement in it
+        # the base came out four cells wide with a `\` or a `/` hanging off one
+        # side, and the root flare below then met that slash point-to-point and
+        # read as a notch cut into the trunk rather than as a foot. A trunk
+        # does not lean where it enters the ground.
+        if step and round(y) == 0:
+            continue
         thick = 3 if t < 0.16 else (2 if t < 0.55 else 1)
         for k in range(thick):
             off = k - (thick - 1) / 2
@@ -514,20 +580,70 @@ def grow(notes, seed=DEFAULT_SEED):
                 else:
                     char = "|" if rng() > 0.3 else pick(TRUNK_CHARS)
                 shade = "mid"
-            place(x + off, y, char, "wood", shade=shade)
+            place(x + off, y, char, "wood", shade=shade, at=trunk_time(y))
+
+    # The nebari - the root flare where the trunk meets the soil. A bonsai is
+    # judged on it before it is judged on anything else, and the reason is
+    # visible at this resolution: a trunk that meets the soil as a straight
+    # column of three cells reads as a pole stuck in a pot, and two cells of
+    # spread either side is the whole difference between that and a tree that
+    # is standing on something. `__/|||\__`, in wood rather than in the soil's
+    # grey, so the roots and the ground they enter are two different things.
+    #
+    # First in time as well as lowest on the picture: a tree roots before it
+    # rises, and starting the trunk's climb from a base that is already spread
+    # is what stops the first frames looking like a line being drawn.
+    #
+    # Measured off the trunk that was actually drawn rather than off
+    # `trunk_x(0)`, and that is not fussiness. A trunk with a lean puts two of
+    # its steps on the soil row, so its base is three cells wide on one side
+    # and four on the other, and a flare starting a fixed distance from the
+    # centre line began INSIDE the wood on the leaning side - where `place`
+    # refused it, leaving one shoulder flared and the other cut square. The
+    # only reliable answer to "where does the wood end" is to look.
+    # `or [ox]` so a trunk whose base fell off the canvas flares from the
+    # origin instead of taking the build down on `min(())`. The canvas is sized
+    # to hold the pot and the pot is always wider than the trunk's lean, so
+    # this cannot happen today - but the empty-garden guard above was also a
+    # thing that could not happen, and it was a ZeroDivisionError in the build.
+    roots = [col for col, cell in enumerate(grid[oy]) if cell is not None] or [ox]
+    for side, edge in ((-1, min(roots)), (1, max(roots))):
+        # Not symmetric, and not seeded to be: a flare that matches itself
+        # across the trunk reads as a drawn bracket. Each side gets its own
+        # draw, the way each side of a real nebari got its own roots.
+        for k in range(1, 2 + int(rng() * 3)):
+            place(
+                edge + side * k - ox,
+                0,
+                ("/" if side < 0 else "\\") if k == 1 else "_",
+                "wood",
+                shade="lit" if side < 0 else "shade",
+                at=TRUNK_FROM * k / 4,
+            )
 
     # A branch out to each pad, so the wood visibly holds the foliage up
     # instead of the crown floating over a bare trunk. Most of each branch ends
     # up under the pad it carries; what shows is the length between the trunk
     # and the plate, which is the part that matters.
+    #
+    # Each branch also records WHEN it finished and WHERE it ended, because
+    # those two are what the foliage's timing hangs off: a pad opens from the
+    # end of the branch carrying it, at the moment that branch arrives.
+    pad_ready, pad_anchor = {}, {}
     for i, (px, py) in enumerate(centres):
         if i == pads - 1:
+            # The apex pad sits on the trunk's own top, so it has no branch and
+            # opens the moment the trunk tops out. It is the last thing on the
+            # tree to leaf, which is what a leader is.
+            pad_ready[i] = trunk_time(trunk_h)
+            pad_anchor[i] = (trunk_x(1.0), trunk_h)
             continue
         side = 1 if px > crown_x else -1
         from_y = min(py, trunk_h * 0.92)
         from_x = trunk_x(from_y / trunk_h)
         to_x = px - side * 1.5
         run = max(2, int(abs(to_x - from_x)))
+        leaves_at = trunk_time(from_y)
         for step in range(1, run + 1):
             u = step / run
             # A trained branch leaves the trunk level, dips, and lifts into its
@@ -540,7 +656,10 @@ def grow(notes, seed=DEFAULT_SEED):
                 "_" if rng() > 0.5 else pick(BRANCH_CHARS),
                 "wood",
                 shade="lit" if side < 0 else "shade",
+                at=leaves_at + BRANCH_SPAN * u,
             )
+        pad_ready[i] = leaves_at + BRANCH_SPAN
+        pad_anchor[i] = (to_x, py - 0.5)
 
     # ---- the foliage ------------------------------------------------------
     # One light source, from the upper left, read off the cell's place in the
@@ -548,15 +667,34 @@ def grow(notes, seed=DEFAULT_SEED):
     # seven separately lit blobs; one source over the whole tree is what makes
     # the shading read as the form of a single mass.
     light_x, light_y = -0.5, 0.87
+
+    # A pad opens OUTWARD from the branch that carries it, over the same span
+    # whatever size it is - so a big pad opens faster per cell than a small
+    # one, which is what makes the crown fill rather than creep. The distance
+    # is normalised per pad for exactly that reason.
+    def reach(which, dx, dy):
+        ax, ay = pad_anchor[which]
+        return math.hypot((crown_x + dx - ax) / ASPECT, crown_y + dy - ay)
+
+    deepest = collections.defaultdict(float)
+    for dx, dy, which, _ in foliage:
+        deepest[which] = max(deepest[which], reach(which, dx, dy))
+
     on_tree = set()
-    for dx, dy, _, _ in foliage:
+    for dx, dy, which, _ in foliage:
         note = owner.get((dx, dy))
         if note is None:
             continue
         light = (dx / crown_w) * light_x + (dy / crown_h) * light_y + jit(0.30)
         shade = "lit" if light > 0.22 else ("shade" if light < -0.22 else "mid")
         char = pick(LEAF_CHARS[notes[note].stage])
-        if place(crown_x + dx, crown_y + dy, char, "leaf", note, shade):
+        # The jitter is what stops the opening edge being a clean arc sweeping
+        # across the pad - the same reason the crown's outline is perturbed by
+        # angle rather than left as an ellipse.
+        opened = pad_ready[which] + LEAF_SPAN * (
+            reach(which, dx, dy) / (deepest[which] or 1) + jit(0.07)
+        )
+        if place(crown_x + dx, crown_y + dy, char, "leaf", note, shade, at=opened):
             on_tree.add(note)
 
     # Every note must be on the tree - that is the premise of the whole
@@ -567,10 +705,11 @@ def grow(notes, seed=DEFAULT_SEED):
         char = pick(LEAF_CHARS[notes[index].stage])
         found = False
         px, py = centres[index % pads]
+        last = pad_ready[index % pads] + LEAF_SPAN
         for radius in range(1, max(width, height)):
             for dy in range(-radius, radius + 1):
                 for dx in range(-radius * 2, radius * 2 + 1):
-                    if place(px + dx, py + dy, char, "leaf", index):
+                    if place(px + dx, py + dy, char, "leaf", index, at=last):
                         found = True
                         break
                 if found:
@@ -587,17 +726,26 @@ def grow(notes, seed=DEFAULT_SEED):
     #
     # Proportioned the way a bonsai pot is - about two thirds of the crown's
     # spread, and shallow. A pot as wide as the tree reads as a tub.
+    #
+    # FIRST in the growth timeline, and it is the correction that matters most
+    # to how the picture reads: the pot used to be revealed last, so the tree
+    # grew in mid-air and the thing it stands in arrived afterwards. A pot is
+    # the one object here that was not grown. It is set down, from under the
+    # trunk outward, and everything else happens in it.
+    def set_down(i):
+        return POT_SET * abs(i) / (pot_half + 1)
+
     for i in range(-pot_half, pot_half + 1):
-        place(pot_x + i, 0, "." if i % 4 == 0 else "_", "soil")
-    place(pot_x - pot_half - 1, 0, "\\", "pot")
-    place(pot_x + pot_half + 1, 0, "/", "pot")
+        place(pot_x + i, 0, "." if i % 4 == 0 else "_", "soil", at=set_down(i))
+    place(pot_x - pot_half - 1, 0, "\\", "pot", at=POT_SET)
+    place(pot_x + pot_half + 1, 0, "/", "pot", at=POT_SET)
     inner = pot_half - 1
     for i in range(-inner, inner + 1):
-        place(pot_x + i, -1, "_", "pot")
-    place(pot_x - inner - 1, -1, "\\", "pot")
-    place(pot_x + inner + 1, -1, "/", "pot")
+        place(pot_x + i, -1, "_", "pot", at=set_down(i))
+    place(pot_x - inner - 1, -1, "\\", "pot", at=POT_SET)
+    place(pot_x + inner + 1, -1, "/", "pot", at=POT_SET)
     for sign in (-1, 1):
-        place(pot_x + sign * (inner - 2), -2, "‾", "pot")
+        place(pot_x + sign * (inner - 2), -2, "‾", "pot", at=POT_SET)
 
     # The assertion the plan asks for. A tree that quietly drops a note is
     # worse than no tree: the whole claim of this feature is that it is a
@@ -658,6 +806,19 @@ def to_html(tree, notes):
     already there. The caption store below it is hidden from everyone - it is
     where the caption's words live, not something to read in document order.
     """
+    # The growth times are rescaled onto whole numbers from 0 to 1000 here
+    # rather than written out as the floats they are. Two reasons, and the
+    # second is the real one: an integer is a third of the bytes, and there is
+    # one of these per drawn character - but more importantly the page divides
+    # by 1000 and gets a fraction of the animation, so how long the tree takes
+    # to grow is a decision baseof.html makes and this file cannot accidentally
+    # take. Rescaled from the tree's OWN first and last cell, so every tree
+    # starts at 0 and finishes at 1000 whatever the timeline's constants add up
+    # to for its particular geometry.
+    times = [c.grew for row in tree.rows for c in row if c is not None]
+    first, last = (min(times), max(times)) if times else (0.0, 1.0)
+    span = (last - first) or 1.0
+
     lines = []
     for row in tree.rows:
         out = []
@@ -676,8 +837,9 @@ def to_html(tree, notes):
                 if note.hue:
                     classes += f" hue-{note.hue}"
             note_attr = "" if cell.note is None else f' data-note="{cell.note}"'
+            grew = round(1000 * (cell.grew - first) / span)
             out.append(
-                f'<span class="{classes}"{note_attr} data-grow="{cell.grew}">'
+                f'<span class="{classes}"{note_attr} data-grow="{grew}">'
                 f"{html.escape(cell.char)}</span>"
             )
         lines.append("".join(out))
@@ -723,8 +885,53 @@ def to_html(tree, notes):
     )
 
 
-def render(notes, seed=DEFAULT_SEED):
-    """Grow a tree from `notes` and return the markup for it."""
+def seed_from(notes):
+    """The seed a given set of notes draws itself with.
+
+    The tree used to be drawn from a fixed constant, so it was the same tree on
+    every build: the garden's SIZE moved it - a new note widened the crown and
+    took a share of the canopy - but its silhouette, its trunk's curve and its
+    pads were nailed down. That was the wrong reading of a real constraint. The
+    constraint is that the same vault must draw the same tree, because the
+    builder skips a rebuild when the staging tree hashes the same as last time
+    (see digital-garden.nix) and a tree that reseeded itself every hour would
+    rewrite the site for nothing. A constant satisfies that. So does a hash of
+    the garden, and a hash also does the thing the constant could not: it makes
+    the tree a FINGERPRINT of the vault rather than a fixed picture that a
+    counter happens to be pointed at.
+
+    So: write a note, and the tree you get is a different tree - a new trunk,
+    new lobes on the crown, new pads - not the old one with one more clump on
+    it. Change nothing, and it is the same tree it was this morning, forever.
+
+    Every field the tree can draw is in the hash, WORD COUNTS INCLUDED, which
+    is the one debatable line here: it means fixing a typo redraws the whole
+    tree. That is the intended reading of "a picture of the garden as it is" -
+    the picture is of this vault at this moment, and this vault is not the one
+    that had the typo. Dropping `words` from the fields below is the whole
+    change if that ever grates.
+
+    blake2b rather than `hash()`, which is salted per process for strings and
+    would draw a different tree on every build of the same vault - the exact
+    failure this function exists to avoid.
+    """
+    fields = "\n".join(
+        f"{n.title}\x1f{n.url}\x1f{n.words}\x1f{n.stage}\x1f{n.topic}\x1f{n.hue}"
+        for n in notes
+    )
+    digest = hashlib.blake2b(fields.encode("utf-8"), digest_size=4).digest()
+    return int.from_bytes(digest, "big")
+
+
+def render(notes, seed=None):
+    """Grow a tree from `notes` and return the markup for it.
+
+    With no seed, the notes seed themselves - see `seed_from`. A seed is still
+    accepted so that a particular tree can be pinned or replayed, which is what
+    `--seed` on the command line is for.
+    """
+    if seed is None:
+        seed = seed_from(notes)
     return to_html(grow(notes, seed), notes)
 
 
@@ -758,7 +965,13 @@ def _synthetic(count, seed):
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--notes", type=int, default=19, help="how many notes to grow")
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="pin the tree to one seed. Without it the notes seed themselves, "
+        "which is what the site does",
+    )
     parser.add_argument(
         "--seeds",
         type=int,
@@ -770,8 +983,13 @@ def main(argv):
     )
     args = parser.parse_args(argv[1:])
 
-    for seed in range(1, args.seeds + 1) if args.seeds else [args.seed]:
-        notes = _synthetic(args.notes, seed)
+    # `--seeds` varies the GARDEN and lets each one seed itself, which is the
+    # loop the taste pass wants: what varies on the site is the vault, and a
+    # run that held the notes still and turned the seed would be judging trees
+    # the site can never draw.
+    for vault in range(1, args.seeds + 1) if args.seeds else [args.seed or 0]:
+        notes = _synthetic(args.notes, vault)
+        seed = args.seed if args.seed is not None else seed_from(notes)
         tree = grow(notes, seed)
         if args.html:
             print(to_html(tree, notes), end="")

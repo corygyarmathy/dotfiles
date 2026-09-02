@@ -1931,11 +1931,45 @@ h4:hover > .heading-anchor,
 }
 
 /* Mid-growth. The characters are in the markup either way; this is what lets
- * the script put them on screen in the order the tree was drawn in, and it is
+ * the script put them on screen in the order the tree grew in, and it is
  * applied BY the script, so a reader with no JavaScript is never handed a tree
- * that something has to un-hide. */
+ * that something has to un-hide.
+ *
+ * `opacity`, not `visibility`, because a character that is on its way in is a
+ * different thing from one that is not there - and opacity is the half of that
+ * a transition can interpolate. `pointer-events` is the other half: an
+ * invisible cell is not something to point at, and under `visibility: hidden`
+ * that came for free. */
 .bonsai .off {
-  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Each character fades up as it grows rather than appearing, and each leaf
+ * arrives a shade lighter than it settles at. Both are transitions off the
+ * `.off` state above, so the script still only adds and removes one class.
+ *
+ * The pale arrival is the one that earns its line. New growth on a real tree
+ * IS lighter than the wood under it, and at this resolution - where a leaf is
+ * one character - a pad that opens pale and darkens into the canopy is the
+ * only cue that says the crown has depth rather than being a flat stencil that
+ * filled in. It costs nothing: the light tier is already computed by the same
+ * `color-mix` the three shading rules use, taken one step further toward white.
+ *
+ * Scoped to `.growing`, which the script takes off once the tree is up: the
+ * hover highlight is a pointer following the reader's hand and must not ease.
+ *
+ * The colour is slower than the opacity on purpose. Matched, the two read as
+ * one fade; separated, the character is fully there while it is still pale, so
+ * what the reader sees is a leaf settling rather than a leaf arriving twice. */
+.bonsai.growing span {
+  transition:
+    opacity 0.35s ease-out,
+    color 0.9s ease-out;
+}
+
+.bonsai.growing .off.leaf {
+  color: color-mix(in oklab, var(--base, var(--wood)) 45%, white);
 }
 
 /* Where the captions' words live until one is pointed at. Data, not content:
