@@ -29,7 +29,7 @@
       the answer. The value here is the light ground, matching what :root paints
       when no script has run.
     */}}
-    <meta name="theme-color" id="theme-color" content="#f9f6e1" />
+    <meta name="theme-color" id="theme-color" content="#f2ecbc" />
     {{ partial "social.html" . }}
     {{ with resources.Get "main.css" | fingerprint }}
       <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" />
@@ -89,7 +89,7 @@
           var meta = document.getElementById("theme-color");
           if (meta) {
             meta.content =
-              root.dataset.theme === "dark" ? "#1f1f28" : "#f9f6e1";
+              root.dataset.theme === "dark" ? "#1f1f28" : "#f2ecbc";
           }
         };
         window.__paintChrome();

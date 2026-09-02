@@ -1,11 +1,11 @@
 # Plan: theme and navigation for the digital garden
 
-Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Item 16, the callout icons, was taken and is done on 2026-08-31 — the first of the 2026-08-31 set, per the sequencing that lets a small dependency-free item fill a short session. Item 18, the bonsai, followed on the same day, in the two sessions it was scoped as: the generator is done and on the landing page, and the taste pass is done after it — it also took item 15's filter half, because the tree's foliage needs the topic before it can be coloured. Item 15, the growth marks, topic hue and link marks, was taken next and is done: the sprite, the link marks and the /notes/ entries, reading the topic the bonsai's note_topic already writes. Item 19, the home page, is done after that and is the last item that needed the tree. Item 17, the margin on every note, was taken next and is done on 2026-09-01, in two passes: a first cut that drew the section map as a proportional vertical strip, and a redesign after looking at it that put the map's size and its labels on separate axes — see the shipped note under item 17 for why the first shape could not be tuned into the second. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
+Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Item 16, the callout icons, was taken and is done on 2026-08-31 — the first of the 2026-08-31 set, per the sequencing that lets a small dependency-free item fill a short session. Item 18, the bonsai, followed on the same day, in the two sessions it was scoped as: the generator is done and on the landing page, and the taste pass is done after it — it also took item 15's filter half, because the tree's foliage needs the topic before it can be coloured. Item 15, the growth marks, topic hue and link marks, was taken next and is done: the sprite, the link marks and the /notes/ entries, reading the topic the bonsai's note_topic already writes. Item 19, the home page, is done after that and is the last item that needed the tree. Item 17, the margin on every note, was taken next and is done on 2026-09-01, in two passes: a first cut that drew the section map as a proportional vertical strip, and a redesign after looking at it that put the map's size and its labels on separate axes — see the shipped note under item 17 for why the first shape could not be tuned into the second. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. Item 2's light ground was reversed on 2026-09-02 — the lightening it shipped with is gone and the light theme is Lotus as Kanagawa specifies it; see the reversal note under item 2. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
 
 | #   | Item                                | Size   | Depends on | Status      |
 | --- | ----------------------------------- | ------ | ---------- | ----------- |
 | 1   | Rendering fixture + screenshot loop | small  | -          | **done** 2026-08-27 |
-| 2   | Kanagawa palette                    | medium | 1          | **done** 2026-08-27 |
+| 2   | Kanagawa palette                    | medium | 1          | **done** 2026-08-27; light ground un-lightened 2026-09-02 |
 | 3   | An index of everything published    | small  | -          | **done** 2026-08-30 |
 | 4   | Right-hand rail: contents, backlinks| medium | 1          | **done** 2026-08-27 |
 | 5   | Link and image treatment            | small  | 2          | **done** 2026-08-27; the image mat reverted the same day |
@@ -45,7 +45,7 @@ The 2026-08-27 decisions below all still stand. The three that were touched are 
 
 Taken against the rendered comparisons rather than the swatches, which is the point of item 1 existing before item 2.
 
-- **The light theme is Lotus, lightened.** `#f2ecbc` mixed 45% toward white, `#f9f6e1`, with the surface, border and code-well tokens lightened to match. Option 1 of the three below. Lotus as specified is out: rendered at full width it is a buttery yellow that the Lighting notes' white-background diagrams have to fight.
+- **The light theme is Lotus, lightened.** `#f2ecbc` mixed 45% toward white, `#f9f6e1`, with the surface, border and code-well tokens lightened to match. Option 1 of the three below. Lotus as specified is out: rendered at full width it is a buttery yellow that the Lighting notes' white-background diagrams have to fight. **Reversed on 2026-09-02, on the rendered pages** — option 2 is taken and the light grounds are Lotus's own. See the reversal note under item 2.
 - **Headings stay neutral.** `fujiWhite` in dark, `lotusInk2` in light. No `carpYellow`.
 - **One hue per role, per the official scheme.** The first pass spent `--accent` (`crystalBlue`/`lotusBlue4`) everywhere that wanted emphasis, which read as a wall of blue across the masthead, every link, the default callout and the rail's "you are here". The official `themes.lua` never collapses roles like that — `fun`, `statement`, `diag.info` and visual selection each have their own hue, consistently in Wave and Lotus. So `--accent` was withdrawn to the roles the scheme gives it and the others were reassigned, keeping one hue per role in both themes (details below). This is the opposite of "fruit salad": fruit salad is arbitrary colouring, and this is systematic.**
 
@@ -113,28 +113,45 @@ Proposed mapping:
 
 | Role        | Wave (dark)             | Lotus (light)                 |
 | ----------- | ----------------------- | ----------------------------- |
-| `--bg`      | `#1F1F28` sumiInk3      | `#f9f6e1` lotusWhite3, lightened |
-| `--surface` | `#2A2A37` sumiInk4      | lotusWhite2, lightened        |
-| `--border`  | `#363646` sumiInk5      | lotusWhite0, lightened        |
+| `--bg`      | `#1F1F28` sumiInk3      | `#f2ecbc` lotusWhite3         |
+| `--surface` | `#2A2A37` sumiInk4      | `#e5ddb0` lotusWhite2         |
+| `--border`  | `#363646` sumiInk5      | `#d5cea3` lotusWhite0         |
 | `--muted`   | `#727169` fujiGray      | `#716e61` lotusGray2          |
 | `--text`    | `#DCD7BA` fujiWhite     | `#545464` lotusInk1           |
 | `--strong`  | `#DCD7BA` fujiWhite     | `#43436c` lotusInk2           |
 | `--accent`  | `#7E9CD8` crystalBlue   | `#4d699b` lotusBlue4          |
-| `--code-bg` | `#16161D` sumiInk0      | lotusWhite1, lightened        |
+| `--code-bg` | `#16161D` sumiInk0      | `#dcd5ac` lotusWhite1         |
 
 Callouts map one-for-one onto Kanagawa's semantic hues — crystalBlue for note, waveAqua2 for abstract, springGreen for tip, oniViolet for important, carpYellow for question, roninYellow for warning, waveRed for failure, fujiGray for quote — with the Lotus counterpart in each `light-dark()` pair. `==highlight==` becomes winterYellow / lotusYellow4, and `::selection` becomes waveBlue2 / lotusBlue1, which the site does not currently style at all.
 
-This measurably improves the dimmest text on the site. `--muted` carries the dateline and the backlink theses, and today it is `#b8b8b8` on `#faf8f8` — a contrast ratio of **1.87**, which is not a legibility judgement, it is illegible. Lotus's lotusGray2 gives 4.70 on the lightened cream. In dark it goes from 3.05 to 3.33. Body text stays comfortably AAA in both.
+This measurably improves the dimmest text on the site. `--muted` carries the dateline and the backlink theses, and today it is `#b8b8b8` on `#faf8f8` — a contrast ratio of **1.87**, which is not a legibility judgement, it is illegible. Lotus's lotusGray2 gives 4.70 on the lightened cream, and 4.26 on Lotus's own ground once the lightening is reversed (see below). In dark it goes from 3.05 to 3.33. Body text stays comfortably AAA in both.
 
-### The open question, decided 2026-08-27 — option 1
+### The open question, decided 2026-08-27 — option 1, reversed 2026-09-02 to option 2
 
 Lotus's own background is `#f2ecbc`. Inside a Neovim window that is a warm cream. Across a full browser page at 1440px it is a **buttery yellow**, and it competes with the white-background diagrams the Lighting notes are full of. Rendered, it is a much bigger change than the dark side is.
 
-Three ways out, in order of preference. **Option 1 was taken**; the other two are kept because the reasoning against them is the useful part.
+Three ways out, in order of preference. **Option 1 was taken and then reversed**; option 2 is what ships. All three are kept because the reasoning is the useful part, and because the reversal turns on which of them was actually being compared.
 
 1. **Lotus, lightened.** `#f2ecbc` mixed 45% toward white gives `#f9f6e1` — warm paper, unmistakably in the Kanagawa family, calm at full width. Contrast improves across the board. Rendered, this is the one that looks right.
 2. **Lotus as specified.** Authentic, and a strong aesthetic commitment.
 3. **Dark only.** Kanagawa Wave for dark, keep the near-white light theme. Defensible — Wave is what is actually used — but it leaves two unrelated palettes in one stylesheet, and it leaves `--muted` at 1.87.
+
+### The reversal, 2026-09-02
+
+Option 1 shipped and was wrong, and the way it was wrong is worth more than the colour is. The lightening was not applied to the background; it was applied to **all four grounds**, because they had to stay a family. So every surface this design layers on the page — the callout tints, the code well, the border rule under the masthead, the tint behind inline code — was lightened along with the page it was meant to sit on, and the separations went with it: `--surface` ended 1.07:1 from `--bg` and the code well 1.13:1. A well 1.13:1 from the page it is sunk into is not a well. What that renders as is a page with no depth in it at all, and the depth is most of what the light theme had.
+
+The second thing is about the hue rather than the layering. What survives mixing a yellow 45% toward white is its green edge, so `#f9f6e1` reads as a faint green cast rather than as warm paper — which is how it was reported, and it is visible in the two screenshots side by side. The three grounds derived from it read greener still, because they carry the same cast at lower lightness.
+
+**WCAG pointed the wrong way for the whole of that.** The lightened ground beats Lotus against every single foreground in the stylesheet — `--text` 6.82 against 6.19, `--strong` 8.55 against 7.75, `--muted` 4.70 against 4.26 — and it still looked worse, at a glance, to the person reading it. That is not a failure of the numbers; it is a failure to measure the right pairs. The ratios were all computed for text on a ground, and nothing was measuring ground on ground, which is where the whole of this defect lived. Going the other way, the same three separations become 1.14, 1.24 and 1.33 — still small numbers, and the difference between a surface and no surface.
+
+What it costs, recorded honestly, because the 2026-08-27 objection was not wrong about anything except which cost was larger:
+
+- **Every foreground loses about a tenth of its contrast**, since the ground is darker and every ink on it is a Lotus ink. Body text is 6.19 on the page, 5.41 on `--surface`, 5.00 in the code well; headings are 7.75. All comfortably AA, body text still AAA on the page.
+- **`--muted` is 4.26 on the page, under the 4.5 floor** this document set for it under item 11, and it stays at lotusGray2 anyway. There is no step down inside Lotus: lotusGray2 is the darkest grey the palette has short of its two inks, one of which is `--text` itself, so the only way to 4.5 is a derived colour — the same class of departure the grounds have just come back from, and paying it to buy 0.24 is the wrong trade for a palette whose stated property is that every hex is traceable to a pinned `colors.lua`. The floor was in any case never met everywhere it was claimed: on the lightened ground this same colour was 4.38 where it lands on `--surface` and 4.15 in the code well. Lotus's own comment colour, lotusGray3, is 2.93 and was never a candidate.
+- **`--brand` goes 4.12 to 3.73**, which settles the open question left under item 11 rather than reopening it. lotusPink cannot reach 4.5 on any Lotus ground, so the recommendation there — take the title to 1.2rem, where 19.2px semibold qualifies as large text and the allowance is 3:1 — is now the only option that both keeps the hue and passes. Still not blocked on.
+- **The white-background diagrams glare, exactly as predicted.** On the lightened ground a light SVG export was nearly invisible against the page; on Lotus it is a bright slab. Item 5 settled the answer on 2026-08-27 and it has not changed: export them with a transparent ground, which fixes it for both themes at once, and nothing in CSS can tell a diagram from a photograph. This is the one genuine regression here and it is worth taking, because it is one element type on some notes against the depth of every page.
+
+Three files, not one, and only the first is CSS. `layouts/baseof.html` names the light ground **twice** as a literal — the `theme-color` meta tag, and the script that repaints it on a theme toggle — so a stylesheet-only edit would have left every phone painting its address bar in the old cream against the new page. And the fixture's own token table in `_Slip_Box/Every Element.md` documents `--bg`'s value in prose, which is the fixture doing its job: it is the one page that would have shown the stale hex to a reader.
 
 A second, smaller decision, also taken: headings stay neutral (`fujiWhite` / `lotusInk2`) rather than taking a hue. The writeup has twenty-nine headings and a yellow one every screen is a lot.
 
@@ -341,7 +358,7 @@ Four things found by rendering the fixture and measuring it, none of which is vi
 
 **A wide table scrolled the page.** `.table-container { overflow-x: auto }` had been in the stylesheet since the single-column layout landed, and there was no render hook to emit the div, so the rule matched nothing. The container was never there. A table therefore had no box to scroll inside and did the only other thing available to it: at 390px the reference tables took the document to about twice the width of the phone, so every paragraph on the note could be dragged sideways and had to be dragged back. `width: 100%` on the table was the same bug seen from the other end — it guaranteed the table could never exceed the container, so `overflow-x` never had anything to scroll, and it guaranteed a table too wide for the measure was squeezed into it anyway. That is how a column of one-sentence theses came to be set one word per line at 1600px. The fixture has said _"a table wide enough to scroll inside its own container"_ since it was written, and it never did.
 
-**Wave's `--muted` was below the contrast floor for body text.** fujiGray `#727169` against sumiInk3 is 3.33:1, under the 4.5:1 that body text needs, and 2.88:1 where it lands on `--surface`. That would be defensible if `--muted` were decoration. It is not: it carries blockquote text, every sidenote at 0.8rem, the dateline, the backlink theses, the footer and every rail link that is not the current section. fujiGray is Kanagawa's _comment_ colour, and it was doing duty as reading text. Lotus needed nothing — lotusGray2 is 4.70:1.
+**Wave's `--muted` was below the contrast floor for body text.** fujiGray `#727169` against sumiInk3 is 3.33:1, under the 4.5:1 that body text needs, and 2.88:1 where it lands on `--surface`. That would be defensible if `--muted` were decoration. It is not: it carries blockquote text, every sidenote at 0.8rem, the dateline, the backlink theses, the footer and every rail link that is not the current section. fujiGray is Kanagawa's _comment_ colour, and it was doing duty as reading text. Lotus needed nothing — lotusGray2 is 4.70:1 on the lightened cream, and 4.26:1 on Lotus's own ground after the 2026-09-02 reversal under item 2, which decided to keep it there.
 
 **No tab icon and no `theme-color`.** The site declared neither, so every visit asked for `/favicon.ico` and got a 404, the tab showed the browser's blank-page glyph, and on a phone a sumiInk3 page sat under a white address bar.
 
@@ -375,7 +392,7 @@ This is the same line item 6 drew between its two assertions. A rule that is wri
 
 ### The open question, not decided
 
-Lotus's `--brand` is 4.12:1 on the masthead. At 1.1rem and weight 600 that is 17.6px semibold, just under the 18.66px where the large-text allowance of 3:1 starts, so the 4.5:1 floor applies and it misses.
+Lotus's `--brand` is 4.12:1 on the masthead. At 1.1rem and weight 600 that is 17.6px semibold, just under the 18.66px where the large-text allowance of 3:1 starts, so the 4.5:1 floor applies and it misses. **Still open, and 3.73:1 since the 2026-09-02 reversal under item 2**, which removes the second way out below: no Lotus hue that reads as pink reaches 4.5 on Lotus's own ground.
 
 Three ways out, and the choice is a taste decision rather than a measurement:
 

@@ -130,7 +130,7 @@ rendered in 84ms
 
 | Token       | Role                        | Light     | Dark      |
 | ----------- | --------------------------- | --------- | --------- |
-| `--bg`      | The page behind the text    | `#f9f6e1` | `#1F1F28` |
+| `--bg`      | The page behind the text    | `#f2ecbc` | `#1F1F28` |
 | `--text`    | The text on it              | `#545464` | `#DCD7BA` |
 | `--muted`   | Datelines, theses, captions | `#716e61` | `#727169` |
 | `--accent`  | Links and the masthead      | `#4d699b` | `#7E9CD8` |
