@@ -1,14 +1,19 @@
 {{/*
-  Search and theme, the site's two controls. A partial because they appear in
-  two places that are not the same element: the masthead on every interior
-  page, and the home page's composition, which is that page's masthead and is
-  laid out as one grid (see home.html, item 19). Duplicating the markup would
-  duplicate the ids the scripts in baseof.html bind to, so there is one copy
-  and only one of the two places renders per page.
+  Search and theme, the site's two controls, in the one masthead every page
+  now carries (item 21). It was a partial because the markup appeared in two
+  templates and the ids the scripts in baseof.html bind to must exist exactly
+  once per page; the home page's second header is gone, so it is now simply
+  where these two are written.
+
+  They are wrapped in a box of their own so that the pair travels together as
+  one item of the masthead's row, with its own tight gap between the glyphs.
+  Loose in the row they took the row's gap, which is the distance between the
+  name and the links and much too far apart for two icons that are one group.
 
   The controls are buttons, not boxes: a bordered field containing the word
   "Search" reads as an input you can type into, and this one opens a dialog.
 */}}
+<div class="masthead-tools">
 <button
   class="icon-button"
   id="search-open"
@@ -24,3 +29,4 @@
 <button class="icon-button" id="theme-toggle" aria-label="Change theme">
   {{ partial "icon-theme.html" . }}
 </button>
+</div>

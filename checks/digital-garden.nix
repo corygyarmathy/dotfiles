@@ -686,6 +686,16 @@
         # whole trick, so that is what is pinned.
         assert re.search(r'\.table-container\s*{[^}]*\blocal\b', css), \
             "the scroll shadow on a table container is gone"
+        # And room around it. The container had no margin at all, so a table
+        # took whatever the block after it happened to have above it - and a
+        # callout's is 1rem, the same 1rem that separates two paragraphs of one
+        # argument. A table and the callout under it therefore sat at the
+        # spacing of two sentences and read as ONE object with a tinted foot.
+        # The vault makes that adjacency common rather than rare: the markdown
+        # formatter these notes are written with closes the blank line around
+        # a table, so the two arrive with no authored separation to inherit.
+        assert re.search(r'\.table-container\s*{[^}]*\bmargin:', css), \
+            "a table has no room around it, so it merges with whatever follows"
         # And paper, which cannot scroll: the box must stop clipping there, or a
         # wide table prints with its right-hand columns cut off.
         assert re.search(r'@media print\s*{.*\.table-container\s*{[^}]*overflow-x:\s*visible',
@@ -2019,30 +2029,53 @@
         # computed stages instead of published ones would read zero here.
         assert int(counted.group(2)) >= 1, "the hand-written evergreen is not counted"
 
-    with subtest("the composition belongs to the home page alone"):
-        # Item 19: one site title per page. The home page carries it in a bar
-        # of its own - larger, and with the site's links beside it - and
-        # baseof.html drops the small one there; every interior page is the
-        # masthead it has always been, and carries no composition.
+    with subtest("one masthead, on every page, and the tree on the home page alone"):
+        # Item 21. The site had two headers - this bar on the interior pages
+        # and a composition of its own on the landing page, carrying the same
+        # name at twice the size - so the row at the top of the window changed
+        # height on the commonest journey the site has. There is now one bar,
+        # rendered by baseof.html for every page, and what is left on the home
+        # page is the picture.
+        #
+        # Still one site title per page. On the home page the name is that
+        # page's <h1>: the landing page's own title was removed with the
+        # composition, and the site's name is what the page is about, so it
+        # takes the heading rather than the page having none.
         home = served("/")
-        assert '<p class="nameplate-title">' in home, home[:400]
-        assert 'class="masthead-title"' not in home, (
+        assert '<h1 class="masthead-title">' in home, home[:400]
+        assert home.count("masthead-title") == 1, (
             "the home page carries the site title twice"
         )
-        # And the composition is outside the indexed article, for the reason
-        # the bonsai's caption store is: a search for the site would otherwise
+        assert not re.search(r'<article[^>]*>\s*<h1', home), (
+            "the landing page still opens with a title of its own"
+        )
+        # And the tree is outside the indexed article, for the reason the
+        # bonsai's caption store is: a search for the site would otherwise
         # return the home page for the words "notes evergreen growing".
-        assert home.index('class="nameplate"') < home.index("data-pagefind-body"), (
-            "the composition is inside the indexed article"
+        assert home.index('class="garden"') < home.index("data-pagefind-body"), (
+            "the tree is inside the indexed article"
         )
 
-        # The header's link list, and the placeholder rule. An entry with no
+        # The masthead's link list, and the placeholder rule. An entry with no
         # URL renders as muted text and not as a link, so a section can show
         # its shape before every destination exists - the alternative being a
         # 404 shipped on purpose. GitHub has a URL; Projects and Resume do not
         # yet.
-        links = re.search(r'<ul class="nameplate-links">(.*?)</ul>', home, re.S)
+        links = re.search(r'<ul class="masthead-links">(.*?)</ul>', home, re.S)
         assert links, "the header has no link list"
+        # THE LINKS DROP, THEY DO NOT WRAP. On the old landing page the list
+        # was allowed to fold onto a second line, which turned the bar into a
+        # block on a phone - at the one width where the header should cost
+        # least. The row is now fixed at one line and the links leave it one at
+        # a time, from the left, as the bar narrows. The question is asked of
+        # the BAR rather than of the viewport, because the bar is capped at the
+        # measure and it is the bar that runs out of room.
+        assert re.search(r'\.masthead\s*{[^}]*container-type:\s*inline-size', css), \
+            "the masthead is not a container, so the link steps cannot be measured on it"
+        assert re.search(r'@container[^{]*{\s*\.masthead-links', css), \
+            "nothing drops a link when the bar runs out of room"
+        assert not re.search(r'\.masthead-links\s*{[^}]*flex-wrap:\s*wrap', css), \
+            "the masthead's links can wrap onto a second line again"
         assert re.search(
             r'<a href="https://github\.com/[^"]+">GitHub</a>', links.group(1)
         ), links.group(1)
@@ -2062,33 +2095,39 @@
         )
 
         essay = served("/on-gates/")
-        assert 'class="masthead-title"' in essay, essay[:400]
+        # The same bar, with the name as a link rather than as a heading - an
+        # interior page's <h1> is the note's own title - and with the same
+        # links beside it, which is the half of item 21's blend that the
+        # interior pages gained.
+        assert '<a class="masthead-title"' in essay, essay[:400]
+        assert '<h1 class="masthead-title">' not in essay, (
+            "an interior page took the site's name as its heading"
+        )
+        assert re.search(r'<ul class="masthead-links">.*?GitHub', essay, re.S), (
+            "an interior page's masthead carries no links"
+        )
         # The bonsai is matched on its element rather than on the word: the
         # script that grows it is inlined on every page and names the plate it
         # looks for, and finding nothing is how it stays off an essay.
-        for stray in ['class="nameplate"', 'class="colophon"', 'class="bonsai-plate"']:
+        for stray in ['class="garden"', 'class="colophon"', 'class="bonsai-plate"']:
             assert stray not in essay, f"an interior page rendered {stray}"
 
-    with subtest("the home page's header is anchored to the page's own grid"):
-        # The header used to share a CENTRE with the page and not a single
-        # EDGE: at 1440px every interior masthead's rule ran from 400px to
-        # 1040px, exactly the article column, and the nameplate ran from 305px
-        # to 1135px. Nothing on the page lined up with either of its ends, and
-        # a band that lines up with nothing reads as floating over the page
-        # rather than as part of it. That is a geometry fault, invisible to a
-        # grep and obvious in a screenshot, so it is measured here.
+    with subtest("the home page's header and tree are anchored to the page's own grid"):
+        # The home page's header used to share a CENTRE with the page and not a
+        # single EDGE: at 1440px every interior masthead's rule ran from 400px
+        # to 1040px, exactly the article column, and the landing page's ran
+        # from 305px to 1135px. Nothing on the page lined up with either of its
+        # ends, and a band that lines up with nothing reads as floating over
+        # the page rather than as part of it. That is a geometry fault,
+        # invisible to a grep and obvious in a screenshot, so it is measured
+        # here.
         #
-        # The first fix anchored the left end to the prose and the right end
-        # to the wide grid's right edge, and it was half right. The home page
-        # carries no sidenotes, so nothing on it ever reaches that edge: the
-        # header closed 288px past the last character of every paragraph
-        # below it, on a line the page never draws. Anchored to an empty
-        # column it read as hanging off the page instead of floating over it.
-        #
-        # So: BOTH ends on the article column, which is the span every
-        # interior page's masthead rule already has. The name sits directly
-        # above the first line of prose and the rule under the header closes
-        # where every line of prose closes.
+        # It is now the same masthead every page carries (item 21), which no
+        # longer needs a rule of its own to reach those edges: `max-width:
+        # var(--measure); margin-inline: auto` reduces to the article column's
+        # own offset out here. That is arithmetic rather than a coincidence,
+        # and this is what pins it - along with the tree beneath, which is held
+        # to the same two lines by the same declaration.
         machine.succeed(
             "mkdir -p /tmp/np && "
             "cp /var/lib/digital-garden/public/index.html /tmp/np/page.html && "
@@ -2104,8 +2143,8 @@
             "}\n"
             'var marker = document.createElement("div");\n'
             'marker.id = "NP-MEAS";\n'
-            'marker.textContent = "@@" + [box(".nameplate"), box(".layout > article"),\n'
-            '  box(".layout")].join("|") + "@@";\n'
+            'marker.textContent = "@@" + [box(".masthead"), box(".layout > article"),\n'
+            '  box(".layout"), box(".garden")].join("|") + "@@";\n'
             'document.body.appendChild(marker);\n'
             "PROBE"
         )
@@ -2129,10 +2168,10 @@
             "--dump-dom file:///tmp/np/page.html 2>/dev/null"
         )
         m = re.search(r'id="NP-MEAS">@@(.*?)@@', dom, re.S)
-        assert m, "the nameplate probe never ran"
+        assert m, "the masthead probe never ran"
         parts = m.group(1).split("|")
         assert "MISSING" not in parts, f"the probe could not find a box: {parts}"
-        header, article, grid = [
+        header, article, grid, tree = [
             tuple(int(n) for n in part.split(",")) for part in parts
         ]
         # A pixel of slack, because a fractional layout rounds.
@@ -2142,11 +2181,113 @@
         assert abs(header[1] - article[1]) <= 1, (
             f"the header does not end on the prose's right edge: {header} vs {article}"
         )
-        # And the page is genuinely in its wide layout, so that the two
+        # The tree under it spans the same column, so the picture begins and
+        # ends where every line of prose begins and ends.
+        assert abs(tree[0] - article[0]) <= 1 and abs(tree[1] - article[1]) <= 1, (
+            f"the tree does not span the prose column: {tree} vs {article}"
+        )
+        # And the page is genuinely in its wide layout, so that the three
         # assertions above are about the anchored header and not about a
         # narrow page where everything is one centred column anyway.
         assert grid[1] - article[1] > 100, (
             f"the page is not in its wide layout: article {article}, grid {grid}"
+        )
+
+    with subtest("the masthead drops a link before it cuts the site's name"):
+        # The name is the one item in the bar that can be squeezed, so the
+        # order the bar gives way in is a property with a wrong answer: a
+        # reader at 430px saw "Cory Gyarma..." with three links beside it,
+        # which is the site's identity cut to keep its chrome. That shipped,
+        # from container steps measured off a screenshot rather than off the
+        # bar - the row needs 396.5px to hold two links and the second step
+        # was set at 384.
+        #
+        # A screenshot cannot hold this still: it is true or false at every
+        # width, and the failure lives in a forty-pixel window between two
+        # steps. So the bar is swept in a real browser instead. One page load
+        # measures a clone of the masthead inside a box of each width from
+        # 280 to 720px - the clone carries `.masthead`, so it is its own
+        # container and the @container steps resolve against the box - and
+        # reports, for each width, whether the name's text is wider than the
+        # box the name was given and whether the row overflows the bar.
+        #
+        # Both must be no, everywhere. Never cut says the links go first;
+        # never overflow says the answer to "no room" is not a bar hanging off
+        # the page, which is what a name that could not shrink at all would
+        # do. The step widths are reported so a failure says which one moved.
+        machine.succeed(
+            "mkdir -p /tmp/bar && "
+            "cp /var/lib/digital-garden/public/index.html /tmp/bar/page.html && "
+            "cp /var/lib/digital-garden/public/main.*.css /tmp/bar/"
+        )
+        machine.succeed(
+            "cat > /tmp/bar/sweep.js <<'SWEEP'\n"
+            'var bar = document.querySelector(".masthead");\n'
+            'var host = document.createElement("div");\n'
+            'host.style.cssText = "position:absolute;left:-9999px;top:0";\n'
+            "document.body.appendChild(host);\n"
+            "var rows = [];\n"
+            "for (var w = 280; w <= 720; w += 2) {\n"
+            '  var box = document.createElement("div");\n'
+            '  box.style.cssText = "width:" + w + "px";\n'
+            "  var clone = bar.cloneNode(true);\n"
+            "  clone.querySelectorAll('[id]').forEach(function (el) {\n"
+            '    el.removeAttribute("id");\n'
+            "  });\n"
+            "  box.appendChild(clone);\n"
+            "  host.appendChild(box);\n"
+            '  var t = clone.querySelector(".masthead-title");\n'
+            "  var links = Array.prototype.filter.call(\n"
+            "    clone.querySelectorAll('.masthead-links > li'),\n"
+            "    function (li) { return li.offsetParent !== null; }\n"
+            "  );\n"
+            "  rows.push([w, links.length, t.scrollWidth - t.clientWidth,\n"
+            '    clone.scrollWidth - clone.clientWidth].join(","));\n'
+            "  host.removeChild(box);\n"
+            "}\n"
+            'var marker = document.createElement("div");\n'
+            'marker.id = "BAR-SWEEP";\n'
+            'marker.textContent = "@@" + rows.join(";") + "@@";\n'
+            "document.body.appendChild(marker);\n"
+            "SWEEP"
+        )
+        machine.succeed(
+            "python3 - <<'PY'\n"
+            "import re\n"
+            'p = "/tmp/bar/page.html"\n'
+            "s = open(p).read()\n"
+            'sweep = open("/tmp/bar/sweep.js").read()\n'
+            'css = re.search(r"main\\.[0-9a-f]+\\.css", s)\n'
+            'assert css, "no fingerprinted stylesheet on the home page"\n'
+            's = re.sub(r\'href="/main\\.[0-9a-f]+\\.css"\', \'href="\' + css.group(0) + \'"\', s)\n'
+            's = s.replace("</body>", "<script>" + sweep + "</" + "script>" + "</body>", 1)\n'
+            'open(p, "w").write(s)\n'
+            "PY"
+        )
+        dom = machine.succeed(
+            "chromium --headless=new --no-sandbox --disable-gpu "
+            "--disable-dev-shm-usage --allow-file-access-from-files "
+            "--virtual-time-budget=30000 --window-size=1600,1200 "
+            "--dump-dom file:///tmp/bar/page.html 2>/dev/null"
+        )
+        m = re.search(r'id="BAR-SWEEP">@@(.*?)@@', dom, re.S)
+        assert m, "the masthead sweep never ran"
+        cut, overflow, steps, previous = [], [], [], None
+        for row in m.group(1).split(";"):
+            width, shown, clipped, over = (int(n) for n in row.split(","))
+            if clipped > 0:
+                cut.append((width, shown, clipped))
+            if over > 0:
+                overflow.append((width, shown, over))
+            if previous is not None and shown != previous:
+                steps.append((width, previous, shown))
+            previous = shown
+        assert steps, "no width in the sweep changes how many links are shown"
+        assert not cut, (
+            f"the name is cut while links are still shown: {cut[:5]}; steps {steps}"
+        )
+        assert not overflow, (
+            f"the bar overflows rather than dropping a link: {overflow[:5]}; steps {steps}"
         )
 
     with subtest("a renamed note keeps its publication date"):
@@ -2192,5 +2333,27 @@
         assert "on-gates" not in ledger, "the old key lingered after the rename"
         page = served("/on-gates-renamed")
         assert 'datetime="2001-01-01"' in page, page[-400:]
+
+        # ONE DATE ON A NOTE, at the narrow width (item 21). The seeding above
+        # makes this the fixture's only note whose edit date differs from its
+        # publication date, so it is the only place the rule can be seen: the
+        # line under the title carries the EDIT and drops the publication,
+        # because four facts and two dates are wider than a phone and the
+        # wrapped second line pushed the essay down by a whole row at exactly
+        # the width where vertical space is scarcest. The margin has a column
+        # to spend and still carries both.
+        line = re.search(r'<p class="dateline">(.*?)</p>', page, re.S)
+        assert line, "the renamed note has no dateline"
+        line = line.group(1)
+        assert "updated" in line, (
+            f"the note's dateline dropped the edit rather than the publication:\n{line}"
+        )
+        assert 'datetime="2001-01-01"' not in line, (
+            f"the note's dateline carries both dates and so can wrap:\n{line}"
+        )
+        facts = re.search(r'<dl class="margin-facts">(.*?)</dl>', page, re.S)
+        assert facts and 'datetime="2001-01-01"' in facts.group(1), (
+            "the margin lost the publication date"
+        )
   '';
 }

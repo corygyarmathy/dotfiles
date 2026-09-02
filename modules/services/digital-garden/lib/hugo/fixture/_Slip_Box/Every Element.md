@@ -150,6 +150,19 @@ rather than be cut into stacked fragments:
 | -------------------------------------------------------------------- | ----------- |
 | `https://example.invalid/a/very/long/path/that/never/breaks/anywhere` | It is long. |
 
+And a table with nothing between it and what follows, because the markdown
+formatter these notes are written with closes the blank line around a table.
+This is the case the spacing has to survive: the vault ships it, and with no
+margin of its own the table sat at paragraph distance from the callout under
+it and the two read as one object.
+
+| Supplier    | Unit   | Minimum |
+| ----------- | ------ | ------- |
+| Direct      | $18.40 | 500     |
+| Distributor | $24.10 | 1       |
+> [!warning] Read the minimum before the price
+> The direct price is the better one only at a volume this project does not have.
+
 ## An image
 
 Diagrams in the vault are frequently light-background scans and exports, which is the case worth looking at on a dark page:

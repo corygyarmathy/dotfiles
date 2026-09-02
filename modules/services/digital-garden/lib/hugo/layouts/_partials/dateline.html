@@ -25,15 +25,33 @@
 
   The last edit shows only when it is a different day — "published and
   modified on the same date" is noise on an essay.
+
+  ONE DATE ON A NOTE, NOT TWO. Where this line is a note's whole margin
+  (`facts`) and the note has been edited since it was published, the
+  publication date is dropped and only the edit is shown. That is item 21's
+  narrow-width rule and it is about the line fitting: four facts and two dates
+  are wider than a phone, so the line wrapped, and a wrapped second line under
+  the title pushes the essay down by a whole row at exactly the width where
+  vertical space is scarcest. Which of the two dates to cut is not a close
+  call — a reader arriving at a note wants to know how current it is, and the
+  edit date answers that while the publication date answers a question about
+  the note's history. The margin still carries both at the wide width, where
+  there is a column to carry them in.
+
+  The index keeps both. Its rows have two facts rather than four, so they fit,
+  and there the publication date is what orders the page.
 */}}
 {{ $page := .page }}
 {{ $facts := .facts }}
+{{ $updated := and (not $page.Lastmod.IsZero) (ne ($page.Lastmod.Format "2006-01-02") ($page.Date.Format "2006-01-02")) }}
 {{ if not $page.Date.IsZero }}
   <p class="dateline">
-    <span>
-      <time datetime="{{ $page.Date.Format "2006-01-02" }}">{{ $page.Date.Format "2 Jan 2006" }}</time>
-    </span>
-    {{ if and (not $page.Lastmod.IsZero) (ne ($page.Lastmod.Format "2006-01-02") ($page.Date.Format "2006-01-02")) }}
+    {{ if not (and $facts $updated) }}
+      <span>
+        <time datetime="{{ $page.Date.Format "2006-01-02" }}">{{ $page.Date.Format "2 Jan 2006" }}</time>
+      </span>
+    {{ end }}
+    {{ if $updated }}
       <span>
         updated
         <time datetime="{{ $page.Lastmod.Format "2006-01-02" }}">{{ $page.Lastmod.Format "2 Jan 2006" }}</time>

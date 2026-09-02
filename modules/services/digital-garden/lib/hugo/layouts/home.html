@@ -1,66 +1,41 @@
 {{ define "main" }}
   {{/*
-    The landing page, composed once (docs/plans/digital-garden-design.md,
-    item 19, and recomposed by its second pass). A masthead bar — the name,
-    the links and the tools on one line — and the tree under it, filling the
-    article column, with the garden counted beneath as the picture's label.
+    The landing page: the masthead every page carries (baseof.html), the tree
+    under it, and the hand-written table of contents under that.
 
-    The bar rather than a band with the name beside the tree: that version
-    gave the two equal columns, and only the tree filled one. Here the tree
-    has the whole measure and the name is a label on it, which is the order
-    the page's subject actually has.
-
-    This IS the page's masthead: baseof.html renders none here, because a site
-    title in two sizes on one page is two mastheads. Every interior page keeps
-    the masthead it has, and the tools are shared between the two so that the
-    ids their scripts bind to exist exactly once per page.
+    What used to be here was a composition of its own - the name at 2rem, the
+    links and the tools on a bar of its own, a rule under the whole thing - and
+    it is gone (item 21). It was the second of two headers on this site, and
+    the price of the second was that the row at the top of the page changed
+    height depending on which page you were on. The blend the two became is in
+    baseof.html; what is left here is the part that was never a header, which
+    is the picture.
 
     The tree (item 18) is grown by publish-filter.py and left in the staging
     tree as ready markup, which lib/hugo.nix moves into assets; all this
     template does is inline it. That is the whole reason the page ships no
-    generator and no library — the characters are already in the HTML by the
+    generator and no library - the characters are already in the HTML by the
     time it is served, and the only script involved reveals ones that are
     already there.
 
     `resources.Get` returns nothing when there is no tree, so a content tree
-    that came from somewhere other than the filter still renders a home page —
-    with the name and the colophon, which are read off the pages themselves.
+    that came from somewhere other than the filter still renders a home page -
+    with the masthead and the colophon, which are read off the pages
+    themselves.
 
     Outside <article>, deliberately. The article is what carries
     data-pagefind-body, and the tree's caption store holds the title of every
     note on the site - indexing it here would put the whole garden into the
     search results for the home page.
-  */}}
-  <header class="nameplate">
-    <div class="nameplate-tools">{{ partial "masthead-tools.html" . }}</div>
-    <div class="nameplate-id">
-      <p class="nameplate-title">{{ site.Title }}</p>
-      {{/*
-        The site's own sentence used to sit here, under the name. It is gone,
-        and nothing is lost: `description.html` still resolves it for <meta
-        name="description">, for the social card and for the feed, so the page
-        says the same thing to a reader's machine as it ever did. What it was
-        NOT is prose written for this composition - the comment that used to
-        sit here said as much - and the first paragraph of the body below says
-        the same thing properly, in the site's own voice.
 
-        What it cost was a line: the bar holds the name, the links and the
-        tools, and a sentence is not a thing a bar can hold.
-      */}}
-      {{/*
-        The site's links, from the same `footerLinks` the footer renders, so
-        that "where else to find me" is one list in the host's configuration
-        and not two that drift. Nothing is rendered when none are configured.
-      */}}
-      {{ with site.Params.footerLinks }}
-        <ul class="nameplate-links">
-          {{ range . }}<li>{{ partial "site-link.html" . }}</li>{{ end }}
-        </ul>
-      {{ end }}
-      {{ partial "colophon.html" . }}
-    </div>
+    No rule under it. There was one, closing the old header, and with the
+    header gone it was a line drawn between a picture and the prose that
+    describes it - which is exactly the pair a rule should not separate.
+  */}}
+  <div class="garden">
     {{ with resources.Get "bonsai.html" }}{{ .Content | safeHTML }}{{ end }}
-  </header>
+    {{ partial "colophon.html" . }}
+  </div>
 
   {{/*
     The landing page is a hand-written table of contents, not a generated list:
@@ -70,12 +45,15 @@
   {{/* Same wrapper as a note, with nothing in the margins to put there. The
        wide grid builds either way and the article is always its centre
        column, so the landing page's prose lands exactly where every note's
-       prose lands - which is the point of using the same wrapper. The
-       composition above is the one thing on this site that is wider than the
-       measure, and the prose beneath it is not. */}}
+       prose lands - which is the point of using the same wrapper. The tree
+       above is the one thing on this site that is wider than the measure, and
+       the prose beneath it is not.
+
+       No <h1>: the site's name in the masthead is this page's heading (item
+       20). The title that was here was a second name for the same page, and a
+       reader met it between the picture and the first sentence about it. */}}
   <div class="layout">
     <article data-pagefind-body>
-      <h1>{{ .Title }}</h1>
       {{ .Content }}
     </article>
   </div>
