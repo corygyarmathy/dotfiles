@@ -100,11 +100,11 @@
     <div class="page">
       {{/*
         Every page but the home page. The home page's masthead IS its
-        composition - the name at scale, the count, the tools and the tree in
-        one grid - so it renders its own in home.html (item 19) rather than
-        taking a small title here and a large one below, which would be two
-        mastheads on one page. The tools themselves are shared, so the ids the
-        scripts below bind to exist exactly once either way.
+        composition - the same bar as this one, carrying the site's links as
+        well, with the tree under it - so it renders its own in home.html
+        (item 19) rather than taking a title here and another below, which
+        would be two mastheads on one page. The tools themselves are shared,
+        so the ids the scripts below bind to exist exactly once either way.
       */}}
       {{ if not .IsHome }}
         <header class="masthead">
