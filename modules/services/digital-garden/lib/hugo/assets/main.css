@@ -14,17 +14,22 @@
  * fetched to render them. Each is commented with the name it has there, so a
  * value can be traced back without a colour picker.
  *
- * Two deliberate departures from Kanagawa as specified, both recorded in
- * docs/plans/digital-garden-design.md:
+ * One deliberate departure from Kanagawa as specified, recorded in
+ * docs/plans/digital-garden-design.md: headings take no hue. Kanagawa's own
+ * markdown treatment colours them, and the longest note here has twenty-nine;
+ * a coloured heading every screen is more page than it is emphasis.
  *
- *   Lotus's own background is #f2ecbc. In a Neovim window that is a warm
- *   cream; across a browser page at 1440px it is a buttery yellow that the
- *   light-background diagrams in these notes have to fight. The light grounds
- *   below are Lotus's, lightened toward white — warm paper, same family.
- *
- *   Headings take no hue. Kanagawa's own markdown treatment colours them, and
- *   the longest note here has twenty-nine; a coloured heading every screen is
- *   more page than it is emphasis.
+ * There was a second, and it is gone: the light grounds were Lotus's mixed 45%
+ * toward white, because Lotus at full browser width is a buttery yellow and a
+ * Neovim window is not a page. Reversed 2026-09-02, on the rendered pages. The
+ * lightening was applied to all four grounds, so the surfaces the design layers
+ * on the page — the callout tints, the code well, the border rule — were
+ * lightened along with it and every separation collapsed with it: --surface sat
+ * 1.07:1 from --bg and the code well 1.13:1, which is a page with no wells in
+ * it. And the tint that survives 45% lightening of a yellow reads green rather
+ * than warm. WCAG pointed the other way the whole time — the lightened ground
+ * beat Lotus against every foreground here — because the numbers measure the
+ * text-on-ground pairs and the fault was in the ground-on-ground ones.
  *
  * Fonts are the system stack, for headings as well as for body text. A
  * vendored serif for headings was built and then removed: the machinery was
@@ -35,12 +40,14 @@
  */
 
 :root {
-  /* Lotus. The three grounds are lotusWhite3/2/0 lightened toward white; the
-   * ink and the accent are Lotus's own. */
-  --bg: #f9f6e1;       /* lotusWhite3 #f2ecbc, lightened */
-  --surface: #f2eed8;  /* lotusWhite2 #e5ddb0, lightened */
-  --border: #e6e2c8;   /* lotusWhite0 #d5cea3, lightened */
-  --code-bg: #ece8d1;  /* lotusWhite1 #dcd5ac, lightened */
+  /* Lotus, unmodified. The grounds are the four Kanagawa gives them:
+   * lotusWhite3 is Lotus's own `bg`, and White2/White1/White0 are its
+   * bg_m1/bg_m2/bg_m3 — one, two and three steps away from the page, in the
+   * order this stylesheet needs them. */
+  --bg: #f2ecbc;       /* lotusWhite3 — Lotus's bg    */
+  --surface: #e5ddb0;  /* lotusWhite2 — Lotus's bg_m1 */
+  --border: #d5cea3;   /* lotusWhite0 — Lotus's bg_m3 */
+  --code-bg: #dcd5ac;  /* lotusWhite1 — Lotus's bg_m2 */
   --muted: #716e61;    /* lotusGray2 */
   --text: #545464;     /* lotusInk1  */
   --strong: #43436c;   /* lotusInk2  */
@@ -101,7 +108,15 @@
    * backlink theses, the footer and every rail link that is not the current
    * one. Those are things a reader reads. springViolet1 is 5.02:1 and is
    * Wave's own, so the "every hex is traceable to a pinned colors.lua"
-   * property is unchanged. Lotus needed nothing: lotusGray2 is 4.70:1.
+   * property is unchanged.
+   *
+   * Lotus needed nothing when this was written, at 4.70:1 on the lightened
+   * ground. On Lotus's own ground lotusGray2 is 4.26:1, and it stays: it is
+   * the darkest grey Lotus has short of the two inks, one of which is --text,
+   * so buying the last 0.24 means leaving the palette — the same departure the
+   * grounds above just came back from. The floor was never met everywhere in
+   * any case; on the lightened ground this same colour was 4.38:1 where it
+   * lands on --surface and 4.15:1 in the code well.
    *
    * The one place fujiGray survives is the Chroma comment rule below, which
    * is genuinely a comment on genuinely lower-contrast-by-design code. */
