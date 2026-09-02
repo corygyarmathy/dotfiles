@@ -72,7 +72,7 @@ return {
 		---@type obsidian.config
 		opts = {
 			workspaces = { { name = "personal", path = "~/git/personal-notes" } },
-			picker = { name = "snacks.pick" },
+			picker = { name = "snacks.picker" },
 			attachments = { folder = "Files" },
 			ui = { enable = false },
 			legacy_commands = false, -- Just to suppress the annoying warning every startup
