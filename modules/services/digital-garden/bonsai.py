@@ -96,7 +96,22 @@ ASPECT = 1.9
 
 # How much wider than tall the crown looks ON SCREEN. A bonsai's crown is a
 # broad, shallow dome; a tall narrow one reads as a conifer.
-CANOPY_ASPECT = 1.6
+#
+# Raised from 1.6 by item 19's second pass, and the reason is the composition
+# rather than the tree. At 1.6 the whole picture - crown, bare trunk and pot -
+# came out 35x18 cells, which on screen is 1.11:1: a SQUARE. A square is the
+# one shape that cannot be a masthead, and it was what forced the home page's
+# header to put the name beside the tree rather than above it. The width has
+# to come from somewhere, and taking it from the crown's proportion is free:
+# a broader, shallower dome is what the line above already asks for. At 2.4
+# today's vault draws 43x15 - 1.64:1, and three rows shorter - so the picture
+# can fill the measure without pushing the prose off the screen.
+#
+# It also improves as the garden grows. The crown widens faster than it rises,
+# so a two-hundred-note vault draws 78x27 rather than a taller and taller
+# mass: the tree keeps roughly the height it has today and spends the extra
+# foliage sideways, which is the axis the page has room on.
+CANOPY_ASPECT = 2.4
 
 # The crown's underside, as a fraction of its top half. Foliage grows up into
 # the light and is cut off below by the branches carrying it, so the shape is
@@ -684,9 +699,21 @@ def to_html(tree, notes):
             f'<span class="stage{topic}">{note.stage}</span></span></span>'
         )
 
+    # The stylesheet sizes the tree from the width of the column it is in -
+    # `font-size: 100cqi / (cols * advance)` - so that the picture's right
+    # edge and the header's right edge are the same line at every viewport
+    # and for every vault. It cannot count the columns itself: `pre` is
+    # `max-content` wide precisely so the type decides the box, and asking the
+    # box how wide the type is would be the circle that sizing is there to
+    # break. Only the generator knows, so the generator says.
+    #
+    # The grid is rectangular after `_crop`, so any row's length is the
+    # width; `lines` are right-stripped and are not.
+    cols = len(tree.rows[0]) if tree.rows else 0
+
     return (
         '<div class="bonsai-plate">\n'
-        '<pre class="bonsai" aria-hidden="true">'
+        f'<pre class="bonsai" aria-hidden="true" style="--cols: {cols}">'
         + "\n".join(lines)
         + "</pre>\n"
         + '<p class="bonsai-caption" aria-hidden="true"></p>\n'

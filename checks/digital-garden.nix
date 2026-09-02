@@ -383,6 +383,7 @@
 
   testScript = ''
     import datetime as dt
+    import html
     import json
     import re
 
@@ -1928,7 +1929,38 @@
 
         # An enhancement, not a route. The tree carries no headings, no links
         # and no tab stops; /notes/ is the accessible path and it is complete.
-        assert '<pre class="bonsai" aria-hidden="true">' in home, home[:400]
+        #
+        # Matched on the tag's attributes rather than on the whole opening tag
+        # written out: the `--cols` below is the second attribute to live here
+        # and an exact string is a check that breaks every time one is added,
+        # which is a check that tests the spelling rather than the claim.
+        opening = re.search(r'<pre class="bonsai"[^>]*>', home)
+        assert opening, home[:400]
+        assert 'aria-hidden="true"' in opening.group(0), opening.group(0)
+
+        # And the tree says how wide it is, because the stylesheet sizes the
+        # type from it - `font-size: 100cqi / (--cols * advance)` - and only
+        # the generator can count the columns. This is asserted rather than
+        # trusted because losing it fails SILENTLY: the rule has a default, so
+        # a tree with no `--cols` still renders, at the wrong size, filling
+        # neither its column nor the header's width. Nothing errors and the
+        # only symptom is a picture that stops short of its own rule, which is
+        # the fault this whole pass exists to fix.
+        cols = re.search(r"--cols:\s*(\d+)", opening.group(0))
+        assert cols, opening.group(0)
+
+        # The number is the tree's real width, not just some number. Rows are
+        # right-stripped in `to_html`, and `_crop` guarantees the rightmost
+        # column has ink in at least one row, so the longest row is exactly
+        # the grid's width.
+        drawn = home[opening.end() : home.index("</pre>", opening.end())]
+        widest = max(
+            len(html.unescape(re.sub(r"<[^>]+>", "", line)))
+            for line in drawn.split("\n")
+        )
+        assert int(cols.group(1)) == widest, (
+            f"the tree says it is {cols.group(1)} columns wide and draws {widest}"
+        )
 
         # The markup is a fragment of the home page, not a page. Hugo must
         # never have seen it as content.
@@ -1988,9 +2020,10 @@
         assert int(counted.group(2)) >= 1, "the hand-written evergreen is not counted"
 
     with subtest("the composition belongs to the home page alone"):
-        # Item 19: one site title per page. The home page carries it at scale
-        # and baseof.html drops the small one there; every interior page is
-        # the masthead it has always been, and carries no composition.
+        # Item 19: one site title per page. The home page carries it in a bar
+        # of its own - larger, and with the site's links beside it - and
+        # baseof.html drops the small one there; every interior page is the
+        # masthead it has always been, and carries no composition.
         home = served("/")
         assert '<p class="nameplate-title">' in home, home[:400]
         assert 'class="masthead-title"' not in home, (
@@ -2045,10 +2078,17 @@
         # rather than as part of it. That is a geometry fault, invisible to a
         # grep and obvious in a screenshot, so it is measured here.
         #
-        # Two edges, which are the only two vertical lines this layout has:
-        # the header begins on the article column's left edge - so the name
-        # sits directly above the first line of prose - and ends on the wide
-        # grid's right edge.
+        # The first fix anchored the left end to the prose and the right end
+        # to the wide grid's right edge, and it was half right. The home page
+        # carries no sidenotes, so nothing on it ever reaches that edge: the
+        # header closed 288px past the last character of every paragraph
+        # below it, on a line the page never draws. Anchored to an empty
+        # column it read as hanging off the page instead of floating over it.
+        #
+        # So: BOTH ends on the article column, which is the span every
+        # interior page's masthead rule already has. The name sits directly
+        # above the first line of prose and the rule under the header closes
+        # where every line of prose closes.
         machine.succeed(
             "mkdir -p /tmp/np && "
             "cp /var/lib/digital-garden/public/index.html /tmp/np/page.html && "
@@ -2099,14 +2139,14 @@
         assert abs(header[0] - article[0]) <= 1, (
             f"the header does not begin on the prose's left edge: {header} vs {article}"
         )
-        assert abs(header[1] - grid[1]) <= 1, (
-            f"the header does not end on the page grid's right edge: {header} vs {grid}"
+        assert abs(header[1] - article[1]) <= 1, (
+            f"the header does not end on the prose's right edge: {header} vs {article}"
         )
-        # And it is genuinely wider than the prose - the assertion above would
-        # also pass if the header had simply been capped at the measure, which
-        # is a different design and would leave no room for the tree.
-        assert header[1] - header[0] > article[1] - article[0] + 100, (
-            f"the header is no wider than the prose it sits over: {header}, {article}"
+        # And the page is genuinely in its wide layout, so that the two
+        # assertions above are about the anchored header and not about a
+        # narrow page where everything is one centred column anyway.
+        assert grid[1] - article[1] > 100, (
+            f"the page is not in its wide layout: article {article}, grid {grid}"
         )
 
     with subtest("a renamed note keeps its publication date"):
