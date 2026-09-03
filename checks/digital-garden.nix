@@ -1972,6 +1972,55 @@
             f"the tree says it is {cols.group(1)} columns wide and draws {widest}"
         )
 
+        # THE GROWTH ORDER IS BOTANICAL, which is what the page reveals the
+        # tree in and what stops it reading as a wipe. Every drawn character
+        # carries when it grew, from 0 to 1000 across the whole animation, and
+        # the two claims worth pinning are exact rather than statistical - a
+        # rate assertion on a four-note fixture would measure noise. Use
+        # `bonsai.py --rate` to judge the rate itself; that is a taste loop and
+        # not a gate.
+        #
+        # This fails silently if it fails at all. A tree whose timeline has
+        # collapsed still renders, still carries every note, and still passes
+        # everything above it - the only symptom is a reveal that has stopped
+        # looking like growth, which is exactly the class of fault the
+        # 2026-09-03 pass found by measuring rather than by looking.
+        # `int`, and not because it is tidier: read as the strings re.findall
+        # returns, every comparison below is lexicographic, and "106" < "1000"
+        # is False. That cost two wrong diagnoses of working code while this
+        # assertion was being written.
+        cells = [
+            (k, int(t))
+            for k, t in re.findall(
+                r'<span class="([^"]*)"[^>]*data-grow="(\d+)"', drawn
+            )
+        ]
+        assert cells, "no character on the tree says when it grew"
+        grew = [t for _, t in cells]
+        assert min(grew) == 0 and max(grew) == 1000, (
+            f"the timeline runs {min(grew)}..{max(grew)}, not 0..1000"
+        )
+        # The pot is set down first and the crown finishes last. A pot is the
+        # one object in the picture that was never grown, and it used to be
+        # revealed last of all - the tree grew in mid-air and the thing it
+        # stands in arrived afterwards.
+        #
+        # Both ends of each stage, so the order is pinned as an order and not
+        # merely as three things that happen: the pot is set down, the trunk
+        # rises out of it, and the crown is the last thing to arrive.
+        pot = [t for k, t in cells if k.split()[0] in ("pot", "soil")]
+        leaf = [t for k, t in cells if k.split()[0] == "leaf"]
+        wood = [t for k, t in cells if k.split()[0] == "wood"]
+        assert pot and leaf and wood, [len(pot), len(leaf), len(wood)]
+        assert min(pot) <= min(wood) < min(leaf), (
+            f"the picture starts pot {min(pot)}, wood {min(wood)}, foliage "
+            f"{min(leaf)}: something grew before there was anything to grow in"
+        )
+        assert max(pot) < max(wood) < max(leaf), (
+            f"the pot finishes at {max(pot)}, the wood at {max(wood)} and the "
+            f"foliage at {max(leaf)}: the tree is not growing out of its pot"
+        )
+
         # The markup is a fragment of the home page, not a page. Hugo must
         # never have seen it as content.
         machine.fail(f"test -e {SITE}/bonsai.html")

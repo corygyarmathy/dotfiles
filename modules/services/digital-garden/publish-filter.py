@@ -1027,6 +1027,14 @@ def main(argv):
                     stage=stage,
                     topic=front["topic"],
                     hue=front["hue"],
+                    # How far OUT on the tree this note sits: the most-worked
+                    # notes low and close to the trunk, the least-worked at the
+                    # tips. Straight off the ledger, which is the only thing
+                    # that knows either fact - see "who owns which cell" in
+                    # bonsai.py for why the revision count leads and the date
+                    # only breaks its ties.
+                    revisions=entry["revisions"],
+                    published=entry["published"],
                 )
             )
 
