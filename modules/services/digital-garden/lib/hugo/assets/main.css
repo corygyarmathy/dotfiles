@@ -1917,30 +1917,35 @@ h4:hover > .heading-anchor,
   pointer-events: none;
 }
 
-/* Each character fades up as it grows rather than appearing, and each leaf
- * arrives a shade lighter than it settles at. Both are transitions off the
- * `.off` state above, so the script still only adds and removes one class.
+/* NOTHING HERE TRANSITIONS, and that is the whole of this block.
  *
- * The pale arrival is the one that earns its line. New growth on a real tree
- * IS lighter than the wood under it, and at this resolution - where a leaf is
- * one character - a pad that opens pale and darkens into the canopy is the
- * only cue that says the crown has depth rather than being a flat stencil that
- * filled in. It costs nothing: the light tier is already computed by the same
- * `color-mix` the three shading rules use, taken one step further toward white.
+ * Each character used to fade up over 0.35s and each leaf to settle its colour
+ * over 0.9s. Reported as "the reveal feels too smooth - more reveal than
+ * growth", and the measurement agrees: at about one character every nine
+ * milliseconds, a 0.35s fade puts forty cells on screen part-drawn at any
+ * instant. Forty part-drawn cells is not a growing tree, it is a soft-edged
+ * front sweeping over a finished one - which is a WIPE, and a wipe is a thing
+ * being uncovered rather than a thing being made.
  *
- * Scoped to `.growing`, which the script takes off once the tree is up: the
- * hover highlight is a pointer following the reader's hand and must not ease.
+ * So a character arrives at full strength in one frame, and the smoothness is
+ * bought back from the RATE instead of from the blur: bonsai.py now hands over
+ * a timeline whose cells arrive at a roughly even rate, so three or four land
+ * per frame at sixty frames a second and the cumulative effect is smooth while
+ * every individual character is hard-edged. That is what a thing being
+ * generated looks like, and it is why the fix was mostly in the generator.
  *
- * The colour is slower than the opacity on purpose. Matched, the two read as
- * one fade; separated, the character is fully there while it is still pale, so
- * what the reader sees is a leaf settling rather than a leaf arriving twice. */
-.bonsai.growing span {
-  transition:
-    opacity 0.35s ease-out,
-    color 0.9s ease-out;
-}
-
-.bonsai.growing .off.leaf {
+ * The one cue that survives is the pale arrival, and it survives as a STEP
+ * rather than as a fade. New growth on a real tree is lighter than the wood
+ * under it, and at this resolution - where a leaf is one character - a pad
+ * that opens pale and hardens into the canopy is the only cue that says the
+ * crown has depth rather than being a flat stencil that filled in. The script
+ * puts `.new` on a cell as it lands and takes it off a beat later, so what
+ * runs ahead of the settled canopy is a band of fresh growth two or three
+ * frames deep - snapping in and snapping down, never interpolating.
+ *
+ * Scoped to `.growing`, which the script takes off once the tree is up, so a
+ * `.new` that somehow outlived the animation cannot tint a finished tree. */
+.bonsai.growing .new.leaf {
   color: color-mix(in oklab, var(--base, var(--wood)) 45%, white);
 }
 

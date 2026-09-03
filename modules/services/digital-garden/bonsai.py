@@ -90,7 +90,18 @@ import sys
 # NAME, which is what the markup can be read against and is fixed by the vault,
 # and its slot in the palette, which depends on what other shelves exist. Only
 # the second one carries the colour.
-Note = collections.namedtuple("Note", "title url words stage topic hue")
+#
+# `revisions` and `published` come from the ledger and decide how far OUT on
+# the tree a note sits - the most-worked notes low and close to the trunk, the
+# least-worked out at the tips. See "who owns which cell" in `grow` for why
+# revisions leads and the date only breaks its ties. Both default, because they
+# are the only two fields a caller can sensibly not have: a tree grown from a
+# hand-written list in a test is still a tree, it just has no inside.
+Note = collections.namedtuple(
+    "Note",
+    "title url words stage topic hue revisions published",
+    defaults=(0, ""),
+)
 
 # What `grow` falls back to when it is called without a seed. Nothing on the
 # site takes it: `render` seeds every tree from the notes themselves, which is
@@ -148,6 +159,46 @@ CANOPY_B = 0.60
 # not one per branch - a trained bonsai has a handful, and MAX_PADS is what
 # keeps a large garden reading as an old tree rather than as a shrub. At eleven
 # the channels between the pads outnumbered the pads.
+# Pruning the crown's fringe: one pass per entry, removing every cell with
+# fewer than that many orthogonal neighbours. Two passes at two, because
+# removing a cell can orphan the one beside it.
+#
+# THE THIRD IDEA LEFT OPEN ON 2026-09-03 WAS TO RAISE ONE PASS TO THREE, and it
+# is declined here on measurements rather than on taste, because the premise
+# turned out not to hold. Counted over forty-eight trees at four vault sizes:
+#
+#   * 0.3% of crown cells have fewer than two orthogonal neighbours. There is
+#     no dust to prune - these two passes already removed it.
+#   * The crown's EDGE cells carry more ink than its interior, not less (2.41
+#     against 2.33 on a three-point scale over the glyph sets), and fewer of
+#     them come from the faint seedling set (14.5% against 18.7%). The fringe
+#     is not fainter than the mass behind it.
+#   * (2, 3) costs 14.5% of the canopy and takes specks from 0.3% UP to 2.1%,
+#     because a pass at three removes cells with two neighbours and orphans
+#     what was leaning on them, with no low pass left to clean up after it.
+#   * (3, 2) - erode hard, then tidy - is the only ordering that improves on
+#     today at all, and it buys 0.3% to 0.1% for 15.6% of the canopy. Rendered
+#     at three seeds and three vault sizes, what that 15.6% costs is holes in
+#     the crown's BODY and channels between the pads wide enough to come apart:
+#     the silhouette this file exists to protect, eaten from the inside.
+#
+# On the real vault the numbers are the same shape: 0.4% specks on the tree
+# this replaces, and 0.0% on the one it draws.
+#
+# AND THE FRINGE NOW MEANS SOMETHING, which is the argument that closes it.
+# Dealing the notes inward-to-outward by revision count sorts the glyph sets
+# along with them, because a note nobody has gone back to is usually a seedling
+# and a seedling's set is the faintest. Measured on the vault: the crown used
+# to carry the same weight of ink in its outer half as in its inner half (1.97
+# against 1.97 on a three-point scale over the sets), and now carries 1.48
+# outside against 2.18 inside. That gradient IS the wispy edge somebody looked
+# at - and it is now the picture reporting that the tips are this year's
+# growth, which is the whole of the idea above. Pruning it away would delete
+# the signal the pass before it was added to carry.
+#
+# Left as a named constant because the idea is a natural one to have twice, and
+# this is the cheapest possible way to try it again.
+PRUNE = (2, 2)
 PAD_A = 1.20
 MIN_PADS, MAX_PADS = 3, 7
 
@@ -198,10 +249,50 @@ BRANCH_CHARS = "~-="
 # long the whole thing takes is the page's business, and baseof.html sets it -
 # so what these fix is the SHAPE of the growth, which is the part this file
 # knows about.
-POT_SET = 0.09  # the pot and its soil, sweeping out from under the trunk
-TRUNK_FROM, TRUNK_TO = 0.06, 0.55  # the trunk, rising base to apex
-BRANCH_SPAN = 0.10  # a branch reaching out, once the trunk has passed it
-LEAF_SPAN = 0.42  # a pad opening, from the branch's end outward
+# The first cut of this timeline was right about the ORDER and wrong about the
+# RATE, and the fade the page used to reveal it with was wide enough to hide
+# the difference. Counted per twentieth of the animation, the tree arrived as a
+# lump (fifty cells of pot and trunk base in the first tenth), then a stall of
+# about a quarter of the whole run in which a one-cell-wide trunk was the only
+# thing being drawn, then an avalanche - every pad opening at once, a third of
+# the tree in a fifth of the time. That is not a rate a thing can be GENERATED
+# at; it is a rate you can only get away with behind a wipe.
+#
+# The stall and the avalanche have one cause. A bonsai's trunk is bare low down
+# - that is what `clear` is for - so every branch leaves the trunk in its upper
+# half, and "a branch leaves at the moment the trunk passes its height" put all
+# of them within a fifth of the run of each other. There is genuinely nothing to
+# draw while the bare trunk rises, and then there is everything to draw at once.
+#
+# So the trunk is given a share of the clock in proportion to the wood it
+# actually draws, and the crown is given a span of its own that the pads divide
+# BY CELL COUNT - see `grow`. The causality survives as an ORDER rather than as
+# an arrival time: a pad still cannot leaf before the branch carrying it has
+# reached out, and the pads still leaf in the order the trunk reached them, so
+# the lower crown is still in leaf while the apex is still rising. What changes
+# is that the picture now arrives at a roughly even rate whatever the geometry
+# happens to be, which is the property the page needs and the one thing the
+# old constants could not promise from one vault size to the next.
+# The pot is about fifty of three hundred cells, and at 0.09 it was set down at
+# three times the rate the rest of the tree grows at - the front half of the
+# lump the note above describes. It is still QUICKER than the tree, because it
+# is placed rather than grown, but not by a factor you can see.
+POT_SET = 0.18  # the pot and its soil, sweeping out from under the trunk
+TRUNK_FROM, TRUNK_TO = 0.10, 0.34  # the trunk, rising base to apex
+BRANCH_SPAN = 0.06  # a branch reaching out, once the trunk has passed it
+
+# The crown's own span, which the pads divide between them in proportion to how
+# many cells each carries - so a big pad gets more of the clock than a small one
+# and both fill at the same rate. It opens BEFORE the trunk has topped out
+# (TRUNK_TO above), because the lowest branch is reached long before the apex is
+# and a crown that waits for the leader is a stage list rather than a tree.
+CROWN_FROM, CROWN_TO = 0.24, 1.0
+
+# How far a pad's opening runs past its own slot, as a multiple of it. At 1.0
+# each pad finishes exactly as the next begins, and a hard handoff from one
+# plate to the next is the stage list this file keeps trying not to be; the
+# overlap is what keeps two or three pads always in motion.
+PAD_OVERLAP = 2.2
 
 
 def mulberry32(seed):
@@ -417,7 +508,7 @@ def grow(notes, seed=DEFAULT_SEED):
     # characters around a crown reads as dust rather than as foliage - most
     # visibly where a seedling's glyphs, which are the lightest set, land on
     # the edge. Two passes, because removing a cell can orphan its neighbour.
-    for _ in range(2):
+    for need in PRUNE:
         lonely = [
             at
             for at in kept
@@ -425,83 +516,12 @@ def grow(notes, seed=DEFAULT_SEED):
                 ((at[0] + ddx, at[1] + ddy) in kept)
                 for ddx, ddy in ((1, 0), (-1, 0), (0, 1), (0, -1))
             )
-            < 2
+            < need
         ]
         for at in lonely:
             del kept[at]
 
     foliage = [(dx, dy, which, near) for (dx, dy), (which, near) in kept.items()]
-
-    # ---- who owns which cell ----------------------------------------------
-    # The pads' sizes come out of the geometry, so the notes are dealt to MATCH
-    # them: longest note first, each to whichever pad is furthest below its
-    # share, so no pad ends up carrying only the long notes or only the stubs.
-    #
-    # Deliberately NOT grouped by shelf. Putting each topic on a pad of its own
-    # was tried and drew hard-edged blocks of colour: the tree read as a chart
-    # of itself rather than as foliage. Spread, the hues interleave at the
-    # scale of a note's clump, which is the scale foliage varies at.
-    by_pad = collections.defaultdict(list)
-    for cell in foliage:
-        by_pad[cell[2]].append(cell)
-    sizes = {i: len(v) for i, v in by_pad.items()}
-    live = [i for i in sizes if sizes[i]]
-    total_cells = sum(sizes.values())
-    total_weight = sum(STAGE_WEIGHT[note.stage] for note in notes)
-
-    buckets = collections.defaultdict(list)
-    load = collections.defaultdict(float)
-    for index in sorted(range(count), key=lambda i: -notes[i].words):
-        at = max(live, key=lambda k: sizes[k] - load[k])
-        buckets[at].append(index)
-        load[at] += total_cells * STAGE_WEIGHT[notes[index].stage] / total_weight
-
-    # Inside a pad, each note grows from a seed point of its own and takes the
-    # cells nearest it. A note's cells have to be a CLUMP and not a sprinkle:
-    # pointing at foliage lights the whole note and names it, and a note
-    # scattered through a pad would be impossible to point at.
-    owner = {}
-    for i in live:
-        bucket = buckets.get(i)
-        if not bucket:
-            continue
-        cells = sorted(by_pad[i], key=lambda c: c[3])
-        px, py = centres[i]
-        weights = [STAGE_WEIGHT[notes[b].stage] for b in bucket]
-        share = sum(weights)
-        room = {
-            b: max(1, round(len(cells) * w / share)) for b, w in zip(bucket, weights)
-        }
-        seeds = []
-        for k, b in enumerate(bucket):
-            angle = (k / len(bucket)) * 2 * math.pi + rng() * 0.8
-            radius = 0.35 + 0.45 * ((k % 3) / 2.0)
-            seeds.append(
-                (
-                    px + math.cos(angle) * ASPECT * 3.0 * radius,
-                    py + math.sin(angle) * 2.0 * radius,
-                    b,
-                )
-            )
-        for dx, dy, _, _ in cells:
-            x, y = crown_x + dx, crown_y + dy
-            best, best_d = None, None
-            for sx, sy, b in seeds:
-                if room[b] <= 0:
-                    continue
-                d = math.hypot((x - sx) / ASPECT, y - sy)
-                if best_d is None or d < best_d:
-                    best, best_d = b, d
-            if best is None:
-                # Every seed is full and there are cells over: they go to
-                # whichever note is nearest, because a hole in the crown would
-                # be a hole in the outline this whole file exists to protect.
-                best = min(
-                    seeds, key=lambda s: math.hypot((x - s[0]) / ASPECT, y - s[1])
-                )[2]
-            else:
-                room[best] -= 1
-            owner[(dx, dy)] = best
 
     # ---- the canvas -------------------------------------------------------
     pot_half = max(6, int(crown_w * 0.54))
@@ -565,7 +585,14 @@ def grow(notes, seed=DEFAULT_SEED):
         # does not lean where it enters the ground.
         if step and round(y) == 0:
             continue
-        thick = 3 if t < 0.16 else (2 if t < 0.55 else 1)
+        # THE TAPER IS ANCHORED TO THE CROWN, not to the trunk's total height.
+        # At fixed fractions of `trunk_h` how much of the VISIBLE trunk was at
+        # full width depended on how tall the tree happened to be, which is a
+        # fact about the vault's size and not about the tree's proportions.
+        # Three cells for the whole bare trunk, two through the crown's lower
+        # half, one above: `clear` and `crown_y` are where those things
+        # actually are.
+        thick = 3 if y < clear else (2 if y < crown_y else 1)
         for k in range(thick):
             off = k - (thick - 1) / 2
             if off < 0:
@@ -573,12 +600,24 @@ def grow(notes, seed=DEFAULT_SEED):
             elif off > 0:
                 char, shade = ("/" if dx > 0.12 else "|"), "shade"
             else:
-                if dx < -0.18:
-                    char = "\\"
-                elif dx > 0.18:
-                    char = "/"
-                else:
-                    char = "|" if rng() > 0.3 else pick(TRUNK_CHARS)
+                # THE MIDDLE COLUMN IS NEVER A SLASH, and this is the line that
+                # fixed "the trunk is thin for a bonsai". It used to take the
+                # lean's own diagonal, so a leaning trunk drew `\\\\|` - every
+                # column the same stroke - and three cells of wood read as one
+                # hatched line rather than as a column that has shifted. The
+                # lean is already carried by the x position the whole group is
+                # drawn at; the edges show it, and the core stays upright.
+                #
+                # Measured over twenty-four seeds at nineteen notes, because
+                # the two halves of this fix look interchangeable and are not.
+                # Anchoring the taper ALONE takes the bare trunk from 2.75
+                # cells wide to 3.41 and from 43% upright DOWN to 36% - wider,
+                # and more obviously a hatch, which is why the 2026-09-03
+                # session found it "barely moved". The solid core alone leaves
+                # it 2.75 wide at 53% upright. Together: 3.41 wide and 62%
+                # upright, for no change to the picture's proportions at any
+                # vault size.
+                char = "|" if rng() > 0.3 else pick(TRUNK_CHARS)
                 shade = "mid"
             place(x + off, y, char, "wood", shade=shade, at=trunk_time(y))
 
@@ -628,14 +667,19 @@ def grow(notes, seed=DEFAULT_SEED):
     #
     # Each branch also records WHEN it finished and WHERE it ended, because
     # those two are what the foliage's timing hangs off: a pad opens from the
-    # end of the branch carrying it, at the moment that branch arrives.
-    pad_ready, pad_anchor = {}, {}
+    # end of the branch carrying it, and it opens outward from that end.
+    #
+    # `reached_at` is when the branch is done and the pad COULD open; when it
+    # actually opens is settled below, out of the crown's own span, because
+    # every branch leaves this trunk within a fifth of the run of every other
+    # one and a crown that opens on those times opens all at once.
+    reached_at, pad_anchor = {}, {}
     for i, (px, py) in enumerate(centres):
         if i == pads - 1:
             # The apex pad sits on the trunk's own top, so it has no branch and
-            # opens the moment the trunk tops out. It is the last thing on the
-            # tree to leaf, which is what a leader is.
-            pad_ready[i] = trunk_time(trunk_h)
+            # is ready the moment the trunk tops out. It is the last thing on
+            # the tree to leaf, which is what a leader is.
+            reached_at[i] = trunk_time(trunk_h)
             pad_anchor[i] = (trunk_x(1.0), trunk_h)
             continue
         side = 1 if px > crown_x else -1
@@ -644,6 +688,10 @@ def grow(notes, seed=DEFAULT_SEED):
         to_x = px - side * 1.5
         run = max(2, int(abs(to_x - from_x)))
         leaves_at = trunk_time(from_y)
+        # A long branch takes longer to reach out than a short one. Constant,
+        # it was one more reason every pad on this tree became ready within a
+        # fifth of the run of every other.
+        reaching = BRANCH_SPAN * min(1.0, abs(to_x - from_x) / (crown_w or 1))
         for step in range(1, run + 1):
             u = step / run
             # A trained branch leaves the trunk level, dips, and lifts into its
@@ -656,10 +704,34 @@ def grow(notes, seed=DEFAULT_SEED):
                 "_" if rng() > 0.5 else pick(BRANCH_CHARS),
                 "wood",
                 shade="lit" if side < 0 else "shade",
-                at=leaves_at + BRANCH_SPAN * u,
+                at=leaves_at + reaching * u,
             )
-        pad_ready[i] = leaves_at + BRANCH_SPAN
+        reached_at[i] = leaves_at + reaching
         pad_anchor[i] = (to_x, py - 0.5)
+
+    # ---- when each pad leafs ----------------------------------------------
+    # The pads leaf in the order the trunk reached them, and they divide the
+    # crown's span BY CELL COUNT: a pad carrying eighty cells gets four times
+    # the clock of one carrying twenty, so both fill at the same rate and the
+    # whole crown fills at one rate. Sizing the slots by count rather than
+    # handing every pad an equal share is the difference between an even rate
+    # and a picture that stalls on the small plates and floods on the big ones.
+    #
+    # `max` against the branch's own arrival keeps the causality that matters:
+    # a pad may be scheduled early, but it can never leaf before the wood
+    # holding it up is there.
+    pad_cells = collections.Counter(which for _, _, which, _ in foliage)
+    crown_cells = sum(pad_cells.values()) or 1
+    pad_ready, pad_span = {}, {}
+    filled = 0
+    for i in sorted(reached_at, key=lambda k: (reached_at[k], k)):
+        share = pad_cells.get(i, 0) / crown_cells
+        pad_ready[i] = max(
+            reached_at[i], CROWN_FROM + (CROWN_TO - CROWN_FROM) * filled
+        )
+        # The overlap is what stops the crown reading as one plate at a time.
+        pad_span[i] = (CROWN_TO - CROWN_FROM) * share * PAD_OVERLAP
+        filled += share
 
     # ---- the foliage ------------------------------------------------------
     # One light source, from the upper left, read off the cell's place in the
@@ -680,6 +752,197 @@ def grow(notes, seed=DEFAULT_SEED):
     for dx, dy, which, _ in foliage:
         deepest[which] = max(deepest[which], reach(which, dx, dy))
 
+    # ---- who owns which cell ----------------------------------------------
+    #
+    # NEW GROWTH BELONGS AT THE TIPS. A note's place in the crown used to be
+    # arbitrary: the pads were dealt by word count so the long notes did not
+    # all land on one plate, and inside a pad each note took a seed point at an
+    # angle off the centre, which is a spiral and means nothing. So the picture
+    # reported the garden's size and its spread and nothing about its DEPTH -
+    # you could not tell the note that has been rewritten nine times from the
+    # one written once and left, and the vault records the difference.
+    #
+    # It does now, on the axis a tree already has. The most-worked notes sit
+    # low and close to the trunk where the oldest wood is; the least-worked sit
+    # out at the extremities where this year's growth is. Both halves of the
+    # placement carry it - which pad a note lands on, and where in that pad -
+    # because either alone is too coarse to read at three notes per plate.
+    #
+    # REVISIONS, not age, is the fact that decides it, and that is a choice
+    # about this vault rather than about trees. The ledger's `published` is the
+    # first day a note appeared in the published set, and for a vault whose
+    # ledger was seeded in one afternoon that is one date for almost every
+    # note - an axis with no spread to give. `revisions` is seeded from the
+    # vault's own git history and spreads from nought to eight today. Age
+    # breaks the ties, so the axis sharpens by itself as the garden ages and
+    # notes stop sharing a birthday.
+    #
+    # Ranked rather than scaled. A rank uses the whole axis whatever the
+    # distribution behind it looks like, so a garden where every note has been
+    # revised twice still reads as a tree rather than as a ring, and the
+    # picture says "this note is more worked over than that one", which is the
+    # only claim the numbers can actually support.
+    established = sorted(
+        range(count),
+        key=lambda i: (-notes[i].revisions, notes[i].published, i),
+    )
+    rank = {index: k for k, index in enumerate(established)}
+
+    by_pad = collections.defaultdict(list)
+    for cell in foliage:
+        by_pad[cell[2]].append(cell)
+    sizes = {i: len(v) for i, v in by_pad.items()}
+    live = [i for i in sizes if sizes[i]]
+    total_cells = sum(sizes.values())
+    total_weight = sum(STAGE_WEIGHT[note.stage] for note in notes)
+
+    # The pads in order of how far their own foliage sits from the FOOT OF THE
+    # TRUNK, in screen proportions - which is the axis the sentence this item
+    # comes from describes, measured on the picture the reader will actually
+    # see rather than inferred from something upstream of it.
+    #
+    # Two other orderings were built and measured against that same distance,
+    # because "close to the trunk" is easy to say and has three plausible
+    # readings. Over forty-eight gardens - eight vault sizes, six gardens each,
+    # ranked against where the foliage actually landed on the drawn grid:
+    #
+    #   by the branch's HEIGHT on the trunk          rho +0.57
+    #   by path distance along the wood              rho +0.33
+    #   by where the pad's own foliage ended up      rho +0.74
+    #
+    # Height loses because a low branch that reaches right across the crown
+    # ends further out than a high one that barely leaves it. Path distance
+    # loses by more, and for a subtler reason: it orders the plates by their
+    # ANCHORS, and a pad is not where its branch stops - it is a mass of cells
+    # spread around that point, which can sit mostly inboard of it.
+    #
+    # Ordering the plates by the thing being measured is not circular here. The
+    # measurement is of the DRAWN grid, and this is a decision taken before
+    # anything is drawn; it just turns out that the honest axis is the visible
+    # one.
+    from_root = collections.defaultdict(float)
+    for dx, dy, which, _ in foliage:
+        from_root[which] += math.hypot(
+            (crown_x + dx - trunk_x(0)) / ASPECT, crown_y + dy
+        )
+    inward = sorted(live, key=lambda i: (from_root[i] / sizes[i], i))
+
+    # Poured rather than packed. Each pad is filled to its share of the canopy
+    # before the next one is started, so the notes come out in rank order along
+    # `inward` and every pad still ends up carrying about as much foliage as it
+    # has room for - the balance the old word-count deal existed to get, kept,
+    # but now as a side effect of an order that means something.
+    #
+    # The old deal put the LONGEST note first and gave it the emptiest pad,
+    # which balanced the plates perfectly and scattered the notes at random.
+    # Balance was never the thing worth optimising: no reader can see that a
+    # pad is carrying its fair share, and every reader can see that the tree
+    # has an inside and an outside.
+    buckets = collections.defaultdict(list)
+    load = collections.defaultdict(float)
+    at_pad = 0
+    for dealt, index in enumerate(established):
+        pad = inward[at_pad]
+        buckets[pad].append(index)
+        load[pad] += total_cells * STAGE_WEIGHT[notes[index].stage] / total_weight
+        left = len(established) - dealt - 1
+        ahead = len(inward) - at_pad - 1
+        # Hand on once this pad has taken its share - and hand on early if the
+        # notes still to deal have only just enough left to reach every pad
+        # after it. A pad with no note is a pad whose cells nothing owns, and
+        # an unowned cell is never drawn: a hole in the outline this whole file
+        # exists to protect.
+        if ahead and left and (load[pad] >= sizes[pad] or left <= ahead):
+            at_pad += 1
+
+    # A garden with fewer notes than pads leaves the outer pads with nothing to
+    # carry. Their cells still have to belong to somebody, so they go to the
+    # nearest pad that does have a note - a hole in the crown is a worse answer
+    # than a slightly larger clump.
+    for i in inward:
+        if not buckets[i]:
+            near = min(
+                (j for j in inward if buckets[j]),
+                key=lambda j: math.hypot(
+                    (centres[i][0] - centres[j][0]) / ASPECT,
+                    centres[i][1] - centres[j][1],
+                ),
+                default=None,
+            )
+            if near is not None:
+                by_pad[near].extend(by_pad[i])
+                by_pad[i] = []
+
+    # Inside a pad, each note grows from a seed point of its own and takes the
+    # cells nearest it. A note's cells have to be a CLUMP and not a sprinkle:
+    # pointing at foliage lights the whole note and names it, and a note
+    # scattered through a pad would be impossible to point at.
+    #
+    # The seed points are strung along the pad's OWN outward axis - from the
+    # end of the branch carrying it, out to the pad's far edge - in rank order,
+    # so the inner-to-outer reading survives at the scale of a single plate as
+    # well as across the crown. That axis is `reach`, which the timeline above
+    # already measures the pad's opening against, so a note's place in the pad
+    # and the moment it leafs are the same fact told twice.
+    #
+    # The lateral offset is seeded and is not decoration: seeds strung along a
+    # line with no spread give clumps that are bands across the pad, and a pad
+    # striped in three colours reads as a chart of itself - the same fault that
+    # ruled out grouping the pads by shelf.
+    owner = {}
+    for i in live:
+        bucket = buckets.get(i)
+        cells = by_pad[i]
+        if not bucket or not cells:
+            continue
+        cells = sorted(cells, key=lambda c: c[3])
+        px, py = centres[i]
+        ax, ay = pad_anchor[i]
+        span = deepest[i] or 1.0
+        # The pad's outward direction, in screen proportions, so that "out" is
+        # out to look at and not merely out in the grid.
+        ox_, oy_ = (px - ax) / ASPECT, py - ay
+        length = math.hypot(ox_, oy_) or 1.0
+        ox_, oy_ = ox_ / length, oy_ / length
+        bucket = sorted(bucket, key=lambda b: rank[b])
+        weights = [STAGE_WEIGHT[notes[b].stage] for b in bucket]
+        share = sum(weights)
+        room = {
+            b: max(1, round(len(cells) * w / share)) for b, w in zip(bucket, weights)
+        }
+        seeds = []
+        for k, b in enumerate(bucket):
+            out = span * (k + 0.5) / len(bucket)
+            # Enough lateral spread that the clumps are not bands across the
+            # pad, not so much that it swamps the outward order it is jittering.
+            side = jit(0.22) * span
+            seeds.append(
+                (
+                    ax + (ox_ * out - oy_ * side) * ASPECT,
+                    ay + oy_ * out + ox_ * side,
+                    b,
+                )
+            )
+        for dx, dy, _, _ in cells:
+            x, y = crown_x + dx, crown_y + dy
+            best, best_d = None, None
+            for sx, sy, b in seeds:
+                if room[b] <= 0:
+                    continue
+                d = math.hypot((x - sx) / ASPECT, y - sy)
+                if best_d is None or d < best_d:
+                    best, best_d = b, d
+            if best is None:
+                # Every seed is full and there are cells over: they go to
+                # whichever note is nearest, because a hole in the crown would
+                # be a hole in the outline this whole file exists to protect.
+                best = min(
+                    seeds, key=lambda s: math.hypot((x - s[0]) / ASPECT, y - s[1])
+                )[2]
+            else:
+                room[best] -= 1
+            owner[(dx, dy)] = best
+
     on_tree = set()
     for dx, dy, which, _ in foliage:
         note = owner.get((dx, dy))
@@ -691,7 +954,7 @@ def grow(notes, seed=DEFAULT_SEED):
         # The jitter is what stops the opening edge being a clean arc sweeping
         # across the pad - the same reason the crown's outline is perturbed by
         # angle rather than left as an ellipse.
-        opened = pad_ready[which] + LEAF_SPAN * (
+        opened = pad_ready[which] + pad_span[which] * (
             reach(which, dx, dy) / (deepest[which] or 1) + jit(0.07)
         )
         if place(crown_x + dx, crown_y + dy, char, "leaf", note, shade, at=opened):
@@ -705,7 +968,7 @@ def grow(notes, seed=DEFAULT_SEED):
         char = pick(LEAF_CHARS[notes[index].stage])
         found = False
         px, py = centres[index % pads]
-        last = pad_ready[index % pads] + LEAF_SPAN
+        last = pad_ready[index % pads] + pad_span[index % pads]
         for radius in range(1, max(width, height)):
             for dy in range(-radius, radius + 1):
                 for dx in range(-radius * 2, radius * 2 + 1):
@@ -781,6 +1044,43 @@ def to_text(tree):
     return "\n".join(
         "".join(c.char if c else " " for c in row).rstrip() for row in tree.rows
     )
+
+
+def to_rate(tree, buckets=20):
+    """How many characters arrive per slice of the animation, as a bar chart.
+
+    The taste-pass loop for the GROWTH, and it exists for the same reason
+    `--seeds` does: the only way to judge a tree is to look at one, and the
+    only way to judge how it grows is to look at its rate. A screenshot cannot
+    show this and neither can reading the constants - the timeline's shape is
+    an emergent property of the crown's geometry, and it changes whenever the
+    geometry does.
+
+    What it is FOR is catching the fault that produced it. The reveal used to
+    arrive as a lump, then a stall of about a quarter of the whole run in which
+    a one-cell-wide trunk was the only thing being drawn, then an avalanche as
+    every pad opened at once. Behind a 0.35s fade that read as "smooth"; behind
+    the snap the page uses now it would read as a stutter, a wait and a flash.
+    An even bar chart here is what lets the page get away with hard-edged
+    arrival, so this is the number to look at before changing anything in the
+    growth timeline or in the crown's proportions.
+    """
+    times = sorted(c.grew for row in tree.rows for c in row if c is not None)
+    if not times:
+        return "an empty plate"
+    lo, hi = times[0], times[-1]
+    span = (hi - lo) or 1.0
+    counts = collections.Counter(
+        min(buckets - 1, int(buckets * (t - lo) / span)) for t in times
+    )
+    flat = len(times) / buckets
+    lines = [f"{len(times)} cells; an even rate would be {flat:.1f} per slice"]
+    for i in range(buckets):
+        n = counts.get(i, 0)
+        lines.append(f"{i * 100 // buckets:3d}% {n:5d} {'#' * n}")
+    worst = min(counts.get(i, 0) for i in range(buckets))
+    lines.append(f"thinnest slice {worst}, fullest {max(counts.values())}")
+    return "\n".join(lines)
 
 
 def to_html(tree, notes):
@@ -917,6 +1217,7 @@ def seed_from(notes):
     """
     fields = "\n".join(
         f"{n.title}\x1f{n.url}\x1f{n.words}\x1f{n.stage}\x1f{n.topic}\x1f{n.hue}"
+        f"\x1f{n.revisions}\x1f{n.published}"
         for n in notes
     )
     digest = hashlib.blake2b(fields.encode("utf-8"), digest_size=4).digest()
@@ -958,7 +1259,25 @@ def _synthetic(count, seed):
             "evergreen" if words > 1200 else "sapling" if words > 380 else "seedling"
         )
         shelf, hue = ("slip-box", "2") if rng() > 0.28 else ("lighting", "5")
-        notes.append(Note(f"Note {i + 1}", f"/note-{i + 1}/", words, stage, shelf, hue))
+        # A long tail again, and for the same reason: most notes are written
+        # once and left, a few are worked over repeatedly, and the shape of
+        # that tail is what the inner-to-outer axis has to read against. The
+        # dates spread over a year so that the tie-break has something to do,
+        # which the real vault's ledger cannot offer it yet.
+        revisions = math.floor(rng() ** 2.6 * 10)
+        published = f"2026-{1 + math.floor(rng() * 12):02d}-{1 + math.floor(rng() * 28):02d}"
+        notes.append(
+            Note(
+                f"Note {i + 1}",
+                f"/note-{i + 1}/",
+                words,
+                stage,
+                shelf,
+                hue,
+                revisions,
+                published,
+            )
+        )
     return notes
 
 
@@ -981,6 +1300,12 @@ def main(argv):
     parser.add_argument(
         "--html", action="store_true", help="print the markup instead of the tree"
     )
+    parser.add_argument(
+        "--rate",
+        action="store_true",
+        help="print how many characters arrive per twentieth of the animation, "
+        "which is the shape the page reveals the tree at",
+    )
     args = parser.parse_args(argv[1:])
 
     # `--seeds` varies the GARDEN and lets each one seed itself, which is the
@@ -991,6 +1316,9 @@ def main(argv):
         notes = _synthetic(args.notes, vault)
         seed = args.seed if args.seed is not None else seed_from(notes)
         tree = grow(notes, seed)
+        if args.rate:
+            print(to_rate(tree))
+            continue
         if args.html:
             print(to_html(tree, notes), end="")
             continue

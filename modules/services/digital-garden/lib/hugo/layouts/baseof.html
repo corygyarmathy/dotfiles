@@ -589,13 +589,14 @@
         cells.forEach(function (cell) {
           cell.classList.add("off");
         });
-        // Turns on the per-character fade, and is taken off again at the end so
-        // that the hover highlight is instant rather than easing in.
+        // Scopes the fresh-growth tint below, and is taken off at the end so
+        // that a finished tree can never carry it.
         tree.classList.add("growing");
 
         function done() {
           cells.forEach(function (cell) {
             cell.classList.remove("off");
+            cell.classList.remove("new");
           });
           tree.classList.remove("growing");
         }
@@ -604,8 +605,8 @@
         // what made the trunk arrive as one object: it is about fifty cells of
         // three hundred, so at a fixed eight per frame it was over in a tenth
         // of a second whatever the generator meant it to be. Against the clock
-        // the trunk gets the half of the animation the generator gave it, a big
-        // vault grows in the same time as a small one, and a machine that
+        // the trunk gets the share of the animation the generator gave it, a
+        // big vault grows in the same time as a small one, and a machine that
         // cannot keep up drops cells in bigger steps instead of taking longer.
         var GROWTH = 2600;
         var start = Date.now();
@@ -617,18 +618,39 @@
         // the finished tree instead, because the time passed while they were
         // away. And a timeout behind it, so that the one failure this can have
         // (the interval never finishing) still ends with the whole tree up.
+        //
+        // Two cursors, not one. `at` is the growing tip: it snaps cells on at
+        // full strength, with no fade, because a character part-way in is a
+        // thing being uncovered rather than a thing being made. `settled`
+        // follows FRESH behind it and takes the pale tint back off, so what
+        // moves over the tree is a band of new growth a few frames deep rather
+        // than a soft edge. Both are read off the same clock, so the band's
+        // depth is fixed in milliseconds however fast the machine is drawing.
+        //
+        // The tick is 16ms rather than 32ms for the same reason the fade went:
+        // with nothing interpolating between frames, the frame rate IS the
+        // smoothness. At about nine milliseconds a character that is under two
+        // cells a tick, which reads as a rate; at 32ms it was four, which reads
+        // as a step.
+        var FRESH = 170;
         var at = 0;
+        var settled = 0;
         var timer = setInterval(function () {
-          var reached = ((Date.now() - start) / GROWTH) * 1000;
+          var elapsed = Date.now() - start;
+          var reached = (elapsed / GROWTH) * 1000;
+          var hardened = ((elapsed - FRESH) / GROWTH) * 1000;
           while (at < cells.length && +cells[at].dataset.grow <= reached) {
+            cells[at].classList.add("new");
             cells[at++].classList.remove("off");
           }
-          if (at >= cells.length) {
-            clearInterval(timer);
-            // After the last characters have finished fading up, not with them.
-            setTimeout(done, 1000);
+          while (settled < at && +cells[settled].dataset.grow <= hardened) {
+            cells[settled++].classList.remove("new");
           }
-        }, 32);
+          if (settled >= cells.length) {
+            clearInterval(timer);
+            done();
+          }
+        }, 16);
         setTimeout(function () {
           clearInterval(timer);
           done();
