@@ -1,6 +1,6 @@
 # Plan: the desktop, as a designed system
 
-Status: proposed 2026-09-05; the four open questions were answered on 2026-09-06 and two requirements were added that change the shape of the bar and remove motion from the desktop entirely — see _Decisions, 2026-09-06_ below. Nothing is built yet. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
+Status: proposed 2026-09-05; the four open questions were answered on 2026-09-06 and two requirements were added that change the shape of the bar and remove motion from the desktop entirely — see _Decisions, 2026-09-06_ below. Items 22 and 1–4 were built on 2026-09-06; everything from 5 on is still proposed. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
 
 Scope is the `xps15` host: `modules/home/desktop/`, `modules/nixos/hyprland.nix`, `modules/nixos/stylix.nix` and the eleven files under `configs/` that they deploy. The servers are out of scope and have no desktop.
 
@@ -104,10 +104,10 @@ These are the load-bearing ones. Each is argued in its item below; they are coll
 
 | # | Item | Size | Depends on | Status |
 | - | ---- | ---- | ---------- | ------ |
-| 1 | A check that the bar's commands exist | small | – | proposed |
-| 2 | A polkit authentication agent | small | – | proposed |
-| 3 | The eight dead click actions | small | 1 | proposed |
-| 4 | Autostart stops owning what systemd owns | small | – | proposed |
+| 1 | A check that the bar's commands exist | small | – | **done 2026-09-06** |
+| 2 | A polkit authentication agent | small | – | **done 2026-09-06** |
+| 3 | The eight dead click actions | small | 1 | **done 2026-09-06** — ten, in the end |
+| 4 | Autostart stops owning what systemd owns | small | – | **done 2026-09-06** |
 | 5 | One palette, one source | medium | – | proposed |
 | 6 | A geometry scale | small | – | proposed; motion half withdrawn 2026-09-06 |
 | 7 | Rofi is the menu system | medium | 5 | proposed |
@@ -125,7 +125,7 @@ These are the load-bearing ones. Each is argued in its item below; they are coll
 | 19 | Waybar, re-laid-out | medium | 3, 5, 6 | **superseded by 21** |
 | 20 | Rofi, refined | small | 5, 6, 7 | proposed |
 | 21 | The bar is vertical | large | 3, 5, 6 | proposed 2026-09-06 |
-| 22 | Motion comes out | small | – | proposed 2026-09-06 |
+| 22 | Motion comes out | small | – | **done 2026-09-06** |
 
 Sequencing: **22 first**, out of order, because it is one line, it is free, and it changes how everything after it feels to work on — there is no sense tuning a desktop while a 400 ms fade sits in front of the launcher. Then **1–4**, because they are defects and cheap, and because item 1 is the harness that stops item 3 from recurring — the same reason the digital garden plan put its rendering fixture before its palette. **5–7 next**, because they are the spine every later item hangs from. **8–15** are the gaps, and each is a session-sized piece of work that can be taken independently once 7 exists. **16, 17, 18, 20 and 21** are tuning and taste, and want the rest in place first so that what is being looked at is the finished shape — item 21 especially, since it is the item that decides which of the modules from 9, 12, 13 and 14 earn a permanent place on a bar that no longer has room for all of them.
 
@@ -149,6 +149,14 @@ Reference resolution is the same question for `binds.lua` and for the hypridle a
 
 Half a session. The risk is over-reach: shell one-liners with pipes and `$(...)` are in the file already, and the check should look at the first token and stop, not try to parse shell.
 
+### Built, 2026-09-06
+
+`modules/home/desktop/waybar-commands.py`, run from `modules/home/desktop/waybar.nix`. It parses `config.jsonc` with `json5` (JSONC is a subset — comments and trailing commas both parse), walks every `exec`, `exec-if`, `on-update`, `on-click*` and `on-scroll*` string, takes the first whitespace-separated word, and asserts it resolves under `home.path/bin`, `system.path/bin` or `system.path/sbin` — the two closures that actually make up the bar's PATH, read from the evaluated configuration rather than restated.
+
+It is _not_ in `checks/`, and that is the point of item 1 rather than an omission: `xdg.configFile."waybar".source` is the check's own output, so there is no way to deploy a `config.jsonc` the check has not passed on. A dead button fails `nixos-rebuild switch` on the laptop and fails the host build in CI, instead of failing a test run somebody has to remember to look at. `/run/wrappers/bin` is deliberately not modelled — nothing on the bar is setuid, and a wrapper cannot be resolved from a build sandbox, so a command that needs one fails the check and forces the question.
+
+One deliberate exclusion: a module's `actions` object maps an event to a waybar-_internal_ action name, not to a command, so it is skipped. That distinction turned out to matter — see item 3.
+
 ## 2. A polkit authentication agent
 
 ### The problem
@@ -166,6 +174,10 @@ Its dialog is Qt and will not be themed by stylix's GTK target. That is acceptab
 ### Cost and risk
 
 Minutes. Verify by asking for something that needs it rather than by reading the option back.
+
+### Built, 2026-09-06
+
+`services.hyprpolkitagent.enable = true` in `modules/home/desktop/hyprland.nix`, next to the comment naming it as the other half of `security.polkit.enable`. Not behind its own toggle: a session with no way to authenticate is not a configuration anyone would choose. The Qt dialog stays an accepted exception. Still to be verified the way the item asks — by triggering something that needs it, not by reading the option back.
 
 ## 3. The eight dead click actions
 
@@ -202,6 +214,19 @@ That leaves the actual installs: `btop` for the system view, and — if the righ
 
 One session, mostly deciding rather than typing. Item 1 should land first so the result is verified by the check rather than by clicking eight things.
 
+### Built, 2026-09-06
+
+Item 1 landed first, as the item asks, and immediately found two more of the same defect that reading the file had missed — so the count was ten, not eight:
+
+- `hyprland/workspaces` had `"on-click": "activate"`. `activate` is a `sway/workspaces` action name; `hyprland/workspaces` has no `on-click` option at all, so waybar was handing `activate` to a shell. Clicking a workspace already switches to it natively (`Workspace::handleClicked` dispatches over the Hyprland socket), so the line is simply gone.
+- The clock's `"on-click-right": "mode"` sat _inside_ `"calendar"`, where waybar never reads it — module actions come from an `"actions"` object on the module. It was inert rather than broken, which is the same failure wearing a better disguise. Moved to `"actions"`, where it now works.
+
+The eight from the table: the three `foot -e btop` left-clicks became `term-run btop`; `dust`, `pulsemixer` and `nm-connection-editor` were dropped rather than installed, each with a comment naming the later item that replaces what it was reaching for (14, 9, 9); and the two `notify-send` right-clicks were moved rather than fixed, per the escalation-ladder rule.
+
+The battery's move is the clean case: `upower -i` reported state, percentage, time and energy rate, and waybar's own `tooltip-format` renders `{timeTo}`, `{power}` and `{health}` at hover depth with no process to fork. The temperature's is the honest one: the module's `tooltip-format` only accepts `{temperatureC/F/K}`, so "all thermal zones" cannot go there. The right-click is gone, the native tooltip answers the module's own question, and per-zone detail is left to item 14 — where a `pick`-depth surface exists to put it in.
+
+**The terminal is named once.** `term-run <command>` is a `writeShellApplication` in `modules/home/terminals/ghostty.nix` — the module that already decides which terminal this desktop uses, and therefore the right place to make that decision executable. `config.jsonc` names `term-run`, never `ghostty`. `btop` is installed by `modules/home/desktop/waybar.nix` rather than by the host's package list, so the bar carries its own click targets and the two cannot drift apart.
+
 ## 4. Autostart stops owning what systemd owns
 
 ### The problem
@@ -219,6 +244,12 @@ Delete the `hyprpaper` and `dunst` lines. The `systemctl --user start hyprland-s
 ### Cost and risk
 
 Small, and it is a strict simplification. The risk is that something depends on the ordering the exec gave it; UWSM plus `graphical-session.target` is the correct ordering mechanism and both services already declare `After=graphical-session.target`.
+
+### Built, 2026-09-06
+
+The `hyprpaper` and `dunst` lines are gone. `kdeconnect-indicator` got the unit it never had, in `modules/home/desktop/kdeconnect.nix` behind `cg.home.kdeconnect.enable` — the daemon and its firewall holes stay with `programs.kdeconnect.enable` on the host, and only the tray icon is the home-manager side's business. It is ordered `After=` and `Requires=tray.target` exactly as `udiskie.service` is, because a StatusNotifierItem with no host has nowhere to draw; under the old `exec_cmd` it raced the bar with nothing to order it at all.
+
+`autostart.lua` is kept rather than folded away, at one line. The file is now the written-down answer to "where does a daemon go", and the comment says the answer is _not here_ — which is worth more as a file than as a deleted file.
 
 ## 5. One palette, one source
 
