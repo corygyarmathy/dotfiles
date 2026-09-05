@@ -5,11 +5,13 @@
 -- hyprland-session.target is what pulls those units in; a daemon launched here
 -- as well is launched twice. hyprpaper (services.hyprpaper, enabled by stylix)
 -- and dunst (services.dunst) were both in that state - dunst refused its second
--- instance, hyprpaper raced its first over the same IPC socket.
+-- instance, hyprpaper raced its first over the same IPC socket. kdeconnect-
+-- indicator had no unit at all, so it was given one
+-- (modules/home/desktop/kdeconnect.nix) rather than kept here.
 --
--- So: add a daemon here only if it has no unit, and prefer giving it one.
+-- That leaves one line, and it should stay the only one: add a daemon here
+-- only if it has no unit, and prefer giving it one.
 
 hl.on("hyprland.start", function()
 	hl.exec_cmd("systemctl --user start hyprland-session.target")
-	hl.exec_cmd("kdeconnect-indicator")
 end)
