@@ -103,7 +103,8 @@
   },
 
   "hyprland/workspaces": {
-    "on-click": "activate",
+    // Clicking a workspace switches to it natively; there is no "on-click"
+    // option on this module, so a value here would be run as a command.
     "all-outputs": false,
   },
 
@@ -113,24 +114,25 @@
   "disk": {
     "interval": 120,
     "format": "{percentage_used}% ",
-    // Left = open file manager, Right = show details, Middle = open terminal at /
+    // Left = open file manager, Right = show details
+    // Middle was a `dust` tree in a terminal; item 14 of the desktop plan owns
+    // "what is using this disk" and gives it a menu instead.
     "on-click": "xdg-open ~",
     "on-click-right": "notify-send 'Disk' \"$(df -h / --output=source,size,used,avail,pcent | tail -1)\"",
-    "on-click-middle": "foot -e bash -c 'dust / | head -30; read'",
   },
 
   "cpu": {
     "format": "{usage}% ",
     "tooltip": true,
     // Left = open btop, Right = show top processes, Middle = (reserved)
-    "on-click": "foot -e btop",
+    "on-click": "term-run btop",
     "on-click-right": "notify-send 'Top CPU' \"$(ps -eo comm,%cpu --sort=-%cpu | head -6)\"",
   },
 
   "memory": {
     "format": "{}% ",
     // Left = open btop, Right = show top memory consumers
-    "on-click": "foot -e btop",
+    "on-click": "term-run btop",
     "on-click-right": "notify-send 'Top Memory' \"$(ps -eo comm,%mem --sort=-%mem | head -6)\"",
   },
 
@@ -139,9 +141,12 @@
     "critical-threshold": 80,
     "format": "{temperatureC}°C {icon}",
     "format-icons": ["", "", ""],
-    // Left = open btop (sensors), Right = show all thermal zones
-    "on-click": "foot -e btop",
-    "on-click-right": "notify-send 'Temperatures' \"$(sensors 2>/dev/null | grep -E '°C' | head -10)\"",
+    // Left = open btop (sensors)
+    // Right was a `sensors` notification with no `sensors` to run, so it fired
+    // an empty body - which reads as "nothing to report" rather than "broken".
+    // waybar's own tooltip already answers this module's question at hover
+    // depth; per-zone detail belongs to item 14 of the desktop plan.
+    "on-click": "term-run btop",
   },
 
   // ===========================================================================
@@ -157,9 +162,12 @@
       "critical": 15,
       "warning": 30,
     },
-    // Left = toggle format (capacity vs time), Right = show power details
-    // (format-alt handles left click natively)
-    "on-click-right": "notify-send 'Battery' \"$(upower -i $(upower -e | grep battery) | grep -E 'state|percentage|time|energy-rate')\"",
+    // Left = toggle format (capacity vs time; format-alt handles it natively)
+    // Right was a `upower` notification, and upower is not enabled - so it
+    // fired an empty body. Everything it meant to report waybar can render
+    // itself, at hover depth, which is where information the user asked for
+    // belongs.
+    "tooltip-format": "{timeTo}\nDraw: {power} W\nHealth: {health}%",
   },
 
   // ===========================================================================
@@ -174,7 +182,6 @@
       "mode": "month",
       "weeks-pos": "right",
       "mode-mon-col": 3,
-      "on-click-right": "mode",
       "format": {
         "month": "<span color='#E6C384'><b>{}</b></span>",
         "weekdays": "<span color='#FFA066'><b>{}</b></span>",
@@ -183,6 +190,12 @@
       },
     },
     // Left = toggle format (format-alt handles natively)
+    // Right = switch the calendar between month and year. That is a module
+    // action rather than a command, so it belongs in "actions"; inside
+    // "calendar" it was never read.
+    "actions": {
+      "on-click-right": "mode",
+    },
   },
 
   // ===========================================================================
@@ -195,8 +208,9 @@
     "format-ethernet": "{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}",
     "format-linked": "{ifname} (No IP) ",
     "format-wifi": "{signalStrength}% ",
-    // Left = toggle format (format-alt handles natively), Middle = open nm settings
-    "on-click-middle": "nm-connection-editor",
+    // Left = toggle format (format-alt handles natively)
+    // Middle was nm-connection-editor, which is not installed; item 9 of the
+    // desktop plan gives the network a rofi menu instead.
   },
 
   // ===========================================================================
@@ -218,10 +232,11 @@
     "format-muted": " {format_source}",
     "format-source": "{volume}% ",
     "format-source-muted": "",
-    // Left = open pavucontrol, Right = toggle mute, Middle = open pulsemixer
+    // Left = open pavucontrol, Right = toggle mute
+    // Middle was a pulsemixer TUI; item 9 of the desktop plan replaces it with
+    // a sink picker in rofi.
     "on-click": "pavucontrol",
     "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-    "on-click-middle": "foot -e pulsemixer",
     "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
     "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
   },
