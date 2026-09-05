@@ -35,6 +35,20 @@ in
       };
     };
 
+    # The other half of `security.polkit.enable` in modules/nixos/hyprland.nix.
+    # That option starts polkitd, which is the half that *decides*; this is the
+    # half that *asks*. Without an agent a graphical action needing
+    # authorisation has nowhere to prompt, so it fails with no dialog and no
+    # visible error - the action simply does not happen.
+    #
+    # Not behind its own toggle: a session with no way to authenticate is not a
+    # configuration anyone would choose, so this is part of what it costs to run
+    # Hyprland rather than something to enable separately.
+    #
+    # Its dialog is Qt and stylix's GTK target does not reach it. Accepted:
+    # it should be seen rarely, and polkit-gnome is unmaintained.
+    services.hyprpolkitagent.enable = true;
+
     home.packages = with pkgs; [
       # Screenshots
       grim # Screenshot utility
