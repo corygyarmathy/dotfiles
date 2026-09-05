@@ -24,6 +24,25 @@
   boot.loader = {
     systemd-boot.enable = true;
     efi.canTouchEfiVariables = true;
+
+    # Without a limit, every `switch` - including the nightly unattended one
+    # from `system.autoUpgrade` - adds one more kernel+initrd to the ESP and
+    # none are ever removed. Found the hard way: homelab02's /boot hit 91%
+    # used (22 generations, ZFS support inflating its initrd) and homelab01
+    # was on the same trajectory at 81% (59 generations). 10 is comfortably
+    # more rollback depth than boot-counting or upgrade-verify ever reach
+    # back for, while leaving the ESP mostly empty again.
+    #
+    # Not covered by the fleet's existing `nix.gc.automatic` (flake.nix):
+    # `nix-collect-garbage --delete-older-than 14d` has been running weekly on
+    # both servers and freeing several GB of store garbage each time, but it
+    # has never trimmed a single generation from the `system` profile itself -
+    # homelab02's oldest surviving generation predates its GC policy by a week
+    # with no explanation found. `configurationLimit` doesn't depend on that:
+    # `nixos-rebuild switch`/`boot` prunes the system profile to this count
+    # directly, every time, which is why it's the documented way to bound
+    # bootloader entries rather than leaving it to GC.
+    systemd-boot.configurationLimit = 10;
   };
 
   # ============================================================================
