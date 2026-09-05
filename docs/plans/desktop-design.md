@@ -1,6 +1,6 @@
 # Plan: the desktop, as a designed system
 
-Status: proposed 2026-09-05. Nothing here is taken yet. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
+Status: proposed 2026-09-05; the four open questions were answered on 2026-09-06 and two requirements were added that change the shape of the bar and remove motion from the desktop entirely — see _Decisions, 2026-09-06_ below. Nothing is built yet. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
 
 Scope is the `xps15` host: `modules/home/desktop/`, `modules/nixos/hyprland.nix`, `modules/nixos/stylix.nix` and the eleven files under `configs/` that they deploy. The servers are out of scope and have no desktop.
 
@@ -15,6 +15,19 @@ What is missing is not compositor work. It is three things:
 3. **About eight of the bar's documented click actions run a command that is not installed.** The bar teaches an interaction grammar and then does not honour it, which is worse than not having the grammar.
 
 The plan below fixes those in that order, then spends the remaining effort on measurement and taste. The single largest design decision proposed is item 7: **rofi becomes the menu system for everything that is a list of things to pick**, instead of adding four or five separate applets. One theme, one interaction model, keyboard and mouse both work, and the maintenance surface is a handful of shell scripts over `nmcli`, `bluetoothctl`, `wpctl` and `cliphist` rather than four GTK trays.
+
+Two further decisions were added on 2026-09-06 and are as structural as item 7: **the bar becomes vertical** (item 21), and **motion is removed rather than tuned** (item 22).
+
+## Decisions, 2026-09-06
+
+The four questions at the foot of the 2026-09-05 draft were answered, and two requirements arrived that were not in it. The answers are recorded here; the items they touch are amended in place below.
+
+- **Portability is kept, and only colour is generated.** The configs have never been copied to a non-Nix machine, but the property is wanted, so the compromise stands as item 5 proposed it: `config.jsonc` and `style.css` stay hand-written and hex-free, and only the colour file is produced from the stylix palette, with a checked-in copy for the non-Nix case. The cheaper alternative — hand stylix the waybar and rofi targets — stays rejected.
+- **The power menu is two layers, so it takes no confirmation.** Opening the menu is the first decision and picking `Power off` is the second, which is the interruption budget principle 3 allows. The conditional in the answer is worth writing down as a rule, because it generalises: _a destructive action reachable in one step gets a confirmation; one reachable in two does not._ That is what makes it wrong to also bind `SUPER+SHIFT+Q` straight to shutdown later as a convenience — see item 8.
+- **`swayosd`, not the dunst progress bar.** Taken directly rather than after trying the free version. It has a home-manager service and the daemon is cheap. It has one consequence worth naming now: **stylix has no swayosd target**, so it arrives as a fourth surface holding a hand-written copy of the palette, and it must be built into item 5's generated-colour scheme from the start rather than added to it afterwards. Item 12 is rewritten and now depends on item 5.
+- **The laptop panel is sometimes the only display, and gets no workspace assignments.** Confirmed as deliberate: with the externals disconnected every workspace lands on `eDP-1` because it is the only output, which is the behaviour wanted, and no rule is needed to produce it. The lid-disabled state is a workaround for a Hyprland issue that may have been fixed since — worth re-testing during item 16, but not a design question. This closes the question; item 21 inherits the constraint that the bar must be sensible on one 16:10 panel as well as on two 1440p externals.
+- **The bar becomes vertical.** New requirement, and the largest single change in this document. See item 21, which supersedes item 19.
+- **Animations go off, not down.** New requirement, and it withdraws the motion half of item 6 and one of item 16's three variables. See item 22.
 
 ## Principles, turned into rules
 
@@ -64,7 +77,7 @@ Two rules follow from the pairs rather than from any single principle, and they 
 
 ### Where it stands against each principle
 
-**Principle 1 — performance.** Two settings are worth measuring before anything else is tuned. `settings.lua` runs blur at `passes = 4` against a default of 1, with `popups = true`, across a 3440×1440 ultrawide, a 2560×1440 secondary and the laptop panel on a hybrid-graphics machine; that is the most expensive thing the compositor does, and it is set nearly four times higher than stock. `cursor.no_hardware_cursors = true` forces a software cursor, which composites the whole screen on pointer motion — this was the correct NVIDIA workaround historically and may no longer be, so it is a re-test rather than an assumption. Separately, `animations.lua` gives `layersIn` a speed of 4, which is 400 ms: **rofi takes 400 ms to fade in**, and the launcher is the surface where responsiveness is felt most. That single number is probably the largest gap between how fast this desktop is and how fast it feels. And `custom/ddc-brightness` polls DDC/CI over I²C every 10 seconds, which is a slow serialised bus being asked a question whose answer changes when the user changes it.
+**Principle 1 — performance.** Two settings are worth measuring before anything else is tuned. `settings.lua` runs blur at `passes = 4` against a default of 1, with `popups = true`, across a 3440×1440 ultrawide, a 2560×1440 secondary and the laptop panel on a hybrid-graphics machine; that is the most expensive thing the compositor does, and it is set nearly four times higher than stock. `cursor.no_hardware_cursors = true` forces a software cursor, which composites the whole screen on pointer motion — this was the correct NVIDIA workaround historically and may no longer be, so it is a re-test rather than an assumption. Separately, `animations.lua` gives `layersIn` a speed of 4, which is 400 ms: **rofi takes 400 ms to fade in**, and the launcher is the surface where responsiveness is felt most. That single number is probably the largest gap between how fast this desktop is and how fast it feels — item 22 removes it, and every other duration with it. And `custom/ddc-brightness` polls DDC/CI over I²C every 10 seconds, which is a slow serialised bus being asked a question whose answer changes when the user changes it.
 
 **Principle 2 — keyboard with mouse backups.** The keyboard half is genuinely good. The gaps are the actions that have no bind because they have no implementation (power, network, clipboard, audio device), and one structural gap: with sixty-odd bindings there is no way to see them. `binds.lua` is the only documentation of `binds.lua`.
 
@@ -83,7 +96,7 @@ These are the load-bearing ones. Each is argued in its item below; they are coll
 - **Hyprland stays.** It is working, it is configured well, and the alternatives (niri's scrolling model, river) are a different desktop rather than a better version of this one. Not revisited.
 - **Rofi becomes the menu system, and dedicated applets are rejected.** Power, wifi, bluetooth, audio sink, clipboard history, emoji and the keybind sheet are all the same shape — a list you filter and pick from — and rofi already does that with a theme this repository owns. The alternative is `wlogout` plus `nm-applet` plus `blueman-applet` plus a picker, which is four more surfaces, four more themes, four more tray icons and four more things to break. See item 7.
 - **Dunst stays; a notification centre daemon is rejected.** `swaync` would bring a history panel and a do-not-disturb toggle, and would also be a second GTK surface to theme. Dunst already has `dunstctl set-paused` and a queryable history; a bar module and a rofi menu get the same result with no new daemon, which is the order principle 6 asks for. Revisit only if the rofi history view turns out to be unusable.
-- **Waybar's colour file becomes generated; its layout file stays hand-written and portable.** The split is the point: `config.jsonc` and `style.css` remain standalone files that work on any machine, and only `kanagawa-wave.css` — which is nothing but colour — is produced from the stylix palette. The same split applies to rofi. This keeps the portability the current design bought while removing the duplication it cost. **This one is genuinely the user's call**, because it slightly weakens the "copy `configs/` to any machine" property. See item 5 for the two alternatives.
+- **Waybar's colour file becomes generated; its layout file stays hand-written and portable.** The split is the point: `config.jsonc` and `style.css` remain standalone files that work on any machine, and only `kanagawa-wave.css` — which is nothing but colour — is produced from the stylix palette. The same split applies to rofi, and to swayosd when item 12 adds it. This keeps the portability the current design bought while removing the duplication it cost. **Settled 2026-09-06**; see item 5.
 - **The greeter stays tuigreet, and its palette is set by hand.** `regreet` is the consistent answer and stylix themes it, but it needs a compositor to run inside, which puts a Wayland session in front of the Wayland session on every boot. tuigreet on a TTY is instant. The exception goes on the record instead. See item 18.
 - **A shell framework is rejected.** AGS, Quickshell and eww would replace waybar, rofi, the notification daemon and the lock screen with one programmable surface, and that is how the best-looking rices are built. It is also a bespoke desktop shell to maintain, which is what principle 6 exists to refuse. Not revisited unless waybar becomes the limiting factor, and it is not close to being that.
 
@@ -96,23 +109,25 @@ These are the load-bearing ones. Each is argued in its item below; they are coll
 | 3 | The eight dead click actions | small | 1 | proposed |
 | 4 | Autostart stops owning what systemd owns | small | – | proposed |
 | 5 | One palette, one source | medium | – | proposed |
-| 6 | A geometry and motion scale | small | 5 | proposed |
+| 6 | A geometry scale | small | – | proposed; motion half withdrawn 2026-09-06 |
 | 7 | Rofi is the menu system | medium | 5 | proposed |
 | 8 | Power and session | small | 7 | proposed |
 | 9 | Network, bluetooth, audio | medium | 7 | proposed |
 | 10 | Clipboard history that survives its window | small | 7 | proposed |
 | 11 | The keybind sheet | small | 7 | proposed |
-| 12 | Hardware feedback has nowhere to land | small | 5 | proposed |
+| 12 | Hardware feedback has nowhere to land | small | 5 | proposed; rewritten for swayosd 2026-09-06 |
 | 13 | Do not disturb, and a history | small | 7 | proposed |
 | 14 | What is running, and what has failed | medium | 3, 7 | proposed |
 | 15 | The screenshot suite | small | – | proposed |
-| 16 | Measure, then tune: blur, cursor, motion | medium | 6 | proposed |
+| 16 | Measure, then tune: blur and the cursor | medium | 22 | proposed; motion variable withdrawn 2026-09-06 |
 | 17 | The lock screen is off-palette | small | 5 | proposed |
 | 18 | The greeter, on the record | small | 5 | proposed |
-| 19 | Waybar, re-laid-out | medium | 3, 5, 6 | proposed |
+| 19 | Waybar, re-laid-out | medium | 3, 5, 6 | **superseded by 21** |
 | 20 | Rofi, refined | small | 5, 6, 7 | proposed |
+| 21 | The bar is vertical | large | 3, 5, 6 | proposed 2026-09-06 |
+| 22 | Motion comes out | small | – | proposed 2026-09-06 |
 
-Sequencing: **1–4 first**, because they are defects and cheap, and because item 1 is the harness that stops item 3 from recurring — the same reason the digital garden plan put its rendering fixture before its palette. **5–7 next**, because they are the spine every later item hangs from. **8–15** are the gaps, and each is a session-sized piece of work that can be taken independently once 7 exists. **16–20** are tuning and taste, and want the rest in place first so that what is being looked at is the finished shape.
+Sequencing: **22 first**, out of order, because it is one line, it is free, and it changes how everything after it feels to work on — there is no sense tuning a desktop while a 400 ms fade sits in front of the launcher. Then **1–4**, because they are defects and cheap, and because item 1 is the harness that stops item 3 from recurring — the same reason the digital garden plan put its rendering fixture before its palette. **5–7 next**, because they are the spine every later item hangs from. **8–15** are the gaps, and each is a session-sized piece of work that can be taken independently once 7 exists. **16, 17, 18, 20 and 21** are tuning and taste, and want the rest in place first so that what is being looked at is the finished shape — item 21 especially, since it is the item that decides which of the modules from 9, 12, 13 and 14 earn a permanent place on a bar that no longer has room for all of them.
 
 ---
 
@@ -228,40 +243,39 @@ The constraint that produced this is real and should be preserved: `configs/` de
 - `config.jsonc` and `style.css` stay hand-written, portable, and free of hexes.
 - `kanagawa-wave.css` becomes generated from `config.lib.stylix.colors`, keeping its current role-name interface exactly so that `style.css` does not change at all. A checked-in copy stays for the non-Nix case; a check asserts the two agree.
 - The rofi theme gets the same treatment, and its role names are renamed to match waybar's. Two files should not call the same colour by two names.
-- The clock's four calendar hexes are the awkward case, because Pango markup inside JSON cannot read CSS variables. Either the calendar block is generated with the rest, or the calendar moves out of the tooltip entirely — item 19 is going to ask whether a click-through calendar is the right shape anyway.
-- `hyprlock.nix` is item 17.
+- The clock's four calendar hexes are the awkward case, because Pango markup inside JSON cannot read CSS variables. Either the calendar block is generated with the rest, or the calendar moves out of the tooltip entirely — item 21 is going to ask whether a tooltip calendar survives a 40px-wide bar at all.
+- `hyprlock.nix` is item 17. **swayosd is a fourth hand-themed surface** and joins this scheme when item 12 adds it: it reads a plain `~/.config/swayosd/style.css`, and stylix has no target for it (confirmed by evaluation), so it must be generated from the same source from the first commit rather than hand-written and cleaned up later.
 - The seven unused theme files go. A theme that has never been rendered is not an option, it is a liability.
 
-Three alternatives were considered and two rejected. **Hand stylix the targets** (`stylix.targets.waybar.enable = true`) is the least code and gives up portability and the entire hand-tuned layout; rejected. **Keep hand-transcribing and add a check that the hexes match the base16 scheme** keeps portability perfectly and does not remove the duplication, only the drift; this is the cheap fallback if generation proves annoying. **Generate the colour file only** is what is proposed.
+Three alternatives were considered and two rejected. **Hand stylix the targets** (`stylix.targets.waybar.enable = true`) is the least code and gives up portability and the entire hand-tuned layout; rejected. **Keep hand-transcribing and add a check that the hexes match the base16 scheme** keeps portability perfectly and does not remove the duplication, only the drift; this is the cheap fallback if generation proves annoying. **Generate the colour file only** is what is proposed, and is what was taken on 2026-09-06.
 
-The one thing that would change the answer is if the portability property is not actually used — if these configs have never been copied to a non-Nix machine, the first alternative becomes attractive and this item shrinks to an afternoon. **That is a question for the user, not an assumption to make.**
+**Decided 2026-09-06.** The configs have never in fact been copied to a non-Nix machine, which would have made the first alternative attractive and halved this item — but the portability is wanted as a property rather than as a current practice, so the split stands. The checked-in copy of each generated file is what makes that true: it is the thing a non-Nix machine gets, and the check that it agrees with the generated version is what stops it rotting.
 
 ### Cost and risk
 
 One to two sessions. The risk is generating something stylix already generates and ending up with two files fighting over `~/.config/rofi/`; note that `stylix.targets.rofi.enable` is currently `true` and does nothing only because `programs.rofi` is not enabled — the raw `xdg.configFile` route is used instead. That latent conflict should be resolved explicitly rather than left to whichever writes last.
 
-## 6. A geometry and motion scale
+## 6. A geometry scale
+
+_Titled "a geometry and motion scale" on 2026-09-05. The motion half was withdrawn on 2026-09-06: item 22 removes motion rather than budgeting it, so there is no longer a duration scale to design. What is left is geometry._
 
 ### The problem
 
 Every surface picked its own numbers. Window rounding is 16, waybar's modules are 8, rofi's window is 16 and its rows are 10, dunst is 10. Window borders are 1px, waybar's are 2px, rofi's are 2px. Gaps are 5 in and 5 out; waybar's margins are 3, 10, 15 and 20 in different places. Nothing is wrong individually and nothing agrees.
 
-Motion is the same, and here it costs performance rather than only coherence. `layersIn` at speed 4 is a 400 ms fade for every layer surface — which is rofi opening. Windows open in 300 ms, workspaces slide in 200 ms, `global` is 1000 ms. Against the principle-1 rule of 150 ms for anything user-initiated, the launcher is nearly three times over budget and the window open is double.
-
 ### Approach
 
 Pick one scale and apply it everywhere. A first proposal, to be argued with rather than accepted:
 
-- **Radius**: 12 for anything window-sized or overlay-sized (windows, rofi, hyprlock's field, dunst), 8 for chips inside a surface (waybar modules, rofi rows). Two values, and the relationship between them is legible.
-- **Border**: 2px everywhere, including window borders. 1px on a window next to 2px on the bar above it is the kind of inconsistency that is felt without being seen.
+- **Radius**: 12 for anything window-sized or overlay-sized (windows, rofi, hyprlock's field, dunst, swayosd), 8 for chips inside a surface (waybar modules, rofi rows). Two values, and the relationship between them is legible.
+- **Border**: 2px everywhere, including window borders. 1px on a window next to 2px on the bar beside it is the kind of inconsistency that is felt without being seen.
 - **Spacing**: 8 as the unit. Gaps 8, waybar module padding 8/16, rofi padding 16.
-- **Motion budget**: user-initiated ≤ 150 ms. `layersIn` to 1.5, `windows` to 1.5, `workspaces` to 1.5, `fade` to 1. Ambient motion — `border`, `global` — may stay slower because nothing waits on it.
 
-The 150 ms number is the rule from principle 1 and is the point of the exercise; the specific radii are taste and should be looked at rather than reasoned about.
+These are taste and should be looked at rather than reasoned about. The one non-taste part is that the numbers live in one place, so that item 21 does not reinvent them while rotating the bar.
 
 ### Cost and risk
 
-Small, and immediately visible. It depends on item 5 only so that the numbers land in a file that will not be regenerated over.
+Small, and immediately visible. It no longer depends on item 5 — with motion gone there is nothing here that a generated colour file would overwrite — but taking 5 first still avoids touching `style.css` twice.
 
 ## 7. Rofi is the menu system
 
@@ -298,7 +312,9 @@ There is no visual way to shut down, reboot, log out or suspend. `SUPER+S` locks
 
 A rofi menu: lock, log out, suspend, reboot, power off. Bound to `SUPER+Escape`, and reachable from a bar module. `loginctl` and `systemctl` do the work.
 
-Confirmation is the one design question. Principle 3 says the system should not interrupt, and a confirmation dialog is an interruption — but so is losing an unsaved buffer to a mistyped keystroke. The proposal is no separate confirmation step, with the destructive entries ordered last and the list not accepting a bare Return on an empty filter. Worth arguing.
+**Decided 2026-09-06: no confirmation, because the menu is already two layers.** Opening the menu is one decision and picking the entry is the second, which is enough deliberation for an action that costs an unsaved buffer. Destructive entries are still ordered last and the list still does not accept a bare Return on an empty filter, so the fast path never lands on `Power off` by accident.
+
+The rule underneath that answer generalises, and is the reason to write it down rather than just do it: **a destructive action reachable in one step gets a confirmation; one reachable in two does not.** So the obvious later convenience — binding `SUPER+SHIFT+Q` straight to shutdown to skip the menu — is not a free optimisation. It collapses the two layers into one and would have to bring a confirmation with it, at which point it has saved nothing. Do not add it.
 
 ### Cost and risk
 
@@ -358,17 +374,24 @@ Half a session. Consider making the entries actionable — picking one runs it �
 
 ### The problem
 
-Pressing volume up changes the volume and shows nothing. The bar's `pulseaudio` module will catch up, but it may be on another monitor, it is small, and the point of a volume key is immediate confirmation. Brightness, mute and caps lock are the same.
+Pressing volume up changes the volume and shows nothing. The bar's `pulseaudio` module will catch up, but it may be on another monitor, it is small, and the point of a volume key is immediate confirmation. Brightness and mute are the same. This gets worse rather than better after item 21: a 40px-wide bar has less room for a number than a 30px-tall one, so the bar stops being even a partial answer.
 
 ### Approach
 
-Dunst is already configured for this and it is not being used: `progress_bar = true` with a height, frame width and min/max width are all set in `dunst.nix`, and nothing sends a progress notification. `notify-send -h int:value:N -h string:x-dunst-stack-tag:volume` gives a replacing, stacking OSD with zero new processes, which is the ordering principle 6 asks for.
+_The 2026-09-05 draft proposed reusing dunst's already-configured but unused `progress_bar`, with swayosd as the escalation if that disappointed. Taken directly to swayosd on 2026-09-06._
 
-The objection is principle 3: this puts hardware feedback into the notification channel. The answer is that it is user-initiated, it replaces rather than stacks, and dunst can be told to give it its own rules. If that proves unsatisfying — the position is fixed to the notification corner, which is not where an OSD wants to be — `swayosd` is the escalation, it has a home-manager service, and it also solves caps-lock indication. Try the free version first.
+`services.swayosd.enable` in home-manager — the option exists — with the volume, mute and brightness binds in `binds.lua` calling `swayosd-client` instead of, or alongside, `wpctl` and `brillo`. The client route rather than swayosd's libinput backend: the backend is a system service that watches the raw input device to catch keys it was not bound to, there is no NixOS module for it in this nixpkgs, and the binds are already explicit in `binds.lua`, so there is nothing for it to catch. Caps lock is the one thing the backend would add and `custom/modifiers` already reports it.
+
+Two consequences worth taking on knowingly, because both are principle-6 costs:
+
+- **swayosd is a new daemon**, which principle 6's ordering asks to justify. The justification is that the dunst route puts hardware feedback into the notification channel and pins it to the notification corner, and this is a surface that should appear centred, over the focused output, and disappear without being dismissed. That is a different job from a notification and it is reasonable for it to be a different process.
+- **swayosd has no stylix target** (confirmed by evaluation) and reads a plain `~/.config/swayosd/style.css`. It is therefore a fourth hand-written copy of the palette unless it is built into item 5's generated-colour scheme from the first commit. That is why this item now depends on 5 rather than standing alone.
+
+While here: `brillo` on the function keys and `brightnessctl` in the bar and in hypridle are two tools with two ideas about the same backlight. Pick one. `brightnessctl` is the one the other two places already use.
 
 ### Cost and risk
 
-An hour for the dunst route. The volume and brightness binds in `binds.lua` grow a second command each, which argues for moving them into a small script rather than lengthening the Lua.
+Half a session, most of it theming. The volume and brightness binds grow a second command each, which argues for moving them out of `binds.lua` into a small script rather than lengthening the Lua — the same move item 15 wants for the screenshot binds.
 
 ## 13. Do not disturb, and a history
 
@@ -426,21 +449,26 @@ Keep `grimblast` and give it the full set, under `Print` with modifiers: region 
 
 An hour. Purely additive.
 
-## 16. Measure, then tune: blur, cursor, motion
+## 16. Measure, then tune: blur and the cursor
+
+_Titled "blur, cursor, motion" on 2026-09-05. Motion is no longer a variable here — item 22 sets it to zero, which is the endpoint any measurement would have been arguing towards._
 
 ### The problem
 
-Principle 1 is the first principle, and there is currently no way to tell whether the desktop meets it. Three settings are strong suspects and none should be changed on suspicion:
+Principle 1 is the first principle, and there is currently no way to tell whether the desktop meets it. Two settings are strong suspects and neither should be changed on suspicion:
 
 - `decoration.blur.passes = 4` against a default of 1, with `popups = true`, across two 1440p externals and a laptop panel on hybrid graphics. Blur is the most expensive thing a Wayland compositor does and this is set nearly four times over stock.
 - `cursor.no_hardware_cursors = true`, which forces the cursor to be composited into every frame instead of living on a hardware plane, so that pointer motion redraws the screen. This was the correct NVIDIA workaround for years. Whether it still is, on this driver and this Hyprland, is a question with an answer.
-- The motion budget from item 6, which is the one where the perceived win is largest and the measurement is easiest.
+
+Item 22 raises the stakes on the first of these rather than lowering them. With motion gone, blur is the only decoration left that costs frame time, and it is now the whole of the performance question rather than a third of it.
 
 ### Approach
 
 Establish the measurement first — this is the same move as the digital garden plan's rendering fixture, and for the same reason: a change you cannot see the effect of is a change you will argue about forever. Hyprland reports frame timings; `wev` measures input-to-event; a high-frame-rate capture of a keypress to first pixel is the honest end-to-end number if the cheap methods disagree.
 
-Then change one variable at a time: blur passes 4 → 2 → 1, hardware cursors on, and the item 6 durations. Record the numbers in this document, including the ones that turn out not to matter — a measurement showing blur is free on this hardware is worth as much as one showing it is not, because it closes the question.
+Then change one variable at a time: blur passes 4 → 2 → 1 → off, and hardware cursors on. Record the numbers in this document, including the ones that turn out not to matter — a measurement showing blur is free on this hardware is worth as much as one showing it is not, because it closes the question.
+
+Two things ride along, since the harness is up and the machine is being poked at anyway. **The lid-disabled workaround** in `monitors.lua` was added for a Hyprland issue that may since have been fixed; re-test it. **The hypridle `FIXME`** about waking from suspend is a reliability bug rather than a rice question, and it is the only open defect in this subsystem that this plan does not otherwise touch.
 
 ### Cost and risk
 
@@ -478,7 +506,9 @@ tuigreet accepts a colour theme via `--theme`, which covers the text, the prompt
 
 An hour. Revisit only if boot-time measurement in item 16 shows the greeter is not on the critical path after all.
 
-## 19. Waybar, re-laid-out
+## 19. Waybar, re-laid-out — superseded by 21
+
+_**Superseded 2026-09-06.** The bar is becoming vertical, and laying out a horizontal bar and then rotating it is doing the work twice. The analysis below is not wrong and is not discarded — item 21 inherits all of it, and the vertical constraint turns out to force most of what this item was going to have to argue for. Kept here because the reasoning is the input to 21, not because the item is still live._
 
 ### The problem
 
@@ -515,6 +545,63 @@ Also revisit the launcher itself: `sidebar-mode` is on with three modes, `drun-d
 
 Half a session, after item 7 has shown what shapes are actually needed. Doing it before is designing for menus that do not exist yet.
 
+## 21. The bar is vertical
+
+_Added 2026-09-06. Supersedes item 19._
+
+### The problem
+
+The bar is horizontal and 30px tall, and it costs the wrong axis. On the ultrawide it takes 30 of 1440 rows — 2.1% of the scarce dimension on a 21:9 panel — to display information across 3440 columns it does not need. Turned on its side at 40px it would take 1.2% of the plentiful dimension instead. On the 2560×1440 secondary the same trade is 2.1% against 1.6%. On the laptop panel, which is 16:10 rather than 21:9, it is closer to even and the vertical bar wins only slightly. Across the machine as it is normally used — docked, two wide externals — the argument is clearly right, and it is right for the reason given: windows want to be taller more than they want to be wider.
+
+The second half of the problem is that the current layout will not survive the rotation. Ten modules sit in `modules-right`, four of them numeric telemetry. `network` is formatted as `{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}`. `custom/media` is capped at 35 characters. The clock is `{:%H:%M %A, %d/%m}`. None of those fit in 40px, and the honest reading is that **the vertical bar is not a rotation, it is a redesign with a hard width budget**.
+
+### Approach
+
+That budget is the good news, and it is the argument for taking this item rather than treating it as a constraint to work around: **a 40px bar cannot hold information that is only interesting when abnormal, so it enforces the escalation ladder that item 19 was going to have to argue for.** There is no room for a permanently-displayed `6%` next to a permanently-displayed `31%`. Everything becomes an icon that changes when something is wrong, with the number in the tooltip and the detail one pick away — which is what principles 3 and 4 wanted anyway, and which the existing `custom/nixos-upgrade` and `custom/project` modules already do.
+
+The rules for the redesign:
+
+- **Icon-first, one glyph wide.** A module shows a glyph. A number appears only when it earns the space — a battery percentage does, a CPU percentage at idle does not.
+- **No rotated text.** Waybar supports `"rotate": 90`, and rotated labels on a bar you read a hundred times a day are a novelty that costs legibility every time. The exception, if any, is a single long-lived string like the project name; decide it by looking rather than in advance.
+- **Two lines beat rotation.** The clock becomes `%H` over `%M` — five characters that do not fit become two lines of two that do, and it reads instantly. The date goes to the tooltip.
+- **Drawers for the telemetry group.** Waybar's `group` in `drawer` mode collapses several modules behind one and expands on hover. cpu, memory, disk and temperature become one group that is a single glyph until pointed at. This is the `glance → hover → pick` ladder implemented literally, and it is what makes ten modules fit in a column.
+- **Groups by kind, along the column**: workspaces and project at the top, state and tray in the middle, system and clock at the bottom. The horizontal bar's left/centre/right becomes top/centre/bottom, and the grouping question item 19 raised is answered by the layout rather than deferred.
+- **Tooltips carry what the label used to.** `network`'s ifname and address, `battery`'s time remaining, `temperature`'s zones. This is also where the two `notify-send` right-clicks from item 3 land, which is the convergence noted there.
+
+Mechanically: `"position": "left"`, `"width": 40`, `height` unset; `style.css`'s eight margin values and its left/right `border-radius` pairs all swap axis, which is most of the CSS work and is why this is _large_ rather than _medium_. Item 6's scale should land first so the swap is done once against final numbers.
+
+Two things it drags with it. `dunst.nix` has `offset = "10x50"` on a `top-right` origin, where the 50 exists to clear the horizontal bar; with the bar on the left that offset is wrong. And swayosd from item 12 should be positioned against the new geometry rather than the old.
+
+**One question is genuinely open and should be settled by looking**: with two monitors side by side, a left-edge bar on each puts the secondary's bar against the seam, in the middle of the combined desktop. The alternative is outer edges — left on the ultrawide, right on the secondary — which waybar supports as two bar definitions with different `output` and `position`, at the cost of duplicating the module list or splitting it into an included file. The recommendation is **left on every output first**, because it is one config and the seam objection may evaporate on sight; switch only if it does not.
+
+### Cost and risk
+
+A full session, possibly two, and it is the largest item here. It wants 3, 5 and 6 landed first, and it wants 9, 12, 13 and 14 landed first as well — not as a dependency, but because this is the item that decides which of the modules those add earn a permanent place on a bar that can no longer hold everything.
+
+The risk is that a 40px bar turns out to be too narrow to be useful and the answer is 48 or 56, which is fine and is discovered by building it. The real risk is doing this before the modules exist and then doing it again.
+
+## 22. Motion comes out
+
+_Added 2026-09-06._
+
+### The problem
+
+`animations.lua` is 22 lines of carefully-chosen bezier curves, and the desktop would be faster without any of it. `layersIn` at speed 4 is 400 ms — every time rofi opens, the launcher spends four tenths of a second fading in before it is usable. Windows open in 300 ms. `global` is 1000 ms. Against principle 1's 150 ms rule the launcher is nearly three times over, and against the stated preference — no animations at all — the whole file is over.
+
+### Approach
+
+`hl.config({ animations = { enabled = false } })`, and the curves and per-leaf lines come out with it. One line changed, twenty deleted.
+
+**The recommendation is off, not minimal.** The middle position exists — keep animations and set every user-initiated one to 60–80 ms, which is below the threshold where motion feels like waiting but above the threshold where a change is a hard cut — and it is the right answer for someone who is undecided in the abstract. It is not the right answer here, for two reasons. The first is that the stated preference is off, and a designed compromise that nobody asked for is worse than an answer that can be reversed in one line. The second is that the one real argument _for_ animation does not apply to this desktop: motion is worth its cost when it tells you something the end state does not, and the case that usually makes is orientation after a change of focus — which this desktop already solves with a border colour, as the requirement notes. An instantly-recoloured border is in fact a _better_ focus cue than an animated one, because there is no 200 ms window in which the answer is ambiguous.
+
+There is one animation that carries information the end state genuinely does not, and it is worth naming so that missing it later is a recognised outcome rather than a puzzle: **the workspace slide tells you which direction you moved.** Switching from workspace 3 to 4 with no motion replaces the entire screen at once with no cue about whether you went left or right. Most people who turn animations off stop noticing within a day; some never stop. So: off wholesale, and if that one is missed after a week of real use, `workspaces` alone comes back at speed 1 (100 ms) and nothing else does. That is an answer decided by living with it rather than by reasoning about it, which is the right way round for a question this subjective.
+
+Turning motion off also settles two things elsewhere. It withdraws the motion half of item 6, which no longer has a duration scale to design, and it removes one of item 16's three variables — leaving blur as the whole performance question rather than a third of it.
+
+### Cost and risk
+
+Minutes, and it is the first thing to do. Fully reversible: the deleted curves are in the git history and the file is 22 lines. The only risk is the workspace-direction cue above, which is named so that it can be recognised rather than rediscovered.
+
 ---
 
 ## Rejected
@@ -527,13 +614,18 @@ Half a session, after item 7 has shown what shapes are actually needed. Doing it
 
 **A notification centre daemon (`swaync`).** Would give item 13 for free and would add a second GTK surface to theme and a daemon to replace a working one. Dunst plus `dunstctl` plus a rofi view gets the same result at the cost of two small scripts, which is the order principle 6 asks for. Revisit if the rofi history view is unusable in practice.
 
+Item 12 adopting `swayosd` on 2026-09-06 sits next to this and does not contradict it, though it is close enough to be worth stating: swayosd is accepted because it does a job dunst does _badly_ — a transient, centred, undismissable overlay is not a notification and pinning it to the notification corner was always the weak part of that proposal. swaync is rejected because it would replace a job dunst does _well_. The test is not "how many daemons" but "does the daemon exist because the incumbent cannot do the job".
+
 **`regreet`.** See item 18. A Wayland session in front of the Wayland session, for a screen that is visible for four seconds.
 
 **Replacing thunar.** It is dated next to everything else here, and it is used for drag-and-drop and little else; yazi covers the keyboard case and the GTK file _picker_ comes from the portal, which stylix already themes. Low value, and not free — nautilus drags in a GNOME dependency chain. Left alone.
 
-## Open questions for the user
+## Open questions
 
-1. **Have `configs/waybar/` and `configs/rofi/` ever actually been copied to a non-Nix machine?** Item 5's shape depends on the answer. If the portability property is live, the colour file is generated and the layout stays hand-written. If it is aspirational, stylix takes the targets and item 5 shrinks by half.
-2. **Item 8: confirmation on shutdown, or not?** Principle 3 argues against a dialog; a lost unsaved buffer argues for one.
-3. **Item 12: is the dunst OSD good enough, or is `swayosd` worth the daemon?** Recommend trying the free one first, but the answer may be obvious on sight.
-4. **Is the laptop's built-in panel ever the only display?** `monitors.lua` assigns workspaces 1–5 and 6–10 to the two externals and leaves `eDP-1` with none. Undocked behaviour is worth confirming before item 19 lays out a bar that assumes two monitors.
+The four questions raised on 2026-09-05 were answered on 2026-09-06 and are recorded in _Decisions_ above. Three remain, and all three are of a kind that should be settled by building the thing and looking at it rather than by deciding now.
+
+1. **Item 21: left edge on every output, or outer edges?** A left-edge bar on both side-by-side monitors puts one of them against the seam. Recommendation is left everywhere first, because it is one config instead of two; switch only if the seam is actually annoying.
+2. **Item 22: does the workspace slide get missed?** Off wholesale first. If after a week of real use the loss of direction cue is felt, `workspaces` alone comes back at 100 ms.
+3. **Item 21: is 40px the right width?** Discovered by building it. If the clock at two lines or the battery percentage does not read cleanly, the answer is 48.
+
+One item is left open for a different reason. The hypridle `FIXME` about waking from suspend is a real defect, it predates this plan, and nothing here fixes it. It is noted in item 16 so that it is not lost, but it is not rice work and should probably be its own session.
