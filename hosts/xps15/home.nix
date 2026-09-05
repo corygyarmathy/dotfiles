@@ -52,6 +52,7 @@
     # Desktop Services
     dunst.enable = true; # Notification daemon (extracted from hyprland)
     udiskie.enable = true; # USB automounting (extracted from hyprland)
+    kdeconnect.enable = true; # Tray indicator (the daemon is a NixOS option)
 
     # Upgrade indicator in waybar
     auto-upgrade-desktop.enable = true;
