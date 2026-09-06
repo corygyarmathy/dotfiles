@@ -29,6 +29,14 @@ let
 
   pythonWithEvdev = pkgs.python3.withPackages (ps: [ ps.evdev ]);
 
+  # The fifth place Kanagawa was not. This module emits pango markup, so its
+  # colours cannot come from style.css - and being out of CSS's reach, it had
+  # kept a hand-written *Rose Pine* palette from before the machine was
+  # themed, which nothing on the bar has matched for a long time. Item 5 of
+  # docs/plans/desktop-design.md; the colours are interpolated below.
+  palette = import ../../../lib/kanagawa-wave.nix { inherit lib; };
+  inherit (palette) roles;
+
   modIndicatorPy = pkgs.writeText "waybar-mod-indicator.py" ''
     #!/usr/bin/env python3
     """Monitor keyboard modifier state and output Waybar JSON with pango markup.
@@ -50,12 +58,13 @@ let
 
     # --- Configuration -----------------------------------------------------------
 
-    # Rose Pine palette — matches waybar/rose-pine.css
+    # Interpolated from lib/kanagawa-wave.nix at build time. Four roles chosen
+    # to stay apart at a glance on a dark bar, in the order they are drawn.
     COLORS = {
-        "shift": "#eb6f92",  # Love
-        "ctrl":  "#31748f",  # Pine
-        "alt":   "#f6c177",  # Gold
-        "super": "#c4a7e7",  # Iris
+        "shift": "${roles.danger-bright}",
+        "ctrl":  "${roles.accent}",
+        "alt":   "${roles.warning}",
+        "super": "${roles.secondary}",
     }
 
     SYMBOLS = {
@@ -223,7 +232,7 @@ in
       #custom-modifiers {
         font-family: monospace;
         font-size: 13px;
-        padding: 0 6px;
+        padding: 0 8px;
         min-width: 0;
         /* No transition — feedback must be instant */
         transition: none;

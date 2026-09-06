@@ -1,6 +1,6 @@
 # Plan: the desktop, as a designed system
 
-Status: proposed 2026-09-05; the four open questions were answered on 2026-09-06 and two requirements were added that change the shape of the bar and remove motion from the desktop entirely — see _Decisions, 2026-09-06_ below. Items 22 and 1–4 were built on 2026-09-06; everything from 5 on is still proposed. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
+Status: proposed 2026-09-05; the four open questions were answered on 2026-09-06 and two requirements were added that change the shape of the bar and remove motion from the desktop entirely — see _Decisions, 2026-09-06_ below. Items 22, 1–4 and 5–7 were built on 2026-09-06; everything from 8 on is still proposed. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
 
 Scope is the `xps15` host: `modules/home/desktop/`, `modules/nixos/hyprland.nix`, `modules/nixos/stylix.nix` and the eleven files under `configs/` that they deploy. The servers are out of scope and have no desktop.
 
@@ -22,7 +22,7 @@ Two further decisions were added on 2026-09-06 and are as structural as item 7: 
 
 The four questions at the foot of the 2026-09-05 draft were answered, and two requirements arrived that were not in it. The answers are recorded here; the items they touch are amended in place below.
 
-- **Portability is kept, and only colour is generated.** The configs have never been copied to a non-Nix machine, but the property is wanted, so the compromise stands as item 5 proposed it: `config.jsonc` and `style.css` stay hand-written and hex-free, and only the colour file is produced from the stylix palette, with a checked-in copy for the non-Nix case. The cheaper alternative — hand stylix the waybar and rofi targets — stays rejected.
+- **Portability is kept, and only colour is generated.** The configs have never been copied to a non-Nix machine, but the property is wanted, so the compromise stands as item 5 proposed it: `config.jsonc` and `style.css` stay hand-written and hex-free, and only the colour file is produced from the stylix palette, with a checked-in copy for the non-Nix case. The cheaper alternative — hand stylix the waybar and rofi targets — stays rejected. **Amended when item 5 was built:** the colour file is not produced from _the stylix palette_, because that palette does not contain eight of the colours in use. `lib/kanagawa-wave.nix` is the source and stylix reads it. See item 5's build note.
 - **The power menu is two layers, so it takes no confirmation.** Opening the menu is the first decision and picking `Power off` is the second, which is the interruption budget principle 3 allows. The conditional in the answer is worth writing down as a rule, because it generalises: _a destructive action reachable in one step gets a confirmation; one reachable in two does not._ That is what makes it wrong to also bind `SUPER+SHIFT+Q` straight to shutdown later as a convenience — see item 8.
 - **`swayosd`, not the dunst progress bar.** Taken directly rather than after trying the free version. It has a home-manager service and the daemon is cheap. It has one consequence worth naming now: **stylix has no swayosd target**, so it arrives as a fourth surface holding a hand-written copy of the palette, and it must be built into item 5's generated-colour scheme from the start rather than added to it afterwards. Item 12 is rewritten and now depends on item 5.
 - **The laptop panel is sometimes the only display, and gets no workspace assignments.** Confirmed as deliberate: with the externals disconnected every workspace lands on `eDP-1` because it is the only output, which is the behaviour wanted, and no rule is needed to produce it. The lid-disabled state is a workaround for a Hyprland issue that may have been fixed since — worth re-testing during item 16, but not a design question. This closes the question; item 21 inherits the constraint that the bar must be sensible on one 16:10 panel as well as on two 1440p externals.
@@ -85,7 +85,7 @@ Two rules follow from the pairs rather than from any single principle, and they 
 
 **Principle 4 — system processes visually exposed.** This is the weak one. Of the four examples given — wifi, shutdown, audio devices, what is running in the background — the first two have no visual path at all, the third is two clicks into pavucontrol, and the fourth is partly covered by the tray. Underneath that sits a defect: **there is no polkit authentication agent running.** `modules/nixos/hyprland.nix` enables `security.polkit`, which starts the daemon, but nothing starts an agent, so any graphical action needing authentication has no way to ask and fails quietly. That is the most important single line in this document.
 
-**Principle 5 — consistency.** The Kanagawa palette is currently written out by hand in `configs/waybar/kanagawa-wave.css` (17 `@define-color` declarations), in `configs/rofi/themes/kanagawa-wave.rasi` (16 more), in four hardcoded hexes inside `config.jsonc`'s clock calendar, and in six `rgb()` literals in `hyprlock.nix` that are not Kanagawa at all — the lock screen's input field is grey `#151515` on white with an amber check and a red fail, which is a different design entirely. There are also four waybar theme files and five rofi theme files of which one each is used; the other seven are drift waiting to happen. Geometry has no scale: window rounding is 16, waybar radius is 8, rofi is 16 outside and 10 inside, dunst is 10; border width is 1 on windows and 2 everywhere else. And two different brightness tools are in play — `brillo` on the function keys, `brightnessctl` in the bar's scroll handler and in hypridle — which can hold different ideas about the same backlight.
+**Principle 5 — consistency.** _(As surveyed 2026-09-05. Items 5 and 6 fixed everything here except the lock screen, which is item 17.)_ The Kanagawa palette is currently written out by hand in `configs/waybar/kanagawa-wave.css` (17 `@define-color` declarations), in `configs/rofi/themes/kanagawa-wave.rasi` (16 more), in four hardcoded hexes inside `config.jsonc`'s clock calendar, and in six `rgb()` literals in `hyprlock.nix` that are not Kanagawa at all — the lock screen's input field is grey `#151515` on white with an amber check and a red fail, which is a different design entirely. There are also four waybar theme files and five rofi theme files of which one each is used; the other seven are drift waiting to happen. Geometry has no scale: window rounding is 16, waybar radius is 8, rofi is 16 outside and 10 inside, dunst is 10; border width is 1 on windows and 2 everywhere else. And two different brightness tools are in play — `brillo` on the function keys, `brightnessctl` in the bar's scroll handler and in hypridle — which can hold different ideas about the same backlight.
 
 **Principle 6 — maintainable.** The Nix structure is the strongest thing here and should not be disturbed: `cg.home.*` toggles, one module per concern, configs deployed as standalone files so they work off NixOS. That last choice is also the reason stylix cannot theme waybar or rofi — `stylix.targets.waybar.enable = false` is not an oversight, it is the price of portability — and item 5 is about paying that price differently rather than abandoning it. The gap is that **no check covers the desktop at all**. `checks/` holds VM tests for services; a desktop that boots into a bar whose buttons do nothing passes every check in the repository today.
 
@@ -108,9 +108,9 @@ These are the load-bearing ones. Each is argued in its item below; they are coll
 | 2 | A polkit authentication agent | small | – | **done 2026-09-06** |
 | 3 | The eight dead click actions | small | 1 | **done 2026-09-06** — ten, in the end |
 | 4 | Autostart stops owning what systemd owns | small | – | **done 2026-09-06** |
-| 5 | One palette, one source | medium | – | proposed |
-| 6 | A geometry scale | small | – | proposed; motion half withdrawn 2026-09-06 |
-| 7 | Rofi is the menu system | medium | 5 | proposed |
+| 5 | One palette, one source | medium | – | **done 2026-09-06** — the repository owns the palette |
+| 6 | A geometry scale | small | – | **done 2026-09-06**; motion half withdrawn 2026-09-06 |
+| 7 | Rofi is the menu system | medium | 5 | **done 2026-09-06** — scaffolding, and the picker moved onto it |
 | 8 | Power and session | small | 7 | proposed |
 | 9 | Network, bluetooth, audio | medium | 7 | proposed |
 | 10 | Clipboard history that survives its window | small | 7 | proposed |
@@ -282,6 +282,27 @@ Three alternatives were considered and two rejected. **Hand stylix the targets**
 
 **Decided 2026-09-06.** The configs have never in fact been copied to a non-Nix machine, which would have made the first alternative attractive and halved this item — but the portability is wanted as a property rather than as a current practice, so the split stands. The checked-in copy of each generated file is what makes that true: it is the thing a non-Nix machine gets, and the check that it agrees with the generated version is what stops it rotting.
 
+### Built, 2026-09-06
+
+The approach survived, but its source did not. Generating the colour files from `config.lib.stylix.colors` turned out to be impossible without shifting the palette, because **`base16-schemes/kanagawa.yaml` is a sixteen-slot reduction of Kanagawa Wave and eight of the colours this desktop renders have no slot in it**: `sumiInk2`, `sumiInk3`, `waveBlue2`, `waveRed`, `springGreen`, `springBlue`, `roninYellow` and `carpYellow`. The scheme's green is `autumnGreen` #76946A where the bar draws `springGreen` #98BB6C; its yellow is `boatYellow2` where the bar draws `roninYellow`. The hand-written themes had been drawing on the full palette all along, and the scheme stylix reads is not it. So generation from stylix would have had to either recolour the desktop or name those eight somewhere else — which is the duplication the item exists to remove.
+
+**So the direction is inverted. `lib/kanagawa-wave.nix` is the source, and stylix is handed it** (`base16Scheme` takes an attrset). The sixteen slots it exports are byte-identical to the upstream YAML, so adopting it changed nothing that was already themed — verified by evaluating `lib.stylix.colors` before and after. What it bought is that the other eight colours have somewhere to live, that GTK, Qt, dunst, hyprland's borders, ghostty and nvim now come from the same file as the bar and the launcher, and that the palette stops moving underneath the machine when `base16-schemes` updates.
+
+The file has two layers and the distinction is load-bearing. **`colours` names the pigment; `roles` names the job.** A surface reads `roles` — the shared vocabulary — and a role that gains a user is how a colour earns its place. There is exactly one documented exception, below.
+
+Three files are generated and also checked in, so `configs/` still works on a machine without Nix: `configs/waybar/kanagawa-wave.css`, `configs/rofi/themes/palette.rasi`, and `configs/waybar/calendar.jsonc`. `nix run .#write-palette` writes them; the build asserts the tree matches (`modules/home/desktop/lib/generated.nix`, called from `waybar.nix` and `rofi.nix`) with the same shape as item 1 — the deployed file is the check's output, so a hand-edited colour fails `nixos-rebuild switch` and fails CI. Proven by editing one hex and watching the build reject it.
+
+Four things the item did not anticipate:
+
+- **The calendar is answered by an `include`, not by generating `config.jsonc`.** waybar's `mergeConfig` recurses into objects and lets the including file win any key it already sets (confirmed in `src/config.cpp`), so `config.jsonc` keeps every decision about the calendar and `calendar.jsonc` supplies only the four Pango colours. `config.jsonc` is now hex-free. `waybar-commands.py` follows `include` too, so a command arriving from one is checked like any other.
+- **The calendar is the one surface that reads `colours` rather than `roles`,** and this is the exception the item's rule asks to be put on the record. It is markup inside JSON with no widget to theme; the four spans are typography, not state. Inventing four roles with one user each would have been worse than naming the pigment, which is still named in exactly one file.
+- **rofi silently ignores a theme it cannot parse** — it warns to a log nobody reads and loads its own default, so a broken theme looks like a launcher that has reverted to Solarized. That is now a build gate as well (`rofi -no-config -theme … -dump-theme` needs no display). It earned itself immediately: rofi's grammar takes a *literal* colour in `element-text`'s `highlight` and rejects both `@info` and `var(info)`, so that one declaration is generated into `palette.rasi` rather than left as the last hex in the layout file.
+- **A fifth hand-written palette turned up.** `modules/home/desktop/waybar-modifiers.nix` emits Pango markup, so its colours were out of CSS's reach — and it had been carrying a **Rose Pine** palette from before the machine was themed. Its four modifier colours now come from `roles`.
+
+Role names were reconciled to waybar's, as the item asks, and the audit shaved two: `accent-primary` (waveAqua1) was declared and referenced by nothing, and rofi's `accent2` likewise. What was `accent-secondary` is now `accent`, which is the only change `style.css` needed. Six theme files that had never been rendered are gone — two waybar, four rofi — and `stylix.targets.rofi.enable` is now explicitly `false` rather than inert-by-accident, so the latent fight over `~/.config/rofi` is settled on the record.
+
+`hyprlock` (item 17) and `swayosd` (item 12) are unchanged and now have a palette to join.
+
 ### Cost and risk
 
 One to two sessions. The risk is generating something stylix already generates and ending up with two files fighting over `~/.config/rofi/`; note that `stylix.targets.rofi.enable` is currently `true` and does nothing only because `programs.rofi` is not enabled — the raw `xdg.configFile` route is used instead. That latent conflict should be resolved explicitly rather than left to whichever writes last.
@@ -308,6 +329,16 @@ These are taste and should be looked at rather than reasoned about. The one non-
 
 Small, and immediately visible. It no longer depends on item 5 — with motion gone there is nothing here that a generated colour file would overwrite — but taking 5 first still avoids touching `style.css` twice.
 
+### Built, 2026-09-06
+
+The proposal was taken as written. `lib/geometry.nix` holds it: radius 12 for a surface and 8 for a chip, border 2 everywhere, and spacing as multiples of 8 rather than a fixed list so that a gap nobody anticipated is still on the scale.
+
+The interesting half is how it reaches the files. dunst is configured in Nix and simply reads the values. waybar's stylesheets, rofi's theme and hyprland's `settings.lua` cannot: they are deployed verbatim so `configs/` works without Nix, and GTK 3 CSS has no custom properties for lengths the way it has `@define-color` for colour. So **the scale reaches them backwards** — `modules/home/desktop/geometry-scale.py` reads them at build time and asserts every length they name is on it, wired in from `waybar.nix`, `rofi.nix` and `hyprland.nix` through `lib/scale.nix`. Same bargain as the palette: hand-written, portable, gated. Proven by putting a 10px radius and a 60px margin back and watching the build name both.
+
+Its scope is deliberately narrow — the properties that carry geometry, listed in the script. Font sizes, icon sizes, opacities, durations and content widths are somebody else's decision and are not looked at; a check that policed every number in a stylesheet would be turned off within a week.
+
+What actually moved: window rounding 16 → 12 and gaps 5 → 8 in `settings.lua`, window borders 1 → 2, dunst's radius 10 → 12, rofi's window 16 → 12 and its rows 10 → 8. And in `style.css`, the bar's own asymmetry finally went: every module carried `margin: 3px 0` with a `margin-top: 15px` overriding it, which is why the modules sat low. They are now `padding: 8px 16px; margin: 8px 0`, which is the plan's number and which **makes the bar roughly fourteen pixels taller**. That is the one change here worth looking at before accepting — item 21 owns the bar's final shape, and dunst's `offset` is the number that has to move with it.
+
 ## 7. Rofi is the menu system
 
 ### The problem
@@ -332,6 +363,18 @@ The alternatives are worth naming. **Fuzzel** and **tofi** are faster than rofi 
 ### Cost and risk
 
 A session for the shared scaffolding and one menu; each further menu is then an hour. The real risk is the maintenance one the user named: a pile of shell scripts _is_ the flaky custom solution principle 6 warns about, if it is written carelessly. The mitigations are that each script is small, each is independently testable from a terminal, and none of them is in the path of anything critical — if the wifi menu breaks, `nmtui` still exists.
+
+### Built, 2026-09-06
+
+`packages/rofi-menu`, installed by `modules/home/desktop/rofi.nix` because "rofi owns every list of things to pick" is that module's responsibility. It reads a list on stdin, prints the choice on stdout, and passes rofi's exit 1 straight through so a caller can tell _the user picked nothing_ from _something went wrong_.
+
+It pins three flags every menu wants and the launcher does not: `-no-custom` (a menu offers answers; typing a new one is not an answer), `-disable-history` (a menu whose order changes under you is a worse menu) and `-no-sidebar-mode` (the mode switcher belongs to the launcher). Everything else — colour, radius, spacing, font — comes from the shared theme, which is the entire point. **The one permitted override is the number of rows**, and it should stay the only one: a power menu with five answers should not leave three empty rows below them.
+
+The one menu is the one that already existed. **`project-launcher pick` now goes through `rofi-menu`** instead of calling rofi with its own flags — it was a second menu system of one, and the flags it was missing are exactly the ones the wrapper now pins. Its old comment about `-format i` interacting badly with "history and sidebar-mode" was describing this problem from the inside. It also happens to satisfy the reachability rule already: `SUPER+P` from the keyboard, a click on the bar module from the pointer, neither one the real path.
+
+`rofi` is a `runtimeInput` rather than a name looked up on `PATH`, so a menu cannot break because the launcher left the user's profile — the failure class item 1 built a check for, made impossible here instead.
+
+The rules are written into the package's own header rather than left in this document, because that is where somebody adding the wifi menu will be. The fifty-line rule is not yet mechanical: there is one menu and no shell scripts to measure, and a check with nothing to check is a claim the repository does not honour. Whoever writes the second menu should extract a `mkMenu` builder and put the rule in it.
 
 ## 8. Power and session
 

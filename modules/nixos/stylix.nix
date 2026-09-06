@@ -9,6 +9,16 @@
 let
   cfg = config.cg.stylix;
   stylixAvailable = lib.hasAttr "stylix" options;
+
+  # Item 5 of docs/plans/desktop-design.md: one palette, one source, and this
+  # is the source. It used to be `${pkgs.base16-schemes}/share/themes/
+  # kanagawa.yaml`, which is a sixteen-slot reduction of Kanagawa Wave - eight
+  # of the colours the bar, the launcher and the calendar actually render have
+  # no slot in it, so they were hand-transcribed in four other files instead.
+  # `palette.scheme` is byte-identical to that YAML; what changed is that the
+  # colours outside it now come from the same place, and that upstream can no
+  # longer move the palette under this machine.
+  palette = import ../../lib/kanagawa-wave.nix { inherit lib; };
 in
 {
   options.cg.stylix.enable = lib.mkEnableOption "Stylix theming";
@@ -19,7 +29,7 @@ in
         stylix = {
           enable = true;
           autoEnable = true; # Enables stylix themes for all applications
-          base16Scheme = "${pkgs.base16-schemes}/share/themes/kanagawa.yaml";
+          base16Scheme = palette.scheme;
           polarity = "dark"; # "light" or "either" - sets light or dark mode
           image = ../../wallpapers/wallhaven-6l5emq.png; # Sets wallpaper, ""s are not required for path
 
@@ -52,7 +62,10 @@ in
         };
 
         environment.systemPackages = with pkgs; [
-          base16-schemes # Imports colours schemes. Used for RICEing with Stylix.
+          # A browsable collection of base16 schemes. It is no longer where this
+          # machine's palette comes from - see `palette` above - but it is still
+          # the reference to reach for when picking a different one.
+          base16-schemes
           bibata-cursors
           rose-pine-cursor
         ];

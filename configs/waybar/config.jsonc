@@ -7,8 +7,18 @@
   //   Left click  = primary action (toggle, open default app, activate)
   //   Right click = alternate view / secondary info (format-alt, details)
   //   Middle click = contextual action (kill, reset, open settings)
+  //
+  // No hex appears in this file. Colour is style.css's business, except for
+  // the clock's calendar, which is Pango markup inside JSON where CSS cannot
+  // reach - those four colours live in calendar.jsonc, generated from
+  // lib/kanagawa-wave.nix. waybar merges an include recursively and lets this
+  // file win any key it already sets, so every other decision about the
+  // calendar stays below. See item 5 of docs/plans/desktop-design.md.
+  "include": ["calendar.jsonc"],
 
-  "height": 30,
+  // A minimum: the bar grows to fit its modules. On the geometry scale
+  // (lib/geometry.nix), like everything else the modules are made of.
+  "height": 32,
   "layer": "top",
   "position": "top",
 
@@ -88,7 +98,7 @@
   // Tray
   // ===========================================================================
   "tray": {
-    "spacing": 5,
+    "spacing": 8,
     "icon-size": 18,
     "show-passive-items": true,
   },
@@ -178,16 +188,11 @@
     "format": "{:%H:%M %A, %d/%m}",
     "format-alt": "{:%d/%m/%Y  %H:%M:%S}",
     "tooltip-format": "<span>{calendar}</span>",
+    // "format" is supplied by calendar.jsonc - see the "include" at the top.
     "calendar": {
       "mode": "month",
       "weeks-pos": "right",
       "mode-mon-col": 3,
-      "format": {
-        "month": "<span color='#E6C384'><b>{}</b></span>",
-        "weekdays": "<span color='#FFA066'><b>{}</b></span>",
-        "days": "<span color='#DCD7BA'><b>{}</b></span>",
-        "today": "<span color='#E46876'><b>{}</b></span>",
-      },
     },
     // Left = toggle format (format-alt handles natively)
     // Right = switch the calendar between month and year. That is a module

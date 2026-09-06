@@ -1,0 +1,26 @@
+// Waybar clock calendar colours: Kanagawa Wave
+//
+// Generated from lib/kanagawa-wave.nix. Do not edit.
+//
+// A copy is checked in so that the bar works on a machine without Nix, the
+// way everything under configs/ does. The build asserts the two agree, so an
+// edit here fails `nixos-rebuild switch` and fails CI rather than drifting
+// quietly. To change a colour, change the palette and run:
+//
+//     nix run .#write-palette
+//
+// Merged into config.jsonc's "clock" module by its "include" key. Pango
+// markup in JSON is out of CSS's reach, which is the whole reason this
+// file exists rather than four more @define-colors.
+{
+  "clock": {
+    "calendar": {
+      "format": {
+        "month": "<span color='#E6C384'><b>{}</b></span>",
+        "weekdays": "<span color='#FFA066'><b>{}</b></span>",
+        "days": "<span color='#DCD7BA'><b>{}</b></span>",
+        "today": "<span color='#E46876'><b>{}</b></span>"
+      }
+    }
+  }
+}

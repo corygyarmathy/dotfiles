@@ -25,6 +25,9 @@ pkgs: {
   # Media player waybar module
   waybar-media = pkgs.callPackage ./waybar-media { };
 
+  # The shared rofi dmenu wrapper every desktop menu goes through
+  rofi-menu = pkgs.callPackage ./rofi-menu { };
+
   # Project launcher / picker
   project-launcher = pkgs.callPackage ./project-launcher { };
 

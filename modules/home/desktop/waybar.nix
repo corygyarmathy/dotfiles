@@ -11,6 +11,10 @@ let
 
   configs = ../../../configs/waybar;
 
+  palette = import ../../../lib/kanagawa-wave.nix { inherit lib; };
+  inherit (import ./lib/generated.nix { inherit pkgs; }) assertGenerated;
+  geometryScale = import ./lib/scale.nix { inherit pkgs; };
+
   # Where the bar will actually look for the commands it names. waybar runs as
   # a systemd user service inside the graphical session, so its PATH is the
   # user's own profile plus the system one - the same two closures, not a
@@ -36,6 +40,13 @@ let
   # having passed on it.
   #
   # See ./waybar-commands.py for what it does and does not look at.
+  #
+  # It gates three things now. The second is item 5's half of the same
+  # bargain: the colour file and the calendar's four hexes are generated from
+  # lib/kanagawa-wave.nix and checked in, and this is what stops the copy from
+  # drifting away from the palette. The third is item 6's: the stylesheets are
+  # hand-written and cannot read the geometry scale, so they are checked
+  # against it instead. See ./lib/generated.nix and ./lib/scale.nix.
   checkedConfigs =
     pkgs.runCommand "waybar-config"
       {
@@ -43,6 +54,24 @@ let
       }
       ''
         python3 ${./waybar-commands.py} ${configs}/config.jsonc ${lib.escapeShellArg searchPath}
+
+        ${assertGenerated [
+          {
+            path = "configs/waybar/kanagawa-wave.css";
+            deployed = "${configs}/kanagawa-wave.css";
+            expected = palette.toCss;
+          }
+          {
+            path = "configs/waybar/calendar.jsonc";
+            deployed = "${configs}/calendar.jsonc";
+            expected = palette.toCalendarJson;
+          }
+        ]}
+
+        ${geometryScale}/bin/geometry-scale \
+          ${configs}/style.css \
+          ${configs}/nixos-upgrade.css \
+          ${configs}/ddc.css
 
         cp -r ${configs} $out
         chmod -R u+w $out

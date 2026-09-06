@@ -1,18 +1,24 @@
 -- General settings, decoration, input, layout, and misc
 -- https://wiki.hypr.land/Configuring/Basics/Variables/
+--
+-- The four numbers below are geometry and come from lib/geometry.nix, which
+-- this desktop's other surfaces read too: 12 for a window-sized radius, 2 for
+-- a border, 8 for a space. A 1px window border beside a 2px bar is the kind of
+-- inconsistency that is felt without being seen. The build asserts this file
+-- honours the scale - item 6 of docs/plans/desktop-design.md.
 
 hl.config({
 	general = {
-		gaps_in = 5,
-		gaps_out = 5,
-		border_size = 1,
+		gaps_in = 8,
+		gaps_out = 8,
+		border_size = 2,
 		allow_tearing = false,
 		resize_on_border = true,
 		layout = "dwindle",
 	},
 
 	decoration = {
-		rounding = 16,
+		rounding = 12,
 		rounding_power = 2,
 
 		blur = {

@@ -1,40 +1,30 @@
 /*******************************************************************************
- *  Kanagawa Wave — Rofi Theme
+ *  Kanagawa Wave - Rofi Theme
  *
  *  A clean, modern launcher with rounded corners, a prominent search bar,
  *  subtle accent borders, and the Kanagawa Wave colour palette.
  *
  *  Designed for drun / run / window modes with icons enabled.
+ *
+ *  LAYOUT ONLY. Every colour comes from palette.rasi, which is generated from
+ *  lib/kanagawa-wave.nix and shares its role names with waybar's style.css -
+ *  item 5 of docs/plans/desktop-design.md. There is no hex below this line.
+ *  Relative imports resolve against this file's own directory, so the two
+ *  travel together onto a machine without Nix. One rule lives over there
+ *  rather than here - element-text's `highlight` - because rofi's grammar
+ *  refuses a variable in that position.
+ *
+ *  There is no loose length below either: radius is 12 for the window and 8
+ *  for a row, borders are 2, and every space is a multiple of 8. That scale
+ *  is lib/geometry.nix, and the build asserts this file honours it - item 6
+ *  of the same plan.
  ******************************************************************************/
 
-/* ── Colour Definitions ───────────────────────────────────────────────────── */
+@import "palette.rasi"
+
+/* -- Non-colour defaults ---------------------------------------------------- */
 
 * {
-    /* Backgrounds (dark → light) */
-    bg0:        #16161Dcc;          /* window backdrop — slight transparency  */
-    bg1:        #1F1F28;            /* main surface                          */
-    bg2:        #2A2A37;            /* inputbar / raised surface             */
-    bg3:        #363646;            /* subtle separators                     */
-    bg4:        #54546D;            /* borders, muted UI chrome              */
-
-    /* Selection */
-    sel-bg:     #223249;            /* waveBlue1 — selected row bg           */
-    sel-bg2:    #2D4F67;            /* waveBlue2 — active highlight          */
-
-    /* Foreground */
-    fg0:        #DCD7BA;            /* fujiWhite — primary text              */
-    fg1:        #C8C093;            /* oldWhite  — secondary / dimmed text   */
-    fg2:        #727169;            /* fujiGray  — placeholder, comments     */
-
-    /* Accents */
-    accent:     #7E9CD8;            /* crystalBlue — functions / titles      */
-    accent2:    #957FB8;            /* oniViolet  — keywords / statements    */
-    urgent:     #E46876;            /* waveRed                               */
-    active:     #98BB6C;            /* springGreen                           */
-    orange:     #FFA066;            /* surimiOrange                          */
-    pink:       #D27E99;            /* sakuraPink                            */
-
-    /* Meta */
     transparent: transparent;
 
     /* Typography */
@@ -42,7 +32,7 @@
 
     /* Global resets */
     background-color:   @transparent;
-    text-color:         @fg0;
+    text-color:         @fg-primary;
 }
 
 /* ── Window ───────────────────────────────────────────────────────────────── */
@@ -52,9 +42,9 @@ window {
     anchor:             center;
     width:              680px;
     border:             2px;
-    border-color:       @bg4;
-    border-radius:      16px;
-    background-color:   @bg0;
+    border-color:       @border;
+    border-radius:      12px;
+    background-color:   @bg-backdrop;
     padding:            0px;
     cursor:             "default";
 }
@@ -71,19 +61,19 @@ mainbox {
 /* ── Input Bar ────────────────────────────────────────────────────────────── */
 
 inputbar {
-    padding:            16px 20px;
-    spacing:            12px;
+    padding:            16px;
+    spacing:            16px;
     children:           [ textbox-prompt, entry ];
-    background-color:   @bg2;
-    border-radius:      16px 16px 0px 0px;
+    background-color:   @bg-overlay;
+    border-radius:      12px 12px 0px 0px;
     border:             0px 0px 2px 0px;
-    border-color:       @accent;
+    border-color:       @info;
 }
 
 textbox-prompt {
     expand:             false;
     content:            " ";
-    text-color:         @accent;
+    text-color:         @info;
     vertical-align:     0.5;
     horizontal-align:   0.5;
     font:               "Hack Nerd Font 16";
@@ -93,8 +83,8 @@ textbox-prompt {
 entry {
     font:               "Hack Nerd Font 14";
     placeholder:        "Search...";
-    placeholder-color:  @fg2;
-    text-color:         @fg0;
+    placeholder-color:  @fg-muted;
+    text-color:         @fg-primary;
     cursor:             text;
     vertical-align:     0.5;
     background-color:   @transparent;
@@ -103,14 +93,14 @@ entry {
 /* ── Message ──────────────────────────────────────────────────────────────── */
 
 message {
-    border:             0px 0px 1px 0px;
-    border-color:       @bg3;
-    background-color:   @bg1;
-    padding:            8px 20px;
+    border:             0px 0px 2px 0px;
+    border-color:       @bg-raised;
+    background-color:   @bg-surface;
+    padding:            8px 16px;
 }
 
 textbox {
-    text-color:         @fg1;
+    text-color:         @fg-secondary;
     background-color:   @transparent;
 }
 
@@ -124,71 +114,71 @@ listview {
     cycle:              true;
     dynamic:            true;
     layout:             vertical;
-    spacing:            4px;
-    padding:            8px 8px;
-    background-color:   @bg1;
+    spacing:            8px;
+    padding:            8px;
+    background-color:   @bg-surface;
     border:             0px;
 }
 
 /* ── Elements (each row) ──────────────────────────────────────────────────── */
 
 element {
-    padding:            10px 16px;
-    spacing:            14px;
-    border-radius:      10px;
+    padding:            8px 16px;
+    spacing:            16px;
+    border-radius:      8px;
     background-color:   @transparent;
     cursor:             pointer;
 }
 
 element normal.normal {
     background-color:   @transparent;
-    text-color:         @fg0;
+    text-color:         @fg-primary;
 }
 
 element normal.urgent {
     background-color:   @transparent;
-    text-color:         @urgent;
+    text-color:         @danger-bright;
 }
 
 element normal.active {
     background-color:   @transparent;
-    text-color:         @active;
+    text-color:         @success;
 }
 
 element selected.normal {
-    background-color:   @sel-bg;
-    text-color:         @accent;
-    border:             0px 0px 0px 3px;
-    border-color:       @accent;
+    background-color:   @bg-hover;
+    text-color:         @info;
+    border:             0px 0px 0px 2px;
+    border-color:       @info;
 }
 
 element selected.urgent {
-    background-color:   @sel-bg;
-    text-color:         @urgent;
-    border:             0px 0px 0px 3px;
-    border-color:       @urgent;
+    background-color:   @bg-hover;
+    text-color:         @danger-bright;
+    border:             0px 0px 0px 2px;
+    border-color:       @danger-bright;
 }
 
 element selected.active {
-    background-color:   @sel-bg;
-    text-color:         @active;
-    border:             0px 0px 0px 3px;
-    border-color:       @active;
+    background-color:   @bg-hover;
+    text-color:         @success;
+    border:             0px 0px 0px 2px;
+    border-color:       @success;
 }
 
 element alternate.normal {
     background-color:   @transparent;
-    text-color:         @fg0;
+    text-color:         @fg-primary;
 }
 
 element alternate.urgent {
     background-color:   @transparent;
-    text-color:         @urgent;
+    text-color:         @danger-bright;
 }
 
 element alternate.active {
     background-color:   @transparent;
-    text-color:         @active;
+    text-color:         @success;
 }
 
 element-icon {
@@ -204,33 +194,34 @@ element-text {
     cursor:             inherit;
     background-color:   @transparent;
     text-color:         inherit;
-    highlight:          bold underline #7E9CD8;
+    /* `highlight` is set in palette.rasi: rofi's grammar wants a literal
+     * colour there and rejects both @info and var(info). */
 }
 
 /* ── Mode Switcher ────────────────────────────────────────────────────────── */
 
 mode-switcher {
     spacing:            0px;
-    border:             1px 0px 0px 0px;
-    border-color:       @bg3;
-    background-color:   @bg2;
-    border-radius:      0px 0px 16px 16px;
+    border:             2px 0px 0px 0px;
+    border-color:       @bg-raised;
+    background-color:   @bg-overlay;
+    border-radius:      0px 0px 12px 12px;
     padding:            0px;
 }
 
 button {
-    padding:            12px 20px;
-    text-color:         @fg2;
+    padding:            8px 16px;
+    text-color:         @fg-muted;
     background-color:   @transparent;
     cursor:             pointer;
     border-radius:      0px;
 }
 
 button selected {
-    text-color:         @accent;
-    background-color:   @sel-bg;
+    text-color:         @info;
+    background-color:   @bg-hover;
     border:             2px 0px 0px 0px;
-    border-color:       @accent;
+    border-color:       @info;
 }
 
 /* vim:ft=css
