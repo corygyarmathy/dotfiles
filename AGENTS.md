@@ -116,3 +116,20 @@ For each completed task, summarize:
 - Files changed, especially any security- or deployment-sensitive files.
 - Checks run and their results.
 - Assumptions, residual risks, or skipped verification.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (via the `gh` CLI). See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles map 1:1 to the default labels. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See
+`docs/agents/domain.md`.
