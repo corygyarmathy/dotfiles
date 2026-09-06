@@ -28,6 +28,29 @@ pkgs: {
   # The shared rofi dmenu wrapper every desktop menu goes through
   rofi-menu = pkgs.callPackage ./rofi-menu { };
 
+  # Desktop menus - items 8, 9, 10 and 13 of docs/plans/desktop-design.md,
+  # all built with lib/mk-menu.nix so they cannot drift into looking like
+  # four menus. The builder itself is not a package and deliberately does not
+  # appear here: flake `packages` are derivations, and a function would trip
+  # `nix flake check`.
+  power-menu = pkgs.callPackage ./power-menu { };
+  network-menu = pkgs.callPackage ./network-menu { };
+  bluetooth-menu = pkgs.callPackage ./bluetooth-menu { };
+  audio-menu = pkgs.callPackage ./audio-menu { };
+  clipboard-menu = pkgs.callPackage ./clipboard-menu { };
+
+  # Do-not-disturb bar module + history menu (item 13)
+  dnd = pkgs.callPackage ./dnd { };
+
+  # Failed-units bar module + journal menu (item 14)
+  failed-units = pkgs.callPackage ./failed-units { };
+
+  # Keybind reference parsed from binds.lua (item 11)
+  keybind-sheet = pkgs.callPackage ./keybind-sheet { };
+
+  # Screenshot suite (item 15)
+  screenshot = pkgs.callPackage ./screenshot { };
+
   # Project launcher / picker
   project-launcher = pkgs.callPackage ./project-launcher { };
 

@@ -17,6 +17,23 @@ hl.bind(mod .. " + P", hl.dsp.exec_cmd("project-launcher pick"))
 hl.bind(mod .. " + Q", hl.dsp.exec_cmd("project-launcher close"))
 
 ---------------------------------------------------------------------------
+-- Menus and system actions
+---------------------------------------------------------------------------
+-- Every menu is keybound *and* reachable from the bar (principle 2 in one
+-- sentence). These are the keyboard half of items 8, 9, 10, 11 and 13 of
+-- docs/plans/desktop-design.md; the pointer half lives on the bar modules.
+-- Item 9's three menus take SHIFT + the first letter of the domain, which
+-- keeps the plain letters for their applications (B = vivaldi, W = window
+-- picker, A = togglesplit).
+hl.bind(mod .. " + escape", hl.dsp.exec_cmd("power-menu"))
+hl.bind(mod .. " + SHIFT + V", hl.dsp.exec_cmd("clipboard-menu"))
+hl.bind(mod .. " + slash", hl.dsp.exec_cmd("keybind-sheet"))
+hl.bind(mod .. " + N", hl.dsp.exec_cmd("dunstctl set-paused toggle"))
+hl.bind(mod .. " + SHIFT + W", hl.dsp.exec_cmd("network-menu"))
+hl.bind(mod .. " + SHIFT + B", hl.dsp.exec_cmd("bluetooth-menu"))
+hl.bind(mod .. " + SHIFT + A", hl.dsp.exec_cmd("audio-menu"))
+
+---------------------------------------------------------------------------
 -- Window management
 ---------------------------------------------------------------------------
 hl.bind(mod .. " + C", hl.dsp.window.close())
@@ -102,29 +119,41 @@ hl.bind(mod .. " + ALT + mouse:272", hl.dsp.window.resize(), { mouse = true })
 ---------------------------------------------------------------------------
 -- Screenshot
 ---------------------------------------------------------------------------
-hl.bind("Print", hl.dsp.exec_cmd("grimblast copy area"))
+-- Item 15 of docs/plans/desktop-design.md. Print stays the common case -
+-- region to clipboard, unchanged. The other three capture to a file and
+-- offer satty as an optional annotation step; SUPER+SHIFT+C picks a colour.
+hl.bind("Print", hl.dsp.exec_cmd("screenshot area-copy"))
+hl.bind(mod .. " + Print", hl.dsp.exec_cmd("screenshot area-save"))
+hl.bind(mod .. " + SHIFT + Print", hl.dsp.exec_cmd("screenshot window"))
+hl.bind(mod .. " + CTRL + Print", hl.dsp.exec_cmd("screenshot monitor"))
+hl.bind(mod .. " + SHIFT + C", hl.dsp.exec_cmd("hyprpicker -a"))
 
 ---------------------------------------------------------------------------
 -- Media keys
----------------------------------------------------------------------------
+--------------------------------------------------------------------------
 hl.bind("XF86AudioPlay", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true })
 hl.bind("XF86AudioNext", hl.dsp.exec_cmd("playerctl next"), { locked = true })
-hl.bind("XF86AudioMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), { locked = true })
-hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true })
+
+-- Volume and brightness now go through swayosd-client (item 12): it performs
+-- the change *and* shows the OSD, so the key has immediate confirmation.
+-- That replaces wpctl here and brillo on the brightness keys - brightnessctl
+-- was already the tool everywhere else, and now it is the tool here too.
+hl.bind("XF86AudioMute", hl.dsp.exec_cmd("swayosd-client --output-volume mute-toggle"), { locked = true })
+hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("swayosd-client --input-volume mute-toggle"), { locked = true })
 
 -- Volume (repeating)
 hl.bind(
 	"XF86AudioRaiseVolume",
-	hl.dsp.exec_cmd("wpctl set-volume -l '1.0' @DEFAULT_AUDIO_SINK@ 6%+"),
+	hl.dsp.exec_cmd("swayosd-client --output-volume +5"),
 	{ locked = true, repeating = true }
 )
 hl.bind(
 	"XF86AudioLowerVolume",
-	hl.dsp.exec_cmd("wpctl set-volume -l '1.0' @DEFAULT_AUDIO_SINK@ 6%-"),
+	hl.dsp.exec_cmd("swayosd-client --output-volume -5"),
 	{ locked = true, repeating = true }
 )
 
 -- Brightness (repeating)
-hl.bind("XF86MonBrightnessUp", hl.dsp.exec_cmd("brillo -q -u 300000 -A 5"), { locked = true, repeating = true })
-hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brillo -q -u 300000 -U 5"), { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessUp", hl.dsp.exec_cmd("swayosd-client --brightness +5"), { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("swayosd-client --brightness -5"), { locked = true, repeating = true })

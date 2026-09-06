@@ -41,6 +41,19 @@
     playerctl.enable = true;
     yazi.enable = true;
 
+    # Items 8-15 of docs/plans/desktop-design.md - the missing surfaces, one
+    # toggle each. The menus all go through rofi-menu (item 7).
+    power-menu.enable = true;
+    network-menu.enable = true;
+    bluetooth-menu.enable = true;
+    audio-menu.enable = true;
+    clipboard.enable = true;
+    keybind-sheet.enable = true;
+    swayosd.enable = true;
+    dnd.enable = true;
+    failed-units.enable = true;
+    screenshot.enable = true;
+
     obsidian-sync.enable = true;
 
     project-launcher = {
