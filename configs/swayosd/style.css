@@ -1,0 +1,118 @@
+/*
+ * SwayOSD colours: Kanagawa Wave
+ *
+ * Generated from lib/kanagawa-wave.nix. Do not edit.
+ *
+ * A copy is checked in so that swayosd works on a machine without Nix, the
+ * way everything under configs/ does. The build asserts the two agree, so an
+ * edit here fails `nixos-rebuild switch` and fails CI rather than drifting
+ * quietly. To change a colour, change the palette and run:
+ *
+ *     nix run .#write-palette
+ *
+ * The OSD is overlay-sized, so it takes the surface radius (12) and the
+ * border (2) from lib/geometry.nix like every other surface. Item 12 of
+ * docs/plans/desktop-design.md; the same two gates the bar and the
+ * launcher sit behind.
+ */
+
+/* ── Backgrounds ─────────────────────────────────────────────────── */
+/* Layered darkest to lightest. */
+/* sumiInk0: darkest surface - module backgrounds, tooltips */
+@define-color bg-base        #16161D;
+/* sumiInk0: the same, translucent - rofi's window behind its own chrome */
+@define-color bg-backdrop    alpha(#16161D, 0.8);
+/* sumiInk1: default background - the layer most things sit on */
+@define-color bg-surface     #1F1F28;
+/* sumiInk2: raised chrome - tooltip borders, rofi's input bar */
+@define-color bg-overlay     #2A2A37;
+/* sumiInk3: separators and elevated surfaces */
+@define-color bg-raised      #363646;
+/* waveBlue1: hover and selection */
+@define-color bg-hover       #223249;
+
+/* ── Foreground ──────────────────────────────────────────────────── */
+/* Text, brightest to dimmest. */
+/* fujiWhite: primary text */
+@define-color fg-primary     #DCD7BA;
+/* oldWhite: secondary text */
+@define-color fg-secondary   #C8C093;
+/* fujiGray: placeholders and comments */
+@define-color fg-muted       #727169;
+/* sumiInk4: disabled and inactive */
+@define-color fg-disabled    #54546D;
+
+/* ── Structure ───────────────────────────────────────────────────── */
+/* sumiInk4: borders and separators */
+@define-color border         #54546D;
+/* springBlue: the accent - prominent chrome that is not carrying a state */
+@define-color accent         #7FB4CA;
+
+/* ── Semantic states ─────────────────────────────────────────────── */
+/* What a colour *means*. Nothing here is decorative. */
+/* autumnRed: errors, critical states, destructive actions */
+@define-color danger         #C34043;
+/* waveRed: the same, where it must carry against a selection */
+@define-color danger-bright  #E46876;
+/* roninYellow: warnings, overrides, updates available */
+@define-color warning        #FF9E3B;
+/* springGreen: healthy, complete, up to date */
+@define-color success        #98BB6C;
+/* crystalBlue: informational and neutral-active */
+@define-color info           #7E9CD8;
+/* oniViolet: second informational voice - disk, audio, applying */
+@define-color secondary      #957FB8;
+/* sakuraPink: decorative, attention-drawing - the media player */
+@define-color highlight      #D27E99;
+
+window#osd {
+  border-radius: 12px;
+  border: 2px solid @border;
+  background: alpha(@bg-surface, 0.9);
+}
+
+#container {
+  margin: 8px 16px;
+}
+
+image,
+label {
+  color: @fg-primary;
+}
+
+progressbar:disabled,
+image:disabled {
+  opacity: 0.5;
+}
+
+progressbar,
+segmentedprogress {
+  min-height: 8px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+}
+
+trough,
+segment {
+  min-height: inherit;
+  border-radius: inherit;
+  border: none;
+  background: alpha(@fg-primary, 0.5);
+}
+
+progress,
+segment.active {
+  min-height: inherit;
+  border-radius: inherit;
+  border: none;
+  background: @accent;
+}
+
+segment {
+  margin-left: 8px;
+}
+
+segment:first-child {
+  margin-left: 0;
+}

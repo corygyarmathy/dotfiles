@@ -315,6 +315,25 @@ rec {
   # file, including its header, so that what is checked in is exactly what the
   # build produces and `diff` is the entire check.
 
+  # The @define-color block shared by every GTK CSS surface. GTK 3 CSS has no
+  # custom properties, so this is the only indirection available - which is why
+  # the layouts in style.css and the swayosd rules can stay hand-written and
+  # hex-free while this half is generated.
+  defineColors = lib.concatStringsSep "\n" (
+    map (group: ''
+
+      /* ── ${group.title} ${repeat (62 - lib.stringLength group.title) "─"} */
+      ${lib.optionalString (group.note != "") "/* ${group.note} */\n"}${
+        lib.concatStringsSep "\n" (
+          map (
+            role:
+            "/* ${role.colour}: ${role.note} */\n"
+            + "@define-color ${role.name}${pad 15 role.name}${cssValue role};"
+          ) group.roles
+        )
+      }'') groups
+  );
+
   # waybar. GTK 3 CSS has no custom properties, so `@define-color` is the only
   # indirection available - which is why the layout in style.css can stay
   # hand-written and hex-free while this half is generated.
@@ -328,20 +347,84 @@ rec {
      * the palette at different pigment; the role names are the interface and
      * do not change.
      */
-    ${lib.concatStringsSep "\n" (
-      map (group: ''
+    ${defineColors}
+  '';
 
-        /* ── ${group.title} ${repeat (62 - lib.stringLength group.title) "─"} */
-        ${lib.optionalString (group.note != "") "/* ${group.note} */\n"}${
-          lib.concatStringsSep "\n" (
-            map (
-              role:
-              "/* ${role.colour}: ${role.note} */\n"
-              + "@define-color ${role.name}${pad 15 role.name}${cssValue role};"
-            ) group.roles
-          )
-        }'') groups
-    )}
+  # swayosd (item 12 of docs/plans/desktop-design.md). The OSD reads a plain
+  # ~/.config/swayosd/style.css and stylix has no target for it, so it joins
+  # the generated scheme from its first commit rather than arriving as a
+  # fourth hand-written copy of the palette and being cleaned up afterwards.
+  #
+  # The rules mirror swayosd's own default theme - window#osd, #container, the
+  # progressbar/trough/progress stack, segment for the segmented variant -
+  # with the palette's roles instead of GTK's theme variables, and the
+  # geometry scale's numbers instead of the default's pill shape. It is GTK 4
+  # CSS, which is the same grammar as the waybar half above with a narrower
+  # parser; the build validates it with GTK 4 (swayosd-css-parse.nix).
+  toSwayosdCss = ''
+    /*
+     * SwayOSD colours: Kanagawa Wave
+     *
+    ${comment " *" (banner "swayosd")}
+     *
+     * The OSD is overlay-sized, so it takes the surface radius (12) and the
+     * border (2) from lib/geometry.nix like every other surface. Item 12 of
+     * docs/plans/desktop-design.md; the same two gates the bar and the
+     * launcher sit behind.
+     */
+    ${defineColors}
+
+    window#osd {
+      border-radius: 12px;
+      border: 2px solid @border;
+      background: alpha(@bg-surface, 0.9);
+    }
+
+    #container {
+      margin: 8px 16px;
+    }
+
+    image,
+    label {
+      color: @fg-primary;
+    }
+
+    progressbar:disabled,
+    image:disabled {
+      opacity: 0.5;
+    }
+
+    progressbar,
+    segmentedprogress {
+      min-height: 8px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+    }
+
+    trough,
+    segment {
+      min-height: inherit;
+      border-radius: inherit;
+      border: none;
+      background: alpha(@fg-primary, 0.5);
+    }
+
+    progress,
+    segment.active {
+      min-height: inherit;
+      border-radius: inherit;
+      border: none;
+      background: @accent;
+    }
+
+    segment {
+      margin-left: 8px;
+    }
+
+    segment:first-child {
+      margin-left: 0;
+    }
   '';
 
   # rofi. Imported by themes/kanagawa-wave.rasi, which keeps the layout.
@@ -428,5 +511,6 @@ rec {
     "configs/waybar/kanagawa-wave.css" = toCss;
     "configs/waybar/calendar.jsonc" = toCalendarJson;
     "configs/rofi/themes/palette.rasi" = toRasi;
+    "configs/swayosd/style.css" = toSwayosdCss;
   };
 }

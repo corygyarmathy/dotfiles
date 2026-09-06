@@ -3,6 +3,7 @@
 {
   inputs,
   config,
+  osConfig,
   lib,
   pkgs,
   ...
@@ -18,6 +19,32 @@ let
   # window rounding are the compositor's half of the same four numbers waybar,
   # rofi and dunst use. See ./lib/scale.nix.
   geometryScale = import ./lib/scale.nix { inherit pkgs; };
+
+  # Where the binds' commands will actually be found. Hyprland runs inside the
+  # graphical session, so its PATH is the user's profile plus the system one -
+  # the same two closures, read from the evaluated configuration rather than
+  # restated, exactly as waybar.nix does for the bar. See ./lib/session-path.nix.
+  searchPath = import ./lib/session-path.nix { inherit lib config osConfig; };
+
+  # The keybind sheet's parser, as the build-gate command. Same resolution the
+  # keybind-sheet module uses: the overlay's package, or the source on its own.
+  # See ../../../packages/keybind-sheet.
+  keybind-sheet = pkgs.keybind-sheet or (pkgs.callPackage ../../../packages/keybind-sheet { });
+
+  # Item 1's extension, taken with items 8-15. binds.lua names binaries in
+  # its exec_cmd strings and no check covered them; a bind that runs nothing
+  # is the bar's dead click wearing a keyboard. See ./binds-commands.py.
+  #
+  # The same runCommand also gates item 11's keybind sheet: the parser reads
+  # the *deployed* binds.lua at runtime, and keybind-sheet-parse - the
+  # package's own command - runs the identical parser over the checked-in
+  # file so a binds.lua the sheet stops understanding fails the build instead
+  # of silently losing its documentation.
+  checkedBinds = pkgs.runCommand "hypr-binds.lua" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    python3 ${./binds-commands.py} ${configs}/binds.lua ${lib.escapeShellArg searchPath}
+    ${keybind-sheet}/bin/keybind-sheet-parse ${configs}/binds.lua > /dev/null
+    cp ${configs}/binds.lua $out
+  '';
 
   checkedSettings = pkgs.runCommand "hypr-settings.lua" { } ''
     ${geometryScale}/bin/geometry-scale ${configs}/settings.lua
@@ -37,7 +64,7 @@ in
       "hypr/settings.lua".source = checkedSettings;
       "hypr/animations.lua".source = ../../../configs/hypr/animations.lua;
       "hypr/rules.lua".source = ../../../configs/hypr/rules.lua;
-      "hypr/binds.lua".source = ../../../configs/hypr/binds.lua;
+      "hypr/binds.lua".source = checkedBinds;
       "hypr/autostart.lua".source = ../../../configs/hypr/autostart.lua;
     };
 

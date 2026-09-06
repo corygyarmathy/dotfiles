@@ -81,6 +81,9 @@ tooltip {
 #custom-media,
 #custom-nixos-upgrade,
 #custom-ddc-brightness,
+#custom-dnd,
+#custom-failed-units,
+#custom-power,
 #window,
 #clock,
 #battery,
@@ -160,6 +163,54 @@ tooltip {
   margin-right: 16px;
 }
 
+/* Item 13: do-not-disturb changes shape, not just colour, when it is on - a
+ * bell while quiet, a labelled chip while paused, so the state cannot be
+ * left on silently. The box is style.css's; these are the states.
+ *
+ * When quiet it reads as an idle module like any other. */
+#custom-dnd {
+  color: @fg-muted;
+  border-radius: 8px;
+  margin-left: 8px;
+  margin-right: 0px;
+}
+
+#custom-dnd.paused {
+  color: @warning;
+  background: @bg-raised;
+  font-weight: bold;
+}
+
+/* Item 14: the failed-units module is nothing at all when healthy - the same
+ * collapse the project module uses - and a danger chip when something has
+ * failed. `.ok` is emitted by the script, so the collapse is keyed on real
+ * state rather than on a class nobody sets. */
+#custom-failed-units.ok {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  color: transparent;
+}
+
+#custom-failed-units.failed {
+  color: @danger;
+  background: @bg-raised;
+  border-radius: 8px;
+  margin-right: 8px;
+}
+
+/* Item 8: the power module closes the right end of the bar, beside the
+ * backlight chip, with the same asymmetric radius the bar's other edge
+ * modules carry. */
+#custom-power {
+  color: @fg-secondary;
+  border-radius: 0px 8px 8px 0px;
+  margin-right: 16px;
+  border-left: 0px;
+}
+
 /* nixos-upgrade.css and ddc.css own these two modules' states - which colour
  * means "updates available", which means "override". They used to own the box
  * as well, and restated it: the same padding, margin, border and radius
@@ -236,6 +287,12 @@ window#waybar.empty #window {
 #network {
   color: @info;
   border-radius: 8px 0px 0px 8px;
+  border-right: 0px;
+}
+
+#bluetooth {
+  color: @accent;
+  border-left: 0px;
   border-right: 0px;
 }
 

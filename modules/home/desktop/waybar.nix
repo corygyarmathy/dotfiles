@@ -19,17 +19,8 @@ let
   # Where the bar will actually look for the commands it names. waybar runs as
   # a systemd user service inside the graphical session, so its PATH is the
   # user's own profile plus the system one - the same two closures, not a
-  # hand-written list that could disagree with them.
-  #
-  # `/run/wrappers/bin` is not modelled: nothing on the bar is setuid today,
-  # and a wrapper cannot be resolved from inside the build sandbox. A command
-  # that needs one will fail this check, which is the right moment to decide
-  # whether it belongs on the bar at all.
-  searchPath = lib.concatStringsSep ":" [
-    "${config.home.path}/bin"
-    "${osConfig.system.path}/bin"
-    "${osConfig.system.path}/sbin"
-  ];
+  # hand-written list that could disagree with them. See ./lib/session-path.nix.
+  searchPath = import ./lib/session-path.nix { inherit lib config osConfig; };
 
   # Item 1 of docs/plans/desktop-design.md.
   #

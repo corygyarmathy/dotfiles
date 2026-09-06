@@ -1,6 +1,6 @@
 # Plan: the desktop, as a designed system
 
-Status: proposed 2026-09-05; the four open questions were answered on 2026-09-06 and two requirements were added that change the shape of the bar and remove motion from the desktop entirely — see _Decisions, 2026-09-06_ below. Items 22, 1–4 and 5–7 were built on 2026-09-06; everything from 8 on is still proposed. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
+Status: proposed 2026-09-05; the four open questions were answered on 2026-09-06 and two requirements were added that change the shape of the bar and remove motion from the desktop entirely — see _Decisions, 2026-09-06_ below. Items 22, 1–4, 5–7 were built on 2026-09-06, and **8–15 on 2026-09-06 as well**; 16, 17, 18, 20 and 21 are still proposed. This is the spine document for a series of sessions — it decides what the desktop is _for_, names the rules a change can be checked against, records what is actually there today, and sequences the work. The per-tool sessions (waybar, rofi, the lock screen) come after, and their brief is this document rather than a fresh opinion.
 
 Scope is the `xps15` host: `modules/home/desktop/`, `modules/nixos/hyprland.nix`, `modules/nixos/stylix.nix` and the eleven files under `configs/` that they deploy. The servers are out of scope and have no desktop.
 
@@ -111,14 +111,14 @@ These are the load-bearing ones. Each is argued in its item below; they are coll
 | 5 | One palette, one source | medium | – | **done 2026-09-06** — the repository owns the palette |
 | 6 | A geometry scale | small | – | **done 2026-09-06**; motion half withdrawn 2026-09-06 |
 | 7 | Rofi is the menu system | medium | 5 | **done 2026-09-06** — scaffolding, and the picker moved onto it |
-| 8 | Power and session | small | 7 | proposed |
-| 9 | Network, bluetooth, audio | medium | 7 | proposed |
-| 10 | Clipboard history that survives its window | small | 7 | proposed |
-| 11 | The keybind sheet | small | 7 | proposed |
-| 12 | Hardware feedback has nowhere to land | small | 5 | proposed; rewritten for swayosd 2026-09-06 |
-| 13 | Do not disturb, and a history | small | 7 | proposed |
-| 14 | What is running, and what has failed | medium | 3, 7 | proposed |
-| 15 | The screenshot suite | small | – | proposed |
+| 8 | Power and session | small | 7 | **done 2026-09-06** |
+| 9 | Network, bluetooth, audio | medium | 7 | **done 2026-09-06** |
+| 10 | Clipboard history that survives its window | small | 7 | **done 2026-09-06** |
+| 11 | The keybind sheet | small | 7 | **done 2026-09-06** |
+| 12 | Hardware feedback has nowhere to land | small | 5 | **done 2026-09-06** — rewritten for swayosd 2026-09-06 |
+| 13 | Do not disturb, and a history | small | 7 | **done 2026-09-06** |
+| 14 | What is running, and what has failed | medium | 3, 7 | **done 2026-09-06** |
+| 15 | The screenshot suite | small | – | **done 2026-09-06** |
 | 16 | Measure, then tune: blur and the cursor | medium | 22 | proposed; motion variable withdrawn 2026-09-06 |
 | 17 | The lock screen is off-palette | small | 5 | proposed |
 | 18 | The greeter, on the record | small | 5 | proposed |
@@ -296,7 +296,7 @@ Four things the item did not anticipate:
 
 - **The calendar is answered by an `include`, not by generating `config.jsonc`.** waybar's `mergeConfig` recurses into objects and lets the including file win any key it already sets (confirmed in `src/config.cpp`), so `config.jsonc` keeps every decision about the calendar and `calendar.jsonc` supplies only the four Pango colours. `config.jsonc` is now hex-free. `waybar-commands.py` follows `include` too, so a command arriving from one is checked like any other.
 - **The calendar is the one surface that reads `colours` rather than `roles`,** and this is the exception the item's rule asks to be put on the record. It is markup inside JSON with no widget to theme; the four spans are typography, not state. Inventing four roles with one user each would have been worse than naming the pigment, which is still named in exactly one file.
-- **rofi silently ignores a theme it cannot parse** — it warns to a log nobody reads and loads its own default, so a broken theme looks like a launcher that has reverted to Solarized. That is now a build gate as well (`rofi -no-config -theme … -dump-theme` needs no display). It earned itself immediately: rofi's grammar takes a *literal* colour in `element-text`'s `highlight` and rejects both `@info` and `var(info)`, so that one declaration is generated into `palette.rasi` rather than left as the last hex in the layout file.
+- **rofi silently ignores a theme it cannot parse** — it warns to a log nobody reads and loads its own default, so a broken theme looks like a launcher that has reverted to Solarized. That is now a build gate as well (`rofi -no-config -theme … -dump-theme` needs no display). It earned itself immediately: rofi's grammar takes a _literal_ colour in `element-text`'s `highlight` and rejects both `@info` and `var(info)`, so that one declaration is generated into `palette.rasi` rather than left as the last hex in the layout file.
 - **A fifth hand-written palette turned up.** `modules/home/desktop/waybar-modifiers.nix` emits Pango markup, so its colours were out of CSS's reach — and it had been carrying a **Rose Pine** palette from before the machine was themed. Its four modifier colours now come from `roles`.
 
 Role names were reconciled to waybar's, as the item asks, and the audit shaved two: `accent-primary` (waveAqua1) was declared and referenced by nothing, and rofi's `accent2` likewise. What was `accent-secondary` is now `accent`, which is the only change `style.css` needed. Six theme files that had never been rendered are gone — two waybar, four rofi — and `stylix.targets.rofi.enable` is now explicitly `false` rather than inert-by-accident, so the latent fight over `~/.config/rofi` is settled on the record.
@@ -404,6 +404,17 @@ The rule underneath that answer generalises, and is the reason to write it down 
 
 An hour once item 7 exists.
 
+### Built, 2026-09-06
+
+`packages/power-menu`, built with the `mkMenu` builder item 7 asked the
+second menu to extract, and reachable both ways: `SUPER+Escape` in binds.lua
+and a `custom/power` module at the right end of the bar. The list is the
+order the decision settled on — lock, suspend, log out, reboot, power off —
+so a bare Return on an empty filter lands on Lock. `loginctl lock-session`
+for lock, `systemctl` for suspend/reboot/poweroff, and `hyprctl dispatch
+exit` for log out: UWSM ends the session when the compositor does, which is
+loginctl's "log out" wearing the name of the mechanism that actually does it.
+
 ## 9. Network, bluetooth, audio
 
 ### The problem
@@ -422,6 +433,39 @@ Three rofi menus and three bar modules, in that order of dependency.
 
 A session, or one each if taken separately. The passphrase prompt is the only fiddly part — rofi can read a masked line, and the alternative is deferring to `nmtui` for new networks and handling only saved ones, which is a smaller and possibly better first version.
 
+### Built, 2026-09-06
+
+Three menus and three bar modules, plus the three keyboard binds that make
+each one reachable two ways — `SUPER+SHIFT+W` network, `SUPER+SHIFT+B`
+bluetooth, `SUPER+SHIFT+A` audio (the plain letters belong to applications).
+`network-menu` over `nmcli` — saved and visible networks with signal
+strength, a masked rofi password prompt for the not-yet-saved case, and
+"saved" decided on the connection name field alone (`nmcli -g NAME`,
+fixed-string), so an SSID full of regex is still an SSID and a whole-line
+match cannot silently send every network down the passphrase path.
+`bluetooth-menu` over `bluetoothctl` — paired _and_ discoverable devices,
+state-marked (connected, paired, or just discovered), with a scan entry that
+runs a bounded discovery scan and re-opens the menu so freshly seen devices
+appear; pairing itself stays one entry that opens `blueman-manager` rather
+than asking a PIN a menu should not. `audio-menu` over `wpctl` — sinks then
+sources, each row carrying the node id tab-separated from the name, so
+`wpctl set-default` needs no further parsing; PipeWire node ids are unique
+across sinks and sources, which is what makes one menu over both possible.
+
+The bar changes follow the item's order of dependency. The `network` module's
+left click opens the wifi menu and its right keeps the alternate format —
+waybar toggles `format-alt` on left click by default, and `format-alt-click:
+click-right` moves the toggle rather than letting the menu eat it; the
+`pulseaudio` module's left opens the audio menu and pavucontrol moves to
+middle, where the dead `pulsemixer` binding was; the `bluetooth` module —
+whose CSS has been waiting in style.css since before the plan existed — is
+added, and its left click opens the device menu. The `blueman` package moved
+out of the host's package list into the bluetooth menu's own closure, which
+resolves the half-installed state by giving the package the pairing job a
+menu should not attempt, instead of leaving it inert. The three binds and the
+right-click toggle are review corrections: the first built version had the
+menus pointer-only and had let the format toggle die on the left click.
+
 ## 10. Clipboard history that survives its window
 
 ### The problem
@@ -438,6 +482,16 @@ Two things need deciding: how long the history is, and whether password-manager 
 
 An hour. Low risk and probably the highest ratio of daily relief to effort in this entire document.
 
+### Built, 2026-09-06
+
+`services.cliphist` and `services.wl-clip-persist`, plus `clipboard-menu`
+bound to `SUPER+SHIFT+V`, all under one `cg.home.clipboard` toggle. The
+sensitive-hint question resolved itself rather than needing a filter:
+cliphist's `store` reads `CLIPBOARD_STATE` — which wl-clipboard sets when an
+offer carries the `secret` hint — and skips, so password-manager fields are
+excluded by the tool's own logic. History length is cliphist's default
+`-max-items 500`, which nobody argued with because nobody has a reason to.
+
 ## 11. The keybind sheet
 
 ### The problem
@@ -453,6 +507,24 @@ Parsing Lua with a regex is the obvious objection. The counter is that `binds.lu
 ### Cost and risk
 
 Half a session. Consider making the entries actionable — picking one runs it — which turns the cheat sheet into a command palette for free.
+
+### Built, 2026-09-06
+
+`packages/keybind-sheet`, bound to `SUPER+slash`. It parses the _deployed_
+binds.lua — every `hl.bind` call, grouped by the section comments — and
+renders into rofi-menu. The parse is deliberately over this file's one style
+rather than Lua, and it is gated rather than trusted: hyprland.nix runs the
+identical parser over the checked-in binds.lua — via the package's own
+`keybind-sheet-parse` command, so the build gate calls a script that lives
+where the parser lives rather than reaching into its source — and a file the
+sheet stops understanding (including one that parses to nothing) fails the
+build instead of silently losing its documentation. The regex objections the
+item anticipated showed up as real bugs in the first pass — multi-line binds,
+and the prose comments that sit beside fenced section titles — and both are
+answered by the file's own conventions (a bind keeps accumulating until its
+parens balance; a title is only a title when a fence precedes it and it is
+short). Entries are display-only for now; making them runnable is the
+"consider" the item left open.
 
 ## 12. Hardware feedback has nowhere to land
 
@@ -477,6 +549,24 @@ While here: `brillo` on the function keys and `brightnessctl` in the bar and in 
 
 Half a session, most of it theming. The volume and brightness binds grow a second command each, which argues for moving them out of `binds.lua` into a small script rather than lengthening the Lua — the same move item 15 wants for the screenshot binds.
 
+### Built, 2026-09-06
+
+`services.swayosd.enable`, with the volume, mute and brightness binds in
+binds.lua calling `swayosd-client` — which performs the change _and_ shows
+the OSD — instead of `wpctl` and `brillo`. `brillo` is gone, so brightnessctl
+is the one brightness tool, used by the bar's backlight module, hypridle and
+swayosd alike, which is the "pick one" the item asked for. The client route
+is the one taken: the libinput backend is not started, because the binds are
+already explicit and caps-lock is already reported by `custom/modifiers`.
+
+The theming half is where the item's other point landed. `configs/swayosd/style.css`
+is generated from lib/kanagawa-wave.nix and checked in, and it sits behind
+three gates: the palette match, the geometry scale, and a new GTK 4 parse
+check (`swayosd-css-parse.py`) — swayosd, unlike waybar, only warns and
+carries on when its stylesheet fails, so a file GTK rejects would otherwise
+be an OSD that silently looks default. The OSD keeps the server's default
+top-margin; item 21 positions it against the new bar when that lands.
+
 ## 13. Do not disturb, and a history
 
 ### The problem
@@ -494,6 +584,17 @@ Consider also pausing automatically during fullscreen — Hyprland can signal it
 ### Cost and risk
 
 Half a session.
+
+### Built, 2026-09-06
+
+A `custom/dnd` waybar module reading `dunstctl is-paused` — a bell when
+quiet, a labelled "DND" chip when paused, so the state changes shape rather
+than only colour and cannot be left on silently. Left click toggles
+`dunstctl set-paused toggle` (also `SUPER+N`); right click opens a rofi menu
+over `dunstctl history`, and picking an entry `history-pop`s it, which
+re-displays the notification the user missed. Auto-pause during fullscreen
+is deliberately not added: that is a system deciding something on the user's
+behalf, and it stays a revisitable choice rather than a default.
 
 ## 14. What is running, and what has failed
 
@@ -517,6 +618,20 @@ The `custom/nixos-upgrade` module is worth pointing at as the pattern for the wh
 
 A session. The failed-units module is the interesting half and is a good candidate for the same Go treatment the other custom modules got, since shelling out to `systemctl` twice on an interval is exactly the kind of poller principle 1's second sentence warns about — it should be event-driven off the systemd D-Bus signal instead.
 
+### Built, 2026-09-06
+
+A `custom/failed-units` module — `systemctl --user --failed` plus the system
+equivalent, rendered as nothing at all when every unit is healthy and as a
+danger marker when any has failed. That is the `custom/nixos-upgrade`
+pattern verbatim, which is the point of the item's last paragraph. Clicking
+it lists the failed units in rofi — each tagged `user` or `system` — and
+opens the chosen one's journal in ghostty, `journalctl --user` or not
+depending on which side of the line the unit sits on. The process half was
+already built as item 3: cpu, memory and temperature carry their single
+consistent left click into btop, so this item was the half that was not. The
+module polls on a 30-second interval, far slower than the thing it watches
+changes; the Go/D-Bus treatment stays the upgrade path, as the item notes.
+
 ## 15. The screenshot suite
 
 ### The problem
@@ -532,6 +647,17 @@ Keep `grimblast` and give it the full set, under `Print` with modifiers: region 
 ### Cost and risk
 
 An hour. Purely additive.
+
+### Built, 2026-09-06
+
+`packages/screenshot`, with binds under `Print`: region to clipboard
+(unchanged, the common case), region to file, active window, current
+monitor, and `SUPER+SHIFT+C` for hyprpicker. The save modes write to
+`~/Pictures/screenshots` and offer satty as a second decision — a dismissed
+prompt means "save it as it is", never a captured frame that vanished. The
+screenshot binds moved out of binds.lua into the script, the move item 12's
+note and this item's shape both pointed at. `satty` over `swappy`, as the
+item decided on maintenance grounds.
 
 ## 16. Measure, then tune: blur and the cursor
 

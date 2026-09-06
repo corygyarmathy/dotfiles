@@ -28,14 +28,17 @@
     "custom/project",
     "tray",
     "idle_inhibitor",
+    "custom/dnd",
     "privacy",
     "custom/media",
     "custom/modifiers",
   ],
   "modules-center": ["clock"],
   "modules-right": [
+    "custom/failed-units",
     "custom/nixos-upgrade",
     "network",
+    "bluetooth",
     "cpu",
     "disk",
     "memory",
@@ -44,6 +47,7 @@
     "pulseaudio",
     "backlight",
     "custom/ddc-brightness",
+    "custom/power",
   ],
 
   // ===========================================================================
@@ -57,6 +61,28 @@
     "on-click-right": "nixos-upgrade-waybar-click --button right",
     "on-click-middle": "nixos-upgrade-waybar-click --button middle",
     "tooltip": true,
+  },
+
+  // Item 14 of the desktop plan. Quiet when every user and system unit is
+  // healthy, a visible marker when any has failed; the click lists the
+  // failed units and opens the chosen one's journal. Same shape as the
+  // nixos-upgrade module above: no news, no noise.
+  "custom/failed-units": {
+    "exec": "failed-units-waybar",
+    "return-type": "json",
+    "interval": 30,
+    "on-click": "failed-units-click",
+    "tooltip": true,
+  },
+
+  // Item 8 of the desktop plan. One click away from every action that ends
+  // the session - lock, suspend, log out, reboot, power off - with the
+  // destructive entries last so the fast path lands on Lock. SUPER+Escape is
+  // the keyboard path; neither one is the real one.
+  "custom/power": {
+    "format": "󰐥",
+    "on-click": "power-menu",
+    "tooltip": "Lock, suspend, log out, reboot or power off",
   },
 
   "custom/ddc-brightness": {
@@ -98,6 +124,19 @@
     "return-type": "json",
     "tooltip": true,
     "on-click": "project-launcher pick",
+  },
+
+  // Item 13 of the desktop plan. Reads dunst's own paused state - a bell
+  // when quiet, a "DND" label when notifications are paused, so the state
+  // cannot be left on silently. Left toggles, right opens the history of
+  // missed notifications. SUPER+N is the keyboard path.
+  "custom/dnd": {
+    "exec": "dnd-waybar",
+    "return-type": "json",
+    "interval": 2,
+    "on-click": "dunstctl set-paused toggle",
+    "on-click-right": "dnd-history",
+    "tooltip": true,
   },
 
   // ===========================================================================
@@ -215,13 +254,36 @@
   "network": {
     "interval": 30,
     "format-alt": "{ifname}: {ipaddr}/{cidr}",
+    // The plan (item 9) wanted the format toggle kept after the menu took
+    // the left click. Waybar's format-alt toggles on left click by default;
+    // format-alt-click moves it, here to the right button, so neither
+    // surface eats the other.
+    "format-alt-click": "click-right",
     "format-disconnected": "Disconnected ⚠",
     "format-ethernet": "{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}",
     "format-linked": "{ifname} (No IP) ",
     "format-wifi": "{signalStrength}% ",
-    // Left = toggle format (format-alt handles natively)
-    // Middle was nm-connection-editor, which is not installed; item 9 of the
-    // desktop plan gives the network a rofi menu instead.
+    // Left = the wifi menu (item 9 of the desktop plan), SUPER+SHIFT+W the
+    // keyboard half. Right = the alternate format, kept via format-alt-click
+    // above rather than lost to the menu. Middle stays nothing: item 3
+    // dropped the dead nm-connection-editor middle click and the menu
+    // connects to networks without editing profiles, which is `full` depth
+    // and belongs to an application.
+    "on-click": "network-menu",
+  },
+
+  // Item 9 of the desktop plan. The native bluetooth module - a glyph in
+  // each adapter state, the connected device in the tooltip - with its left
+  // click opening the device menu. The CSS has been waiting for this module
+  // since before the plan existed.
+  "bluetooth": {
+    "format-disabled": "󰂲",
+    "format-off": "󰂯",
+    "format-on": "󰂯",
+    "format-connected": "󰂯",
+    "tooltip-format-connected": "{num_connections} connected{device_enumerate}",
+    "tooltip-format-enumerate-connected": "\n  {device_alias}",
+    "on-click": "bluetooth-menu",
   },
 
   // ===========================================================================
@@ -243,11 +305,13 @@
     "format-muted": " {format_source}",
     "format-source": "{volume}% ",
     "format-source-muted": "",
-    // Left = open pavucontrol, Right = toggle mute
-    // Middle was a pulsemixer TUI; item 9 of the desktop plan replaces it with
-    // a sink picker in rofi.
-    "on-click": "pavucontrol",
+    // Left = the audio device menu (item 9 of the desktop plan) - "which
+    // headphones" is a pick, not a full mixer. Right = toggle mute.
+    // Middle = pavucontrol, the full mixer, moved here from the dead
+    // pulsemixer binding (item 3).
+    "on-click": "audio-menu",
     "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "on-click-middle": "pavucontrol",
     "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
     "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
   },
