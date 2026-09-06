@@ -1,7 +1,7 @@
 # Backups
 
 Restic runs on both hosts: a cross-server repo (to the *other* host, over
-sftp) and an offsite Google Drive repo via rclone. Schedules are 02:30
+sftp) and an offsite OneDrive repo via rclone. Schedules are 02:30
 (cross-server) and 03:00 (offsite); homelab02's MariaDB dump for Grimmory
 lands at 02:00 so the 02:30 snapshot captures a consistent dump.
 
@@ -11,14 +11,14 @@ Metrics per job/repo: `restic_backup_last_run_success` and
 ## ResticBackupFailed
 
 **Severity:** warning · **Fires when:** the last run of a named backup job
-failed. The notification names the job (`cross-server` / `gdrive`) and host.
+failed. The notification names the job (`cross-server` / `onedrive`) and host.
 
 ### Do now
 
 - `ssh <host> systemctl status restic-<job>.service`
 - `journalctl -u restic-<job>.service -n 100` - the tail usually says it all:
   lock contention (two jobs overlapping), network/sftp failure to the peer,
-  rclone quota/auth failure for gdrive.
+  rclone quota/auth failure for onedrive.
 
 ### Dig deeper
 

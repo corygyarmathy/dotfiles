@@ -179,9 +179,9 @@ in
           repository = "sftp:coryg@${fleet.hosts.${peer}.address}:/srv/backups/${hostName}";
           schedule = "02:30";
         };
-        # Offsite: Google Drive via rclone
-        gdrive = {
-          repository = "rclone:gdrive:backups/homelab/${hostName}";
+        # Offsite: OneDrive via rclone
+        onedrive = {
+          repository = "rclone:onedrive:backups/homelab/${hostName}";
           schedule = "03:00";
         };
       };

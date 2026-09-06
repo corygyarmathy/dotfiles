@@ -42,7 +42,7 @@ have occurred. This is the worst alert in the fleet.
 
 - Recoverable (transient): import + scrub + breathe.
 - Real failure of both members: restore from backups. Restic snapshots exist
-  on homelab01's cross-server repo AND Google Drive; the restore procedure is
+  on homelab01's cross-server repo AND OneDrive; the restore procedure is
   restic's, pointed at whichever copy survives. Verify what you restored
   before declaring victory.
 
