@@ -5,10 +5,15 @@
 # terminal) or switches to an existing one. Also streams JSON updates to
 # waybar so the bar can show the active project.
 #
-# Runtime dependencies (rofi, hyprctl, ghostty, nvim) are NOT declared as
+# Runtime dependencies (rofi-menu, hyprctl, ghostty, nvim) are NOT declared as
 # buildInputs because they are invoked by name from the user's environment
 # rather than wrapped paths. This keeps the binary portable across hosts
 # that may have slightly different versions of those tools.
+#
+# The picker calls `rofi-menu` rather than `rofi`: item 7 of
+# docs/plans/desktop-design.md makes one wrapper the way every list on this
+# desktop is presented, so that they cannot drift into looking like four
+# different menus. modules/home/desktop/rofi.nix installs it.
 {
   lib,
   buildGoModule,

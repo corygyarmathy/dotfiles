@@ -269,6 +269,31 @@
             fixture = ./modules/services/digital-garden/lib/hugo/fixture;
             workingTreeFixture = "modules/services/digital-garden/lib/hugo/fixture";
           };
+
+          # Item 5 of docs/plans/desktop-design.md. The colour half of the
+          # waybar and rofi configuration is generated from lib/kanagawa-wave.nix
+          # and *also* checked in, so that configs/ keeps working on a machine
+          # without Nix. The host builds assert the two agree; this is how you
+          # make them agree again after changing the palette.
+          writePalette =
+            let
+              palette = import ./lib/kanagawa-wave.nix { inherit (nixpkgs) lib; };
+            in
+            pkgs.writeShellApplication {
+              name = "write-palette";
+              text = ''
+                if [ ! -e flake.nix ]; then
+                  echo "write-palette: run me from the root of the repository" >&2
+                  exit 1
+                fi
+                ${nixpkgs.lib.concatStringsSep "\n" (
+                  nixpkgs.lib.mapAttrsToList (path: text: ''
+                    cp --no-preserve=mode ${pkgs.writeText (baseNameOf path) text} ${path}
+                    echo "wrote ${path}"
+                  '') palette.files
+                )}
+              '';
+            };
         in
         {
           garden-preview = {
@@ -276,6 +301,14 @@
             program = nixpkgs.lib.getExe preview;
             meta = {
               description = "Local preview that renders and serves the digital garden exactly as the server does";
+            };
+          };
+
+          write-palette = {
+            type = "app";
+            program = nixpkgs.lib.getExe writePalette;
+            meta = {
+              description = "Write the generated colour files back into configs/ after changing lib/kanagawa-wave.nix";
             };
           };
         }

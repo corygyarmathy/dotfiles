@@ -23,6 +23,37 @@ import sys
 import json5
 
 
+def load(config_path):
+    """Parse a config file, following its `include` list the way waybar does.
+
+    waybar merges each included file into the including one and lets the
+    including file win any key it already sets, so a command can arrive from
+    an include as easily as from config.jsonc and has to be checked the same
+    way. Include names are resolved against the config's own directory, which
+    is where waybar's own search finds them once the tree is deployed.
+    """
+    with open(config_path) as handle:
+        config = json5.load(handle)
+
+    includes = config.get("include", [])
+    if isinstance(includes, str):
+        includes = [includes]
+
+    here = os.path.dirname(config_path)
+    for name in includes:
+        merge(config, load(os.path.join(here, name)))
+    return config
+
+
+def merge(into, other):
+    """waybar's own merge: recurse into objects, never overwrite."""
+    for key, value in other.items():
+        if isinstance(into.get(key), dict) and isinstance(value, dict):
+            merge(into[key], value)
+        elif key not in into:
+            into[key] = value
+
+
 def is_command_key(key):
     """Is this a key whose value waybar hands to a shell?
 
@@ -63,8 +94,7 @@ def main(argv):
     config_path, search_path = argv[1], argv[2]
     bindirs = [d for d in search_path.split(":") if d]
 
-    with open(config_path) as handle:
-        config = json5.load(handle)
+    config = load(config_path)
 
     failures = []
     for where, command in commands(config):

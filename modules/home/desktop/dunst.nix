@@ -8,6 +8,12 @@
 }:
 let
   cfg = config.cg.home.dunst;
+
+  # Item 6 of docs/plans/desktop-design.md. dunst is configured in Nix, so
+  # unlike waybar's CSS and rofi's theme it can read the scale rather than be
+  # checked against it. A notification is overlay-sized, so it takes the
+  # surface radius.
+  geometry = import ../../../lib/geometry.nix;
 in
 {
   options.cg.home.dunst.enable = lib.mkEnableOption "Dunst notification daemon";
@@ -25,22 +31,24 @@ in
           width = 300;
           height = 300;
           origin = "top-right";
-          offset = "10x50";
+          # Clear of the bar, on the scale. Item 21 rotates the bar, at which
+          # point this is the number that has to move with it.
+          offset = "8x56";
 
           # Progress bar
           progress_bar = true;
-          progress_bar_height = 10;
-          progress_bar_frame_width = 1;
+          progress_bar_height = geometry.space.tight;
+          progress_bar_frame_width = geometry.border;
           progress_bar_min_width = 150;
           progress_bar_max_width = 300;
 
           # Appearance (non-color/font - those are set by Stylix)
           transparency = 10;
-          separator_height = 2;
-          padding = 8;
-          horizontal_padding = 8;
-          frame_width = 2;
-          corner_radius = 10;
+          separator_height = geometry.border;
+          padding = geometry.space.tight;
+          horizontal_padding = geometry.space.loose;
+          frame_width = geometry.border;
+          corner_radius = geometry.radius.surface;
           sort = "yes";
 
           # Text layout (font is set by Stylix)

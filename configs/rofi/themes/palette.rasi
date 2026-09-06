@@ -1,0 +1,56 @@
+/*
+ * Rofi colours: Kanagawa Wave
+ *
+ * Generated from lib/kanagawa-wave.nix. Do not edit.
+ *
+ * A copy is checked in so that rofi works on a machine without Nix, the
+ * way everything under configs/ does. The build asserts the two agree, so an
+ * edit here fails `nixos-rebuild switch` and fails CI rather than drifting
+ * quietly. To change a colour, change the palette and run:
+ *
+ *     nix run .#write-palette
+ *
+ * The role names are waybar's. Two files calling the same colour by two
+ * names is what item 5 was about; this is the half that stops it.
+ */
+
+* {
+    /* ── Backgrounds ─────────────────────────────────────────────── */
+    bg-base:          #16161D;    /* sumiInk0: darkest surface - module backgrounds, tooltips */
+    bg-backdrop:      #16161DCC;  /* sumiInk0: the same, translucent - rofi's window behind its own chrome */
+    bg-surface:       #1F1F28;    /* sumiInk1: default background - the layer most things sit on */
+    bg-overlay:       #2A2A37;    /* sumiInk2: raised chrome - tooltip borders, rofi's input bar */
+    bg-raised:        #363646;    /* sumiInk3: separators and elevated surfaces */
+    bg-hover:         #223249;    /* waveBlue1: hover and selection */
+
+    /* ── Foreground ──────────────────────────────────────────────── */
+    fg-primary:       #DCD7BA;    /* fujiWhite: primary text */
+    fg-secondary:     #C8C093;    /* oldWhite: secondary text */
+    fg-muted:         #727169;    /* fujiGray: placeholders and comments */
+    fg-disabled:      #54546D;    /* sumiInk4: disabled and inactive */
+
+    /* ── Structure ───────────────────────────────────────────────── */
+    border:           #54546D;    /* sumiInk4: borders and separators */
+    accent:           #7FB4CA;    /* springBlue: the accent - prominent chrome that is not carrying a state */
+
+    /* ── Semantic states ─────────────────────────────────────────── */
+    danger:           #C34043;    /* autumnRed: errors, critical states, destructive actions */
+    danger-bright:    #E46876;    /* waveRed: the same, where it must carry against a selection */
+    warning:          #FF9E3B;    /* roninYellow: warnings, overrides, updates available */
+    success:          #98BB6C;    /* springGreen: healthy, complete, up to date */
+    info:             #7E9CD8;    /* crystalBlue: informational and neutral-active */
+    secondary:        #957FB8;    /* oniViolet: second informational voice - disk, audio, applying */
+    highlight:        #D27E99;    /* sakuraPink: decorative, attention-drawing - the media player */
+}
+
+/* ── The one declaration a variable cannot reach ──────────────── */
+/*
+ * rofi's `highlight` property wants a literal colour: its grammar rejects
+ * both `@info` and `var(info)` there, and a theme that tries either fails
+ * to parse and is silently replaced by rofi's default. So the fuzzy-match
+ * underline is generated here rather than left as the last hex in the
+ * hand-written layout file.
+ */
+element-text {
+    highlight:      bold underline #7E9CD8;
+}

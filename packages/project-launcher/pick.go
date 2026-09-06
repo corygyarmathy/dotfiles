@@ -47,14 +47,20 @@ func runPick() error {
 	return nil
 }
 
-// rofiPick shows the rofi picker with the given projects and returns the
-// chosen project. A nil project (with nil error) signals the user dismissed
-// the picker without selecting anything.
+// rofiPick shows the picker with the given projects and returns the chosen
+// project. A nil project (with nil error) signals the user dismissed the
+// picker without selecting anything.
 //
-// We use rofi's dmenu mode and match the returned string against the input
-// list. This is more robust than -format i (which interacts poorly with
-// some rofi config combinations like history and sidebar-mode) and gives
-// us actionable error messages when something genuinely goes wrong.
+// It goes through `rofi-menu` rather than calling rofi directly: item 7 of
+// docs/plans/desktop-design.md makes rofi the menu system for every list this
+// desktop asks the user to pick from, and a menu that sets its own flags is
+// a second menu system. rofi-menu is also where the flags this picker used to
+// need live now - it turns off history and sidebar-mode, which is what the
+// note below about -format i was working around.
+//
+// We still match the returned string against the input list rather than using
+// -format i, which gives actionable error messages when something genuinely
+// goes wrong.
 func rofiPick(projects []Project) (*Project, error) {
 	// Build both the input list (one project name per line) and a reverse
 	// lookup from name back to project. Project names come from directory
@@ -68,11 +74,7 @@ func rofiPick(projects []Project) (*Project, error) {
 		byName[projects[i].Name] = &projects[i]
 	}
 
-	cmd := exec.Command("rofi",
-		"-dmenu",
-		"-i",            // case-insensitive matching
-		"-p", "Project", // prompt
-	)
+	cmd := exec.Command("rofi-menu", "Project")
 	cmd.Stdin = &input
 
 	// Capture stderr separately so we can surface any rofi diagnostics
@@ -83,14 +85,15 @@ func rofiPick(projects []Project) (*Project, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			// rofi exits 1 when the user dismisses without selecting.
+			// rofi-menu passes rofi's exit 1 through: dismissed without
+			// selecting.
 			return nil, nil
 		}
 		stderrMsg := strings.TrimSpace(stderr.String())
 		if stderrMsg != "" {
-			return nil, fmt.Errorf("running rofi: %w (stderr: %s)", err, stderrMsg)
+			return nil, fmt.Errorf("running rofi-menu: %w (stderr: %s)", err, stderrMsg)
 		}
-		return nil, fmt.Errorf("running rofi: %w", err)
+		return nil, fmt.Errorf("running rofi-menu: %w", err)
 	}
 
 	selection := strings.TrimSpace(string(out))
@@ -100,11 +103,11 @@ func rofiPick(projects []Project) (*Project, error) {
 
 	project, ok := byName[selection]
 	if !ok {
-		// This usually means rofi returned a filter string that didn't
+		// This usually means rofi-menu returned a filter string that didn't
 		// match any item (e.g. user typed a non-matching query and pressed
 		// Enter). Surface it rather than silently exit so the user knows
 		// why nothing happened.
-		return nil, fmt.Errorf("rofi returned %q which is not a known project", selection)
+		return nil, fmt.Errorf("rofi-menu returned %q which is not a known project", selection)
 	}
 	return project, nil
 }

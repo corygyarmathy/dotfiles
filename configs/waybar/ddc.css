@@ -5,12 +5,11 @@
 #custom-ddc-brightness {
   background: @bg-base;
   opacity: 0.9;
-  padding: 0px 10px;
-  margin: 3px 0px;
-  margin-top: 15px;
+  padding: 8px 16px;
+  margin: 8px 0px;
   border: 2px solid @border;
   border-radius: 8px 8px 8px 8px;
-  margin-right: 10px;
+  margin-right: 8px;
 }
 
 #custom-ddc-brightness.auto {

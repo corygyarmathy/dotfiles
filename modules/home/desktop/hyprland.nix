@@ -9,6 +9,20 @@
 }:
 let
   cfg = config.cg.home.hyprland;
+
+  configs = ../../../configs/hypr;
+
+  # Item 6 of docs/plans/desktop-design.md. settings.lua is deployed verbatim
+  # so it keeps working on a machine without Nix, which means it cannot read
+  # the geometry scale - so the build reads it instead. Gaps, border width and
+  # window rounding are the compositor's half of the same four numbers waybar,
+  # rofi and dunst use. See ./lib/scale.nix.
+  geometryScale = import ./lib/scale.nix { inherit pkgs; };
+
+  checkedSettings = pkgs.runCommand "hypr-settings.lua" { } ''
+    ${geometryScale}/bin/geometry-scale ${configs}/settings.lua
+    cp ${configs}/settings.lua $out
+  '';
 in
 {
   options.cg.home.hyprland.enable = lib.mkEnableOption "Hyprland home configuration";
@@ -20,7 +34,7 @@ in
       "hypr/hyprland.lua".source = ../../../configs/hypr/hyprland.lua;
       "hypr/env.lua".source = ../../../configs/hypr/env.lua;
       "hypr/monitors.lua".source = ../../../configs/hypr/monitors.lua;
-      "hypr/settings.lua".source = ../../../configs/hypr/settings.lua;
+      "hypr/settings.lua".source = checkedSettings;
       "hypr/animations.lua".source = ../../../configs/hypr/animations.lua;
       "hypr/rules.lua".source = ../../../configs/hypr/rules.lua;
       "hypr/binds.lua".source = ../../../configs/hypr/binds.lua;
