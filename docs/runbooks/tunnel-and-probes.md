@@ -15,6 +15,13 @@ is *not* inhibited: the away-host beacon is what still pages when the tunnel
 owner itself is gone, since this alert's metric lives on that host and may
 never reach an operator.
 
+Push notifications for these two alerts are muted between 04:00 and 05:00
+(Australia/Perth): that is the nightly auto-upgrade reboot window
+(`system.autoUpgrade.rebootWindow` in `hosts/*/default.nix`), and the reboot
+takes the tunnel down with the host that owns it. A tunnel still down when the
+window ends pages then, and email is never muted. Any tunnel-down outside that
+window is a genuine incident.
+
 ### Do now
 
 - `ssh homelab01 systemctl status cloudflared-tunnel`
