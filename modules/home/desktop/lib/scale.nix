@@ -31,7 +31,12 @@ pkgs.writeShellApplication {
         ]
       } \
       ${list [ geometry.border ]} \
-      ${toString geometry.space.unit} \
+      ${
+        list [
+          geometry.space.unit
+          geometry.space.half
+        ]
+      } \
       "$@"
   '';
 }

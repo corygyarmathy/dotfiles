@@ -79,6 +79,12 @@
   "custom/media": {
     "exec": "waybar-media",
     "max-length": 35,
+    // Track titles are somebody else's text, and waybar renders a custom
+    // module's output as Pango markup. An unescaped "&" in a title is not a
+    // stray character, it is a markup error - the label refuses to update and
+    // keeps whatever it said before, which reads as a media module that has
+    // stopped following the player.
+    "escape": true,
     "format": "󰎈 {}",
     "on-click": "playerctl play-pause",
     "on-click-right": "playerctl next",

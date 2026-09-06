@@ -211,6 +211,31 @@ let
     }
   ];
 
+  # ── The one role two formats spell differently ─────────────────────────────
+  #
+  # `bg-backdrop` is a colour with an opacity, and rasi and GTK 3 CSS disagree
+  # about how to write one. rofi takes the eight-digit `#RRGGBBAA` that the
+  # palette carries; GTK has no such notation, and `#16161DCC` there is not a
+  # colour it renders opaque but a parse error - which aborts the rest of the
+  # stylesheet and stops waybar from starting at all. So a role that only rofi
+  # reads was enough to take the bar down with it.
+  #
+  # GTK's `alpha()` takes the opacity as a fraction, so the byte is divided
+  # here and the pigment is still written out as the same hex as every other
+  # line in the file. Nix prints a float to six places; the match trims the
+  # zeros back off, and `removeSuffix` catches the "1." a fully opaque byte
+  # would leave behind.
+  fraction =
+    hex:
+    lib.removeSuffix "." (lib.head (lib.match "(.*[^0])0*" (toString (lib.fromHexString hex / 255.0))));
+
+  cssValue =
+    role:
+    if role ? alpha then
+      "alpha(${colours.${role.colour}}, ${fraction role.alpha})"
+    else
+      colours.${role.colour};
+
   flatRoles = lib.listToAttrs (
     lib.concatMap (
       group:
@@ -312,7 +337,7 @@ rec {
             map (
               role:
               "/* ${role.colour}: ${role.note} */\n"
-              + "@define-color ${role.name}${pad 15 role.name}${flatRoles.${role.name}};"
+              + "@define-color ${role.name}${pad 15 role.name}${cssValue role};"
             ) group.roles
           )
         }'') groups

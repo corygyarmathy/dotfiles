@@ -1,16 +1,11 @@
 /* DDC Module Styles
  * @import "./ddc.css";
+ *
+ * States only. The module's box - background, padding, margin, border and
+ * radius - is style.css's, along with every other module's, because a bar
+ * whose modules are boxed in four different files is a bar whose height
+ * cannot be changed in one place.
  */
-
-#custom-ddc-brightness {
-  background: @bg-base;
-  opacity: 0.9;
-  padding: 8px 16px;
-  margin: 8px 0px;
-  border: 2px solid @border;
-  border-radius: 8px 8px 8px 8px;
-  margin-right: 8px;
-}
 
 #custom-ddc-brightness.auto {
   color: @fg-primary;

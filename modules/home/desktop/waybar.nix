@@ -14,6 +14,7 @@ let
   palette = import ../../../lib/kanagawa-wave.nix { inherit lib; };
   inherit (import ./lib/generated.nix { inherit pkgs; }) assertGenerated;
   geometryScale = import ./lib/scale.nix { inherit pkgs; };
+  gtkCssParse = import ./lib/gtk-css.nix { inherit pkgs; };
 
   # Where the bar will actually look for the commands it names. waybar runs as
   # a systemd user service inside the graphical session, so its PATH is the
@@ -41,12 +42,18 @@ let
   #
   # See ./waybar-commands.py for what it does and does not look at.
   #
-  # It gates three things now. The second is item 5's half of the same
+  # It gates four things now. The second is item 5's half of the same
   # bargain: the colour file and the calendar's four hexes are generated from
   # lib/kanagawa-wave.nix and checked in, and this is what stops the copy from
   # drifting away from the palette. The third is item 6's: the stylesheets are
   # hand-written and cannot read the geometry scale, so they are checked
-  # against it instead. See ./lib/generated.nix and ./lib/scale.nix.
+  # against it instead.
+  #
+  # The fourth exists because the first three all passed on a stylesheet GTK
+  # could not parse, and the bar spent a night refusing to start: they check
+  # what the CSS *says*, and none of them checks that it is CSS GTK accepts.
+  # That one asks GTK. See ./lib/generated.nix, ./lib/scale.nix and
+  # ./lib/gtk-css.nix.
   checkedConfigs =
     pkgs.runCommand "waybar-config"
       {
@@ -70,6 +77,12 @@ let
 
         ${geometryScale}/bin/geometry-scale \
           ${configs}/style.css \
+          ${configs}/nixos-upgrade.css \
+          ${configs}/ddc.css
+
+        ${gtkCssParse}/bin/gtk-css-parse \
+          ${configs}/style.css \
+          ${configs}/kanagawa-wave.css \
           ${configs}/nixos-upgrade.css \
           ${configs}/ddc.css
 

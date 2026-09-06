@@ -45,7 +45,7 @@ tooltip {
  * ============================================================================== */
 
 #workspaces button {
-  padding: 8px;
+  padding: 0px 8px;
   color: @fg-disabled;
   margin-right: 8px;
 }
@@ -79,6 +79,8 @@ tooltip {
 #custom-project,
 #custom-power_profile,
 #custom-media,
+#custom-nixos-upgrade,
+#custom-ddc-brightness,
 #window,
 #clock,
 #battery,
@@ -98,8 +100,23 @@ tooltip {
 #backlight {
   background: @bg-surface;
   opacity: 0.9;
-  padding: 8px 16px;
-  margin: 8px 0px;
+  /* The half-step, on the axis the unit is too coarse for. A module's content
+   * is one 19px line, so 8px of vertical padding more than doubles the chip -
+   * that is what put the bar at 55px - and 0 makes it exactly as tall as its
+   * own text. 4 is the scale's answer to that; see lib/geometry.nix.
+   *
+   * The bottom margin is 0 on purpose, and it is not an asymmetry. Hyprland
+   * puts gaps_out (8) between the bar and the window below it, so a bottom
+   * margin of 8 here is the second half of a gap that already exists: it drew
+   * 8px above the chip and 16 below. Above the chip there is no window to gap
+   * against and the margin is the whole story. 8 and 0 here is what renders
+   * as 8 and 8 on screen - which is the thing being kept even, rather than
+   * the two numbers in this rule.
+   *
+   * Item 21 turns the bar on its side. These two lines swap axis with it, and
+   * the gaps_out reasoning above swaps with them. */
+  padding: 4px 16px;
+  margin: 8px 0px 0px 0px;
   border: 2px solid @border;
 }
 
@@ -141,6 +158,24 @@ tooltip {
   color: @fg-primary;
   border-radius: 0px 8px 8px 0px;
   margin-right: 16px;
+}
+
+/* nixos-upgrade.css and ddc.css own these two modules' states - which colour
+ * means "updates available", which means "override". They used to own the box
+ * as well, and restated it: the same padding, margin, border and radius
+ * written a third and a fourth time. Nothing noticed, because nothing was
+ * checking that the module box is one box - so changing it in style.css moved
+ * some of the bar and not the rest.
+ *
+ * Their backgrounds came out of that duplication too. Both said @bg-base
+ * where every other module says @bg-surface, which drew two chips a shade
+ * darker than the rest of the bar for no reason anyone chose - a difference
+ * that reads as a rendering fault rather than as meaning. They take the
+ * shared background now; what is left here is the placement. */
+#custom-nixos-upgrade,
+#custom-ddc-brightness {
+  border-radius: 8px;
+  margin-right: 8px;
 }
 
 #tray {
