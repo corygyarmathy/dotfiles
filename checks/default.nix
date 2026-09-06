@@ -108,13 +108,35 @@ in
     in
     pkgs.runCommand "check-alertmanager-config"
       {
-        nativeBuildInputs = [ pkgs.prometheus-alertmanager ];
+        nativeBuildInputs = [
+          pkgs.prometheus-alertmanager
+          pkgs.jq
+        ];
         passAsFile = [ "amConfig" ];
         amConfig = builtins.toJSON eval.config.services.prometheus.alertmanager.configuration;
       }
       ''
         amtool check-config "$amConfigPath" | tee amtool.out
         grep -q SUCCESS amtool.out
+
+        # The nightly auto-upgrade reboots the tunnel host inside the 04:00-05:00
+        # maintenance window, so CloudflareTunnel criticals fire there by design
+        # (see monitoring.nix). They must be muted - but only during that window,
+        # only on the push lane, and only for tunnel alerts: a mute that covered
+        # the wrong window, every critical, or no longer existed would either
+        # page for planned maintenance or swallow a real outage at 04:30.
+        jq -e '
+          any(.mute_time_intervals[]?;
+              .name == "maintenance-window" and
+              any(.time_intervals[]?;
+                  any(.times[]?;
+                      .start_time == "04:00" and .end_time == "05:00")))
+          and
+          any(.route.routes[]?;
+              any(.matchers[]?; contains("CloudflareTunnel"))
+              and (.mute_time_intervals? | index("maintenance-window") != null))
+        ' "$amConfigPath" >/dev/null
+
         mkdir $out
       '';
 

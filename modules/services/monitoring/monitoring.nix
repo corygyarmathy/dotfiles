@@ -14,6 +14,15 @@ let
   # `attrNames` is, which keeps the generated scrape config stable.
   servers = lib.attrNames (lib.filterAttrs (_: host: host.kind == "server") fleet.hosts);
 
+  # Timezone both wall-clock mute intervals are evaluated in. Quiet hours and
+  # the maintenance window are statements about the hosts' local time, not
+  # UTC, so they share the host timezone (Australia/Perth for this fleet).
+  muteLocation =
+    if cfg.alertmanager.quietHours.timeZone != null then
+      cfg.alertmanager.quietHours.timeZone
+    else
+      "UTC";
+
   # ZFS health metrics script for textfile collector
   # Outputs Prometheus metrics for ZFS pool health
   zfsHealthScript = pkgs.writeShellScript "zfs-health-exporter" ''
@@ -786,6 +795,29 @@ in
               repeat_interval = "24h";
 
               routes = lib.optionals cfg.alertmanager.ntfy.enable [
+                # Tunnel outages inside the nightly maintenance window are the
+                # upgrade rebooting the host that owns the tunnel - expected,
+                # not an incident. Criticals normally ignore quiet hours by
+                # design, so this route is the carve-out: only tunnel alerts
+                # are muted during it, a ZFS pool fault or failed verification
+                # at 04:30 still pages, and a tunnel still down when the
+                # window ends notifies then. See the maintenance-window
+                # interval below.
+                {
+                  receiver = "push";
+                  continue = true; # email still archives it
+                  matchers = [
+                    "severity = \"critical\""
+                    "alertname =~ \"CloudflareTunnel.*\""
+                  ];
+                  group_by = [
+                    "alertname"
+                    "instance"
+                  ];
+                  group_wait = "30s";
+                  repeat_interval = "4h";
+                  mute_time_intervals = [ "maintenance-window" ];
+                }
                 {
                   receiver = "push";
                   continue = true; # email still archives it
@@ -815,31 +847,50 @@ in
             };
 
             mute_time_intervals =
-              lib.optionals (cfg.alertmanager.ntfy.enable && cfg.alertmanager.quietHours.enable)
-                [
-                  {
-                    name = "overnight";
-                    time_intervals = [
-                      {
-                        times = [
-                          {
-                            start_time = cfg.alertmanager.quietHours.start;
-                            end_time = "23:59";
-                          }
-                          {
-                            start_time = "00:00";
-                            end_time = cfg.alertmanager.quietHours.end;
-                          }
-                        ];
-                        location =
-                          if cfg.alertmanager.quietHours.timeZone != null then
-                            cfg.alertmanager.quietHours.timeZone
-                          else
-                            "UTC";
-                      }
-                    ];
-                  }
-                ];
+              (lib.optionals (cfg.alertmanager.ntfy.enable && cfg.alertmanager.quietHours.enable) [
+                {
+                  name = "overnight";
+                  time_intervals = [
+                    {
+                      times = [
+                        {
+                          start_time = cfg.alertmanager.quietHours.start;
+                          end_time = "23:59";
+                        }
+                        {
+                          start_time = "00:00";
+                          end_time = cfg.alertmanager.quietHours.end;
+                        }
+                      ];
+                      location = muteLocation;
+                    }
+                  ];
+                }
+              ])
+              ++ lib.optionals cfg.alertmanager.ntfy.enable [
+                # The servers' nightly auto-upgrade window: homelab01 starts
+                # at 04:00 and homelab02 at 04:15, each with up to 10m of
+                # randomized delay, and both reboot inside it
+                # (system.autoUpgrade.rebootWindow, hosts/*/default.nix).
+                # The tunnel lives on homelab01, so its reboots take the
+                # CloudflareTunnel* criticals down with it - a mute that did
+                # not exist left those buzzing at 04:15. Kept in step with
+                # the UnexpectedReboot alert's 04:00-05:00 exclusion.
+                {
+                  name = "maintenance-window";
+                  time_intervals = [
+                    {
+                      times = [
+                        {
+                          start_time = "04:00";
+                          end_time = "05:00";
+                        }
+                      ];
+                      location = muteLocation;
+                    }
+                  ];
+                }
+              ];
 
             inhibit_rules =
               let

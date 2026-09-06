@@ -176,7 +176,7 @@ sops secrets/homelab01.yaml                 # edit
 
 Prometheus evaluates the rules in `modules/services/monitoring/alert-rules.yml` on both servers; a two-node Alertmanager cluster deduplicates them. Notifications leave through two deliberately unequal lanes:
 
-- **Push (ntfy, self-hosted on homelab01).** Critical alerts arrive with urgent priority and buzz. Warnings arrive silently, repeat no more often than daily, and are muted between 22:00 and 07:00 (Australia/Perth) — read them at breakfast. Resolutions follow their alert's lane: a resolved critical lands as an ordinary-priority all-clear.
+- **Push (ntfy, self-hosted on homelab01).** Critical alerts arrive with urgent priority and buzz. Warnings arrive silently, repeat no more often than daily, and are muted between 22:00 and 07:00 (Australia/Perth) — read them at breakfast. The one carve-out from "criticals always buzz": Cloudflare tunnel criticals are muted between 04:00 and 05:00, because the nightly auto-upgrade reboots the host that owns the tunnel inside that window — a tunnel still down when it ends pages then. Resolutions follow their alert's lane: a resolved critical lands as an ordinary-priority all-clear.
 - **Email (the archive lane).** Everything reaches it regardless of severity, grouped by alert name so a fan-out of related alerts is one message.
 
 Inhibition rules keep one root cause from fanning out into many notifications: an unreachable host suppresses every alert sourced from its exporters, a downed tunnel suppresses the probe failures it would otherwise cause, and a degraded ZFS pool supersedes the per-symptom alerts describing the same disks.
