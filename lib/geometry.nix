@@ -40,5 +40,21 @@
     # The two that get used by name often enough to deserve one.
     tight = 8;
     loose = 16;
+
+    # And one half-step, for the cross axis of something the unit is too
+    # coarse for.
+    #
+    # It was added by waybar. A bar module's content is a single 19px line, so
+    # the only vertical paddings the unit could offer were 0 - a chip exactly
+    # as tall as its text - and 8, which more than doubles the chip and cost
+    # the bar fourteen rows of a 1440-row panel. Neither is the right answer
+    # and the scale had no third one. 4 is: the chip reads as a chip, and the
+    # bar stays the height it is with no padding at all, because the space
+    # comes out of a margin that was being spent twice (see style.css).
+    #
+    # Deliberately a half-step and not a second unit: 4 is allowed, 12 and 20
+    # are not, so this buys the one value the bar needed without turning the
+    # scale into "any multiple of four".
+    half = 4;
   };
 }

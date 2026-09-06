@@ -339,6 +339,16 @@ Its scope is deliberately narrow — the properties that carry geometry, listed 
 
 What actually moved: window rounding 16 → 12 and gaps 5 → 8 in `settings.lua`, window borders 1 → 2, dunst's radius 10 → 12, rofi's window 16 → 12 and its rows 10 → 8. And in `style.css`, the bar's own asymmetry finally went: every module carried `margin: 3px 0` with a `margin-top: 15px` overriding it, which is why the modules sat low. They are now `padding: 8px 16px; margin: 8px 0`, which is the plan's number and which **makes the bar roughly fourteen pixels taller**. That is the one change here worth looking at before accepting — item 21 owns the bar's final shape, and dunst's `offset` is the number that has to move with it.
 
+### Amended, 2026-09-06
+
+It was looked at, and it was not accepted. Three things came out of that.
+
+`padding: 8px 16px` was the wrong number for the bar's cross axis, and the scale had no right one: a module's content is a single 19px line, so 8px of vertical padding more than doubles the chip while 0 leaves it exactly as tall as its own text. `space.half = 4` is the answer — deliberately a half-step and not a second unit, so 4 is on the scale and 12 and 20 still are not. The bar is 39px with a 31px chip, against 55 and 39 as built and 41 and 23 before the item.
+
+The bottom margin was being spent twice. Hyprland puts `gaps_out` between the bar and the window below it, so `margin: 8px 0` drew 8px above the chip and 16 below — the asymmetry the item set out to remove, reintroduced from the other side. It is `margin: 8px 0 0 0` now, which is what renders as 8 and 8.
+
+And the reason none of that could be fixed in one place: **the module box was written out in four files.** `style.css` had it, and so did `nixos-upgrade.css`, `ddc.css` and `modifiers.css` — the same padding, margin, border and radius, restated. Changing `style.css` moved some of the bar and left the rest, which is how the height survived the first attempt to change it. The box is `style.css`'s now and the module sheets carry states only. This is item 5's principle — a value is named in exactly one file — and the geometry gate could not see the violation, because 8 is on the scale in all four files. Worth remembering when item 21 swaps the axis: the swap is now one rule rather than four.
+
 ## 7. Rofi is the menu system
 
 ### The problem

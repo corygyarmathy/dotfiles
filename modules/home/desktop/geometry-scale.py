@@ -13,7 +13,7 @@ somebody else's decision and are not looked at - a check that policed every
 number in a stylesheet would be refused within a week, which is the same as not
 having one.
 
-Usage: geometry-scale.py <radius,...> <border,...> <space-unit> <file> [file...]
+Usage: geometry-scale.py <radius,...> <border,...> <space-unit>[,<half>] <file> [file...]
 """
 
 import re
@@ -108,9 +108,11 @@ def check(path, scale):
             if length == 0:
                 continue
             if part == "space":
-                if length % scale["space"] == 0:
+                if length % scale["space"] == 0 or length in scale["space_extra"]:
                     continue
                 why = "not a multiple of %d" % scale["space"]
+                if scale["space_extra"]:
+                    why += " (or %s)" % ", ".join(str(v) for v in sorted(scale["space_extra"]))
             else:
                 if length in scale[part]:
                     continue
@@ -121,10 +123,14 @@ def check(path, scale):
 
 
 def main(argv):
+    # Space is a unit plus any half-steps the scale allows by name, so that
+    # "a multiple of 8, and also 4" stays one argument and one idea.
+    space = [int(v) for v in argv[3].split(",")]
     scale = {
         "radius": {int(v) for v in argv[1].split(",")},
         "border": {int(v) for v in argv[2].split(",")},
-        "space": int(argv[3]),
+        "space": space[0],
+        "space_extra": set(space[1:]),
     }
 
     failures = [(path, failure) for path in argv[4:] for failure in check(path, scale)]

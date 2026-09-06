@@ -1,16 +1,9 @@
 /* NixOS Upgrade Waybar Module Styles
  * @import "./nixos-upgrade.css";
+ *
+ * States only - which colour means "updates available", which means "reboot
+ * needed". The module's box is style.css's, with every other module's.
  */
-
-#custom-nixos-upgrade {
-  padding: 8px 16px;
-  margin: 8px 0px;
-  border: 2px solid @border;
-  background: @bg-base;
-  opacity: 0.9;
-  border-radius: 8px 8px 8px 8px;
-  margin-right: 8px;
-}
 
 /* Hidden state - no updates, system up to date */
 #custom-nixos-upgrade.hidden {

@@ -20,7 +20,7 @@
 /* sumiInk0: darkest surface - module backgrounds, tooltips */
 @define-color bg-base        #16161D;
 /* sumiInk0: the same, translucent - rofi's window behind its own chrome */
-@define-color bg-backdrop    #16161DCC;
+@define-color bg-backdrop    alpha(#16161D, 0.8);
 /* sumiInk1: default background - the layer most things sit on */
 @define-color bg-surface     #1F1F28;
 /* sumiInk2: raised chrome - tooltip borders, rofi's input bar */
