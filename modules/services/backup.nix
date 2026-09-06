@@ -196,8 +196,8 @@ in
           repository = "sftp:coryg@10.20.2.130:/srv/backups/homelab01";
           schedule = "02:30";
         };
-        gdrive = {
-          repository = "rclone:gdrive:backups/homelab/homelab01";
+        onedrive = {
+          repository = "rclone:onedrive:backups/homelab/homelab01";
           schedule = "03:00";
         };
       };
