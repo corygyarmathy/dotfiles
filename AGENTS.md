@@ -47,16 +47,14 @@ checkout.
 
 ## Formatting
 
-The opencode harness runs a formatter on a file after every write or edit
-(`nixfmt` for `.nix`, `black` for Python, `markdownlint-cli2` for Markdown).
-Treat that output as final:
+`nix fmt` (nixfmt-tree) is the formatter of record, and CI gates on
+`nix fmt -- --ci`. Some harnesses format a file automatically after every write
+or edit; do not assume this one does.
 
-- Do not re-read a file and re-edit it purely to adjust formatting, and do not
-  run `nixfmt`/`nix fmt` yourself to polish an edit - the harness already
-  formatted it.
-- If `nix fmt -- --ci` fails, run `nix fmt` once, accept the resulting diff,
-  and stop. If it still disagrees after one pass, report the mismatch instead
-  of retrying.
+- Run `nix fmt` once before finishing a change that touched `.nix` files.
+- Do not re-read a file and re-edit it purely to adjust formatting beyond that
+  single pass. If `nix fmt -- --ci` still disagrees afterwards, report the
+  mismatch instead of retrying.
 
 ## Validation
 
