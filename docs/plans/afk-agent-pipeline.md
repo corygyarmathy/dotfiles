@@ -4,7 +4,7 @@ Status: in progress — item 1 has two of its three questions answered (see its 
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
-Item 1 gates everything else: the model this pipeline runs on is deliberately undecided (ADR 0004), and building the rest around a guess would be the wrong order.
+Item 1 gates the stages that depend on a model choice - item 5's implement step and item 6's review step - because building either around a guess would be the wrong order (ADR 0004 §2 leaves the model deliberately undecided). Items 2, 3 and 4 do not depend on it and can proceed in parallel with the pilot.
 
 | #  | Item                                 | Size   | Status      |
 | -- | ------------------------------------ | ------ | ----------- |
@@ -396,7 +396,7 @@ A model _and_ reasoning-effort default is chosen with real numbers behind it, th
 
 ### The problem
 
-ADR 0004 restricts AFK-eligible tickets from touching `.github/workflows/`, `secrets/`, or `.sops.yaml`, regardless of how well-specified the ticket is.
+ADR 0004 §5 restricts AFK eligibility with a path denylist, enforced twice, but deliberately does not fix the list. The list is triage vocabulary and lives here and in `docs/agents/triage-labels.md`: **`.github/workflows/`, `secrets/`, `.sops.yaml`** - denied regardless of how well-specified the ticket is.
 
 ### Approach
 
@@ -420,7 +420,7 @@ A PR needs to be opened and pushed by something other than `GITHUB_TOKEN`, or th
 
 ### Approach
 
-A second fine-grained PAT scoped to this repo, under the existing account (ADR 0004 §4 - not a separate GitHub account). Branches it pushes use an `afk/*` prefix; PRs it opens carry an `afk-agent` label, giving the same at-a-glance distinction `deps/*` already provides.
+A second fine-grained PAT scoped to this repo, under the existing account (ADR 0004 §4 - a PAT rather than `GITHUB_TOKEN`, and not a separate GitHub account). This plan owns the naming the ADR delegates to it: branches it pushes use an **`afk/*`** prefix, and PRs it opens carry an **`afk-agent`** label, giving the same at-a-glance distinction `deps/*` already provides. Both are cosmetic and may be changed here without touching the ADR.
 
 ### Testing
 
@@ -470,10 +470,10 @@ On each poll (skipping the peak windows from item 10):
 2. Re-check the path denylist (item 2) against the ticket's described scope - defense in depth, not trusting the label alone (ADR 0004 §5).
 3. Claim it: `gh issue edit <n> --add-assignee @me`, reusing the exact convention `docs/agents/issue-tracker.md` already documents.
 4. `git worktree add ../repo-<ticket-slug> -b afk/<ticket-slug>`, per the isolation pattern `AGENTS.md` already establishes for concurrent agent work.
-5. Run OpenCode against the ticket body, equivalent to `/implement` (adapted per item 1's finding on skills compatibility) - tests, typecheck, up to 2 retries in the same session against a failing result (ADR 0004 §6).
+5. Run OpenCode against the ticket body, equivalent to `/implement` (adapted per item 1's finding on skills compatibility) - tests, typecheck, and retries in the same session against a failing result, per ADR 0004 §6. **The retry budget is 2 retries (3 attempts total)**, owned here rather than in the ADR: a retry carries the prior failure as context, and three attempts cannot meaningfully threaten the Go caps. Raise or lower it here if the pilot's cost numbers say otherwise.
 6. On success, hand off to item 6. On exhausting retries, or any other reason it can't proceed, hand off to item 8.
 
-One ticket at a time (ADR 0004 §8) - no parallel worktrees for now.
+**Concurrency is 1** - one ticket in flight, no parallel worktrees. ADR 0004 §8 fixes the principle (serial while the pipeline is unproven); the number lives here, and is the obvious thing to raise once the runner has earned trust and the backlog justifies it.
 
 ### Testing
 
@@ -569,7 +569,7 @@ All three conditions produce a distinguishable ntfy notification, tested by hand
 
 ### The problem
 
-DeepSeek V4 has real peak pricing (01:00-04:00 and 06:00-10:00 UTC, weekdays) at 2x the off-peak rate. Whether OpenCode Go's usage caps reflect this discount is unconfirmed either way (ADR 0004).
+DeepSeek V4 has real peak pricing at 2x the off-peak rate. **The windows are 01:00-04:00 and 06:00-10:00 UTC on weekdays**, owned here rather than in ADR 0004 - they are DeepSeek's to change, not ours. Item 1 found no peak/off-peak field anywhere in the Go metadata, which makes it near-certain the discount is not passed through; the timer stands regardless, now justified by the $12/5h rolling cap.
 
 ### Approach
 
