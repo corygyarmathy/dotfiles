@@ -124,8 +124,9 @@ Issues live in this repo's GitHub Issues (via the `gh` CLI). See
 
 ### Triage labels
 
-Five canonical roles map 1:1 to the default labels. See
-`docs/agents/triage-labels.md`.
+Five canonical roles map 1:1 to the tracker's label strings. See
+`docs/agents/triage-labels.md`. Whether a ticket may be worked unattended is a
+separate question with two rules: `docs/agents/afk-eligibility.md`.
 
 ### Domain docs
 
