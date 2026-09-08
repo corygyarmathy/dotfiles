@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); item 5 is in progress - its poll → denylist → claim → isolate half (#171) is built and tested, the implement stage it hands to (#172) is not; nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); item 5 is in progress - both its halves are built and tested, poll → denylist → claim → isolate (#171) and the implement stage on a bounded retry budget (#172), but its "Done when" asks for one real ticket carried through by hand and that has not happened; item 6 is built but blocked (#173): the stage runs, is contained, and verifies itself, but its first acceptance criterion is not met by this model and is blocked on the one named experiment that could change that - see its Measured note, which also corrects item 1's review-stage finding; nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -13,7 +13,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | 3  | AFK identity (`AFK_AGENT_TOKEN`)     | small  | done        |
 | 4  | `modules/services/afk-agent.nix`     | medium | done        |
 | 5  | Runner: claim → worktree → implement | large  | in progress |
-| 6  | Review stage                         | small  | not started |
+| 6  | Review stage                         | small  | blocked     |
 | 7  | Raise the PR                         | small  | not started |
 | 8  | Stuck path                           | small  | not started |
 | 9  | Notifications                        | small  | not started |
@@ -504,7 +504,19 @@ The one question item 1's original findings deferred to "confirm during the pilo
 
 **The manual review it produced anyway found something real, independent of which workspace it reviewed.** Both #159 holdout implementations add a new file under `checks/`, and this repo's own CI lint job (`.github/workflows/ci.yml`, "Every flake check is in the matrix") fails the build if a flake check exists that the workflow's matrix doesn't list - which neither implementation's new check is, because the pilot's frozen prompt forbids touching `.github/workflows/` at all. That is not a defect in either model's diff; it is the path denylist (item 2) and the repo's own checks-need-a-matrix-entry convention colliding, for any ticket that adds a new check under `checks/` - which item 5 explicitly names as the established pattern to follow. Confirmed directly: `digital-garden-shelf-collision` is in `nix eval .#checks.x86_64-linux` but absent from the ci.yml matrix on both branches. The full `nix flake check` (24 checks, all hosts) on the holdout winner passes outright - the matrix mismatch is a GitHub Actions lint step, not a Nix-level failure, so this is the one gate `nix flake check` cannot see. **This is a structural finding for item 2 and item 5, not a pilot footnote** - the denylist as currently scoped would block any agent from ever landing a mergeable PR for a ticket that needs a new `checks/*.nix` test, since the one file that must also change is the one file it can never touch.
 
-**Net: item 6 as designed does not hold up under this harness yet.** Before it is built: the runner's review-stage prompt needs an explicit worktree-containment instruction (this is not something the permission overlay currently buys for free), a check that the `skill` tool was actually invoked with `code-review` rather than assumed, and abort-and-report rather than silently-substitute behaviour when a named skill isn't found. And item 2's denylist needs to account for the checks-matrix conflict before item 5 can trust "follow the checks/ pattern" as guidance that can actually pass CI.
+**Net, as read on the day: item 6 as designed does not hold up under this harness yet.** Before it is built: the runner's review-stage prompt needs an explicit worktree-containment instruction (this is not something the permission overlay currently buys for free), a check that the `skill` tool was actually invoked with `code-review` rather than assumed, and abort-and-report rather than silently-substitute behaviour when a named skill isn't found. And item 2's denylist needs to account for the checks-matrix conflict before item 5 can trust "follow the checks/ pattern" as guidance that can actually pass CI.
+
+**Corrected while building item 6, later the same day: the three failures above are one failure, and it is the harness's, not the model's.** The diagnosis stands as originally written above because the observations are all accurate; the attribution was wrong, and it was wrong in the direction that would have been expensive to believe.
+
+`opencode run` resolves its project - and with it skill discovery - from the directory it is launched in, and `pilot-review` launched it one level above the run's worktree, in `~/pilot`. Everything follows from that single fact:
+
+- **The skill error was real, not a hallucination, and not a compatibility gap.** The export shows `skill` called first, before any other tool, with `{"name":"code-review"}`, erroring with `Skill "code-review" not found. Available skills: customize-opencode`. Reproduced exactly: `opencode debug skill` run in `~/pilot` returns exactly that one built-in skill, because `~/pilot` is not a git repository and holds no `.agents/skills/`. Run in the same run's worktree it returns 26, `code-review` among them; run in a `git worktree add` checkout of this repository, 25. So item 1's original discovery finding was right all along - **nothing needs inlining, and `.agents/skills/` resolves fine through a worktree.**
+- **Nothing "left its assigned worktree", because it was never in it.** From `~/pilot` the sibling run directories are simply what is there, and the session picked one. Its "already has a review log" reasoning was it trying to find a target, not abandoning one.
+- **`subagents=0` follows from the skill error rather than from a missing capability.** The skill call is what would have told it to fan out, and it failed. `opencode debug agent build` reports `task: true` and `skill: true`, with a native `general` subagent available, so the fan-out was never unavailable.
+
+The fix is one flag - `--dir`, pinning the session to the worktree explicitly instead of inheriting it from a `cd` - and it is what item 6 is built on. The prompt-level containment and skill-verification the paragraph above asked for are worth having anyway and were built too, but as the belt to that braces rather than as the mechanism: `bash` and `cd` are unrestricted whatever `--dir` says, and a stage whose every failure looks like a pass has to be checked from outside.
+
+**What this does not rescue is item 6's premise.** With the harness corrected, the stage was measured properly, and the result is in the finding below. The mechanics were never the interesting question.
 
 ### Built, 2026-09-08
 
@@ -777,7 +789,9 @@ The second half of this item, #172. `modules/services/afk-agent.nix` no longer s
 
 **ADR 0004 §9's absence-assertion caught the wrong flag, and was narrowed rather than dropped.** The harness grepped the runner's whole command surface for `gh pr merge` *or* `--auto`, the flag that merges as soon as the checks go green. `--auto` is also `opencode run`'s unattended-approval flag, which an unattended runner cannot work without, so the grep now forbids `gh pr merge` outright and requires every `--auto` in the script to belong to an `opencode` invocation. Worth recording because the assertion was written broadly on purpose and the next stage's legitimate flag walked straight into it - a general prohibition aged into a false positive within one ticket.
 
-**`maxRuntime` moved from 4h to 6h**, which is item 4's own guess being corrected by the thing it was guessing about: three attempts at an hour each, with a gate after every one, does not fit under four. It is the outer bound rather than an expected duration - a run that reaches it is killed mid-ticket and leaves the worktree the in-flight guard then refuses to poll past.
+**`maxRuntime` moved from 4h to 6h, and then to 7h when item 6 landed**, which is item 4's own guess being corrected twice by the things it was guessing about: three attempts at an hour each with a gate after every one does not fit under four, and adding the review pass's own ceiling brings the total to 5h45m, which left a 6h bound fifteen minutes for a clone, a fetch and everything else that is not one of those. It is the outer bound rather than an expected duration - a run that reaches it is killed mid-ticket and leaves the worktree the in-flight guard then refuses to poll past.
+
+**Both stages pin their session to the worktree with `--dir`, and the implement stage gained that while item 6 was built.** It is recorded here rather than only under item 6 because it changes this stage: opencode resolves its project - and with it which `.agents/skills/` it can see - from the directory it is launched in, so a `cd` alone is load-bearing state that looks like none. Item 1's review-stage run is what that costs when it is wrong, and the correction to that finding is under item 1. A case asserts the flag on both stages. The permission overlays moved the same way, from an `export` that outlived its stage to an assignment scoped to the one command it governs - an inherited deny-set is the same class of ambient state, and the verbs each stage denies are ones a later stage needs.
 
 **The prompt is item 1's frozen pilot prompt plus the two things the pilot found were missing from it.** The `ci.yml` matrix exception, without which "follow the `checks/` pattern" is advice that cannot pass CI; and the recurring failure reasons item 1 recorded specifically for this prompt to consume. It names the `implement` skill explicitly, because item 1 also established that discovery is not invocation - a real session on this repository made 41 tool calls without ever calling the `skill` tool. It lives as a file in the store rather than as anything the script quotes: prose this shape does not survive being a shell literal, and a heredoc's terminator inside a Nix indented string is coupled to Nix's dedent rule, so an edit to the prose can silently reindent the entire script. That is not hypothetical either - it happened once while writing this, and what it broke was the denylist-drift assertion, which reads the runner's array anchored at column 0.
 
@@ -809,15 +823,74 @@ A real `ready-for-agent` ticket, run through this loop by hand once, ends with a
 
 ### Approach
 
-After item 5 succeeds, invoke `/code-review` in a fresh context - the existing skill's parallel standards + spec sub-agents, unchanged. A failure here does not consume another retry from item 5's budget; it's a new stage with its own outcome (fix-and-recheck once, or hand off to item 8).
+After item 5 succeeds, invoke `code-review` in a fresh session against the same worktree - the existing skill's parallel standards + spec sub-agents, unchanged, and never `--session`. The session is pinned to its worktree with `--dir` rather than a `cd`, which is the whole lesson of item 1's corrected finding above. A failure here does not consume another retry from item 5's budget; it is a new stage with its own outcome.
+
+Three things shape the rest of it, and the third changed after the stage was measured:
+
+- **Report-only is enforced, not requested.** `edit: deny` plus the implement stage's bash denials and `git commit*`, so a review cannot quietly fix what it was meant to report and leave behind a commit nothing reviewed.
+- **Nothing believes the session's own account of itself.** Every way item 1 saw this stage fail was silent, so the stage reads the transcript rather than the report: the `skill` tool must have completed a `code-review` call, and the two axes must show up as at least two `task` calls. Both are fatal, fail-closed - a review that cannot be shown to have happened is not a review that passed. The verdict itself is asked for as one fixed line, because a shell script cannot read prose.
+- **The skill is unchanged; what it may *decide* is not.** #173 asks for "its standards + spec parallel sub-agents, unchanged", and `.agents/skills/code-review/` is untouched - both axes run, both report, and both reach the pull request. But the prompt makes the standards axis non-fatal by construction, so half of what the skill produces can never gate. That is a deliberate deviation from the issue's wording and is named here rather than left to be inferred: a reviewer that cannot be trusted to catch a defect must not be trusted to invent one, and the measurement below is the evidence for reading it that way round.
+- **No fix-and-recheck.** This item originally allowed one, and it is dropped deliberately. A finding handed back to the model that just wrote the code becomes a commit, and the gate cannot tell a correct change from a plausible green one - so a wrong finding would cost a real edit *and* consume the finding. Findings are kept whatever the verdict says and travel to the pull request (item 7), where the human who has to merge it reads them beside the diff. A refusal hands the ticket to item 8, never to another attempt. The measurement below is what settled this: on this model a finding is at least as likely to be wrong as right.
+
+### Measured, 2026-09-08
+
+Run properly for the first time - `--dir` pinned, skill named, containment stated, verdict line asked for - against the pilot's own #159 holdout pair, which is the only diff in this repository with an independently graded right answer. Five runs, `glm-5.3-flash` at `high`, $0.0027-$0.0060 and 3-6 minutes each.
+
+The mechanics all work, and every one of item 1's apparent blockers is gone: `subagents=2` on all five runs, the `skill` call completing on all five, no session leaving its worktree, and the verdict line emitted in the requested shape every time.
+
+The findings are another matter.
+
+| Subject | Human grading | Runs | Verdict |
+| -- | -- | -- | -- |
+| `i159-deepseek-v4-pro-high-r1` | fails AC 3: a false positive that refuses a vault with no real collision | 3 | `pass`, `pass`, `pass` |
+| `i159-glm-5.3-flash-high-r1` | passes the holdout cleanly | 2 | `pass`, `fail` |
+
+**It never caught the defect the holdout exists to expose.** Three runs out of three passed a diff whose check is placed one pass too early. What each did with acceptance criterion 3 is worth recording exactly, because the three runs fail in three different ways and the middle one is the worst:
+
+- One **certified it outright**: "No-collision path behaviorally unchanged (the `hues` line change is whitespace-only)" - the same false claim `deepseek-v4-pro`'s own completion report made, arrived at independently in a fresh context.
+- One **found the gap and rationalised it**: "Criterion 3 [...] is verified by absence-of-change plus the existing VM check, not by a dedicated clean-vault assertion in the new check. Defensible." That is the precise observation the human grading started from - the test never exercises the clean case - followed by a decision to wave it through. A reviewer that sees the untested criterion and argues itself out of it is less useful than one that misses it, because the finding was already in hand.
+- One **did not mention criterion 3 at all.**
+
+A fresh context removed the self-justification bias and left the capability ceiling exactly where it was: **the reviewer reproduced the implementer's error rather than catching it**, which is the one failure mode a separate pass was supposed to rule out.
+
+**The one thing it did find, twice, is the thing a deterministic check already finds.** The `fail` on the clean implementation is not a false positive - it is correct, independently verified in the run's own words against `ci.yml`'s guard job and line numbers: the new check is missing from the checks matrix. That is the same finding item 1's broken review produced, and it is now caught by item 5's gate, which reproduces that audit directly. So the reviewer's demonstrated yield is a defect the gate sees anyway, and its demonstrated blind spot is the class of defect only a reviewer could see.
+
+Set against item 1's own stated bar - "a review pass that misses what a human found in five minutes is not a review stage" - **this model's review does not clear it.** Recorded plainly because the stage was built anyway, and the reasons it was worth building are not the ones this item started with:
+
+- The **provenance and containment half is deterministic and worth having on its own.** It is what turns "we ran a review" from a hope into a checked fact, and it is the half that would have caught item 1's silent failure on the day.
+- The **findings are worth attaching even when the verdict is worthless.** The standards axis reported a real duplication smell across all five runs - the check re-creating the module's filter derivation byte-for-byte - which is a legitimate note for a human reviewer and is not something the gate can see.
+- The **cost is genuinely negligible**: about half a cent and four minutes against the implement stage's 4-9 cents and 12-36 minutes, so the stage is roughly a 5% overhead on a ticket and cannot threaten the Go caps.
+
+What is *not* established, and should not be assumed by item 7 or anything downstream, is that a `pass` from this stage means anything. Treat it as "a review ran, was contained, and produced notes", not as "the diff is correct".
+
+**The open question this leaves, deliberately not settled here:** review costs 10-20x less than implementation, so it is the one stage that could afford a better model than the pipeline's default. `deepseek-v4-pro` is already on the record as the fallback and placed 2nd and 4th in the blind ranking against `glm-5.3-flash`'s 1st and 3rd - but the ranking measured implementation, not review, and the holdout says the two are not the same skill. A cheap follow-up - the same five runs on `deepseek-v4-pro`, about 40 cents - would settle whether the review stage should run on a different model from the implement stage. Worth doing before the pipeline is switched on, and worth doing before anyone treats a `pass` as evidence.
+
+### Built, 2026-09-08
+
+`modules/services/afk-agent.nix` gains `reviewPrompt`, `reviewOverlay`, `reviewTimeout` (1800s, an order of magnitude above the 3-6 minutes measured) and `reviewAxes` (2), and the runner gains the stage itself where it previously logged that the stage did not exist. `checks/afk-agent-runner.nix` gains sixteen cases and a review half to its `opencode` mock, which now answers `session list` and `export` as well as `run` and tells the two kinds of `run` apart by their prompt rather than their flags - so a runner that stopped titling its review session fails those cases rather than quietly falling through to the implement path.
+
+Two things in the runner are worth knowing about before editing it:
+
+- **`--dir` is not a stylistic choice.** It is the fix for item 1's corrected finding, and dropping it puts the session back where skill discovery fails and every sibling checkout is in reach. A case asserts it.
+- **The verdict grep ends in `|| true`, and that is load-bearing.** `grep` exits 1 when it matches nothing, and an unguarded command substitution in an assignment aborts the script under `set -euo pipefail` - before either branch written to diagnose a missing verdict can print anything. The operator would get a bare non-zero exit and no reason. The same applies to reading the transcript, which is why it is validated with `jq -e .` before anything is read out of it rather than left to abort on the first unguarded read.
 
 ### Testing
 
-Manual, at least initially: run the stage against a deliberately flawed implementation (a clear spec violation, or a subtle bug) and confirm the fresh-context `/code-review` pass catches it before the PR reaches item 7. Same shape as how every `checks/` test in deployment-hardening.md item 4 was proven against a deliberate break — just not automatable the same way here, since this stage drives an LLM call rather than a VM.
+Automated in `checks/afk-agent-runner.nix`, against the same mocked-`opencode` harness the implement stage uses, extended with a `review` plan per case: sixteen cases covering both acceptance criteria and every failure mode named above - a fresh session rather than a continued one, `--dir` pinned to the worktree, the report-only overlay, findings kept outside the diff, a refusal stopping the ticket, a missing or wrong skill call, collapsed axes, an unreadable or absent verdict, a quoted verdict that is not the verdict, a timeout, a crash, an unfindable session, an unparseable transcript, and review neither spending nor being spent by the implement budget.
+
+Every one of those was confirmed to fail when the behaviour it asserts is removed from the runner - which is how the two dead-code paths in the first draft were found: an unguarded `grep` in a command substitution aborted the script under `set -e` before either of the two branches written to diagnose a missing verdict could run.
+
+The live half - does a real model catch a real defect - is the finding above, and it is not automatable: it drives an LLM call rather than a VM.
 
 ### Done when
 
-A deliberately flawed implementation, run through this stage, gets caught by the fresh-context review rather than sailing through on the strength of its own self-check.
+**The second criterion is met; the first is not, and this item is blocked rather than done.** "A clean implementation proceeds through unchanged" holds and is tested. "A deliberately flawed implementation is caught rather than proceeding to PR-raising" does not: on the only diff in this repository with a graded answer it sails through, three times out of three.
+
+That is a fact about the model rather than about the stage's wiring, so no amount of further building here addresses it - but "unmeetable" would be the wrong word, and an earlier draft of this note used it. The model question above names a specific, cheap, un-run experiment - the same five runs on `deepseek-v4-pro`, about 40 cents - which sits squarely between "not met" and "cannot be met". Until it is run, this item is blocked on it, not finished.
+
+What *is* built and tested: the stage runs `code-review` in a genuinely separate, contained, report-only context; it proves from the transcript that it did so rather than assuming it; it fails closed on every way that proof can be missing; it keeps the findings for the human who merges; and it never hands a finding back to the model that wrote the code.
+
+Unblock by running the model experiment, not by more prompt engineering.
 
 ---
 
