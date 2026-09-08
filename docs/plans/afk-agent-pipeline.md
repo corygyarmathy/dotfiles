@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); item 5 is in progress - its poll → denylist → claim → isolate half (#171) is built and tested, the implement stage it hands to (#172) is not; nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -12,7 +12,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | 2  | Triage: AFK eligibility              | small  | done        |
 | 3  | AFK identity (`AFK_AGENT_TOKEN`)     | small  | done        |
 | 4  | `modules/services/afk-agent.nix`     | medium | done        |
-| 5  | Runner: claim → worktree → implement | large  | not started |
+| 5  | Runner: claim → worktree → implement | large  | in progress |
 | 6  | Review stage                         | small  | not started |
 | 7  | Raise the PR                         | small  | not started |
 | 8  | Stuck path                           | small  | not started |
@@ -713,6 +713,44 @@ On each poll:
 
 Not a NixOS VM test — this is script logic driving `gh` and `opencode`, neither of which can run inside the Nix build sandbox. A script-level test harness instead, with `gh` and `opencode` mocked: assert the poller only picks up unassigned `ready-for-agent` issues, claims via assignee before touching anything, re-checks the path denylist from item 2 and bails correctly on a ticket that would violate it, accepts a `ci.yml` diff that adds only a well-formed matrix entry while rejecting one that also changes anything else, removes an entry, or adds a name outside `^[a-z][a-z0-9-]*$`, and stops after 2 retries rather than looping indefinitely. It also asserts the absence of a thing: no `gh pr merge` anywhere in the runner's command surface, with or without `--auto`. ADR 0004 §9 is enforced by nothing else - see item 3's finding on why no ruleset can carry it. There's no prior art for this in the repo yet - script-level tests outside `checks/` are new here, so this sets the pattern rather than following one. Items 8 and 10 reuse this same harness rather than inventing their own.
 
+### Built: poll → denylist → claim → isolate, 2026-09-08
+
+The first half of this item, #171. `modules/services/afk-agent.nix` no longer holds item 4's placeholder: its `ExecStart` now polls, re-checks the denylist, claims, and cuts an isolated worktree, then stops and says that the implement stage is #172. `checks/afk-agent-runner.nix` is the harness described above; `checks/afk-agent.nix` keeps proving the plumbing around it.
+
+**The candidate query has a trap in it.** `gh issue list --json blockedBy` returns `{nodes, totalCount}`, and `totalCount` counts every dependency edge including closed ones - #171 itself reports `totalCount: 2` with both blockers closed. So "unblocked" has to be counted from the nodes' `state`, and a reading that trusted the count would work on tickets that never had a blocker and quietly ignore every ticket that ever did. The check pins the distinction with two fixtures identical in `totalCount` and different in state.
+
+**The denylist re-check reads prose, because prose is all there is before a line of code exists.** It matches the three denied paths against the ticket's title and body, and is deliberately biased towards rejecting: a ticket that merely mentions `secrets/` is refused along with one that means to edit it. A false rejection costs one ticket being worked by a human; a false accept is how a workflow edit reaches a branch that runs with the repository's secrets before anybody reads the PR. The consequence worth knowing: this file, `docs/agents/afk-eligibility.md` and ADR 0004 all name the denied paths, so a ticket about the AFK pipeline's own documentation will usually be refused by its own runner.
+
+That also means this check is *not* the `ci.yml` matrix exception. That one is diff-shaped, cannot be judged from a ticket body at all, and stays where afk-eligibility.md puts it - a pre-push gate, owned by item 7 (#174). The `enable` option's description says so at the switch, where somebody deciding to flip it will read it.
+
+**A rejected ticket is skipped, not relabelled.** Telling the tracker about it is the stuck path (item 8), and a rejection that stopped the poll would let one ineligible ticket block every eligible one behind it. Until item 8 lands, a denylisted ticket is re-read and re-skipped on every poll, which is cheap and silent.
+
+**Concurrency 1 needed a second half after all.** Item 4 recorded that systemd enforces it, and that is true of two *live* runs - but says nothing about a run that died: the runtime ceiling, or the kill switch, leaves a worktree on disk and the next poll would happily claim a second ticket beside it. So the runner refuses to start when `worktrees/` is non-empty, and refuses loudly - a red unit every quarter hour, on the grounds that a wedged pipeline should be noisy rather than quiet. Item 8 is what makes it self-clearing; until then the leftover is removed by hand.
+
+**Worktrees are gathered under one directory** rather than dropped beside the checkout as siblings, which is the one departure from `AGENTS.md`'s `../repo-<task-slug>`. The sibling form is for a human's interactive tree; here both the in-flight guard above and item 8's clean-up need to enumerate what is in flight, and a directory they own is how they do that. The branch is cut from `origin/master`, never from whatever the checkout is sitting on, so a tree an earlier run left dirty cannot leak into the next ticket's diff.
+
+**Found by running it, not by reading it: `git worktree add -b <branch> <path> origin/master` sets the new branch's upstream to `origin/master`.** With git's default `push.default` of `simple`, item 7's push would then aim at `master` rather than at the ticket branch. `protect-main` would refuse it, so the failure would have been loud rather than dangerous - but a runner whose push target is correct only because a branch protection rule holds is the wrong shape, so the worktree is cut `--no-track` and the harness asserts the branch has no upstream. Nothing before the push would have noticed.
+
+**An issue title becomes a git ref and a directory name**, so the slug is validated against `^[0-9]+(-[a-z0-9]+)*$` rather than trusted - checked against what is allowed, not against a list of what is not.
+
+**One assertion is about an absence**, and it is the only thing enforcing ADR 0004 §9: the harness greps the runner's whole command surface for `gh pr merge` and for `--auto`. Item 3 established that no GitHub ruleset can carry that decision here - ADR 0004 §4 rules out a second account, so an AFK PR is authored by the person who would approve it, and GitHub does not let an author approve their own PR.
+
+**A second assertion is about drift.** ADR 0004 §5 asks for the denylist twice, and two readings only stay independent while they agree, so the harness compares the runner's own array against rule 1's list in `docs/agents/afk-eligibility.md`. A path added or dropped on one side fails the build rather than silently un-enforcing a control.
+
+**Found in review, and worth recording because reading the code did not show it: `gh issue list` returns newest first.** The query took the first 100 and sorted them ascending, which is oldest-first only while the whole backlog fits in one page - and past that it is precisely the oldest tickets that fall off the end, so the ticket at the front of the queue would have become permanently unreachable at exactly the point a backlog got long enough to matter. Fixed by asking the API for the order (`--search "sort:created-asc"`) rather than sorting the page it chose to send; the local `sort_by` stays, so the ordering holds whatever the API does. The harness now reads the query back out of the mock's log, because a mock that answers whatever it is asked cannot otherwise tell you the runner stopped asking for the label at all.
+
+**The pre-claim check's reach is now pinned by a fixture rather than left implicit.** A ticket that plainly means to edit `ci.yml` but never writes the path - "add a job to the CI matrix" - is claimed, because matching prose is all that is possible before a diff exists. The case asserts that outcome and says in place that it records a limit rather than blessing a bug: if a later change makes it rejected, that expectation is what will say so.
+
+**Nothing here gives a claim back.** Past `gh issue edit`, a failure - an unsafe slug, a clone that fails, a branch that already exists - leaves the ticket assigned, and the assignment is also what filters it out of every later poll. So a failure after the claim is a ticket that quietly leaves the queue. That is item 8's job and is the main reason this half is not enough to switch the service on by itself; it is said at the claim in the runner as well as here.
+
+**Also from review, and fixed rather than argued: `cg.service.afk-agent.repository` was an option nobody set.** One fleet, one value, no consumer - an option like that is a claim about configurability the repository does not honour, so it is a plain binding now.
+
+Proven against deliberate breaks, the way every check here has been: trusting `blockedBy.totalCount`, removing the denylist re-check, moving the claim after the worktree, dropping the in-flight guard, adding a path to the runner that the document lacks, and letting `slugify` stop sanitising. Each failed the harness with a message naming what broke.
+
+**Run by hand against the live tracker, unstubbed, on #171 itself** - the candidate list narrowed to that one ticket so the run could not claim something nobody had chosen, every `gh` call real. It claimed #171, cloned, and cut `afk/171-afk-agent-poll-claim-and-isolate-a-ticket` with a clean tree and no upstream. Then the two halves of "never double-processed": a second poll with the worktree still on disk refused and said why, and a third with the worktree cleared found nothing, because the assignee it had written was now filtering it out. An earlier dry run - real reads, the one write intercepted - went the whole way on the unnarrowed tracker and picked #156, the oldest eligible ticket.
+
+**The sandbox has now met `git` and `gh` for real** - the VM check's run reaches its first `gh issue list` and fails there for want of a network, which is the expected result and is what that assertion now pins. `SystemCallFilter = [ "@system-service" ]` has still never seen an `opencode run`; #172 is where it first does.
+
 ### Done when
 
 A real `ready-for-agent` ticket, run through this loop by hand once, ends with a commit on an `afk/*` branch in an isolated worktree, with the source issue correctly claimed and never double-processed on a second poll.
@@ -748,6 +786,8 @@ This is the step `implement` never does today - nothing currently pushes or open
 ### Approach
 
 Push the `afk/*` branch and open the PR with `AFK_AGENT_TOKEN` (item 3), `afk-agent` labelled, body linking back to the source issue. No auto-merge (ADR 0004 §9) - it lands exactly like any other PR, waiting on human review.
+
+**This item owns the pre-push denylist gate**, and it is the last moment anything can. `docs/agents/afk-eligibility.md` sketches the diff check for the `ci.yml` matrix exception and says why it cannot wait: the push becomes a PR, and a `pull_request` event runs the workflow file *from the head branch* with the repository's secrets before a human reads it. Item 5's pre-claim check does not cover this - it reads ticket prose, and whether a diff is additions-only to the matrix is a question about a diff that did not exist at claim time. `AFK_AGENT_TOKEN` carries the Workflows permission (item 3) precisely so the exception can be exercised, so nothing at GitHub's end refuses the push either. Run it against `git diff` before the push, and refuse the push rather than the PR.
 
 ### Testing
 

@@ -321,6 +321,12 @@ in
       '';
 
   afk-agent = testLib.mkTest ./afk-agent.nix;
+
+  # Not a VM: the runner talks to the GitHub API and clones a repository,
+  # neither of which exists in the sandbox, so `gh` is mocked and `origin` is
+  # a fixture repo on disk. The file says why that is the only level this
+  # logic is reachable at.
+  afk-agent-runner = import ./afk-agent-runner.nix { inherit pkgs self inputs; };
   digital-garden = testLib.mkTest ./digital-garden.nix;
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;

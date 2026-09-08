@@ -161,8 +161,15 @@ That leaves all three enforcement moments above as the agent checking itself, so
 the diff check sketched here is the only control rather than an extra - and it
 has to run **before the push**. The push becomes a PR, the PR runs the head
 branch's workflow with the repository's secrets before anyone reads it, and
-after that there is nothing left to gate. Item 5 owns implementing it as a
-pre-push gate, and item 4 does not switch the runner on before it exists.
+after that there is nothing left to gate. Item 7 owns implementing it as a
+pre-push gate, and the runner is not switched on before it exists.
+
+Item 5's runner does re-check the denylist before it claims (moment 2 above),
+but that check reads the ticket's prose and this exception cannot be judged
+from prose at all: whether a `ci.yml` diff is additions-only to the matrix is a
+question about a diff that does not exist yet. The two are not substitutes, and
+the prose check is the weaker one - it is also blunt in the other direction,
+refusing any ticket that so much as names a denied path.
 
 This exception is the one place the denylist is not purely path-shaped, and the
 only one that *widens* it rather than narrowing it. Like rule 2 below, it is
