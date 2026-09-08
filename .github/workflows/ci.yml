@@ -164,6 +164,7 @@ jobs:
       matrix:
         check:
           - afk-agent
+          - afk-agent-runner
           - alert-rules
           - alert-rules-unit
           - alertmanager-config

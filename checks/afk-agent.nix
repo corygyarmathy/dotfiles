@@ -8,13 +8,17 @@
 # boots the module both ways and looks at the running system: two nodes, one
 # with the switch on and one with it off.
 #
-# The other half is the plumbing the scaffold exists to prove. The poller
-# itself is item 5 of docs/plans/afk-agent-pipeline.md and is not written yet;
-# what item 4 owns is everything around it - that the unit is reached by the
-# timer rather than at boot, that its three credentials arrive, and that the
-# toolchain the runner will drive is on its PATH. The placeholder ExecStart
-# checks exactly those and then exits non-zero, so this test can assert them
-# without pretending a runner exists.
+# The other half is the plumbing the runner is handed. What this file owns is
+# everything around the logic - that the unit is reached by the timer rather
+# than at boot, that its three credentials arrive, and that the toolchain the
+# runner drives is on its PATH. The runner asserts exactly those before it
+# polls anything, which is what lets a VM with no network still prove them.
+#
+# The runner's own behaviour is not testable here and is not attempted: it
+# talks to the GitHub API and clones a repository, and the sandbox has neither.
+# That is checks/afk-agent-runner.nix, which drives this same script against a
+# mocked `gh` and a fixture origin. Here the run is expected to fail at its
+# first outbound call, and the assertion is about how far it got first.
 #
 # The credentials are plaintext fixtures via ./stub-secrets.nix; sops cannot
 # decrypt in the sandbox, and no real value belongs in a test either way. They
@@ -98,9 +102,11 @@
         assert state == "inactive", f"the poller ran without the timer firing: {state}"
 
     with subtest("a run reaches its three credentials and the toolchain it drives"):
-        # The placeholder ExecStart exits non-zero on purpose - the runner is
-        # item 5 and does not exist yet - so the failure here is the expected
-        # result, and the journal is where the evidence is.
+        # The run fails, and is expected to: the VM has no network, so the
+        # first `gh issue list` cannot succeed. Everything asserted below
+        # happens before that call by design - a credential missing or a tool
+        # off the PATH should fail on an empty tracker rather than halfway
+        # through a ticket that has already been claimed.
         enabled.fail("systemctl start afk-agent.service")
         journal = enabled.succeed("journalctl -u afk-agent.service --no-pager")
 
@@ -112,7 +118,12 @@
         for tool in ["git", "gh", "opencode", "nix", "jq"]:
             assert f"tool '{tool}' present" in journal, f"{tool} is not on the unit's PATH:\n{journal}"
 
-        assert "runner not implemented" in journal, f"the placeholder is gone but this test is not:\n{journal}"
+        # It got past the plumbing and into the work. Without this the two
+        # loops above would still pass on a runner that asserted its inputs
+        # and then did nothing at all.
+        assert "polling corygyarmathy/dotfiles" in journal, (
+            f"the run never reached the poll:\n{journal}"
+        )
 
     with subtest("no credential value reaches the journal"):
         # The unit reads three secrets on every poll. A debug echo left behind
