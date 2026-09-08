@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -10,7 +10,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | -- | ------------------------------------ | ------ | ----------- |
 | 1  | Measured pilot                       | medium | done |
 | 2  | Triage: AFK eligibility              | small  | done        |
-| 3  | AFK identity (`AFK_AGENT_TOKEN`)     | small  | not started |
+| 3  | AFK identity (`AFK_AGENT_TOKEN`)     | small  | done        |
 | 4  | `modules/services/afk-agent.nix`     | medium | not started |
 | 5  | Runner: claim → worktree → implement | large  | not started |
 | 6  | Review stage                         | small  | not started |
@@ -595,9 +595,44 @@ A PR needs to be opened and pushed by something other than `GITHUB_TOKEN`, or th
 
 A second fine-grained PAT scoped to this repo, under the existing account (ADR 0004 §4 - a PAT rather than `GITHUB_TOKEN`, and not a separate GitHub account). This plan owns the naming the ADR delegates to it: branches it pushes use an **`afk/*`** prefix, and PRs it opens carry an **`afk-agent`** label, giving the same at-a-glance distinction `deps/*` already provides. Both are cosmetic and may be changed here without touching the ADR.
 
+The permission set is this plan's to fix too, and it is the smallest one the runner's verbs need:
+
+| Permission    | Level          | What needs it                                                  |
+| ------------- | -------------- | -------------------------------------------------------------- |
+| Contents      | Read and write | push the `afk/*` branch, and delete it again afterwards        |
+| Pull requests | Read and write | open the PR and label it (item 7)                              |
+| Issues        | Read and write | claim by assignee, comment, relabel (items 5 and 8)            |
+| Metadata      | Read-only      | mandatory; GitHub selects it as soon as a repository is chosen |
+| Workflows     | Read and write | item 2's `ci.yml` checks-matrix exception - see below          |
+| Checks        | No access      | the runner opens a PR and stops - it never reads check status  |
+
+**Workflows is granted, which is what makes item 2's `ci.yml` exception exercisable.** GitHub rejects any push touching `.github/workflows/` from a fine-grained PAT that lacks the permission, so without it the checks-matrix exception in `docs/agents/afk-eligibility.md` could not be used at all: the runner would produce a correct diff and then fail at the push, unattended, with the ticket already claimed.
+
+What it costs is the one enforcement of the denylist that does not depend on the agent behaving. All three of the moments `afk-eligibility.md` names are now the agent checking itself, which promotes the diff check sketched there from an extra to the only control - and it has to run **before the push**. A pushed branch becomes a PR, a PR runs the head branch's workflow with the repository's secrets before anyone reads it, and after the push there is nothing left to gate.
+
+So the ordering constraint moves from the token to the runner: **item 4 does not enable `cg.service.afk-agent.enable` until item 5's pre-push gate exists and its harness covers it.** That is the condition on the first switch-on rather than a preference. Narrowing the permission back to `No access` is an edit in place rather than a re-issued token, so it stays available if the gate proves harder to trust than expected.
+
+### What this token cannot be stopped from doing, 2026-09-08
+
+Item 2 left this question here (`docs/agents/afk-eligibility.md`, rule 1). The answer is that ADR 0004 §9 cannot be a ruleset, and the reason is §4.
+
+`protect-main` requires a pull request and the `nixos ci` check and has an empty bypass list, but its `required_approving_review_count` is `0`. Nothing at GitHub's end stops a PR this token opened from being merged by the same token. Raising the count is not available: §4 rejects a second GitHub account, so an AFK PR is authored by `corygyarmathy`, and GitHub does not let an author approve their own pull request. A count of `1` would deadlock every PR in this repo, human ones included. **The no-second-account decision and ruleset-enforced review are mutually exclusive** - a consequence of §4 to know about, not a gap to close.
+
+What the ruleset does still enforce against this token: it cannot push to `master` at all, cannot force-push or delete it, and cannot merge a PR that is not green and up to date with `master`. What is left is exactly one thing - merging its own green PR - so §9 is a property of the runner's code rather than of the repository. Item 7 opens the PR and stops; nothing in the runner calls `gh pr merge`, with or without `--auto`. That is reviewable rather than enforced, which is why item 5's harness asserts it directly. The `afk-agent` label carries the other half: a merge that did happen is attributable at a glance.
+
+The same shape, one ref over, and a ticket rather than a paragraph: `Contents: write` is repo-wide rather than per-branch, and `protect-deploy` restricts only deletion and non-fast-forward pushes, not who may push, so this token can fast-forward `deploy` directly - as `FLAKE_UPDATE_TOKEN` can today. `afk-eligibility.md` reaches `deploy` the long way round, through a workflow that runs before anyone reads the PR; the short way is open to any credential with write access. Raised as #190, to be answered before item 4 switches the runner on, because it is a question about the deployment gate rather than about this item.
+
+### Built, 2026-09-08
+
+`AFK_AGENT_TOKEN` exists: a fine-grained PAT named `dotfiles-afk-agent`, scoped to `corygyarmathy/dotfiles` alone, stored as `gh-ci/dotfiles-afk-agent-PAT` in `secrets/homelab01.yaml` - the file homelab01 reads, since homelab01's module is what will declare it (`secrets/README.md`). Not an Actions secret: the runner is a service on a host, not a workflow. It was provisioned by a throwaway wizard that also ran the verification below and cleaned up after itself; the wizard is not kept, because re-issuing a PAT is a browser task either way and the permission table above is the part worth having.
+
+Proven the only way it can be, live. PR #189, opened by the token on `afk/token-smoke-test` and labelled `afk-agent`, ran `nixos ci` to green and was closed again. That is the whole claim: the same PR opened under `GITHUB_TOKEN` would have sat forever with its required check never firing. The narrowing was checked at the same time, from the other side - a private repo the token was not granted returns 404 to it.
+
 ### Testing
 
 No automated test. Verified once, by hand: open a PR with `AFK_AGENT_TOKEN` and confirm `nixos ci` actually runs against it — the same kind of live, manual verification `deploy-rs` used (deployment-hardening.md item 6), since what's being proven is GitHub's own behaviour, not something a VM test can see.
+
+Two claims, not one, because only the first is visible from the token page. **That it is narrowed:** a *private* repo it was not granted must 404 for it. A public repo proves nothing - `dotfiles` itself is public, and any token can read public data - so the probe has to be a repo that needs a grant. **That its PRs raise workflow events:** the failure this token exists to prevent is a silent one, a PR waiting forever on a required check that never fires, so the check is that a workflow run exists for the PR's head commit at all.
 
 ### Done when
 
@@ -648,7 +683,7 @@ On each poll:
 
 ### Testing
 
-Not a NixOS VM test — this is script logic driving `gh` and `opencode`, neither of which can run inside the Nix build sandbox. A script-level test harness instead, with `gh` and `opencode` mocked: assert the poller only picks up unassigned `ready-for-agent` issues, claims via assignee before touching anything, re-checks the path denylist from item 2 and bails correctly on a ticket that would violate it, accepts a `ci.yml` diff that adds only a well-formed matrix entry while rejecting one that also changes anything else, removes an entry, or adds a name outside `^[a-z][a-z0-9-]*$`, and stops after 2 retries rather than looping indefinitely. There's no prior art for this in the repo yet - script-level tests outside `checks/` are new here, so this sets the pattern rather than following one. Items 8 and 10 reuse this same harness rather than inventing their own.
+Not a NixOS VM test — this is script logic driving `gh` and `opencode`, neither of which can run inside the Nix build sandbox. A script-level test harness instead, with `gh` and `opencode` mocked: assert the poller only picks up unassigned `ready-for-agent` issues, claims via assignee before touching anything, re-checks the path denylist from item 2 and bails correctly on a ticket that would violate it, accepts a `ci.yml` diff that adds only a well-formed matrix entry while rejecting one that also changes anything else, removes an entry, or adds a name outside `^[a-z][a-z0-9-]*$`, and stops after 2 retries rather than looping indefinitely. It also asserts the absence of a thing: no `gh pr merge` anywhere in the runner's command surface, with or without `--auto`. ADR 0004 §9 is enforced by nothing else - see item 3's finding on why no ruleset can carry it. There's no prior art for this in the repo yet - script-level tests outside `checks/` are new here, so this sets the pattern rather than following one. Items 8 and 10 reuse this same harness rather than inventing their own.
 
 ### Done when
 

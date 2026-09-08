@@ -84,6 +84,13 @@ requires a pull request and the `nixos ci` check, but its
 the right scope merging its own PR - a question for the AFK identity
 (`docs/plans/afk-agent-pipeline.md`, item 3) rather than for triage.
 
+Item 3 has since answered it, and the answer is that no ruleset can carry §9
+here: ADR 0004 §4 rules out a second GitHub account, so an AFK PR is authored by
+the same person who would approve it, and GitHub does not let an author approve
+their own pull request. Requiring one approval would deadlock every PR in the
+repo. Human merge stays a property of the runner's code, so this file's reliance
+on it is reliance on something reviewed rather than something enforced.
+
 ### The one exception: the checks matrix
 
 `.github/workflows/ci.yml` runs one job per check from a hand-written matrix,
@@ -141,6 +148,21 @@ diff <(git show "$BASE:.github/workflows/ci.yml" | yq "$q") \
 
 Note the limit of step 2: `yq` drops comments on both sides, so a comment-only
 edit to `ci.yml` would pass. That is accepted - comments do not execute.
+
+### What stands behind it
+
+Nothing at GitHub's end. A fine-grained PAT cannot push anything under
+`.github/workflows/` without the Workflows permission, whatever the runner
+believes, and `AFK_AGENT_TOKEN` carries that permission precisely so this
+exception can be exercised (`docs/plans/afk-agent-pipeline.md`, item 3). Without
+it the runner would produce a correct diff and fail at the push instead.
+
+That leaves all three enforcement moments above as the agent checking itself, so
+the diff check sketched here is the only control rather than an extra - and it
+has to run **before the push**. The push becomes a PR, the PR runs the head
+branch's workflow with the repository's secrets before anyone reads it, and
+after that there is nothing left to gate. Item 5 owns implementing it as a
+pre-push gate, and item 4 does not switch the runner on before it exists.
 
 This exception is the one place the denylist is not purely path-shaped, and the
 only one that *widens* it rather than narrowing it. Like rule 2 below, it is
