@@ -290,5 +290,27 @@ in
       "d ${builtins.dirOf cfg.incomingPath} 0755 root root -"
       "d ${cfg.incomingPath} 0700 coryg users -"
     ];
+
+    # A renamed or removed repository leaves its old restic_backup_<name>.prom
+    # behind: nothing ever runs to update or delete it once the systemd unit
+    # is gone, so node_exporter keeps serving a timestamp that only gets
+    # older, and ResticBackupStale eventually fires on a job that no longer
+    # exists. Sweep on every activation so a rename self-heals on next deploy
+    # instead of needing a manual rm.
+    system.activationScripts.resticBackupMetricsCleanup = ''
+      METRICS_DIR="/var/lib/prometheus-node-exporter"
+      KNOWN_JOBS="${lib.concatStringsSep " " (builtins.attrNames cfg.repositories)}"
+      if [ -d "$METRICS_DIR" ]; then
+        for f in "$METRICS_DIR"/restic_backup_*.prom; do
+          [ -e "$f" ] || continue
+          job="$(basename "$f" .prom)"
+          job="''${job#restic_backup_}"
+          case " $KNOWN_JOBS " in
+            *" $job "*) ;;
+            *) rm -f "$f" ;;
+          esac
+        done
+      fi
+    '';
   };
 }
