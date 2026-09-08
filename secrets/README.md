@@ -9,15 +9,15 @@ Encrypted with [sops](https://github.com/getsops/sops) and age, decrypted by [so
 | File             | Read by                | Holds                                                                                                                    |
 | ---------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `shared.yaml`    | both servers           | Only what two machines must agree on. Every entry is justified in `cg.sops-nix.sharedSecrets` (`modules/nixos/sops-nix.nix`). |
-| `homelab01.yaml` | homelab01              | Everything only homelab01 declares — the tunnel, Grafana, miniflux, wallabag, the garden.                                  |
+| `homelab01.yaml` | homelab01              | Everything only homelab01 declares — the tunnel, Grafana, miniflux, wallabag, the garden, and the AFK agent's GitHub PAT and OpenCode credentials. |
 | `homelab02.yaml` | homelab02              | Everything only homelab02 declares — qBittorrent, the VPN, grimmory's database.                                            |
 | `xps15.yaml`     | xps15                  | The laptop's wifi PSKs. Nothing else on a machine that leaves the house.                                                   |
-| `operator.yaml`  | nobody — the user only | Secrets that belong to a person rather than a machine: the user's SSH keys, CI tokens, and web logins for services that keep their own user database. |
+| `operator.yaml`  | nobody — the user only | Secrets that belong to a person rather than a machine: the user's SSH keys, CI tokens no host declares, and web logins for services that keep their own user database. |
 
 Two consequences worth stating, because both are easy to get wrong:
 
 - **`prowlarr/api` is in `homelab02.yaml`, and Prowlarr runs on homelab01.** The file follows the declaration, and the only thing that declares that key is cross-seed, on homelab02. The service's location is not the question.
-- **A secret for a service that is switched off still lives in its host's file.** `vikunja/jwt-secret` and `digital-garden/deploy-key` are both parked in `homelab01.yaml` so that flipping the toggle works without an editing session. `operator.yaml` is for what no host will ever declare, not for what no host declares today.
+- **A secret for a service that is switched off still lives in its host's file.** `vikunja/jwt-secret` and `digital-garden/deploy-key` are both parked in `homelab01.yaml` so that flipping the toggle works without an editing session, and so are the AFK agent's three (`gh-ci/dotfiles-afk-agent-PAT`, `opencode/api-key`, `opencode/username`) — `modules/services/afk-agent.nix` declares them, and it ships disabled. `operator.yaml` is for what no host will ever declare, not for what no host declares today.
 
 Nothing in `modules/` names a file. A module writes `sops.secrets."<name>" = { ... }` and `cg.sops-nix` decides where the name is read from: `secrets/<hostname>.yaml`, or `shared.yaml` if the name is in `cg.sops-nix.sharedSecrets`. That option is the whole of the mapping and the place to change it.
 

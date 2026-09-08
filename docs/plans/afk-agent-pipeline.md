@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -11,7 +11,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | 1  | Measured pilot                       | medium | done |
 | 2  | Triage: AFK eligibility              | small  | done        |
 | 3  | AFK identity (`AFK_AGENT_TOKEN`)     | small  | done        |
-| 4  | `modules/services/afk-agent.nix`     | medium | not started |
+| 4  | `modules/services/afk-agent.nix`     | medium | done        |
 | 5  | Runner: claim → worktree → implement | large  | not started |
 | 6  | Review stage                         | small  | not started |
 | 7  | Raise the PR                         | small  | not started |
@@ -655,6 +655,34 @@ A module on `homelab01` wrapping the poller (item 5) as a systemd service + time
 A `pkgs.testers.runNixOSTest` under `checks/`, following the `monitoring`/`reverse-proxy` pattern (deployment-hardening.md item 4): instantiate the module with `cg.service.afk-agent.enable = true` and assert the poller's service and timer units exist and are enabled; instantiate again with `enable = false` and assert they're absent. This is the test that actually proves the kill switch — the module's whole reason for being a real service rather than a script.
 
 If the test needs secrets present to start the service, it follows the existing `checks/stub-secrets.nix` convention — plaintext fixtures swapped in for `sops.secrets.<name>.path`, real values never entering the test.
+
+### Built, 2026-09-08
+
+`modules/services/afk-agent.nix`, `checks/afk-agent.nix`, and `afk-agent.enable = false` written down in `hosts/homelab01/default.nix` - off, per item 3's ordering constraint, and with the two things it is waiting on named at the switch rather than only here.
+
+**The unit is everything around the runner, and the runner is a placeholder.** What this item settles is the schedule, the runtime ceiling, the service account, the credentials, the sandbox, and the toolchain on `PATH`; item 5 replaces one `ExecStart` and updates the check that covers it. Until then the placeholder asserts the plumbing it was handed - three credentials by name, five tools by name - and exits non-zero. Non-zero on purpose: a host that switches this on before item 5 should get a red unit that says why, not a green one that quietly does nothing.
+
+Four decisions worth having written down, because each is a departure from what the rest of this repository does:
+
+- **`Persistent = false`**, alone among the timers here. The others catch up work that had to happen; a poll has nothing to catch up on, and the tickets a missed poll would have found are still open at the next tick. A `Persistent` poller would also start a coding agent the moment a host finished booting - including the reboot at the end of every nightly upgrade.
+- **`TimeoutStartSec` is an option (`maxRuntime`, default 4h), not a default.** A `oneshot` unit's start timeout is 90 seconds, which would kill every real run: the pilot measured 15-60 minutes, and item 5 allows two retries on top. The ceiling still has to exist, because concurrency here is one unit and a hung run blocks every later poll until something stops it.
+- **Concurrency 1 is systemd's doing, not the runner's.** A single non-templated unit cannot have two live instances, so a poll firing mid-ticket cannot start a second one. Raising it means templating the unit - a deliberate act rather than something item 5 can do by accident.
+- **Two hardening exclusions, both named in the module.** `ProtectSystem` is `full` rather than `strict`, because every `nix build` the runner does is a Nix daemon client and connecting to that socket needs write access to an inode under `/nix/var`. `MemoryDenyWriteExecute` is absent because opencode is a JIT'd JavaScript runtime - the same exemption the digital garden dropped when its Node toolchain went away.
+
+**The credentials are handed over with `LoadCredential`**, which systemd reads as root before the unit drops to `afk-agent`. So the three `sops.secrets` declarations carry no `owner`: the sops-nix defaults (root:root 0400) are already right, and there is no per-secret ownership for this module to get wrong. That is also why `checks/afk-agent.nix` uses ordinary store fixtures rather than `private` ones - there is nothing a `private` fixture would catch here.
+
+**The check boots the module both ways**, because "the module evaluates" cannot tell a `lib.mkIf` that guards everything from one that guards half of it. On the enabled node it asserts the timer is armed, that no `.wants` symlink anywhere pulls the service in at boot and that it is still inactive (the timer is its only trigger), that all three credentials and all five tools arrived, and - the one assertion about an absence - that no credential value reached the journal. On the disabled node: no timer, no service, no account, no state directory.
+
+The boot-trigger assertion is written as a `.wants` glob rather than `systemctl is-enabled`, which reports every NixOS unit as `linked` whatever its `[Install]` section says and so cannot tell the two cases apart.
+
+**What is not yet true.** The "Done when" below has two halves, and only the first is satisfied. `enable = false` does fully stop the pipeline - that is what the check proves. "Flipping it back on resumes polling with no other change needed" cannot be true until item 5 exists: flipping it on today gets a red unit that says so. The switch is meant to stay off until then anyway (item 3's ordering constraint), so this is the intended state rather than an oversight - but the item is closed as a scaffold, not as a working poller.
+
+Two departures from the ticket worth recording rather than leaving to be rediscovered:
+
+- **The service is asserted *not* enabled.** The acceptance criterion asks that "the service+timer exist and are enabled". The timer is enabled; the service deliberately has no `[Install]` section, because a unit that both a timer and `multi-user.target` want would start a coding agent on every boot. So the check asserts the unit exists and that nothing wants it - which is the criterion's intent, inverted on the half where the literal reading would be a bug.
+- **`opencode/username` is wired as a third credential.** Item 11 names two. The third was moved into `secrets/homelab01.yaml` alongside the other two by #169 and is declared here so that one place owns the set; if item 5 turns out not to need it, this is where to drop it.
+
+One residual risk, named because item 5 is where it lands: the sandbox has only ever been run against the placeholder. `SystemCallFilter = [ "@system-service" ]` in particular has seen a shell script and nothing else, and a full `opencode run` meeting it for the first time may need a line loosened. `AF_NETLINK` is already in `RestrictAddressFamilies` for the same reason found in review rather than in production - Go and Node both read resolver state over netlink, so `gh` and `opencode` would have failed without it.
 
 ### Done when
 
