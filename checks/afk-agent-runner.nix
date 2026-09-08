@@ -175,10 +175,48 @@ pkgs.runCommand "check-afk-agent-runner"
     # are held to the same toolset. That is deliberate rather than awkward: a
     # mock free to reach for anything stdenv has would be a poor stand-in for a
     # binary the unit invokes.
+    #
+    # TWO KINDS OF `run` reach this mock since the review stage landed, and they
+    # are told apart by the prompt rather than by the flags: the review prompt
+    # is the only one that opens with "Review the work on this branch".
+    # Detecting on the payload rather than on `--title` is deliberate - a runner
+    # that stopped titling its review session would then fail the cases below
+    # rather than quietly fall through to the implement path and pass.
+    #
+    # The review half answers from `$OC_REVIEW` and is read back through
+    # `export`, not through anything it prints, because that is how the runner
+    # reads it: the log is human-formatted and the transcript is the record.
+    # Each plan below is one way item 1 measured this stage failing, or one way
+    # it could fail silently.
     cat > "$work/bin/opencode" <<'MOCK'
     #!/bin/sh
+    is_review=no
+    for a in "$@"; do
+      case "$a" in
+        "Review the work on this branch."*) is_review=yes ;;
+      esac
+    done
+
     case "$1" in
       run)
+        if [ "$is_review" = yes ]; then
+          printf '%s\n' "$@" > "$OC_STATE/review-args"
+          printf '%s\n' "''${OPENCODE_CONFIG_CONTENT:-}" > "$OC_STATE/review-overlay"
+          plan="''${OC_REVIEW:-pass}"
+          printf '%s\n' "$plan" > "$OC_STATE/review-plan"
+          case "$plan" in
+            # Ran past its ceiling, and crashed: both must stop the ticket
+            # rather than retry, since review has no budget to spend.
+            timeout) exit 124 ;;
+            crash)   exit 7 ;;
+            # Exited cleanly having opened nothing findable afterwards, which
+            # leaves the runner with no transcript to read a verdict out of.
+            nosession) exit 0 ;;
+            *) sed -n '/^--title$/{n;p;q}' "$OC_STATE/review-args" \
+                 > "$OC_STATE/review-title" ;;
+          esac
+          exit 0
+        fi
         n=$(( $(cat "$OC_STATE/attempts" 2>/dev/null || echo 0) + 1 ))
         echo "$n" > "$OC_STATE/attempts"
         printf '%s\n' "$@" > "$OC_STATE/args-$n"
@@ -206,14 +244,116 @@ pkgs.runCommand "check-afk-agent-runner"
         fi
         ;;
       session)
+        # A `session list` that fails outright, which has to reach the caller's
+        # own "no session" die rather than abort the runner inside a command
+        # substitution.
+        if [ "$(cat "$OC_STATE/review-plan" 2>/dev/null)" = listfail ]; then
+          echo "mock opencode: session list unavailable" >&2
+          exit 9
+        fi
         # An empty list until some attempt has actually opened one, so the
         # runner's two no-session paths - start a fresh one, or refuse - are
-        # both reachable from here.
-        if [ -s "$OC_STATE/title" ]; then
-          printf '[{"id":"ses_fixture","title":"%s"}]\n' "$(cat "$OC_STATE/title")"
-        else
-          printf '[]\n'
+        # both reachable from here. The review session joins it once opened,
+        # under whatever title the runner asked for.
+        jq -n \
+          --arg it "$(cat "$OC_STATE/title" 2>/dev/null)" \
+          --arg rt "$(cat "$OC_STATE/review-title" 2>/dev/null)" \
+          '[ (if $it != "" then { id: "ses_fixture", title: $it } else empty end),
+             (if $rt != "" then { id: "ses_review",  title: $rt } else empty end) ]'
+        ;;
+      export)
+        # The review transcript, in the shape the real `opencode export`
+        # produces: tool calls at .messages[].parts[] with .type == "tool", and
+        # the closing report as the last assistant text part. Everything the
+        # runner decides about a review is read from here.
+        if [ "$2" != ses_review ]; then
+          printf '{"messages":[]}\n'
+          exit 0
         fi
+        plan="$(cat "$OC_STATE/review-plan" 2>/dev/null || echo pass)"
+        # A transcript that stopped mid-object, which is what item 1 measured
+        # `opencode export` doing on a large session - and only sometimes.
+        if [ "$plan" = truncated ]; then
+          printf '{"info":{"cost":0.004},"messages":[{"info":{"role":"assist'
+          exit 0
+        fi
+        # Valid JSON of the wrong shape, which `jq -e .` alone is happy with
+        # and every shape query below would then abort on.
+        if [ "$plan" = badshape ]; then
+          printf '{"foo":1}\n'
+          exit 0
+        fi
+        # And an export that simply fails, which must reach the transcript
+        # check rather than kill the runner at its redirection.
+        if [ "$plan" = exportfail ]; then
+          echo "mock opencode: export unavailable" >&2
+          exit 9
+        fi
+        skill_name=code-review
+        skill_status=completed
+        axes=2
+        case "$plan" in
+          # The skill was called and errored, which is what item 1 measured:
+          # the model then wrote a review of its own and reported it as the
+          # skill's.
+          noskill)    skill_status=error ;;
+          # Called, and completed, but not the skill this stage is about.
+          wrongskill) skill_name=implement ;;
+          # The two axes collapsed into the parent context - `subagents=0` in
+          # item 1's terms, which failed silently rather than erroring.
+          oneaxis)    axes=1 ;;
+          noaxes)     axes=0 ;;
+        esac
+        # What the two sub-agents were sent to do, which is what separates a
+        # two-axis review from a session that simply fanned out twice. The
+        # labels are the ones every measured run actually produced.
+        axis_one="Standards axis review"
+        axis_two="Spec axis review"
+        if [ "$plan" = wrongaxes ]; then
+          axis_one="Explore the repository layout"
+          axis_two="Summarise the commit history"
+        fi
+        # Built with printf rather than written as literals spanning lines, for
+        # the reason the module's own retry messages are: a continuation line
+        # would have to start in column 0 to keep this file's indentation out
+        # of the text, and a column-0 line inside a Nix indented string
+        # collapses the dedent for the whole harness.
+        case "$plan" in
+          fail) text="$(printf '## Spec\n\nThe diff never implements acceptance criterion 3.\n\nAFK-REVIEW-VERDICT: fail')" ;;
+          # A closing report that never states a verdict at all.
+          noverdict) text="$(printf '## Standards\n\nNothing worth reporting. Looks fine to me.')" ;;
+          # No closing report whatsoever.
+          emptyreport) text="" ;;
+          # A report that mentions the sentinel three times and means it once.
+          # The decoys are placed to make both halves of the anchor load
+          # bearing: the first starts a line but carries trailing text, so `$`
+          # is what rejects it, and the last trails a real verdict on a line of
+          # its own prose, so `^` is what rejects it - and being last, it is
+          # what an unanchored match would settle on.
+          quoted) text="$(printf 'AFK-REVIEW-VERDICT: fail is the other spelling of this line.\n\nAFK-REVIEW-VERDICT: pass\nHad criterion 3 been missing I would have said AFK-REVIEW-VERDICT: fail here.')" ;;
+          *) text="$(printf '## Standards\n\nOne judgement call: the check duplicates a derivation.\n\n## Spec\n\nNo findings.\n\nAFK-REVIEW-VERDICT: pass')" ;;
+        esac
+        jq -n \
+          --arg status "$skill_status" \
+          --arg skill "$skill_name" \
+          --argjson axes "$axes" \
+          --arg a1 "$axis_one" \
+          --arg a2 "$axis_two" \
+          --arg text "$text" \
+          '{ info: { cost: 0.004 },
+             messages: [
+               { info: { role: "assistant" },
+                 parts: (
+                   [ { type: "tool", tool: "skill",
+                       state: { status: $status, input: { name: $skill } } } ]
+                   + [ [$a1, $a2][0:$axes][]
+                       | { type: "tool", tool: "task",
+                           state: { status: "completed",
+                                    input: { description: ., prompt: . } } } ]
+                   + (if $text == "" then []
+                      else [ { type: "text", text: $text } ] end)
+                 ) }
+             ] }'
         ;;
       *)
         echo "mock opencode: unexpected invocation: $*" >&2
@@ -365,9 +505,10 @@ pkgs.runCommand "check-afk-agent-runner"
 
     # `plan` is one opencode step per attempt, defaulting to a single clean
     # one so that every case written before the implement stage existed still
-    # reads as "the ticket got worked".
+    # reads as "the ticket got worked". `review` is the same idea for the stage
+    # after it, defaulting to a clean pass for the same reason.
     run() {
-      local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good}
+      local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good} review=''${5:-pass}
       state="$work/state/$name"
       if [ "$reuse" = "fresh" ]; then rm -rf "$state"; fi
       mkdir -p "$state"
@@ -377,10 +518,12 @@ pkgs.runCommand "check-afk-agent-runner"
       export GH_LOG="$state/gh.log"
       export OC_STATE="$state"
       export OC_PLAN="$state/opencode.plan"
+      export OC_REVIEW="$review"
       export NIX_LOG="$state/nix.log"
       : > "$GH_LOG"
       : > "$NIX_LOG"
-      rm -f "$state"/args-* "$state"/overlay-* "$state/attempts" "$state/title"
+      rm -f "$state"/args-* "$state"/overlay-* "$state/attempts" "$state/title" \
+        "$state"/review-*
       # Unquoted on purpose: a plan is a whitespace-separated list of steps and
       # this is what turns it into one line each.
       # shellcheck disable=SC2086
@@ -394,6 +537,11 @@ pkgs.runCommand "check-afk-agent-runner"
     }
 
     ghlog() { cat "$state/gh.log"; }
+    # The value opencode was given for a flag, read out of the recorded
+    # arguments. One line per argument is what makes this possible, and a
+    # helper is what keeps the same awk out of four places - including out of
+    # the failure messages, which need the same answer they just asserted on.
+    flag_value() { awk -v f="$2" '$0 == f { getline; print; exit }' "$1"; }
     claims() { grep -c "issue edit" "$state/gh.log" || true; }
     worktrees() { find "$state/worktrees" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | sort; }
     # Scoped to refs/heads/afk: the clone brings its own `master` along, and
@@ -522,6 +670,14 @@ pkgs.runCommand "check-afk-agent-runner"
     if grep -qx -- --session "$state/args-1"; then
       fail "the first attempt continued a session that cannot exist yet"
     fi
+    # And it is aimed at the worktree explicitly rather than by whatever
+    # directory the `cd` above it left behind. opencode resolves its project -
+    # and with it which `.agents/skills/` it can see - from the launch
+    # directory, so this is the flag that decides whether the session can find
+    # the `implement` skill it is told to use at all. Item 1's review-stage run
+    # is what that costs when it goes wrong.
+    [ "$(flag_value "$state/args-1" --dir)" = "$state/worktrees/$ticket" ] \
+      || fail "the implement attempt was not pinned to its worktree with --dir: $(flag_value "$state/args-1" --dir)"
     [ "$(git -C "$state/worktrees/$ticket" rev-list --count origin/master..HEAD)" -eq 1 ] \
       || fail "no commit landed on the ticket branch"
 
@@ -576,7 +732,7 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "the repaired ticket exited $rc: $(cat "$state/err.log")"
     [ "$(attempts)" -eq 2 ] || fail "expected two attempts, got $(attempts)"
     grep -qx -- --session "$state/args-2" || fail "the retry opened a fresh session (ADR 0004 §6)"
-    awk '/^--session$/{getline; print; exit}' "$state/args-2" | grep -qx ses_fixture \
+    [ "$(flag_value "$state/args-2" --session)" = ses_fixture ] \
       || fail "the retry continued a session other than the one that failed"
     if grep -qx -- --title "$state/args-2"; then fail "the retry titled a second session"; fi
     grep -q "the gate failed" "$state/args-2" || fail "the retry was not told what the gate said"
@@ -674,6 +830,220 @@ pkgs.runCommand "check-afk-agent-runner"
     # that cannot pass CI - the collision item 2 settled on 2026-09-08.
     grep -q "jobs.checks.strategy.matrix.check" "$state/args-1" \
       || fail "the prompt does not carry the ci.yml matrix exception"
+
+    echo "case: a clean implementation is reviewed in a fresh session and proceeds"
+    # Item 6's second acceptance criterion. The review is a new session against
+    # the same worktree - never `--session`, however many attempts the
+    # implementation took - because a self-review in the context that just
+    # wrote the code is the form ADR 0004 §6 rules out.
+    run review-clean mixed.json fresh good pass
+    [ "$rc" -eq 0 ] || fail "a clean implementation did not survive review: $(cat "$state/err.log")"
+    [ -s "$state/review-args" ] || fail "no review session was opened at all"
+    if grep -qx -- --session "$state/review-args"; then
+      fail "the review continued the implement session instead of opening a fresh one (ADR 0004 §6)"
+    fi
+    grep -qx -- --title "$state/review-args" || fail "the review session is untitled, so nothing can find it again"
+    [ "$(flag_value "$state/review-args" --title)" = "$ticket-review" ] \
+      || fail "the review session is titled $(flag_value "$state/review-args" --title)"
+    grep -q "review passed" "$state/out.log" || fail "the stage did not report a passing review"
+
+    echo "case: the review is aimed at its worktree explicitly, not by working directory"
+    # The root cause of item 1's entire review-stage finding, and the one
+    # assertion that would have caught it. opencode resolves its project - and
+    # with it skill discovery - from the directory it is launched in, so a
+    # session that inherits the wrong one loses the `code-review` skill and
+    # gains a view of every sibling checkout. Passing `--dir` is what makes
+    # that unrepeatable; a `cd` alone is what did not.
+    [ "$(flag_value "$state/review-args" --dir)" = "$state/worktrees/$ticket" ] \
+      || fail "the review was not pinned to its worktree with --dir: $(flag_value "$state/review-args" --dir)"
+
+    echo "case: the review session cannot edit, commit, push or touch the issue"
+    # Report-only, enforced through the permission layer rather than asked for
+    # in the prompt. A review that quietly fixed what it was meant to report
+    # would produce a commit nothing in this pipeline reviewed.
+    jq -e '.permission.edit == "deny"' "$state/review-overlay" > /dev/null \
+      || fail "the review session was allowed to edit files"
+    for verb in "git push*" "git commit*" "gh pr*" "gh issue edit*" "gh issue comment*" "gh issue close*"; do
+      jq -e --arg v "$verb" '.permission.bash[$v] == "deny"' "$state/review-overlay" > /dev/null \
+        || fail "the review session was not denied '$verb'"
+    done
+
+    echo "case: the findings are kept for the pull request, and stay out of the diff"
+    # They are worth more to the human who merges this than they are as a gate,
+    # so item 7 (#174) attaches them - but a findings file written inside the
+    # worktree would show up in the diff it is describing.
+    [ -s "$state/run/review/findings.md" ] || fail "the review's findings were not kept anywhere"
+    grep -q "AFK-REVIEW-VERDICT" "$state/run/review/findings.md" || fail "the findings file is not the closing report"
+    [ "$(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)" = "fix-1.txt" ] \
+      || fail "the review stage wrote into the diff: $(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)"
+    [ -z "$(git -C "$state/worktrees/$ticket" status --porcelain)" ] \
+      || fail "the review stage dirtied the worktree: $(git -C "$state/worktrees/$ticket" status --porcelain)"
+
+    echo "case: a refused implementation is stopped here rather than sent on to a pull request"
+    # Item 6's first acceptance criterion, and the whole point of the stage.
+    run review-fail mixed.json fresh good fail
+    [ "$rc" -ne 0 ] || fail "a review that refused the work reported success"
+    grep -q "refused this implementation" "$state/err.log" || fail "did not say the review refused it: $(cat "$state/err.log")"
+    # The findings travel with the refusal: the stuck path (#175) has to be able
+    # to say why, and a refusal with no reason attached is a ticket nobody can
+    # pick up.
+    grep -q "acceptance criterion 3" "$state/err.log" || fail "the refusal carried none of the findings"
+    # And it is not retried. Review has no budget (ADR 0004 §6), so exactly one
+    # review session runs and the implement count is untouched.
+    [ "$(attempts)" -eq 1 ] || fail "a failing review re-ran the implement stage: $(attempts) attempt(s)"
+
+    echo "case: a review that cannot be shown to have happened has not passed"
+    # Every way item 1 saw this stage fail was silent - the skill error went to
+    # the model and to nobody else, the collapsed axes left a number in an
+    # export nobody read, and the substituted review looked exactly like a real
+    # one. So each is asserted from outside, out of the transcript, and each is
+    # fatal in the fail-closed direction.
+    #
+    # `noskill` is the measured one: the `skill` tool was called with
+    # `code-review` and errored, and the session wrote its own review instead.
+    run review-noskill mixed.json fresh good noskill
+    [ "$rc" -ne 0 ] || fail "a review whose skill call failed was accepted as a review"
+    grep -q "never completed a" "$state/err.log" || fail "did not say the skill never ran: $(cat "$state/err.log")"
+
+    echo "case: a skill call for something else is not a code-review"
+    run review-wrongskill mixed.json fresh good wrongskill
+    [ "$rc" -ne 0 ] || fail "a session that ran some other skill passed as a code review"
+
+    echo "case: the two axes have to be two contexts, not one"
+    # `subagents=0` in item 1's terms: standards and spec collapsing into the
+    # parent context is the premise of this stage failing rather than erroring.
+    for collapsed in oneaxis noaxes; do
+      run "review-$collapsed" mixed.json fresh good "$collapsed"
+      [ "$rc" -ne 0 ] || fail "$collapsed: collapsed axes were accepted as a two-axis review"
+      grep -q "collapsed into one context" "$state/err.log" \
+        || fail "$collapsed: did not say the axes collapsed: $(cat "$state/err.log")"
+    done
+
+    echo "case: two sub-agents sent elsewhere are not the two axes"
+    # The count on its own would be satisfied by a session that fanned out
+    # twice for its own reasons. What ADR 0004 §6 asks for is the separation of
+    # standards from spec, so that is what is checked.
+    run review-wrongaxes mixed.json fresh good wrongaxes
+    [ "$rc" -ne 0 ] || fail "two unrelated sub-agents were accepted as a two-axis review"
+    grep -q "is identifiable across them" "$state/err.log" \
+      || fail "did not say the axes were unidentifiable: $(cat "$state/err.log")"
+
+    echo "case: an unreadable verdict is a failure, not a pass"
+    # The stage needs one bit out of a page of prose. Not finding it means the
+    # stage does not know what the review decided, which is not the same as the
+    # review having approved anything.
+    #
+    # Asserted on each branch's own message rather than only on the exit
+    # status, because the two arrive at that status by different routes and the
+    # first draft's `[ -s ]` test conflated them: `jq -r` on a `// ""` fallback
+    # still emits a newline, so the no-report case was a one-byte file that
+    # read as a report and fell through to the no-verdict branch. Both were
+    # non-zero, so a status-only assertion passed while one branch was dead.
+    run review-noverdict mixed.json fresh good noverdict
+    [ "$rc" -ne 0 ] || fail "a review with no verdict was read as a pass"
+    grep -q "no readable verdict line" "$state/err.log" \
+      || fail "did not say the verdict was unreadable: $(cat "$state/err.log")"
+
+    run review-emptyreport mixed.json fresh good emptyreport
+    [ "$rc" -ne 0 ] || fail "a review with no closing report was read as a pass"
+    grep -q "no closing report" "$state/err.log" \
+      || fail "did not say the report was empty: $(cat "$state/err.log")"
+
+    echo "case: a transcript of the wrong shape is a failure, not an abort"
+    # Valid JSON is not a session. `jq -e .` is happy with any parseable
+    # document, and the shape queries that follow exit 5 against one with no
+    # `messages` array - which would abort the runner with none of the
+    # diagnosis this stage exists to print.
+    run review-badshape mixed.json fresh good badshape
+    [ "$rc" -ne 0 ] || fail "a transcript of the wrong shape was accepted"
+    grep -q "not a readable session" "$state/err.log" \
+      || fail "did not name the transcript as unreadable: $(cat "$state/err.log")"
+
+    echo "case: opencode failing to answer is reported, not silently fatal"
+    # Two command substitutions stand between the review and its verdict, and
+    # under `set -euo pipefail` either would abort the runner mid-stage before
+    # the message written to explain it could run. Both have to arrive at their
+    # own die instead.
+    run review-exportfail mixed.json fresh good exportfail
+    [ "$rc" -ne 0 ] || fail "a failed export was treated as a pass"
+    grep -q "not a readable session" "$state/err.log" \
+      || fail "a failed export did not reach the transcript check: $(cat "$state/err.log")"
+
+    run review-listfail mixed.json fresh good listfail
+    [ "$rc" -ne 0 ] || fail "a failed session list was treated as a pass"
+    grep -q "no session titled" "$state/err.log" \
+      || fail "a failed session list did not reach its own die: $(cat "$state/err.log")"
+
+    echo "case: a transcript that did not survive being exported is a failure"
+    # Everything this stage verifies is read out of the export, so an export
+    # that cannot be parsed is a stage that cannot verify anything - and item 1
+    # recorded that a truncated one fails as a parse error only sometimes,
+    # which is the worse of the two. Named rather than left to abort the runner
+    # through an unguarded jq.
+    run review-truncated mixed.json fresh good truncated
+    [ "$rc" -ne 0 ] || fail "an unparseable review transcript was accepted"
+    grep -q "not a readable session" "$state/err.log" \
+      || fail "did not say the transcript was unreadable: $(cat "$state/err.log")"
+
+    echo "case: the verdict is the last whole line, not a mention of one"
+    # The prompt prints both spellings as examples, so a model that echoes its
+    # instructions back is ordinary rather than exceptional. Anchoring is what
+    # keeps a quoted verdict from becoming the verdict - once mid-line, once at
+    # the start of a line with text after it, and the real one last.
+    run review-quoted mixed.json fresh good quoted
+    [ "$rc" -eq 0 ] || fail "a quoted verdict was mistaken for the real one: $(cat "$state/err.log")"
+
+    echo "case: a review that hangs or crashes stops the ticket without retrying"
+    # Review has no retry budget at all (ADR 0004 §6): a retry is an implement
+    # concept, because a retry needs a failure to work against and there is
+    # nothing here to fix. So each of these is one review session and then a
+    # stop, never a second.
+    run review-timeout mixed.json fresh good timeout
+    [ "$rc" -ne 0 ] || fail "a review that ran past its ceiling was treated as a pass"
+    grep -q "ceiling" "$state/err.log" || fail "did not report the review timeout: $(cat "$state/err.log")"
+    run review-crash mixed.json fresh good crash
+    [ "$rc" -ne 0 ] || fail "a review that exited non-zero was treated as a pass"
+    grep -q "exited 7" "$state/err.log" || fail "did not report the review's exit status: $(cat "$state/err.log")"
+
+    echo "case: a review session that cannot be found afterwards stops the ticket"
+    # The same shape the implement stage refuses, for the same reason: there is
+    # no transcript, so there is nothing to verify and nothing to read a
+    # verdict out of.
+    run review-nosession mixed.json fresh good nosession
+    [ "$rc" -ne 0 ] || fail "a review with no findable session was accepted"
+    grep -q "no session titled" "$state/err.log" || fail "did not say the session was unfindable: $(cat "$state/err.log")"
+
+    echo "case: review spends none of the implement stage's budget"
+    # A ticket that only just converged still gets a full review, and a review
+    # that then refuses it does not send it back for a fourth attempt - the two
+    # stages have separate outcomes, which is what makes ADR 0004 §6's "review
+    # is always a separate pass" true of the code rather than only of the prose.
+    run review-after-retries mixed.json fresh "broken broken repair" fail
+    [ "$rc" -ne 0 ] || fail "a refused review passed after a retried implementation"
+    [ "$(attempts)" -eq 3 ] || fail "expected exactly three implement attempts, got $(attempts)"
+    [ -s "$state/review-args" ] || fail "a ticket that converged on its last attempt was never reviewed"
+
+    echo "case: an implementation that never converged is never reviewed"
+    # Nothing to review, and a review of a gate-failing tree would be spend
+    # with no decision attached to it.
+    run review-unreached mixed.json fresh "broken broken broken" pass
+    [ "$rc" -ne 0 ] || fail "an unconverged ticket was reported as done"
+    [ ! -s "$state/review-args" ] || fail "reviewed a ticket that never passed the gate"
+
+    echo "case: the review prompt carries the four clauses each measured failure needs"
+    run review-prompt mixed.json fresh good pass
+    grep -q 'code-review` skill' "$state/review-args" || fail "the review prompt does not name the skill to use"
+    grep -q "issue #302" "$state/review-args" || fail "the ticket number was not substituted into the review prompt"
+    grep -q "origin/master" "$state/review-args" || fail "the review prompt does not pin a fixed point"
+    # Abort rather than substitute, which is the behaviour item 1's run did not
+    # have; and containment, which the permission layer does not buy - `bash`
+    # and `cd` are unrestricted whatever `--dir` says.
+    grep -q "stop immediately" "$state/review-args" || fail "the review prompt does not say to stop when the skill is missing"
+    grep -q "do not \`cd\` out of it" "$state/review-args" || fail "the review prompt does not contain the session to its worktree"
+    grep -q "AFK-REVIEW-VERDICT" "$state/review-args" || fail "the review prompt does not ask for a verdict line"
+    # And the narrowness. A reviewer that cannot be trusted to catch a defect
+    # must not be trusted to invent one, so taste is reported and never fatal.
+    grep -q "never a fail" "$state/review-args" || fail "the review prompt does not keep style findings advisory"
 
     echo "case: one ticket at a time - a live worktree stops the next poll"
     # Reusing the state the `mixed` case left behind: #302 is claimed and its

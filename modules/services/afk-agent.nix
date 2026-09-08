@@ -13,10 +13,23 @@
 # around the runner - the schedule, the runtime ceiling, the service account,
 # the credentials, the sandbox, and the toolchain on its PATH. The runner
 # itself is item 5, and lands in pieces: this file carries poll -> denylist ->
-# claim -> isolate (#171), and the implement stage on top of it (#172). It
-# stops with a ticket claimed and a gate-passing commit on an `afk/*` branch.
-# The review stage (#173), the push and PR (#174) and the stuck path that
-# cleans up after a failure (#175) each extend the same script.
+# claim -> isolate (#171), the implement stage on top of it (#172), and the
+# review stage after that (#173, item 6). It stops with a ticket claimed, a
+# gate-passing commit on an `afk/*` branch, and a review of that commit written
+# to the run directory for the pull request to carry. The push and PR (#174)
+# and the stuck path that cleans up after a failure (#175) each extend the same
+# script.
+#
+# WHAT A PASSING REVIEW DOES AND DOES NOT MEAN. The review stage proves, from
+# the session transcript rather than from the session's own account, that the
+# `code-review` skill ran in a fresh contained context across its two axes,
+# and it fails closed when it cannot. What it does not establish is that the
+# diff is correct: measured against the one diff in this repository with an
+# independently graded answer, this model passed a known-defective
+# implementation three times out of three (plan item 6, "Measured"). So the
+# stage's value is a contained review, a set of findings for whoever merges,
+# and a refusal that is occasionally right - not a correctness guarantee, and
+# item 7 should not treat it as one.
 #
 # Nothing here pushes, opens a pull request, or writes to the tracker past the
 # claim. That is not an omission: those verbs belong to the stages above, and
@@ -175,6 +188,31 @@ let
   # at the end of it.
   gateTailLines = 200;
 
+  # Ceiling on the review pass (item 6, #173), for the same reason
+  # `attemptTimeout` exists: a stage that hangs should fail the runner's own
+  # way, countable, rather than by systemd killing the unit mid-ticket and
+  # leaving a worktree the in-flight guard then refuses to poll past.
+  #
+  # Measured runs of this exact stage on this model finished in 3-6 minutes
+  # (223s, 338s and their repeats), so this is generous by an order of
+  # magnitude rather than tight. It matches the ceiling item 1's pilot used
+  # for the same call, which is the only number with real runs behind it.
+  reviewTimeout = 1800;
+
+  # How deep to look when turning a session title back into a session id.
+  # A named binding rather than a bare `-n 20` at two call sites, because every
+  # other number in this file is one: the runner opens at most two sessions per
+  # ticket, so this is generous, and the only thing that would argue for more is
+  # a session list shared with work this unit did not do.
+  sessionListDepth = 20;
+
+  # How many sub-agent contexts a real `code-review` pass fans out into:
+  # standards and spec, which is the whole reason the skill exists rather than
+  # one prompt asking for both. Written down because the stage below asserts
+  # it rather than assuming it - item 1 measured a run where the two collapsed
+  # into a single context, and it failed silently instead of erroring.
+  reviewAxes = 2;
+
   # The instructions the session is opened with: item 1's frozen pilot prompt,
   # which was written to become this, plus the two things the pilot found were
   # missing from it - the `ci.yml` matrix exception, without which "follow the
@@ -254,6 +292,107 @@ let
     };
   };
 
+  # The review stage's instructions (#173, item 6). Its shape is the same as
+  # the implement prompt's and for the same reasons - a file in the store, one
+  # substituted token - but what it asks for is narrower, and every clause in
+  # it is here because a measured run went wrong without it.
+  #
+  # `ISSUE` and `BASE` are substituted at run time; nothing else in it varies.
+  #
+  # NAMING THE SKILL is the whole mitigation for discovery-is-not-invocation,
+  # exactly as in the implement prompt. What is new here is the sentence after
+  # it: item 1's review-stage run called the `skill` tool correctly, got
+  # `Skill "code-review" not found`, and then wrote a review of its own and
+  # reported it as though the skill had run. A hand-rolled review presented as
+  # the skill's is worse than no review, because the stage below cannot tell
+  # the difference - so the prompt asks it to stop, and the stage verifies the
+  # skill fired rather than believing either answer.
+  #
+  # THE CONTAINMENT CLAUSE is not decoration either. The same run reviewed a
+  # sibling checkout instead of its own. The cause was ambient - opencode took
+  # its project from the working directory, and the pilot's harness launched it
+  # one level too high - and `--dir` below is the real fix. This clause is the
+  # belt to that braces: `bash` and `cd` are unrestricted in any case, so a
+  # session that reasons its way toward a neighbouring tree is not contained
+  # from reaching it by permissions alone.
+  #
+  # THE VERDICT LINE exists because a shell script cannot read prose. The
+  # stage needs one bit out of a page of English, and asking for it in a fixed
+  # shape is cheaper and far more legible than parsing for it.
+  #
+  # WHAT MAY FAIL A TICKET is deliberately narrow, and the narrowness is the
+  # finding rather than a caution. Measured on 2026-09-08 against the pilot's
+  # own holdout pair: this model, reviewing a diff with a known false-positive
+  # bug in it, returned `pass` on all three runs and twice certified in prose
+  # the one acceptance criterion that does not hold. A reviewer that cannot be
+  # trusted to catch a defect must not be trusted to invent one either, so
+  # style, naming and structure are reported and never fatal - they are for
+  # the human who merges - and the two things it may fail on are the two
+  # closest to a fact about the diff.
+  reviewPrompt = pkgs.writeText "afk-agent-review-prompt" ''
+    Review the work on this branch. The fixed point is BASE. The spec is
+    GitHub issue #ISSUE; read it with `gh issue view ISSUE`.
+
+    Use the `code-review` skill, by name - call it rather than improvising
+    something equivalent. If the `skill` tool reports that `code-review` is
+    not available, stop immediately and say so as your entire answer. Do not
+    substitute a review of your own: a hand-rolled review reported as if it
+    were the skill's is worse than no review, because nothing downstream can
+    tell the difference.
+
+    Scope:
+
+    - Work only inside this directory. Do not read, write or reason about any
+      checkout above or beside it, and do not `cd` out of it. If this
+      directory looks like the wrong target, say so and stop rather than
+      looking for a better one.
+    - Report findings only. Change no files, commit nothing, push nothing,
+      and do not edit, close or comment on the issue.
+
+    Finish your answer with a verdict line, exactly this shape and nothing
+    after it:
+
+    AFK-REVIEW-VERDICT: pass
+
+    or
+
+    AFK-REVIEW-VERDICT: fail
+
+    Fail only for these two, and nothing else:
+
+    - the diff does not do what the ticket asked, or does it wrongly
+    - a claim in a commit message on this branch is not true of the diff
+
+    Style, naming, structure and taste findings are worth reporting and are
+    never a fail: they go to the human who merges this. Judge the code, not
+    the commit message's prose.
+  '';
+
+  # Report-only, enforced through the permission layer rather than only asked
+  # for in the prose above. `edit` denied outright is what makes "change no
+  # files" a property of the session instead of a request to it: a review pass
+  # that quietly fixed what it was supposed to report would produce a commit
+  # nothing in this pipeline reviewed, and the gate would bless it.
+  #
+  # The bash denials are the implement stage's, unchanged, plus `git commit`,
+  # which the implement session needs and this one must not have.
+  #
+  # Same soft-control caveat as `permissionOverlay`: this is a pattern match
+  # on a command line, not a capability boundary.
+  reviewOverlay = builtins.toJSON {
+    permission = {
+      edit = "deny";
+      bash = {
+        "git push*" = "deny";
+        "git commit*" = "deny";
+        "gh pr*" = "deny";
+        "gh issue edit*" = "deny";
+        "gh issue close*" = "deny";
+        "gh issue comment*" = "deny";
+      };
+    };
+  };
+
   runner = pkgs.writeShellApplication {
     name = "afk-agent-run";
 
@@ -287,6 +426,24 @@ let
 
       log() { echo "afk-agent: $*"; }
       die() { echo "afk-agent: $*" >&2; exit 1; }
+
+      # Turn a session title back into a session id, or print nothing.
+      #
+      # Written once because both stages need it and the pipeline is not
+      # trivial. `|| true` on the end is the same guard the verdict grep
+      # carries, and for the same reason: this is only ever called inside a
+      # command substitution, and under `set -euo pipefail` an `opencode` that
+      # fails or a `jq` that finds nothing would abort the runner right there -
+      # before either caller's own `die` could say which session it was looking
+      # for and why that matters. An empty answer has to travel back as an
+      # empty answer.
+      session_id_for() {
+        (
+          cd "$1" \
+            && opencode session list -n ${toString sessionListDepth} --format json \
+            | jq -r --arg t "$2" 'map(select(.title == $t)) | .[0].id // empty'
+        ) 2>/dev/null || true
+      }
 
       # --- what item 4 hands over ------------------------------------------
       #
@@ -536,7 +693,6 @@ let
 
       sed "s/ISSUE/$number/g" ${implementPrompt} > "$run_dir/prompt"
 
-      export OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg permissionOverlay}
 
       # The gate. Deliberately this repository's own CI gate rather than a
       # cheaper proxy: the entire value of an unattended runner is that it does
@@ -640,10 +796,27 @@ let
         # subshell is the left side of a `||`, so errexit is off inside it, and
         # a failed `cd` would otherwise run the session against whatever
         # directory the runner happened to be in.
+        #
+        # `--dir` says the same thing a second way, and it is not redundant.
+        # opencode resolves its project - and with it which `.agents/skills/`
+        # it can see - from the directory it is launched in, so an ambient
+        # working directory is load-bearing state that looks like none. Item
+        # 1's review-stage run is what this is guarding against: launched one
+        # level above its worktree, it lost the skill it was told to use and
+        # gained a view of every sibling checkout, and all three of the
+        # failures it recorded came from that. The review stage below pins the
+        # same flag; both stages say it explicitly so that neither depends on
+        # the `cd` above having done what it looks like it did.
+        # Overlay scoped to the command, not exported for the rest of the run,
+        # for the reason the review stage below gives: a deny-set that outlives
+        # its own session is ambient state that looks like none, and the verbs
+        # this one denies are ones a later stage needs.
         attempt_rc=0
         (
           cd "$worktree" || exit 1
-          timeout ${toString attemptTimeout} opencode run --auto "''${opencode_args[@]}" "$message"
+          OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg permissionOverlay} \
+            timeout ${toString attemptTimeout} opencode run --auto \
+              --dir "$worktree" "''${opencode_args[@]}" "$message"
         ) || attempt_rc=$?
 
         # Four ways an attempt fails, in the order they can be told apart. The
@@ -681,11 +854,7 @@ let
         # Read back once and then reused: the id does not change, and
         # `session list` is a question with a cost.
         if [ -z "$session" ]; then
-          session="$(
-            cd "$worktree" \
-              && opencode session list -n 20 --format json \
-              | jq -r --arg t "$slug" 'map(select(.title == $t)) | .[0].id // empty'
-          )"
+          session="$(session_id_for "$worktree" "$slug")"
         fi
 
         # Whether there is a session to continue decides both what the next
@@ -721,7 +890,222 @@ let
         attempt=$((attempt + 1))
       done
 
-      log "stopping here: the review stage is item 6 (#173) and is not wired in yet"
+      # --- review, in a fresh context ---------------------------------------
+      #
+      # ADR 0004 §6, and item 6 (#173). A self-review in the context that just
+      # wrote the code is the weakest form, so this is a new session against
+      # the same worktree - never `--session` - however many attempts the
+      # implementation took to converge.
+      #
+      # It is also the last stage that can stop a ticket before a human sees
+      # it, and the one whose output is prose. Both facts shape what follows:
+      # nothing here believes the session's own account of what it did, and
+      # the one bit this stage needs out of a page of English is asked for in
+      # a fixed shape rather than parsed out of it.
+      #
+      # `--dir` is the load-bearing flag, and it is worth saying why, because
+      # the cost of not knowing was item 6's whole first attempt. Item 1's
+      # review-stage run reported three separate failures - the `code-review`
+      # skill missing, the two axes collapsing into one context, and a sibling
+      # checkout reviewed instead of its own - and they were one failure.
+      # opencode resolves its project, and with it skill discovery, from the
+      # directory it is launched in; the pilot's harness launched it one level
+      # above the worktree, where there is no `.agents/skills/` and no git
+      # repository. From there `opencode debug skill` returns exactly one
+      # skill, `customize-opencode`, which is the error string that run
+      # recorded verbatim. The skill error is why no sub-agent ever spawned,
+      # and being a directory above its target is why a sibling was in reach
+      # to review. Naming the directory explicitly rather than inheriting it
+      # from a `cd` is what makes that unrepeatable. The `cd` stays as well:
+      # `session list` and `export` below are project-scoped the same way.
+      review_dir="$run_dir/review"
+      mkdir -p "$review_dir"
+      review_title="$slug-review"
+
+      sed -e "s/ISSUE/$number/g" -e "s|BASE|origin/$base_branch|g" \
+        ${reviewPrompt} > "$review_dir/prompt"
+
+      log "#$number: reviewing $branch in a fresh session"
+
+      # The overlay is set on the one command it governs rather than exported
+      # for the rest of the run. An `export` here would outlive the stage, and
+      # what it would hand item 7 (#174) is a deny-set containing `gh pr*` and
+      # `git commit*` - the two verbs that stage exists to use. Scoping it is
+      # also the honest shape: it describes this session, not this process.
+      review_rc=0
+      (
+        cd "$worktree" || exit 1
+        OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg reviewOverlay} \
+          timeout ${toString reviewTimeout} opencode run --auto \
+            --dir "$worktree" \
+            --agent build --model ${model} --variant ${variant} \
+            --title "$review_title" \
+            "$(cat "$review_dir/prompt")"
+      ) > "$review_dir/run.log" 2>&1 || review_rc=$?
+
+      if [ "$review_rc" -eq 124 ]; then
+        die "#$number: the review ran past its ${toString reviewTimeout}s ceiling. Review does not retry (ADR 0004 §6); handing the ticket back is the stuck path, item 8 (#175)"
+      elif [ "$review_rc" -ne 0 ]; then
+        die "#$number: the review session exited $review_rc. Review does not retry (ADR 0004 §6); handing the ticket back is the stuck path, item 8 (#175)"
+      fi
+
+      review_session="$(session_id_for "$worktree" "$review_title")"
+
+      [ -n "$review_session" ] \
+        || die "#$number: the review exited 0 but no session titled '$review_title' can be found, so there is nothing to read a verdict out of"
+
+      # Written to a file before jq is pointed at it, for the reason item 1
+      # recorded: piping `opencode export` straight into jq truncates on large
+      # sessions, and it fails as a parse error rather than as a wrong answer -
+      # but only sometimes, which is the worse of the two.
+      # `|| true` because a failing `export` has to reach the check below
+      # rather than abort the runner here: this is the left side of a
+      # redirection, not a condition, so `set -e` would take it.
+      ( cd "$worktree" && opencode export "$review_session" ) \
+        > "$review_dir/session.json" 2>/dev/null || true
+
+      # And the transcript is checked for the shape the assertions below read,
+      # not merely for being JSON. Valid JSON of the wrong shape is the trap
+      # here: `jq -e .` is happy with anything parseable, and `.messages[]`
+      # against a document without a `messages` array exits 5 - aborting the
+      # runner with none of the diagnosis this stage exists to print. Item 1
+      # recorded that `opencode export` truncates on large sessions and fails
+      # as a parse error only sometimes, which is what makes checking here
+      # worth more than a stack of unguarded reads below.
+      jq -e 'has("messages") and (.messages | type == "array")' \
+        "$review_dir/session.json" > /dev/null 2>&1 \
+        || die "#$number: the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (plan item 1)"
+
+      # --- did a review actually happen -------------------------------------
+      #
+      # Asked of the transcript rather than of the session's own summary, and
+      # this is the part of the stage with the most evidence behind it. Every
+      # failure item 1 saw here was silent: the skill error was reported to the
+      # model and not to anybody else, the missing sub-agents left `subagents=0`
+      # in an export nobody was reading yet, and the substituted review read
+      # exactly like a real one. A stage whose failures all look like passes
+      # has to be checked from outside, so these two counts are read out of the
+      # tool calls the session actually made.
+      #
+      # Both are fatal, and fatal in the fail-closed direction: a review that
+      # cannot be shown to have happened is not a review that passed.
+      skill_calls="$(
+        jq '[ .messages[].parts[]?
+              | select(.type == "tool" and .tool == "skill")
+              | select(.state.status == "completed")
+              | select(.state.input.name == "code-review")
+            ] | length' "$review_dir/session.json"
+      )"
+
+      [ "$skill_calls" -gt 0 ] \
+        || die "#$number: the review never completed a \`skill\` call for code-review, so whatever it produced was not that skill's review"
+
+      # The two axes are the point of the skill: standards and spec, in
+      # genuinely separate contexts so that neither pollutes the other. They
+      # arrive as `task` calls, and item 1 expected two. Fewer means they
+      # collapsed into the parent context, which is the premise of this stage
+      # failing rather than erroring - so it is checked rather than assumed.
+      axes="$(
+        jq '[ .messages[].parts[]? | select(.type == "tool" and .tool == "task") ] | length' \
+          "$review_dir/session.json"
+      )"
+
+      [ "$axes" -ge ${toString reviewAxes} ] \
+        || die "#$number: the review spawned $axes sub-agent(s), not ${toString reviewAxes}; the standards and spec axes collapsed into one context (ADR 0004 §6)"
+
+      # And that they are the two axes rather than two sub-agents of any kind.
+      # A count alone is satisfied by a session that fanned out twice for its
+      # own reasons, which is not the same thing as standards and spec running
+      # in separate contexts - and it is the separation, not the fan-out, that
+      # ADR 0004 §6 is about.
+      #
+      # Matched over each call's description and prompt together and folded to
+      # lower case, because that wording is the model's rather than this
+      # repository's. What is asserted is only that both subjects are present
+      # across the calls, which is as much as can be checked from outside
+      # without pinning phrasing the skill never fixed. Deliberately loose in
+      # the passing direction and strict in the one that matters: two sub-agents
+      # sent to do something else entirely do not read as a two-axis review.
+      named_axes="$(
+        jq '[ .messages[].parts[]?
+              | select(.type == "tool" and .tool == "task")
+              | ((.state.input.description // "") + " " + (.state.input.prompt // ""))
+              | ascii_downcase
+            ]
+            | [ (map(select(test("standard"))) | length > 0),
+                (map(select(test("spec"))) | length > 0) ]
+            | all' "$review_dir/session.json"
+      )"
+
+      [ "$named_axes" = true ] \
+        || die "#$number: the review spawned $axes sub-agent(s), but neither a standards nor a spec subject is identifiable across them, so this was not the code-review skill's two-axis pass"
+
+      log "#$number: review ran the code-review skill across $axes axes"
+
+      # --- the findings, and the one bit that decides --------------------
+      #
+      # The findings are kept whatever the verdict says, because they are worth
+      # more on the pull request - where the human who has to merge it reads
+      # them alongside the diff - than they are as a gate. Item 7 (#174)
+      # attaches this file; nothing here is the last reader of it.
+      #
+      # Deliberately NOT fed back to the implement session to be fixed. Item 6
+      # originally allowed one fix-and-recheck, and it was dropped on purpose:
+      # a finding handed back to the model that just wrote the code becomes a
+      # commit, and the gate cannot tell a correct change from a plausible
+      # green one. A wrong finding would then cost a real edit and consume the
+      # finding itself, where leaving it on the PR costs nothing and keeps it
+      # legible. So a failing review hands the ticket to a person (#175), and
+      # never to another attempt.
+      jq -r '[ .messages[]
+               | select(.info.role == "assistant")
+               | .parts[]? | select(.type == "text") | .text
+             ] | last // ""' "$review_dir/session.json" > "$review_dir/findings.md"
+
+      # Tested for content rather than for size. `jq -r` on a `// ""` fallback
+      # still emits its newline, so the file is one byte when the session
+      # produced no text at all and `[ -s ]` would call that a report. Found by
+      # removing this branch and watching every case still pass.
+      grep -q '[^[:space:]]' "$review_dir/findings.md" \
+        || die "#$number: the review session produced no closing report to read a verdict out of"
+
+      # One line, one shape, last one wins. Anchored so that a verdict quoted
+      # mid-report - the prompt above prints both spellings as examples, and a
+      # model that echoes its instructions back is ordinary - cannot be
+      # mistaken for the verdict itself.
+      #
+      # The trailing `|| true` is load-bearing rather than tidy. grep exits 1
+      # when it matches nothing, and under this script's `set -euo pipefail` an
+      # unguarded command substitution in an assignment aborts the runner right
+      # here - with a bare non-zero status and none of the diagnosis the `*)`
+      # branch below exists to print. A report with no verdict in it is the
+      # commonest thing this stage will see go wrong, so it has to reach that
+      # branch and be named. Found by removing the branch and watching the
+      # check still pass, which is the only way a dead-code path shows up.
+      verdict="$(
+        grep -oE '^AFK-REVIEW-VERDICT: (pass|fail)$' "$review_dir/findings.md" \
+          | tail -n 1 \
+          | sed 's/^AFK-REVIEW-VERDICT: //' || true
+      )"
+
+      case "$verdict" in
+        pass)
+          log "#$number: review passed; findings are in $review_dir/findings.md for the pull request"
+          ;;
+        fail)
+          die "$(printf '#%s: the review refused this implementation. Its findings:\n\n%s' \
+            "$number" "$(cat "$review_dir/findings.md")")"
+          ;;
+        *)
+          # Fail closed, and say which of the two it was: a review whose
+          # verdict cannot be read has not passed, and the difference between
+          # "it said something else" and "it said nothing" is the difference
+          # between a prompt to fix and a stage to debug.
+          die "#$number: the review produced no readable verdict line, so nothing here can say whether it passed. Its closing report was:$(printf '\n\n%s' "$(cat "$review_dir/findings.md")")"
+          ;;
+      esac
+
+      log "#$number: implemented and reviewed on $branch; pushing and raising the pull request is item 7 (#174)"
     '';
   };
 in
@@ -759,7 +1143,7 @@ in
 
     maxRuntime = lib.mkOption {
       type = lib.types.str;
-      default = "6h";
+      default = "7h";
       example = "90min";
       description = ''
         Ceiling on a single run, as `TimeoutStartSec` (systemd.time(7)).
@@ -772,11 +1156,16 @@ in
         something stops it, and "something" should not have to be a person.
 
         The default has to clear three attempts at their own hour-long ceiling
-        with a gate after each, which is why it is no longer the 4h item 4
-        guessed at before the implement stage existed. It is the outer bound
-        rather than an expected duration: a run that reaches it is killed
-        mid-ticket and leaves a worktree behind, which the in-flight guard then
-        refuses to poll past until item 8 (#175) can clear it.
+        with a gate after each, and then the review pass at its own, which is
+        why it is neither the 4h item 4 guessed at before the implement stage
+        existed nor the 6h that stage left behind: three attempts, three gates
+        and one review come to 5h45m of ceilings, and a 6h bound left fifteen
+        minutes for a clone, a fetch, and everything else that is not one of
+        those. It is the outer bound rather than an expected duration - every
+        measured run of either stage is far inside it - and a run that reaches
+        it is killed mid-ticket and leaves a worktree behind, which the
+        in-flight guard then refuses to poll past until item 8 (#175) can
+        clear it.
       '';
     };
   };
