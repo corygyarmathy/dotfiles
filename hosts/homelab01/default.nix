@@ -195,6 +195,19 @@ in
         };
       };
     };
+
+    # -------------------------------------------------------------------------
+    # AFK agent (unattended ticket runner)
+    # -------------------------------------------------------------------------
+    # Off, and it stays off until two things land: item 5's pre-push denylist
+    # gate (docs/plans/afk-agent-pipeline.md), without which
+    # docs/agents/afk-eligibility.md is enforced by nothing on the push path,
+    # and an answer to #190 on whether `deploy` should restrict who may push.
+    # Both are named in the module's own `enable` description; this is the host
+    # writing the switch down so that turning it on later is one word here
+    # rather than a new block.
+    afk-agent.enable = false;
+
     immich.enable = false;
     home-assistant.enable = false;
     miniflux.enable = true;

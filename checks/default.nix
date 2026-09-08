@@ -320,6 +320,7 @@ in
         touch $out
       '';
 
+  afk-agent = testLib.mkTest ./afk-agent.nix;
   digital-garden = testLib.mkTest ./digital-garden.nix;
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;
