@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 has two of its three questions answered (see its findings note) and a protocol written for the third; nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -8,7 +8,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 
 | #  | Item                                 | Size   | Status      |
 | -- | ------------------------------------ | ------ | ----------- |
-| 1  | Measured pilot                       | medium | in progress |
+| 1  | Measured pilot                       | medium | done |
 | 2  | Triage: path denylist                | small  | not started |
 | 3  | AFK identity (`AFK_AGENT_TOKEN`)     | small  | not started |
 | 4  | `modules/services/afk-agent.nix`     | medium | not started |
@@ -17,7 +17,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | 7  | Raise the PR                         | small  | not started |
 | 8  | Stuck path                           | small  | not started |
 | 9  | Notifications                        | small  | not started |
-| 10 | Peak-hour scheduling                 | small  | not started |
+| 10 | Peak-hour scheduling                 | small  | dropped     |
 | 11 | Secrets                              | small  | not started |
 
 ---
@@ -63,6 +63,58 @@ There is no peak/off-peak field anywhere in the Go metadata; the rates are flat.
 
 It also gives a first cost scale to plan against, from real sessions rather than arithmetic: the DeepSeek V4 Flash session above cost **$0.067** for one small module change (90.7K input, 34.1K output, 3.5M cache reads). If that is representative, a ticket costs cents on the cheap arms and the $12/5h cap is nowhere near binding — but it is one session, on one ticket, which is exactly the reason the runs below exist rather than an argument for skipping them.
 
+### Found during the pilot itself, 2026-09-08
+
+Two things surfaced while grading the first three runs of arm A on #178, and both matter more than any single run's score.
+
+**Repeats were not independent.** `pilot-run` originally used `git worktree add` against the live `~/git/dotfiles` checkout. Worktrees of one repo share its object database and refs, so from inside any run's worktree, `git branch -a` / `git log --all` / `git show <hash>` could see every other pilot run's branch - including a prior repeat's full committed solution to the same ticket. Repeat 3 of arm A on #178 did exactly this: it ran `git log --all --oneline --graph`, found repeat 1's commit, and `git show`ed all three of its changed files before writing its own - its own report calls the result "a deviation from the reference commit in history." That run is disqualified as a data point; it measured "can this model improve on a worked answer," not "can it solve the ticket." Repeats 1 and 2 happened to be clean (repeat 1 ran before any other #178 branch existed; repeat 2 only ran `git log --oneline -5`, never `--all`), so their results stand, but nothing downstream of repeat 3 could have been trusted without a fix.
+
+The fix is a real, isolated clone per run rather than a worktree: `git clone --no-local --no-tags --single-branch --branch master`, then checkout the pinned baseline onto a new branch. Both flags are load-bearing. `--single-branch --branch master` keeps every ref but master out of view. `--no-local` is easy to miss and just as necessary - a same-filesystem clone otherwise hardlinks the *entire* object store regardless of `--single-branch`, so a run that already had a commit hash could still `git show` it even with the ref hidden; verified by reproducing exactly that before adding the flag. Overhead is about 8 seconds per run, against a 15-60 minute `opencode run` - negligible. `pilot-run` and this document's copy of it are both updated.
+
+**Passing the checklist is not the same as being mergeable, and repeat 1 is the proof.** Repeat 1 scored 8/8 against the checklist below, including "every colour traces to `lib/kanagawa-wave.nix`" - true of the wiring. But the palette's roles are plain `#RRGGBB` strings (correct for the CSS consumers waybar and rofi already use them for), and hyprlock's config grammar is not CSS: its own shipped example config uses only `rgba(...)`/`rgb(...)`, `#` is its comment character, and the rendered `hyprlock.conf` from repeat 1's build reads `check_color=#98BB6C` - a value that almost certainly never parses as a colour at all. `nix fmt` and the host build both passed; the lock screen would very likely still render off-palette. Gate-pass and even a literal spec-pass checklist can both go green on a change that fails the ticket's actual acceptance criterion ("visually matches Kanagawa Wave"), which is exactly why this item weights the subjective "would I merge this" pass as the ground truth rather than the checklist alone. Recorded as a failure reason for item 5's prompt: **sourcing the right file is not the same as sourcing a value the target format can parse - verify against the consuming tool's actual grammar, not just against where the value came from.**
+
+Net effect on the noise-calibration pair: repeat 1 (checklist-passing but likely non-rendering) and repeat 2 (timed out, zero commits) now disagree in a different way than first reported, but they still disagree - which still means arm A's flake rate on this ticket needs a clean third repeat, run under the fixed isolation, before 3c proceeds.
+
+**A clean repeat 3, run after the isolation fix, resolves more than it complicates.** It converged (committed, gate-pass, 7.5/8 on the checklist - the one gap being `rounding`/`outline_thickness` set to the correct numbers as bare literals rather than read from `lib/geometry.nix`, so a future change to item 6's scale would not reach it the way repeat 1's version would), it independently noticed and recorded the "five, not six" literal-count discrepancy that repeat 1 missed, and its architecture is arguably cleaner than repeat 1's (the deployed `hyprlock.conf` is literally the checked derivation's own output, rather than a side-derivation asserted alongside it). But rebuilding its `home-manager-generation` and inspecting the rendered conf shows the **identical** bug found in repeat 1: `check_color=#98BB6C`, bare and unquoted - repeat 3's own completion report even quotes that exact string as evidence the fix worked. Two independently-run, uncontaminated sessions reached the same wrong conclusion the same way, which reframes the finding: this is not per-run noise, it is a systematic blind spot in how this task gets approached - the palette file's roles are correct for the CSS consumers they were built for, nothing in the repo hints they need a different literal form for hyprlock, and neither run rendered its own output to check. It is reasonable to expect arms B-D to make the same miss, since nothing about it is model-specific.
+
+That changes what the third repeat was for. Arm A's real convergence rate across three clean runs is 2/3 (one clean timeout, two clean commits) rather than a coin flip on output quality - the two that converged agree closely, including on the one thing both got wrong. That is enough to stop spending repeats on arm A and move to 3c, on two conditions: **add a fixed, uniform post-build check to the grading procedure** - after every run's host build, extract the rendered `hyprlock.conf` from `home.activationPackage`'s `home-files` output and grep for a colour literal not wrapped in `rgba(...)`/`0x...`, the same way this was caught by hand - so the bug is caught mechanically for arms B-D rather than requiring another manual rebuild-and-inspect; and **record the failure reason for item 5's real prompt** rather than editing this pilot's frozen prompt mid-run: sourcing the right file is not the same as sourcing a value the target format can parse, and a task that touches a Nix-configured surface should render and inspect its own output, not just re-check where the value came from.
+
+### 3c (arms B-D), 2026-09-08
+
+All six runs converged - gate-pass, one commit each, no isolation leaks (checked the same way as arm A's repeats: no run's `branch -a` shows anything beyond its own branch and `master`). That alone is a contrast with arm A's 2/3. Two things came out of grading them against the rendered-conf check the arm-A finding above called for.
+
+**The colour-grammar bug is not universal - it is arm A's.** Every arm-A run that converged (repeats 1 and 3) got it wrong. Of arms B-D: `deepseek-v4-pro` fixed it in repeat 1 (`rgb = colour: "rgb(${lib.removePrefix "#" colour})"`, confirmed in the rendered conf) but *not* in repeat 2, which rendered the identical bare `#98BB6C` arm A produced - so it is not a clean model-tier split, but the cheap arm is now the one with a perfect miss rate rather than a mixed one. `glm-5.3` and `glm-5.3-flash` both fixed it in both repeats, via their own small helper added to `lib/kanagawa-wave.nix` (additions only - nothing existing changed, and `homelab01`'s config still evaluates under each). Revises the earlier "expect every arm to miss this" prediction: three of four arms mostly catch it, and the fourth is not simply "the weak one" - it split 50/50 on its own two repeats.
+
+**A second, genuinely subjective question surfaced: which palette role is "correct" for `check_color`.** The palette has both a `success` role (springGreen) and a `warning` role (roninYellow) and an `info` role (a blue). `deepseek-v4-pro` r1 and both `deepseek-v4-flash` successes used `success`. `glm-5.3` (both repeats) used `info`, with no stated reason. `glm-5.3-flash` (both repeats) used `warning`, and gave one: the *baseline* itself painted this field amber (`rgb(204, 136, 34)`), and `warning` is the role that preserves that association rather than assuming "check-in-progress" means "success." The ticket names no role, so none of these is a checklist failure - but they are exactly the kind of reasoned-versus-arbitrary difference the blind pairwise ranking exists to surface, and `glm-5.3`'s unexplained choice is a weaker answer than either alternative regardless of which one is "right."
+
+**Cost separates the arms far more than quality does.** `glm-5.3` costs $1.72-$3.11 per run - one run alone is over a quarter of the $12/5h cap, which makes it hard to justify for serial AFK use regardless of output quality. `deepseek-v4-pro` sits at $0.76-$0.99. `glm-5.3-flash` is $0.036-$0.054 - cheaper than arm A itself, and it is also the arm that fixed the colour bug in both repeats and gave the best-reasoned answer to the subjective question. That combination - cheapest, most consistent, best-justified - is worth registering now, ahead of the blind ranking in step 5, as the strongest candidate to survive to the holdout.
+
+### Blind ranking, 2026-09-08
+
+Graded with identities stripped, per Step 5.3, using the seven runs above (six Go arms plus the 3d calibration reference) laid out anonymously and re-shuffled so position gave no hint. The full ranking, best to worst, with the grader's own notes and the identity revealed afterward:
+
+1. **Opus 5 (3d, reference - not eligible).** "Seems to be the most correct. Also went outside the literal ask, but in a way that addressed the spirit of what I was asking. Like the choice of showing my wallpaper (private and aesthetic)."
+2. **`glm-5.3-flash`, repeat 1.** "Successful build - narrow scope. Colour literals fail evaluation without complex testing logic."
+3. **`deepseek-v4-pro`, repeat 1.** "Valid syntax. Contained change. Like the choice of showing my wallpaper (private and aesthetic)."
+4. **`glm-5.3-flash`, repeat 2.** "Valid syntax, and found the 5-vs-6 discrepancy, but seems to have over-complicated things a bit."
+5. **`deepseek-v4-pro`, repeat 2.** "Likely won't render, like choosing the wallpaper as the background."
+6. **`deepseek-v4-flash`, repeat 1.** "Likely won't render. Having side derivations for the check seems overcomplicated, and I don't want several packages to be created."
+7. **`deepseek-v4-flash`, repeat 3 (last).** "Likely won't render, hard-coded colour values despite being asked not to." (The hardcoding was actually in the geometry - `rounding`/`outline_thickness` as bare literals rather than read from `lib/geometry.nix` - the colours themselves did come from the palette, just in a format hyprlock can't parse. Same underlying objection either way: a value that should trace to one file was written by hand instead.)
+
+The ranking is a clean split on the objective "does this render" fact - every valid-syntax run outranked every broken one, no exceptions - and within each half, the deciding factor was architectural: rewarded narrow scope and a check simple enough to need no separate test logic (rank 2's "colour literals fail evaluation" is the highest praise any check got); penalized both an unnecessarily wide one (rank 4, which also touched `lib/kanagawa-wave.nix` and wrapped the whole `hyprlock` package) and an unnecessarily indirect one (rank 6's side-derivation-plus-extra-package pattern). The wallpaper-over-screenshot background call was noted approvingly every time it appeared (ranks 1, 3 and 5), independent of arm or render outcome - the first real signal that this is the grader's own preference rather than a coincidence of which arm happened to pick it.
+
+**Verdict: `glm-5.3-flash` (arm D) wins among actual candidates**, taking 1st and 3rd of the six real candidates while costing roughly 1/20th of `deepseek-v4-pro` (arm B, 2nd and 4th). `deepseek-v4-flash` (arm A) is dropped: last in both repeats here, and it was already the only arm with a non-convergent run back in 3b. `deepseek-v4-pro` is kept as the pricier alternate into 3f rather than eliminated outright, since it beat one of `glm-5.3-flash`'s own repeats.
+
+**Extending 3e to both `low` and `max`, not just `max` as originally scoped.** The written plan called for one run of the winner at `max` (the effort question was "does more reasoning help at all"); run at cost-per-run this low, there's no reason not to also ask "does *less* reasoning still work" - `glm-5.3-flash` supports `low`/`high`/`max`, `high` is already covered by ranks 2 and 4 above, and one run each of `low` and `max` costs and takes about as much as the `high` runs already did. Worth watching once the export lands: repeat 1 above used zero reasoning tokens even at `high` while repeat 2 used 12,443 - if the variant isn't actually changing this model's behaviour much, `low` landing close to `high` would say so directly, which the original one-armed design (`max` only) couldn't have shown.
+
+### Effort variants, 2026-09-08
+
+Both `low` and `max` converged, both fixed the colour-grammar bug, and both correctly sourced geometry from `lib/geometry.nix` - on this ticket, the effort knob did not touch correctness. What it moved was scope, and it moved it a lot: `low` touched one file for 58 insertions and used the plainest check mechanism of any run in the pilot (a bare home-manager `assertions` entry, no script, no package); `high`'s two repeats sat in the middle (150 and 174 insertions, one and three extra files respectively); `max` touched four files for 322 insertions and built a two-sided source-and-output check that comes closer to the Opus reference's rigor than anything else in arm D. Reasoning-token counts back this reading: 0 / 12,443 / 10,789 / 36,678 across high-r1, high-r2, low, max - noisy at the bottom, but `max` is a clear outlier at the top. For this model on this ticket, the effort variant reads less like an accuracy dial and more like a thoroughness dial - worth stating plainly in item 5's prompt rather than assuming "higher effort" means "more correct," since correctness was never actually in question here.
+
+`low` has one real gap `max` does not: it never touched `docs/plans/desktop-design.md`, so item 17's status and build note go unwritten even though the code change itself is sound. Its own log is more interesting than its output here - it verified "five" literals red against the baseline while testing the gate, then reverted to citing "six" in its final commit message, so the discrepancy was noticed and then lost rather than never noticed at all. `max` caught it and kept it, recording it directly in the plan.
+
+Not re-run through the blind-ranking artifact - by this point the ranking has already been unsealed, and re-blinding two more runs from an already-identified winning arm would not remove any bias worth removing. Graded directly instead, the same way the checklist and rendered-conf checks were applied throughout.
+
 ### What is still open
 
 Only the first question: whether any Go model produces mergeable output on this codebase's tickets, at what cost, and at what reasoning effort. The rest of this item is the protocol for answering it.
@@ -77,7 +129,7 @@ Only the first question: whether any Go model produces mergeable output on this 
 | B   | `opencode-go/deepseek-v4-pro`   | `high`  | The ADR's other named arm                                                     |
 | C   | `opencode-go/glm-5.3`           | `high`  | The strong arm; tops the open-weights band and sets a realistic ceiling in Go |
 | D   | `opencode-go/glm-5.3-flash`     | `high`  | Three times cheaper than A. If it passes, the budget question stops existing  |
-| E   | winner of A–D                   | `max`   | The effort arm — run only after A–D are graded                                |
+| E   | winner of A–D                   | `low` and `max` | The effort arm — run only after A–D are graded. Extended to both ends of the range once the winner (`glm-5.3-flash`) turned out cheap enough that asking "does less work too" costs almost nothing on top of asking "does more help" |
 
 `high` is the floor because it is the only effort level all four models share (`deepseek-v4-pro` offers no `low`). Arm E is deliberately sequenced last: it is one extra run that retires a question otherwise guessed at permanently.
 
@@ -139,10 +191,12 @@ The full count, since the run order below is easy to misread as symmetric:
 | 3b    | Noise calibration, #178, arm A × 2  | 2         | yes            |
 | 3c    | #178, arms B–D × 2 repeats          | 6         | yes            |
 | 3d    | Calibration ceiling, #178, Opus 5   | 1         | no (reference) |
-| 3e    | Effort arm E, #178, winner at `max` | 1         | yes            |
+| 3e    | Effort arm, #178, winner at `low` and `max` | 2 | yes            |
 | 3f    | Holdout, #159, surviving arms × 1   | up to 4   | yes            |
 | —     | Off-peak probe, #167                | 2         | no             |
-|       | **Total**                           | **20–22** | **13 scored**  |
+|       | **Total (original estimate)**       | **20–22** | **13 scored**  |
+
+The actual count has already run ahead of this estimate - a re-run repeat after the isolation fix, `glm-5.3` dropped after 3c rather than carried to 3f, and 3e extended from one run to two - each decision recorded where it happened above rather than reconciled back into this table.
 
 The holdout runs **once** per surviving arm, not twice, and that asymmetry is deliberate: #159 is a confirmation with the prompt frozen, not a second comparison. Repeats buy noise estimates, and the noise estimate has already been bought on #178.
 
@@ -203,7 +257,19 @@ pilot-run() {  # pilot-run <issue> <model> <variant> <repeat> <host>
   local id="i${issue}-${model}-${variant}-r${rep}"
   local wt="$PILOT/$id"
 
-  git -C "$REPO" worktree add -b "pilot/$id" "$wt" "$BASE" >/dev/null 2>&1 || return 1
+  # An isolated clone, not a worktree of $REPO. Worktrees share $REPO's refs,
+  # so any run could `git log --all` / `branch -a` / `show <hash>` its way
+  # into every other run's committed solution for the same ticket - found
+  # 2026-09-08 when a repeat read a prior repeat's commit this way and built
+  # on it instead of solving independently (see the finding below). Both
+  # flags matter: --single-branch --branch master keeps every ref but master
+  # out of view; --no-local is easy to miss and just as load-bearing - a
+  # same-filesystem clone otherwise hardlinks the *entire* object store
+  # regardless of --single-branch, so a run that already knew a commit hash
+  # could still `git show` it even with refs hidden. --no-local forces the
+  # real fetch-negotiation path, which actually excludes unreachable objects.
+  git clone -q --no-local --no-tags --single-branch --branch master "$REPO" "$wt" >/dev/null 2>&1 || return 1
+  git -C "$wt" checkout -q "$BASE" -b "pilot/$id" >/dev/null 2>&1 || return 1
   sed "s/ISSUE/$issue/g" "$PILOT/prompt.tmpl" > "$PILOT/$id.prompt"
 
   # Pilot-only guardrails. Verified with `opencode debug config`: inline config
@@ -283,7 +349,7 @@ Notes on the choices, since each of them is load-bearing:
 
 - **`--auto` is required, not a shortcut.** It approves everything the permission config does not deny, which is exactly the posture the real runner has. Sitting there approving prompts would measure the supervised path, not the unattended one.
 - **`OPENCODE_CONFIG_CONTENT` rather than a file in the worktree.** A config file committed into the worktree would show up in the diff being measured. The inline variable merges above both the repo config and any `.opencode/` directory, and the pilot denies are appended after the repo's own rules, so last-match-wins gives them effect. Confirmed with `opencode debug config`.
-- **A worktree per run, never reused.** Each arm starts from the pinned baseline; nothing carries over. Clean up with `git worktree remove` once graded, not before, because the diff is the evidence.
+- **An isolated clone per run, never reused, and never a worktree of `$REPO`.** Each arm starts from the pinned baseline with no other branch reachable - see the isolation finding below for why that second property needed its own fix. Clean up with `rm -rf "$wt"` once graded, not before, because the diff is the evidence; there is no `git worktree remove` step since `$wt` was never registered as a worktree of `$REPO`.
 - **Per-run gate is `nix fmt -- --ci` plus the host build, not full `nix flake check`.** Sixteen full flake checks build every VM test in `checks/`, and almost none of them are reachable from these two tickets. The host build catches evaluation and build failures, which is where a bad change lands. **Run the full `nix flake check` on the finalists only** — the honest gate is what CI runs, and it is what the winning diff must pass before anything merges.
 - **Hosts:** `xps15` for #178 (it owns hyprlock), `homelab01` for #159 (it is the gateway, so it owns the digital garden). Pass an empty host for the docs-only smoke test on #167.
 - **The session export is written to a file before jq touches it.** Piping `opencode export` straight into `jq` truncates on large sessions — verified, and it fails as a parse error rather than as a wrong number, but only sometimes, which is worse. The `.json` file per run is also the raw evidence for grading, so it is worth keeping regardless.
@@ -313,7 +379,9 @@ done
 # 3d. Calibration ceiling: same ticket, same baseline, Claude Code on Opus 5,
 #     from a worktree created by hand. Not a candidate — the reference line.
 
-# 3e. Effort arm, once the winner of 3b–3c is known.
+# 3e. Effort arm, once the winner of 3b–3c is known. Extended to both ends of
+#     the range, not just `max` — see the blind-ranking finding above.
+pilot-run 178 <winner> low 1 xps15
 pilot-run 178 <winner> max 1 xps15
 
 # 3f. Holdout, prompt frozen, one run per surviving arm.
@@ -338,8 +406,11 @@ The function prints the `task`-tool count, which is the number that matters beyo
 3. **Blind pairwise ranking** of the survivors' diffs. Strip the identities first:
 
    ```bash
-   git -C "$REPO" branch --list 'pilot/i178-*' | shuf | nl -w1 -s$'\t' > "$PILOT/blind-key.tsv"
-   # review `git diff $BASE..<branch>` by row number; unseal the key only afterwards
+   # Each run's branch lives only inside its own clone under $PILOT now (see the
+   # isolation finding above), not in $REPO, so the listing walks $PILOT's
+   # directories rather than $REPO's refs.
+   ls -d "$PILOT"/i178-*/ | xargs -n1 basename | shuf | nl -w1 -s$'\t' > "$PILOT/blind-key.tsv"
+   # review `git -C "$PILOT/<run-id>" diff $BASE` by row number; unseal the key only afterwards
    ```
 
    Rank rows against each other rather than scoring each in isolation, and write the _reason_ beside each placement.
@@ -374,13 +445,95 @@ One discrepancy in the ticket, found while writing this and left in place delibe
 - [ ] The ticket's stated reasoning for _why_ the test must be structured this way is followed, not merely the surface requirement
 - [ ] No files outside scope modified; work committed
 
+### Holdout, 2026-09-08
+
+Prompt frozen, one run each for the two surviving candidates. Both converged and both avoided the trap the ticket names explicitly - neither asserts through the served site, both invoke the filter directly via a plain `runCommand` (no VM boot), both keep their fixture separate from the existing VM check's vault.
+
+They diverge past that point. `glm-5.3-flash`'s test includes the explicit no-collision control the checklist asks for (a clean vault, asserted to stage normally with the right shelf topics on each note); `deepseek-v4-pro`'s test only exercises the collision case, leaving that acceptance criterion untested.
+
+That gap turned out to hide a real bug. `deepseek-v4-pro` places its shelf-collision check in the filter's first pass, before the pass that drops notes with unparseable frontmatter; `glm-5.3-flash` places it after, with its own comment stating why - "a note that will not publish cannot merge a shelf." Built a fixture to settle which one actually holds: two folders both named `Meetings`, one with a normal published note, the other with a note whose frontmatter says `publish: true` but is genuinely broken YAML underneath (so it will never publish - no real collision exists). Run directly against both filters:
+
+```
+=== glm-5.3-flash ===
+unparseable frontmatter, not publishing: B/Meetings/bad.md
+published 1 notes, 0 attachments, skipped 1
+exit=0
+
+=== deepseek-v4-pro ===
+published notes' shelves collide; rename one of each folder:
+  A/Meetings
+  B/Meetings  (both slugify to shelf 'meetings')
+exit=1
+```
+
+`deepseek-v4-pro` refuses a vault that has no actual collision - a false positive, and exactly the failure acceptance criterion 3 exists to prevent. Its own completion report claims the no-collision case is "covered," which is not true; it was never tested, and does not hold. This is the precise thing #159 was chosen to measure: both models wrote nearly identical prose explaining that only actually-published notes can collide, but only `glm-5.3-flash` carried that invariant through to where the check runs rather than only into the comment beside it.
+
+**`glm-5.3-flash` passes the holdout cleanly, including the edge case; `deepseek-v4-pro` does not.** Recorded here rather than only in the results table because the reasoning matters for item 5's prompt: "explains the invariant correctly" and "enforces the invariant correctly" are not the same claim, and grading on the former would have missed this.
+
 ### Results
 
 Filled in as runs complete. Cost in US$, time in seconds, fix-distance in minutes.
 
 | Run | Ticket | Model | Variant | Rep | Gate | Spec | Skill tool | Cost | Time | Fix-distance | Blind rank | Notes |
 | --- | ------ | ----- | ------- | --- | ---- | ---- | ---------- | ---- | ---- | ------------ | ---------- | ----- |
-| --- | ------ | ----- | ------- | --- | ---- | ---- | ---------- | ---- | ---- | ------------ | ---------- | ----- |
+| `i178-deepseek-v4-flash-high-r1` | 178 | deepseek-v4-flash | high | 1 | pass | fail | true | $0.1147 | 986s | not yet measured | 6th of 7 | 8/8 on the written checklist, but the palette's `#RRGGBB` strings are almost certainly unparseable by hyprlock's config grammar (comment char is `#`; its own example config uses only `rgba()`/`rgb()`) - checklist-green, likely non-rendering. See the finding above. |
+| `i178-deepseek-v4-flash-high-r2` | 178 | deepseek-v4-flash | high | 2 | fail | fail | true | $0.2918 | 3601s (timeout) | n/a - no commit | pending | Hit the 3600s cap with zero commits. 87 of 117 tool calls were `bash`, spent re-deriving facts (stylix internals, hyprlock colour syntax) instead of converging; never touched `hyprlock.nix`. |
+| `i178-deepseek-v4-flash-high-r3` (contaminated, void) | 178 | deepseek-v4-flash | high | 3 | — | — | true | $0.2004 | 1598s | — | **disqualified** | Ran `git log --all` / `git show` and read repeat 1's full committed solution before writing its own - contaminated by the worktree-sharing bug fixed above. Not counted. |
+| `i178-deepseek-v4-flash-high-r3` (re-run, isolated) | 178 | deepseek-v4-flash | high | 3 | pass | fail | true | $0.0764 | 829s | not yet measured | 7th of 7 (last) | 7.5/8 on the checklist (radius/border correct value but hardcoded rather than read from `lib/geometry.nix`); correctly flagged the five-vs-six literal discrepancy; kept `path = "screenshot"` with a well-reasoned tradeoff (valid alternative to repeat 1's choice). Same rendered-conf colour bug as repeat 1, independently arrived at - see the finding above. Cheapest and fastest #178 run so far. |
+| `i178-opus5-r1` (3d, calibration - not a candidate) | 178 | Claude Code / Opus 5 | interactive | 1 | pass | pass | n/a | not tracked the same way | not tracked the same way | not yet measured | 1st of 7 (reference, not eligible) | Driven by hand, not `--auto`. Fixed the colour-grammar bug (`rgb(FF9E3B)`, confirmed in the rendered conf), and is the only run in the pilot to make `outer_color` track hyprlock's own idle→checking→failed states (`accent`→`warning`→`danger`) rather than a static colour, and to also colour the greeting/clock labels - both outside the ticket's literal scope. Its check validates the *rendered* conf against the palette's actual colour set (four literal syntaxes normalised), not just the module source - the most rigorous of all seven, though it checks colour *identity* against the palette rather than hyprlock's literal *grammar*, so it would not itself have caught the bare-hex bug had Opus produced it. Correctly flagged the five-vs-six discrepancy. A clean diff, not a rough one - so if anything in the checklist still trips on this ticket, that now points at the ticket rather than at the Go models. |
+| `i178-deepseek-v4-pro-high-r1` | 178 | deepseek-v4-pro | high | 1 | pass | pass (rendered-colour check added) | true | $0.9885 | 2134s | not yet measured | 3rd of 7 | Diagnosed the colour-grammar bug itself and fixed it: `rgb = colour: "rgb(${lib.removePrefix "#" colour})"`, confirmed in the rendered conf (`check_color=rgb(98BB6C)`). Background changed to `config.stylix.image`, with reasoning. Radius/border correctly read from `lib/geometry.nix`. |
+| `i178-deepseek-v4-pro-high-r2` | 178 | deepseek-v4-pro | high | 2 | pass | fail | true | $0.7616 | 2151s | not yet measured | 5th of 7 | Same arm, same ticket, did **not** fix the colour bug this repeat - rendered conf shows bare `check_color=#98BB6C`, identical to arm A's failure. Within-arm inconsistency on the exact question repeat 1 answered correctly. |
+| `i178-glm-5.3-high-r1` | 178 | glm-5.3 | high | 1 | pass | fail (wrong role) | true | $3.1050 | 1767s | not yet measured | pending | Fixed the colour-grammar bug via a new `rgb` helper added to `lib/kanagawa-wave.nix` (addition only, no existing values touched; homelab01/02 still evaluate) - rendered conf confirms `rgb(126, 156, 216)`, valid syntax. But mapped `check_color` to `roles.info` (blue) rather than `roles.success` (green), with no stated rationale, when a role named exactly for this purpose already exists. By far the most expensive run of the pilot so far - one run is over a quarter of the $12/5h cap. |
+| `i178-glm-5.3-high-r2` | 178 | glm-5.3 | high | 2 | pass | fail (wrong role) | true | $1.7172 | 1022s | not yet measured | pending | Same fix, same `info`-not-`success` choice as repeat 1 (consistent within the arm, unlike deepseek-v4-pro). Still expensive relative to every other arm. |
+| `i178-glm-5.3-flash-high-r1` | 178 | glm-5.3-flash | high | 1 | pass | fail (debatable role, justified) | true | $0.0544 | 950s | not yet measured | 2nd of 7 | Fixed the colour-grammar bug (`rgb(FF9E3B)`, hex-compressed, valid). Mapped `check_color` to `roles.warning` (amber) rather than `success`, but with an explicit rationale: the *baseline* itself used amber for this exact field, and `warning` is the role that preserves that. Cheapest run of the entire pilot, arms A-D included. |
+| `i178-glm-5.3-flash-high-r2` | 178 | glm-5.3-flash | high | 2 | pass | fail (debatable role, justified) | true | $0.0359 | 719s | not yet measured | 4th of 7 | Same fix and same `warning` choice as repeat 1. Added a small `rgbOf` helper to `lib/kanagawa-wave.nix` (addition only; homelab01 still evaluates). Cheapest and fastest run of the pilot. |
+| `i178-glm-5.3-flash-low-r1` (3e) | 178 | glm-5.3-flash | low | 1 | pass | fail (see finding below) | true | $0.0572 | 1666s | not yet measured | not blind-ranked | Correct fix (`rgb(255, 158, 59)`, valid), geometry sourced from `lib/geometry.nix`, `warning` role, background kept with reasoning - and a sixth distinct check architecture: a home-manager `assertions` entry, no separate script or package at all. But never touched `docs/plans/desktop-design.md` - item 17's status and build note are left unwritten - and its own log shows it verified "five" literals red against the baseline, then reverted to "six" in the final commit message anyway. Smallest diff of any converged run (58 insertions, one file). |
+| `i178-glm-5.3-flash-max-r1` (3e) | 178 | glm-5.3-flash | max | 1 | pass | pass | true | $0.0859 | 1772s | not yet measured | not blind-ranked | Correct fix (`rgb(FF9E3B)`, valid), geometry sourced, `warning` role, background kept. Closest to Opus's rigor of any Go run: the gate checks both the module source (no literal at all) and the rendered conf (every colour must be one the palette actually names), and it explicitly diffed the gated conf against home-manager's own output to confirm only the intended lines changed. Correctly flagged the five-vs-six discrepancy and recorded it in the plan doc. Largest diff of any run in the pilot (322 insertions, 4 files) - two new files for the check alone. |
+| `i159-glm-5.3-flash-high-r1` (3f, holdout) | 159 | glm-5.3-flash | high | 1 | pass | pass | true | $0.0420 | 893s | not yet measured | n/a (holdout) | 8/8. Includes the explicit no-collision control test the checklist asks for, and empirically survives the unparseable-frontmatter edge case (see the holdout finding above) - a note that will never publish correctly cannot trigger a false collision. Full `nix flake check` (24 checks, all hosts) passes outright - see the review-stage finding for the one gate it can't see. |
+| `i159-deepseek-v4-pro-high-r1` (3f, holdout) | 159 | deepseek-v4-pro | high | 1 | pass | fail | true | $0.3758 | 866s | not yet measured | n/a (holdout) | Missing the no-collision control test, and for a real reason: its shelf-check runs before the unparseable-frontmatter filter, so it falsely refuses a vault with no actual collision (reproduced - see the holdout finding above). Self-report claims this case is covered; it is not. |
+
+### Review-stage sub-agent check, 2026-09-08
+
+The one question item 1's original findings deferred to "confirm during the pilot's review stage rather than assuming it": whether `code-review` actually spawns genuinely separate sub-agents under OpenCode, which item 6's whole design leans on. Run once, `pilot-review` against the #159 holdout winner (`i159-glm-5.3-flash-high-r1`). The answer is no, and there is a worse problem underneath it.
+
+**`subagents=0`.** The `task` tool was never called - whatever ran was not the parallel standards-plus-spec pass item 6 assumes.
+
+**The session left its assigned worktree and reviewed a different one instead.** Its own log: it ran `for d in i159-*/; do ...; done` from inside `~/pilot/`, one level above where it was launched, found a sibling worktree (`i159-deepseek-v4-pro-high-r1`), and reasoned - in its own words - that because `i159-glm-5.3-flash-high-r1-review.log` "already has a review log," it would review the sibling instead. That "already has a review log" is the file the shell redirects its own stdout into, which exists as soon as the shell opens it, before the session has written a single line. It mistook its own output file for evidence of prior work, then substituted a different target entirely rather than flag the confusion. Nothing in the guard config stopped it: the permission overlay denies specific destructive commands (`git push`, `git commit`, `gh pr*`, ...), not lateral movement - `bash` and `cd` are otherwise unrestricted, so an agent that reasons its way toward a neighbouring worktree is not contained from reaching it.
+
+**It also reported the `code-review` skill as unavailable** ("only `customize-opencode`") and quietly ran a manual review instead of stopping to say so - a second silent substitution stacked on the first.
+
+**The manual review it produced anyway found something real, independent of which workspace it reviewed.** Both #159 holdout implementations add a new file under `checks/`, and this repo's own CI lint job (`.github/workflows/ci.yml`, "Every flake check is in the matrix") fails the build if a flake check exists that the workflow's matrix doesn't list - which neither implementation's new check is, because the pilot's frozen prompt forbids touching `.github/workflows/` at all. That is not a defect in either model's diff; it is the path denylist (item 2) and the repo's own checks-need-a-matrix-entry convention colliding, for any ticket that adds a new check under `checks/` - which item 5 explicitly names as the established pattern to follow. Confirmed directly: `digital-garden-shelf-collision` is in `nix eval .#checks.x86_64-linux` but absent from the ci.yml matrix on both branches. The full `nix flake check` (24 checks, all hosts) on the holdout winner passes outright - the matrix mismatch is a GitHub Actions lint step, not a Nix-level failure, so this is the one gate `nix flake check` cannot see. **This is a structural finding for item 2 and item 5, not a pilot footnote** - the denylist as currently scoped would block any agent from ever landing a mergeable PR for a ticket that needs a new `checks/*.nix` test, since the one file that must also change is the one file it can never touch.
+
+**Net: item 6 as designed does not hold up under this harness yet.** Before it is built: the runner's review-stage prompt needs an explicit worktree-containment instruction (this is not something the permission overlay currently buys for free), a check that the `skill` tool was actually invoked with `code-review` rather than assumed, and abort-and-report rather than silently-substitute behaviour when a named skill isn't found. And item 2's denylist needs to account for the checks-matrix conflict before item 5 can trust "follow the checks/ pattern" as guidance that can actually pass CI.
+
+### Built, 2026-09-08
+
+**`opencode-go/glm-5.3-flash` at `high`, chosen over `deepseek-v4-pro` and `deepseek-v4-flash`.**
+
+The numbers: across every #178 and #159 run, `glm-5.3-flash` cost $0.036-$0.086 per converged run against `deepseek-v4-pro`'s $0.76-$0.99 (roughly 15-25x) and `deepseek-v4-flash`'s $0.08-$0.29; convergence was 6/6 for `glm-5.3-flash` and `deepseek-v4-pro` against 2/3 for `deepseek-v4-flash` (the noise-calibration pair that started this - see the finding above); the blind pairwise ranking placed `glm-5.3-flash` 1st and 3rd of six real candidates against `deepseek-v4-pro`'s 2nd and 4th and `deepseek-v4-flash`'s last two places; and the holdout, the run designed specifically to catch pattern-matching over reasoning, is where the gap became concrete rather than statistical - `deepseek-v4-pro` shipped a real false-positive bug that its own completion report incorrectly claimed was covered, while `glm-5.3-flash` got the same edge case right. `deepseek-v4-flash` is dropped entirely; `deepseek-v4-pro` is kept on the record as the fallback if `glm-5.3-flash` ever regresses, but nothing in this pilot asked for it.
+
+`high` over `low` or `max`: correctness did not vary across the three on #178 (all three fixed the colour-grammar bug and sourced geometry correctly), so the variant knob acted on scope rather than accuracy - `low` was narrowest but dropped the plan-doc bookkeeping and lost its own mid-run discovery of the five-vs-six discrepancy by the time it wrote its commit message; `max` was most thorough but produced the largest diff of any run in the pilot for a ticket that never needed that much. `high`'s two repeats sit in between and were what both the blind ranking and the holdout were actually run against.
+
+Recurring failure reasons, for item 5's prompt to consume directly:
+
+- **Sourcing the right file is not sourcing a value the target format can parse.** Three separate runs (including a clean, uncontaminated repeat) sourced hyprlock's colours correctly from the shared palette and still shipped a value hyprlock's own config grammar cannot read, because the palette's string format matches its CSS consumers and not this one. Render the actual output and inspect it against the consuming tool's grammar - do not stop at "traces to the right file."
+- **An invariant explained correctly in a comment is not the same as an invariant enforced in the right place.** `deepseek-v4-pro`'s holdout run wrote the same reasoning `glm-5.3-flash` did about only-published-notes-can-collide, then placed the check one pass too early anyway. Check placement against the stated boundary, not just the presence of prose explaining it.
+- **A self-reported "all covered" is not verification.** The same run's completion report claimed the no-collision case was tested; it never was, and does not hold. Treat a model's own summary of what it verified as a claim to spot-check, not a fact.
+- **The reasoning-effort variant reads as a thoroughness dial on this model, not an accuracy dial.** More effort meant more files and more elaborate checks, not more correct output - budget for scope creep at `max`, not for a quality bump.
+- **A discrepancy caught mid-run and lost by the final commit message is a real failure mode.** `glm-5.3-flash low` verified "five, not six" literals while testing its own gate, then reverted to "six" in its write-up. Whatever gets asserted about the ticket in the final report should be re-derived from what was actually done, not from what the ticket originally said.
+- **Preference signal, not a bug report:** narrow scope and a check that needs no separate script or package (an eval-time throw or a bare `assertions` entry) consistently outranked wider ones that were equally correct - carry this into how the runner's prompt frames "write a build gate" for item 6's review stage to weigh against.
+
+### Off-peak probe: skipped, 2026-09-08
+
+Not run. It only ever tested whether OpenCode Go passes through DeepSeek V4's peak-pricing discount, and the winning arm is not a DeepSeek model - the question has no bearing on the pipeline's actual cost regardless of the answer. Independently confirms the same conclusion the procedure's own metadata read already pointed at (no peak/off-peak field anywhere in Go's catalog, for any model), just from the other direction: the discount question is moot now not because Go lacks the field, but because the chosen model was never in the discount's scope to begin with.
+
+### Cost sustainability, 2026-09-08
+
+The pilot itself spent $7.88 across 17 runs - sunk, not recurring, and worth recording only as a ceiling under everything above. The number that actually matters going forward is `glm-5.3-flash` alone: **$0.28 across its six runs, $0.14 across the four at `high`** (the chosen variant) - $0.006 for the docs-only smoke test, $0.035-$0.054 for the three real implement runs on #178 and #159. Call it **4-6 cents per implement attempt** as the planning number.
+
+Projected onto the real pipeline: a typical ticket (one implement pass, one review pass, both `glm-5.3-flash`) costs on the order of **$0.08-$0.10**; a worst case that burns the full retry budget (item 5's three implement attempts, plus one review and one fix-and-recheck per item 6) costs on the order of **$0.25-$0.30**. Against the $12/5h cap, that is 40-150 worst-case tickets before the rolling window binds - and concurrency is 1 (ADR 0004 §8), with each observed `glm-5.3-flash` run taking 12-30 minutes wall-clock, so the pipeline physically cannot process more than roughly 10-20 tickets in any 5-hour window regardless of cost. At $0.30 each that is $3-6 - comfortably inside the cap with room to spare, and nowhere near the $30/week or $60/month ceilings either.
+
+**No cost-based restriction is needed for `glm-5.3-flash`.** This is a different answer than the one item 10 was written against: its problem statement frames the $12/5h cap as the binding constraint "now justified... rather than by the discount" - true for `deepseek-v4-pro`-level costs (~$0.76-$0.99/run, where the same 5-hour window's worst case would sit close to the cap), false at `glm-5.3-flash`'s. **Item 10 is dropped** on this finding - see its entry below.
 
 ### Testing
 
@@ -446,8 +599,6 @@ A module on `homelab01` wrapping the poller (item 5) as a systemd service + time
 
 A `pkgs.testers.runNixOSTest` under `checks/`, following the `monitoring`/`reverse-proxy` pattern (deployment-hardening.md item 4): instantiate the module with `cg.service.afk-agent.enable = true` and assert the poller's service and timer units exist and are enabled; instantiate again with `enable = false` and assert they're absent. This is the test that actually proves the kill switch — the module's whole reason for being a real service rather than a script.
 
-Also covers item 10: assert the generated timer's schedule excludes all four weekday peak windows (01:00-04:00, 06:00-10:00 UTC), rather than as a separate test.
-
 If the test needs secrets present to start the service, it follows the existing `checks/stub-secrets.nix` convention — plaintext fixtures swapped in for `sops.secrets.<name>.path`, real values never entering the test.
 
 ### Done when
@@ -464,7 +615,7 @@ This is the actual unattended loop: find an eligible ticket, claim it, do the wo
 
 ### Approach
 
-On each poll (skipping the peak windows from item 10):
+On each poll:
 
 1. `gh issue list --label ready-for-agent --state open`, filtered to unassigned issues.
 2. Re-check the path denylist (item 2) against the ticket's described scope - defense in depth, not trusting the label alone (ADR 0004 §5).
@@ -565,23 +716,11 @@ All three conditions produce a distinguishable ntfy notification, tested by hand
 
 ---
 
-## 10. Peak-hour scheduling
+## 10. Peak-hour scheduling — dropped, 2026-09-08
 
-### The problem
+Proposed to make the poller's systemd timer exclude DeepSeek's weekday peak windows (01:00-04:00, 06:00-10:00 UTC), on two justifications in turn: avoiding DeepSeek V4's 2x peak pricing, and, once item 1 found Go does not pass that discount through, avoiding the $12/5h rolling cap instead. Both were written against a `deepseek-v4-pro`-level cost profile (~$0.76-$0.99/run).
 
-DeepSeek V4 has real peak pricing at 2x the off-peak rate. **The windows are 01:00-04:00 and 06:00-10:00 UTC on weekdays**, owned here rather than in ADR 0004 - they are DeepSeek's to change, not ours. Item 1 found no peak/off-peak field anywhere in the Go metadata, which makes it near-certain the discount is not passed through; the timer stands regardless, now justified by the $12/5h rolling cap.
-
-### Approach
-
-The poller's systemd timer simply excludes those windows. Free to build regardless of the answer to item 1's Go-pass-through question - if it turns out Go doesn't reflect the discount, this becomes a no-op, not a mistake.
-
-### Testing
-
-Covered by item 4's VM test, not a separate one - see item 4's testing note.
-
-### Done when
-
-The timer's schedule visibly excludes the four weekday peak windows.
+Dropped once item 1 actually finished: the winning model is `glm-5.3-flash`, not a DeepSeek model, so the discount question never applied to it; and at its real measured cost (4-6 cents per implement attempt), item 1's cost-sustainability finding shows the pipeline cannot get near the $12/5h cap regardless of when it runs - concurrency is 1 and a real run takes 12-30 minutes, so a 5-hour window physically fits at most ~10-20 tickets, costing $3-6 worst case. Neither justification survived contact with the model actually chosen, so there is nothing left for this item to protect against. Item 4's timer runs unrestricted; its testing note no longer needs to assert a peak-window exclusion (see item 4). Revisit only if a future model change reintroduces a real per-run cost or a real pricing discount worth chasing.
 
 ---
 
