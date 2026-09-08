@@ -12,11 +12,16 @@
 # WHAT THIS MODULE OWNS, AND HOW FAR THE RUNNER GETS. Item 4 settled everything
 # around the runner - the schedule, the runtime ceiling, the service account,
 # the credentials, the sandbox, and the toolchain on its PATH. The runner
-# itself is item 5, and lands in pieces: this file currently carries the
-# poll -> denylist -> claim -> isolate half (#171). It stops with a ticket
-# claimed and an empty worktree on an `afk/*` branch, and says so. The implement
-# stage (#172), the review stage (#173), the push and PR (#174) and the stuck
-# path that cleans up after a failure (#175) each extend the same script.
+# itself is item 5, and lands in pieces: this file carries poll -> denylist ->
+# claim -> isolate (#171), and the implement stage on top of it (#172). It
+# stops with a ticket claimed and a gate-passing commit on an `afk/*` branch.
+# The review stage (#173), the push and PR (#174) and the stuck path that
+# cleans up after a failure (#175) each extend the same script.
+#
+# Nothing here pushes, opens a pull request, or writes to the tracker past the
+# claim. That is not an omission: those verbs belong to the stages above, and
+# the implement session is denied them (`permissionOverlay`) rather than merely
+# asked not to use them.
 #
 # The script is written so that its whole state is relocatable through the
 # environment, which is how checks/afk-agent-runner.nix drives this exact
@@ -72,6 +77,17 @@ let
     gh = pkgs.gh;
     opencode = pkgs.opencode;
     jq = pkgs.jq;
+    # For the checks-versus-matrix half of the gate, which reads ci.yml.
+    # The same tool ci.yml's own lint job uses, so the two readings of that
+    # file cannot disagree about what the file says.
+    yq = pkgs.yq-go;
+    # And what compares the two lists it produces. Named here rather than
+    # assumed, because a NixOS unit's default path is coreutils, findutils,
+    # gnugrep, gnused and systemd - `diff` is in none of them, and in none of
+    # the packages above either. Left out, the gate would have failed with
+    # "command not found" on every attempt of every ticket, and the check could
+    # not have caught it: the build sandbox has stdenv's `diff` on PATH.
+    diff = pkgs.diffutils;
     nix = config.nix.package;
   };
 
@@ -97,6 +113,131 @@ let
     "secrets/"
     ".sops.yaml"
   ];
+
+  # The model and reasoning effort item 1's pilot settled on, over
+  # `deepseek-v4-pro` and `deepseek-v4-flash`: cheapest per converged run by
+  # 15-25x, 6/6 convergence, first and third of six candidates in the blind
+  # ranking, and the only arm to get the holdout's edge case right. `high` over
+  # `low` or `max` because correctness did not vary across the three - the
+  # variant moved scope, not accuracy - and `high` is what the ranking and the
+  # holdout were actually run against. `deepseek-v4-pro` is the recorded
+  # fallback if this ever regresses. Plain bindings rather than options for the
+  # same reason `repository` above is one: one fleet, one value, and swapping
+  # them is a text edit rather than a configuration a host supplies.
+  model = "opencode-go/glm-5.3-flash";
+  variant = "high";
+
+  # ADR 0004 §6's retry budget, whose number plan item 5 owns: two retries,
+  # three attempts. At the pilot's measured 4-6 cents per attempt this cannot
+  # meaningfully threaten OpenCode Go's $12-per-5-hours cap, which is the only
+  # constraint that would argue for a smaller one.
+  maxAttempts = 3;
+
+  # Per-attempt ceiling. Every converged pilot run finished inside 12-36
+  # minutes; the one run that reached 3600s had made no progress at all, so a
+  # longer ceiling buys nothing a retry would not buy better. It exists so that
+  # a stuck attempt fails the runner's own way - countable, and about to become
+  # item 8's stuck path - rather than by systemd killing the unit mid-ticket
+  # and leaving behind the worktree the in-flight guard above then trips over.
+  # `maxRuntime` has to stay clear of maxAttempts * this, plus the gate.
+  attemptTimeout = 3600;
+
+  # Ceiling on one run of the gate, for the same reason `attemptTimeout` exists
+  # and pointed at the other half of an attempt. Without it the arithmetic
+  # under `maxRuntime` is not arithmetic at all: three serial `nix flake
+  # check`s and three sets of host builds have no bound, so a slow gate reaches
+  # `TimeoutStartSec` and systemd kills the unit mid-ticket - which is exactly
+  # the outcome the per-attempt ceiling exists to avoid. A gate that runs long
+  # is instead one failed attempt, countable and retried.
+  #
+  # Most of what it runs substitutes from the cache CI pushes to, so this is
+  # generous rather than tight; if it is ever hit routinely that is a fact
+  # about the gate worth knowing, not a number to raise reflexively.
+  gateTimeout = 2700;
+
+  # How much of a failing gate's output is handed back on a retry. The gate
+  # logs a whole `nix flake check`, and the part that says what went wrong is
+  # at the end of it.
+  gateTailLines = 200;
+
+  # The instructions the session is opened with: item 1's frozen pilot prompt,
+  # which was written to become this, plus the two things the pilot found were
+  # missing from it - the `ci.yml` matrix exception, without which "follow the
+  # checks/ pattern" is advice that cannot pass CI, and the failure reasons its
+  # own runs kept reproducing.
+  #
+  # A file in the store rather than anything the script quotes. Prose this
+  # shape does not survive being a shell literal: backticks inside single
+  # quotes fail shellcheck, and a heredoc's terminator inside a Nix indented
+  # string is coupled to Nix's dedent rule, so an edit to the prose can break
+  # the script without looking like it could. `ISSUE` is substituted at run
+  # time; nothing else in it varies.
+  implementPrompt = pkgs.writeText "afk-agent-implement-prompt" ''
+    Implement GitHub issue #ISSUE in this repository.
+
+    Use the `implement` skill, by name - call it rather than improvising
+    something equivalent. Read the ticket first: `gh issue view ISSUE`.
+
+    Scope:
+
+    - Work only inside this directory. Do not read, write or reason about any
+      checkout above or beside it.
+    - Do not touch `secrets/`, `.sops.yaml`, or anything under
+      `.github/workflows/` - with exactly one exception. If your change adds a
+      file under `checks/`, add that check's name to
+      `jobs.checks.strategy.matrix.check` in `.github/workflows/ci.yml` and
+      change nothing else in that file: no other key, no existing entry
+      altered or removed. The name must match ^[a-z][a-z0-9-]*$ and must be a
+      check the flake actually exposes. A new check that is not in that matrix
+      never runs, and CI fails the build for saying so.
+    - Do not push, do not open a pull request, and do not edit, close or
+      comment on the issue. Later stages do all of that.
+    - Do not run `code-review`. Review is a separate pass, in its own context,
+      after this one.
+    - Commit your work to this branch before you finish. Uncommitted work does
+      not exist: the next stage pushes commits, and nothing else.
+
+    The gate your work has to pass is this repository's own: `nix fmt -- --ci`,
+    `nix flake check`, a build of every host, and agreement between the checks
+    the flake exposes and the matrix in `ci.yml`. `AGENTS.md` is the rest of
+    the house style. You will be told what the gate said and given two further
+    attempts to fix it.
+
+    Five ways real runs of this pipeline have produced work that looked
+    finished and was not. They are measured, not hypothetical:
+
+    - Sourcing a value from the right file is not the same as sourcing a value
+      the consuming format can parse. Render the output and read it against
+      the grammar of the tool that consumes it.
+    - An invariant explained correctly in a comment is not an invariant
+      enforced in the right place. Check where the code runs, not what the
+      prose beside it claims.
+    - "I verified this" is a claim to check, not a fact. Re-run the thing.
+    - A discrepancy noticed mid-run is routinely lost by the time the closing
+      summary is written. Derive that summary from what you did, not from what
+      the ticket said before you started.
+    - Narrow scope wins. A check that needs no separate script or package
+      beats a wider one that is equally correct.
+  '';
+
+  # What the implement session may not do, denied through OpenCode's own
+  # permission layer rather than only asked for in the prompt. The pilot
+  # verified that an inline `OPENCODE_CONFIG_CONTENT` merges after the
+  # repository's own rules and that last match wins, so these take effect.
+  #
+  # It is a soft control - a pattern match on a command line, not a capability
+  # boundary - and this process holds a PAT that can push. That is why the
+  # `enable` option below says to leave the service off until item 7 (#174)
+  # lands the gate that reads the diff itself.
+  permissionOverlay = builtins.toJSON {
+    permission.bash = {
+      "git push*" = "deny";
+      "gh pr*" = "deny";
+      "gh issue edit*" = "deny";
+      "gh issue close*" = "deny";
+      "gh issue comment*" = "deny";
+    };
+  };
 
   runner = pkgs.writeShellApplication {
     name = "afk-agent-run";
@@ -168,6 +309,27 @@ let
       GH_TOKEN="$(cat "$creds/github-token")"
       export GH_PROMPT_DISABLED=1
       export GH_NO_UPDATE_NOTIFIER=1
+
+      # OpenCode reads its provider credentials from a file under the data
+      # directory, not from the environment, and this account has never run
+      # `opencode auth login` - the pilot ran as a person who had. So the
+      # credential item 11 hands over is written into the shape opencode looks
+      # for, on every run rather than once, so that a rotated secret takes
+      # effect at the next poll rather than at whatever point somebody
+      # remembers this file exists. 0600 through the unit's UMask, under
+      # StateDirectory 0700; the value is never echoed.
+      #
+      # `opencode-username` is deliberately not wired to anything. Nothing on
+      # the headless path consumes it - not `opencode run`, not `opencode
+      # session`, not `opencode export`; the `--username` flag belongs to
+      # `--attach`, which this never uses. It stays declared and asserted
+      # because item 4 recorded it as a question rather than a decision, and
+      # dropping a credential a later stage might want is the harder mistake to
+      # undo. Plan item 5 says where to drop it once somebody confirms.
+      auth_dir="$state_dir/.local/share/opencode"
+      mkdir -p "$auth_dir"
+      jq -n --arg key "$(cat "$creds/opencode-api-key")" \
+        '{"opencode-go": {type: "api", key: $key}}' > "$auth_dir/auth.json"
 
       # --- one ticket at a time --------------------------------------------
       #
@@ -326,7 +488,216 @@ let
       git -C "$checkout" worktree add --no-track -b "$branch" "$worktree" "origin/$base_branch"
 
       log "claimed #$number, isolated on $branch at $worktree"
-      log "stopping here: the implement stage is item 5's second half (#172) and is not wired in yet"
+
+      # --- implement, on a bounded retry budget -----------------------------
+      #
+      # ADR 0004 §6: a retry happens *inside* the session that produced the
+      # failure, because a retry that cannot see what it is retrying against is
+      # close to useless. `opencode run --session` is what makes that literal.
+      # The model keeps its own transcript, so the only thing this has to hand
+      # back across the boundary is the verdict it could not see for itself:
+      # this repository's gate, and what it said.
+      #
+      # Three attempts, two retries. The budget lives in plan item 5 rather
+      # than in the ADR because it is a cost parameter, not a decision: at the
+      # pilot's measured 4-6 cents per attempt, three of them cannot
+      # meaningfully threaten OpenCode Go's $12-per-5-hours cap.
+      #
+      # Nothing here is written inside the worktree. A prompt or a log that
+      # landed there would show up in the diff being gated, and then in the
+      # pull request.
+      run_dir="$state_dir/run"
+      rm -rf "$run_dir"
+      mkdir -p "$run_dir"
+
+      sed "s/ISSUE/$number/g" ${implementPrompt} > "$run_dir/prompt"
+
+      export OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg permissionOverlay}
+
+      # The gate. Deliberately this repository's own CI gate rather than a
+      # cheaper proxy: the entire value of an unattended runner is that it does
+      # not hand a human a red pull request, and an attempt costs cents.
+      #
+      # `nix flake check` and the host builds are CI's `checks` and `build`
+      # matrices. The checks-versus-matrix audit is CI's lint job, reproduced
+      # here because it is the one gate `nix flake check` cannot see: adding
+      # `checks/foo.nix` without adding `foo` to ci.yml's hand-written matrix
+      # passes every Nix-level check and still fails CI. The pilot found exactly
+      # that, on a diff that was otherwise correct (plan item 1, the
+      # review-stage finding), and it is why the prompt above carries the narrow
+      # ci.yml exception docs/agents/afk-eligibility.md defines.
+      #
+      # Reproducing a CI step here can drift from the step it copies. That drift
+      # is visible rather than silent - it shows up as a branch that is green
+      # here and red on the pull request - which is the acceptable direction for
+      # it to fail, and there is no way to invoke a GitHub Actions step from
+      # outside GitHub Actions.
+      #
+      # Whether the ci.yml exception was *honoured* - a diff that adds matrix
+      # entries and does nothing else - is a different question, asked of the
+      # diff before the push, and belongs to item 7 (#174).
+      #
+      # Hosts are discovered from the branch under test rather than listed, so a
+      # ticket that adds a host is gated on the host it added. CI names them by
+      # hand because discovery would cost it a serialised job ahead of a
+      # parallel matrix; nothing here is parallel, so nothing here pays for it.
+      #
+      # Every step ends in `|| exit 1` instead of leaning on `set -e`, and that
+      # is load-bearing rather than belt-and-braces. Bash switches errexit off
+      # inside any command used as a condition, and it stays off all the way
+      # down - through the function, through the subshell, past an explicit
+      # `set -e` written inside that subshell. The only place this is ever
+      # called from is `if ! gate`, so written the obvious way it would run
+      # every step, ignore every failure, and return the status of the last one:
+      # a `for` loop over a host list that the failed discovery step above it
+      # left empty, which is to say success. A gate that passes because
+      # everything before it failed is the exact shape of a gate that has
+      # stopped gating, and it was a check expecting a retry and getting none
+      # that found it, not reading the code.
+      gate() {
+        (
+          cd "$worktree" || exit 1
+          set -x
+
+          # One deadline for the whole gate, rather than a ceiling on each
+          # step. Per-step ceilings multiply where this adds, and what has to
+          # fit under `maxRuntime` is three attempts *and* three gates, not any
+          # single command. `step` spends whatever is left of the budget on the
+          # command it is given, and refuses once there is none.
+          SECONDS=0
+          step() {
+            local left=$(( ${toString gateTimeout} - SECONDS ))
+            [ "$left" -gt 0 ] || return 1
+            timeout "$left" "$@"
+          }
+
+          step nix fmt -- --ci || exit 1
+
+          step nix eval --raw .#checks.x86_64-linux \
+            --apply 'cs: builtins.concatStringsSep "\n" (builtins.attrNames cs)' \
+            | LC_ALL=C sort > "$run_dir/flake-checks" || exit 1
+          step yq -r '.jobs.checks.strategy.matrix.check[]' .github/workflows/ci.yml \
+            | LC_ALL=C sort > "$run_dir/matrix-checks" || exit 1
+          step diff -u "$run_dir/flake-checks" "$run_dir/matrix-checks" || exit 1
+
+          step nix flake check || exit 1
+
+          local hosts
+          hosts="$(step nix eval --raw .#nixosConfigurations \
+            --apply 'cs: builtins.concatStringsSep " " (builtins.attrNames cs)')" || exit 1
+          read -r -a host_list <<<"$hosts"
+          # A discovery that came back with nothing is a gate that built
+          # nothing, which must not read as a gate that passed.
+          [ "''${#host_list[@]}" -gt 0 ] || exit 1
+          for host in "''${host_list[@]}"; do
+            step nix build --no-link \
+              ".#nixosConfigurations.$host.config.system.build.toplevel" || exit 1
+          done
+        ) > "$run_dir/gate.log" 2>&1
+      }
+
+      attempt=1
+      session=""
+      message="$(cat "$run_dir/prompt")"
+
+      while :; do
+        log "#$number: implement attempt $attempt of ${toString maxAttempts}"
+
+        # `--title` on the first attempt is what makes the session findable
+        # again; `--session` on every attempt after it is ADR 0004 §6.
+        opencode_args=(--agent build --model ${model} --variant ${variant})
+        if [ -n "$session" ]; then
+          opencode_args+=(--session "$session")
+        else
+          opencode_args+=(--title "$slug")
+        fi
+
+        # `|| exit 1` on the `cd` for the same reason as in the gate: this
+        # subshell is the left side of a `||`, so errexit is off inside it, and
+        # a failed `cd` would otherwise run the session against whatever
+        # directory the runner happened to be in.
+        attempt_rc=0
+        (
+          cd "$worktree" || exit 1
+          timeout ${toString attemptTimeout} opencode run --auto "''${opencode_args[@]}" "$message"
+        ) || attempt_rc=$?
+
+        # Four ways an attempt fails, in the order they can be told apart. The
+        # middle two are not defensive padding: the pilot measured runs that
+        # exited 0 having explained what they would do rather than doing it, and
+        # work left in the working tree is work that the push in item 7 (#174)
+        # would silently drop.
+        reason=""
+        committed="$(git -C "$worktree" rev-list --count "origin/$base_branch..HEAD")"
+        if [ "$attempt_rc" -eq 124 ]; then
+          reason="it ran past its ${toString attemptTimeout}s ceiling and was stopped"
+        elif [ "$attempt_rc" -ne 0 ]; then
+          reason="opencode exited $attempt_rc"
+        elif [ "$committed" -eq 0 ]; then
+          reason="nothing was committed to $branch"
+        elif [ -n "$(git -C "$worktree" status --porcelain)" ]; then
+          reason="$(printf 'work was left uncommitted:\n%s' \
+            "$(git -C "$worktree" status --porcelain)")"
+        elif ! gate; then
+          reason="$(printf 'the gate failed. Its last ${toString gateTailLines} lines:\n\n%s' \
+            "$(tail -n ${toString gateTailLines} "$run_dir/gate.log")")"
+        fi
+
+        if [ -z "$reason" ]; then
+          log "#$number: implemented on $branch, in $attempt attempt(s)"
+          break
+        fi
+
+        log "#$number: attempt $attempt did not pass, because $reason"
+
+        if [ "$attempt" -ge ${toString maxAttempts} ]; then
+          die "#$number: ${toString maxAttempts} attempts and no passing implementation; handing the ticket back is the stuck path, item 8 (#175)"
+        fi
+
+        # Read back once and then reused: the id does not change, and
+        # `session list` is a question with a cost.
+        if [ -z "$session" ]; then
+          session="$(
+            cd "$worktree" \
+              && opencode session list -n 20 --format json \
+              | jq -r --arg t "$slug" 'map(select(.title == $t)) | .[0].id // empty'
+          )"
+        fi
+
+        # Whether there is a session to continue decides both what the next
+        # attempt is addressed to and what it is told, and the two have to move
+        # together: a fresh session handed a message about a failure it cannot
+        # see would be worse than either.
+        #
+        # The messages are built with printf rather than written as literals
+        # spanning lines. A continuation line would have to start in column 0
+        # to keep the script's own indentation out of the text, and a column-0
+        # line inside a Nix indented string collapses the dedent for the whole
+        # script - which is not theoretical, it happened while writing this.
+        if [ -n "$session" ]; then
+          log "#$number: retrying inside session $session"
+          message="$(printf '%s\n\n%s' \
+            "Attempt $attempt of ${toString maxAttempts} did not pass, because $reason" \
+            "Fix that here, in this worktree, and commit the fix. The gate is the only thing that decides whether this ticket is done.")"
+        elif [ "$attempt_rc" -eq 0 ] || [ "$committed" -gt 0 ]; then
+          # An attempt that exited cleanly, or committed, plainly had a session.
+          # Not being able to find it means the next attempt would re-read the
+          # ticket in a fresh context with no idea what just failed, which is
+          # the degrade ADR 0004 §6 rules out rather than a lesser form of it.
+          die "#$number: attempt $attempt ran, but no session titled '$slug' can be found to continue; refusing to retry in a fresh context (ADR 0004 §6)"
+        else
+          # Nothing to continue, and nothing lost by not continuing: the attempt
+          # failed before it opened a session, so there is no transcript for a
+          # retry to carry. The next one is the first real attempt rather than a
+          # context-free retry, so it gets the original prompt back.
+          log "#$number: attempt $attempt opened no session; the next one starts one"
+          message="$(cat "$run_dir/prompt")"
+        fi
+
+        attempt=$((attempt + 1))
+      done
+
+      log "stopping here: the review stage is item 6 (#173) and is not wired in yet"
     '';
   };
 in
@@ -364,17 +735,24 @@ in
 
     maxRuntime = lib.mkOption {
       type = lib.types.str;
-      default = "4h";
+      default = "6h";
       example = "90min";
       description = ''
         Ceiling on a single run, as `TimeoutStartSec` (systemd.time(7)).
 
         This is not decoration. A `oneshot` unit defaults to a 90-second start
         timeout, which would kill every real run: the pilot measured 15-60
-        minutes per `opencode run`, and item 5 allows two retries on top of
-        that. The ceiling still has to exist, because concurrency here is one
-        unit - a run that hangs blocks every later poll until something stops
-        it, and "something" should not have to be a person.
+        minutes per `opencode run`, and the implement stage allows two retries
+        on top of that. The ceiling still has to exist, because concurrency
+        here is one unit - a run that hangs blocks every later poll until
+        something stops it, and "something" should not have to be a person.
+
+        The default has to clear three attempts at their own hour-long ceiling
+        with a gate after each, which is why it is no longer the 4h item 4
+        guessed at before the implement stage existed. It is the outer bound
+        rather than an expected duration: a run that reaches it is killed
+        mid-ticket and leaves a worktree behind, which the in-flight guard then
+        refuses to poll past until item 8 (#175) can clear it.
       '';
     };
   };

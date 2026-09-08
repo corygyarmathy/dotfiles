@@ -10,9 +10,9 @@
 #
 # The other half is the plumbing the runner is handed. What this file owns is
 # everything around the logic - that the unit is reached by the timer rather
-# than at boot, that its three credentials arrive, and that the toolchain the
-# runner drives is on its PATH. The runner asserts exactly those before it
-# polls anything, which is what lets a VM with no network still prove them.
+# than at boot, that every credential it declares arrives, and that the
+# toolchain it drives is on its PATH. The runner asserts exactly those before
+# it polls anything, which is what lets a VM with no network still prove them.
 #
 # The runner's own behaviour is not testable here and is not attempted: it
 # talks to the GitHub API and clones a repository, and the sandbox has neither.
@@ -101,7 +101,7 @@
         state = enabled.succeed("systemctl show -p ActiveState --value afk-agent.service").strip()
         assert state == "inactive", f"the poller ran without the timer firing: {state}"
 
-    with subtest("a run reaches its three credentials and the toolchain it drives"):
+    with subtest("a run reaches every credential and every tool it requires"):
         # The run fails, and is expected to: the VM has no network, so the
         # first `gh issue list` cannot succeed. Everything asserted below
         # happens before that call by design - a credential missing or a tool
@@ -110,12 +110,29 @@
         enabled.fail("systemctl start afk-agent.service")
         journal = enabled.succeed("journalctl -u afk-agent.service --no-pager")
 
-        for credential in ["github-token", "opencode-api-key", "opencode-username"]:
+        # What to expect is read out of the script the unit actually runs,
+        # rather than listed here. Both lists are generated from one attribute
+        # set in the module, and a list written out again in this file would
+        # quietly stop covering whatever was added to that set next - which is
+        # not hypothetical: `diff` joined the toolchain after this test was
+        # first written, and a hand-written list would not have noticed.
+        script = enabled.succeed(
+            "systemctl cat afk-agent.service | sed -n 's/^ExecStart=//p'"
+        ).strip()
+
+        def required(directive):
+            names = enabled.succeed(
+                f"grep '^{directive} ' {script} | cut -d' ' -f2"
+            ).split()
+            assert names, f"the runner has no {directive} lines at all"
+            return names
+
+        for credential in required("require_credential"):
             assert f"credential '{credential}' present" in journal, (
                 f"{credential} did not reach the unit:\n{journal}"
             )
 
-        for tool in ["git", "gh", "opencode", "nix", "jq"]:
+        for tool in required("require_tool"):
             assert f"tool '{tool}' present" in journal, f"{tool} is not on the unit's PATH:\n{journal}"
 
         # It got past the plumbing and into the work. Without this the two
