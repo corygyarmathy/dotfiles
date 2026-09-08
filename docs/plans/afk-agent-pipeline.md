@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -9,7 +9,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | #  | Item                                 | Size   | Status      |
 | -- | ------------------------------------ | ------ | ----------- |
 | 1  | Measured pilot                       | medium | done |
-| 2  | Triage: path denylist                | small  | not started |
+| 2  | Triage: AFK eligibility              | small  | done        |
 | 3  | AFK identity (`AFK_AGENT_TOKEN`)     | small  | not started |
 | 4  | `modules/services/afk-agent.nix`     | medium | not started |
 | 5  | Runner: claim → worktree → implement | large  | not started |
@@ -545,23 +545,43 @@ A model _and_ reasoning-effort default is chosen with real numbers behind it, th
 
 ---
 
-## 2. Triage: path denylist
+## 2. Triage: AFK eligibility
 
 ### The problem
 
-ADR 0004 §5 restricts AFK eligibility with a path denylist, enforced twice, but deliberately does not fix the list. The list is triage vocabulary and lives here and in `docs/agents/triage-labels.md`: **`.github/workflows/`, `secrets/`, `.sops.yaml`** - denied regardless of how well-specified the ticket is.
+ADR 0004 §5 restricts AFK eligibility with a path denylist, enforced twice, but deliberately does not fix the list. The list is triage vocabulary and lives here and in `docs/agents/afk-eligibility.md`: **`.github/workflows/`, `secrets/`, `.sops.yaml`** - denied regardless of how well-specified the ticket is.
+
+There is a second rule the ADR does not carry, because it is not a path question: an unattended agent may only take a ticket whose success it can determine for itself. A criterion only a human at a screen can judge gives the runner nothing to act on - it either reports a success it cannot justify, or stops for a reason item 8's stuck path cannot tell apart from a real failure.
 
 ### Approach
 
-Wherever `ready-for-agent` gets applied today (manually, or by a future triage automation), add a check: if the ticket's described scope would require touching a denied path, apply `ready-for-human` instead. Document the denylist in `docs/agents/triage-labels.md` so it travels with the rest of the triage vocabulary.
+Wherever `ready-for-agent` gets applied today (manually, or by a future triage automation), apply both rules; anything failing either gets `ready-for-human`. Both live in `docs/agents/afk-eligibility.md`, linked from `docs/agents/triage-labels.md` so they travel with the rest of the triage vocabulary.
+
+The two are enforced differently, and the document says so. The denylist binds at three moments - triage, the runner's pre-claim re-check (item 5), and mid-run discovery, which is a stuck-path exit (item 8). Self-verifiability is applied **at triage only**: it is a judgement on ticket prose, and a false rejection at pre-claim time would be indistinguishable from a real bail, so a runner that finds mid-run it cannot tell whether it succeeded takes the stuck path rather than a pre-claim reject.
+
+Self-verifiability is written per acceptance criterion rather than per ticket, splitting criteria into gates (machine-decidable), confirmations (a human looks after the gates pass; cannot change what was built) and judgements (a human decision taken mid-flight, which determines the work). Gates and marked confirmations are fine; a judgement is not. That split is what makes the rule actionable instead of a vibe, and it is what lets a ticket keep a look-and-see criterion - established practice here - without that criterion becoming the agent's success signal.
+
+**Recorded as triage vocabulary, not as an ADR 0004 decision.** ADR 0004 bounds eligibility by paths only. If this rule turns out to carry more weight than vocabulary, it earns its own ADR rather than an amendment to 0004.
+
+### Settled: the checks-matrix conflict, 2026-09-08
+
+Item 1 surfaced a collision this item had to resolve before item 5 could trust "follow the `checks/` pattern" as guidance that can actually pass CI. Adding `checks/foo.nix` also requires adding `foo` to the hand-written matrix in `.github/workflows/ci.yml`, which the denylist forbids; the resulting PR has a correct diff, a passing `nix flake check`, and a red lint job. The matrix is hand-written deliberately (discovery would cost a serialised job ahead of every shard, against the wall-clock budget the sharding exists to protect), so both sides of the collision were deliberate.
+
+Two alternatives were considered and rejected. **Leave it red** and let the reviewer add the matrix line: simple and honest, but an AFK PR that is always red trains the reviewer to ignore red. **Hold the line**, making any check-adding ticket `ready-for-human`: costs the most, since `AGENTS.md` asks for a check whenever observable service behaviour changes.
+
+**Chosen: a narrow mechanical exception.** `ci.yml` may be changed only by adding entries to `jobs.checks.strategy.matrix.check` - no other workflow file, nothing else in `ci.yml`, no entry removed or altered, and every added entry matching `^[a-z][a-z0-9-]*$` and naming a check that exists in `nix eval .#checks.x86_64-linux`. The full statement and its rationale are in `docs/agents/afk-eligibility.md`.
+
+The character class is not decoration. `${{ matrix.check }}` is interpolated directly into a `run:` script, so the entry is shell context rather than data, and Nix attribute names can carry arbitrary characters when quoted - and the agent writes `checks/default.nix` too. "It has to name a real check" is therefore not on its own enough to make the string safe. Found while specifying the exception, not by the pilot.
+
+This is the one place the denylist is not purely path-shaped, and the only one that widens it rather than narrowing it. Recorded as triage vocabulary rather than as an ADR 0004 §5 amendment, on the same footing as the self-verifiability rule; the ADR delegates the denylist's content here, and reversing this would be a text edit rather than a return to its alternatives. Revisit if the denylist's shape is reopened.
 
 ### Testing
 
-No automated test while triage stays manual. Once the denylist is enforced in code — the runner's own re-check in item 5 — that's where it becomes a real assertion; see item 5's testing note.
+No automated test while triage stays manual. Once the denylist is enforced in code — the runner's own re-check in item 5 — that's where it becomes a real assertion; see item 5's testing note. Self-verifiability gets no automated assertion at all: it is applied at triage, by a reader.
 
 ### Done when
 
-The denylist is written down in one place that both a human triaging by hand and the runner's own check (item 5) can reference.
+Both rules are written down in one place that a human triaging by hand and the runner's own check (item 5) can reference, and the checks-matrix conflict has a chosen resolution rather than a workaround.
 
 ---
 
@@ -628,7 +648,7 @@ On each poll:
 
 ### Testing
 
-Not a NixOS VM test — this is script logic driving `gh` and `opencode`, neither of which can run inside the Nix build sandbox. A script-level test harness instead, with `gh` and `opencode` mocked: assert the poller only picks up unassigned `ready-for-agent` issues, claims via assignee before touching anything, re-checks the path denylist from item 2 and bails correctly on a ticket that would violate it, and stops after 2 retries rather than looping indefinitely. There's no prior art for this in the repo yet - script-level tests outside `checks/` are new here, so this sets the pattern rather than following one. Items 8 and 10 reuse this same harness rather than inventing their own.
+Not a NixOS VM test — this is script logic driving `gh` and `opencode`, neither of which can run inside the Nix build sandbox. A script-level test harness instead, with `gh` and `opencode` mocked: assert the poller only picks up unassigned `ready-for-agent` issues, claims via assignee before touching anything, re-checks the path denylist from item 2 and bails correctly on a ticket that would violate it, accepts a `ci.yml` diff that adds only a well-formed matrix entry while rejecting one that also changes anything else, removes an entry, or adds a name outside `^[a-z][a-z0-9-]*$`, and stops after 2 retries rather than looping indefinitely. There's no prior art for this in the repo yet - script-level tests outside `checks/` are new here, so this sets the pattern rather than following one. Items 8 and 10 reuse this same harness rather than inventing their own.
 
 ### Done when
 
