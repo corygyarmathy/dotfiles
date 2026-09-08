@@ -22,7 +22,7 @@ Each decision below is stated without its implementation parameters - counts, pr
 
 **2. Harness is split by phase.** Claude Code, on the existing Pro subscription, stays for every *interactive* stage - grilling, planning, spec, ticket generation - where subscription terms are unambiguous. The unattended executor runs OpenCode against DeepSeek V4 via OpenCode Go. This sidesteps the Claude subscription ambiguity entirely rather than resolving it, and costs less. Which DeepSeek variant (or another model) wins is deliberately left open, to be settled by a measured pilot (plan item 1), not decided here.
 
-**3. Trigger is a polling systemd timer**, not a GitHub webhook, even though the existing Cloudflare tunnel would make a webhook receiver feasible. The timer reuses the claim convention `docs/agents/issue-tracker.md` already defines (`gh issue edit <n> --add-assignee @me`) to avoid double-processing, with no new signature-verification code or inbound surface. The poller additionally avoids DeepSeek's weekday peak-pricing windows - free to implement, and a hedge against OpenCode Go's discount pass-through being unconfirmed either way. The windows themselves are a plan parameter (item 10).
+**3. Trigger is a polling systemd timer**, not a GitHub webhook, even though the existing Cloudflare tunnel would make a webhook receiver feasible. The timer reuses the claim convention `docs/agents/issue-tracker.md` already defines (`gh issue edit <n> --add-assignee @me`) to avoid double-processing, with no new signature-verification code or inbound surface.
 
 **4. PRs are opened under a second fine-grained PAT scoped to this repo (`AFK_AGENT_TOKEN`)**, not `GITHUB_TOKEN`, following the exact shape of `FLAKE_UPDATE_TOKEN`: GitHub suppresses workflow events raised by `GITHUB_TOKEN`, so the required `nixos ci` check would never fire on the PR. Not a separate GitHub account either - a dedicated branch prefix and label carry the same at-a-glance distinction `deps/*` already provides for `FLAKE_UPDATE_TOKEN`, without a second account's credentials and 2FA to manage. The prefix and label names are plan parameters (item 3).
 
@@ -49,7 +49,7 @@ Each decision below is stated without its implementation parameters - counts, pr
 
 - `homelab01` gains a new always-on process with repo-write credentials, alongside its existing services - genuine added blast radius, bounded by the path denylist, the worktree isolation, and the bounded retry count, but real.
 - Polling adds up to one timer interval of latency between a ticket becoming eligible and work starting - accepted, since nothing about AFK ticket work needs sub-minute response.
-- DeepSeek V4's actual code-quality on this codebase's ticket types is unproven, as is OpenCode's compatibility with the `.agents/skills/` format `implement`/`code-review` are written against, and whether OpenCode Go's usage accounting reflects DeepSeek's off-peak discount. All three are pilot questions, not settled by this ADR.
+- DeepSeek V4's actual code-quality on this codebase's ticket types is unproven, as is OpenCode's compatibility with the `.agents/skills/` format `implement`/`code-review` are written against. Both are pilot questions, not settled by this ADR.
 
 ## Alternatives considered
 
