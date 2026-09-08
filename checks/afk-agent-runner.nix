@@ -1,7 +1,7 @@
 # checks/afk-agent-runner.nix
 #
-# The AFK runner's poll -> denylist -> claim -> isolate logic (#171), tested at
-# the level it actually lives at.
+# The AFK runner's poll -> denylist -> claim -> isolate logic (#171) and the
+# implement stage that follows it (#172), tested at the level they live at.
 #
 # NOT A VM TEST, and not for the usual reason. checks/afk-agent.nix already
 # boots this module both ways; what it cannot do is exercise the runner, which
@@ -22,6 +22,20 @@
 # are chosen for that: which tickets are picked, which are refused, that the
 # claim lands before anything else is touched, and that a second ticket cannot
 # start while a first is unfinished.
+#
+# The implement stage adds a second thing worth pinning, and it is a *bound*
+# rather than a behaviour: a loop around a paid API that retries until it
+# succeeds has no natural stopping point, and the only observable difference
+# between "it is still trying" and "it will never stop" is the count. So the
+# retry cases assert the exact number of attempts, from both ends - a ticket
+# that converges on the third attempt and one that never converges have to be
+# told apart by the count alone.
+#
+# `opencode` is mocked the way `gh` is, with one addition: its mock does real
+# work in the worktree, because what the runner decides about an attempt is
+# read out of git and out of the gate rather than out of anything opencode
+# said. The mock's `broken` step commits a file the `nix` mock refuses to
+# build, so a failing gate here is a gate that actually failed.
 {
   inputs,
   pkgs,
@@ -44,6 +58,13 @@ let
   };
 
   runnerScript = eval.config.systemd.services.afk-agent.serviceConfig.ExecStart;
+
+  # The unit's own PATH, taken from the same evaluation the script comes from
+  # rather than restated here. `systemd.services.<name>.path` is already the
+  # module's toolchain plus the default a NixOS unit gets (coreutils,
+  # findutils, gnugrep, gnused, systemd), so this is exactly what the runner
+  # will find at 04:00 on homelab01, and it cannot drift from it.
+  unitPath = pkgs.lib.makeBinPath eval.config.systemd.services.afk-agent.path;
 in
 pkgs.runCommand "check-afk-agent-runner"
   {
@@ -125,15 +146,110 @@ pkgs.runCommand "check-afk-agent-runner"
     esac
     MOCK
 
-    # The runner asserts these are on its PATH before it does anything. Nothing
-    # here invokes them, so a stub that exists is the whole requirement - and
-    # is a great deal cheaper than putting a real `nix` in a test closure.
-    for stub in opencode nix; do
-      printf '#!/bin/sh\nexit 0\n' > "$work/bin/$stub"
-    done
+    # `opencode` answers `run` from a per-case plan - one line per attempt - and
+    # each step does to the worktree what a real session would have done, since
+    # every verdict the runner reaches is read back out of git and the gate
+    # rather than out of anything opencode printed. `broken` commits a file the
+    # `nix` mock below refuses to build; `repair` removes it.
+    #
+    # Arguments are recorded one per line rather than as a flat command line:
+    # the message is multi-line prose, and a flat log could not be searched for
+    # a flag without matching the prose as well.
+    #
+    # The mocks run under the same restricted PATH as the runner does, so they
+    # are held to the same toolset. That is deliberate rather than awkward: a
+    # mock free to reach for anything stdenv has would be a poor stand-in for a
+    # binary the unit invokes.
+    cat > "$work/bin/opencode" <<'MOCK'
+    #!/bin/sh
+    case "$1" in
+      run)
+        n=$(( $(cat "$OC_STATE/attempts" 2>/dev/null || echo 0) + 1 ))
+        echo "$n" > "$OC_STATE/attempts"
+        printf '%s\n' "$@" > "$OC_STATE/args-$n"
+        printf '%s\n' "''${OPENCODE_CONFIG_CONTENT:-}" > "$OC_STATE/overlay-$n"
+        opened=yes
+        case "$(sed -n "''${n}p" "$OC_PLAN")" in
+          good)   echo fix > "fix-$n.txt"; git add -A; git commit -qm "afk: implement" ;;
+          broken) echo x > BROKEN;    git add -A; git commit -qm "afk: broken" ;;
+          repair) git rm -q BROKEN;               git commit -qm "afk: repair" ;;
+          none)   : ;;
+          dirty)  echo a > a.txt; git add -A; git commit -qm "afk: partial"; echo b > stray.txt ;;
+          tidy)   git add -A; git commit -qm "afk: tidy" ;;
+          # Committed work whose session cannot be found afterwards - the one
+          # shape the runner must refuse rather than retry.
+          lost)   echo x > BROKEN; git add -A; git commit -qm "afk: broken"; opened=no ;;
+          # Exits before recording a session, which is what a run that failed
+          # before it opened one looks like from the outside.
+          error)  exit 3 ;;
+          *)      echo "mock opencode: no plan step $n" >&2; exit 64 ;;
+        esac
+        # The title is taken from whichever attempt first opened a session, and
+        # kept: a retry is addressed by id and carries no title of its own.
+        if [ "$opened" = yes ] && [ ! -s "$OC_STATE/title" ]; then
+          sed -n '/^--title$/{n;p;q}' "$OC_STATE/args-$n" > "$OC_STATE/title"
+        fi
+        ;;
+      session)
+        # An empty list until some attempt has actually opened one, so the
+        # runner's two no-session paths - start a fresh one, or refuse - are
+        # both reachable from here.
+        if [ -s "$OC_STATE/title" ]; then
+          printf '[{"id":"ses_fixture","title":"%s"}]\n' "$(cat "$OC_STATE/title")"
+        else
+          printf '[]\n'
+        fi
+        ;;
+      *)
+        echo "mock opencode: unexpected invocation: $*" >&2
+        exit 64
+        ;;
+    esac
+    MOCK
+
+    # `nix` fails whenever the tree still holds the file `broken` committed,
+    # which is what makes a failing gate in these cases a gate that failed on
+    # the worktree's actual contents. It answers the host discovery with one
+    # fixture host, so the host-build half of the gate is reachable too.
+    cat > "$work/bin/nix" <<'MOCK'
+    #!/bin/sh
+    printf '%s\n' "nix $*" >> "$NIX_LOG"
+    if [ -e BROKEN ]; then
+      echo "mock nix: the tree still contains BROKEN" >&2
+      exit 1
+    fi
+    if [ "$1" = "eval" ]; then
+      case "$*" in
+        *".#nixosConfigurations "*)
+          [ -n "''${NIX_NO_HOSTS:-}" ] || printf 'fixturehost' ;;
+      esac
+    fi
+    exit 0
+    MOCK
+
+    # Prints nothing, so the flake's checks and ci.yml's matrix compare equal
+    # and that half of the gate passes. Logged, because "the gate read ci.yml
+    # at all" is the assertion, not what it found there.
+    cat > "$work/bin/yq" <<'MOCK'
+    #!/bin/sh
+    printf '%s\n' "yq $*" >> "$NIX_LOG"
+    MOCK
 
     chmod +x "$work/bin"/*
-    export PATH="$work/bin:$PATH"
+
+    # --- the PATH the runner sees -----------------------------------------
+    #
+    # The unit's own, not this build environment's: `$work/bin` for the mocks
+    # to shadow the three binaries that cannot run here, then the module's
+    # evaluated `path` verbatim.
+    #
+    # This is the difference between a harness that proves the runner's logic
+    # and one that proves it will run at all. Inheriting stdenv's PATH hides
+    # every tool the module forgot to declare, because stdenv has most of them
+    # - and that is not hypothetical: the gate reached for `diff`, which is in
+    # neither the module's toolchain nor a NixOS unit's default path, and would
+    # have failed every attempt of every ticket while passing here.
+    unit_path="$work/bin:${unitPath}"
 
     # --- fixtures ---------------------------------------------------------
     #
@@ -232,8 +348,11 @@ pkgs.runCommand "check-afk-agent-runner"
     state=""
     rc=0
 
+    # `plan` is one opencode step per attempt, defaulting to a single clean
+    # one so that every case written before the implement stage existed still
+    # reads as "the ticket got worked".
     run() {
-      local name=$1 fixture=$2 reuse=''${3:-fresh}
+      local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good}
       state="$work/state/$name"
       if [ "$reuse" = "fresh" ]; then rm -rf "$state"; fi
       mkdir -p "$state"
@@ -241,10 +360,19 @@ pkgs.runCommand "check-afk-agent-runner"
       export AFK_STATE_DIR="$state"
       export GH_ISSUES="$work/fixtures/$fixture"
       export GH_LOG="$state/gh.log"
+      export OC_STATE="$state"
+      export OC_PLAN="$state/opencode.plan"
+      export NIX_LOG="$state/nix.log"
       : > "$GH_LOG"
+      : > "$NIX_LOG"
+      rm -f "$state"/args-* "$state"/overlay-* "$state/attempts" "$state/title"
+      # Unquoted on purpose: a plan is a whitespace-separated list of steps and
+      # this is what turns it into one line each.
+      # shellcheck disable=SC2086
+      printf '%s\n' $plan > "$OC_PLAN"
 
       set +e
-      "$script" > "$state/out.log" 2> "$state/err.log"
+      PATH="$unit_path" "$script" > "$state/out.log" 2> "$state/err.log"
       rc=$?
       set -e
     }
@@ -256,6 +384,10 @@ pkgs.runCommand "check-afk-agent-runner"
     # what is under test is which branch the runner cut, not that a clone has
     # the branch it was cloned from.
     branches() { git -C "$state/checkout" for-each-ref --format='%(refname:short)' refs/heads/afk 2>/dev/null | sort; }
+    attempts() { cat "$state/attempts" 2>/dev/null || echo 0; }
+    # Every case below that reaches the implement stage runs `mixed.json`, which
+    # claims #302; this is the worktree that ticket lands in.
+    ticket=302-unblocked-at-last
 
     echo "case: the plumbing is asserted before anything is polled"
     run plumbing none.json
@@ -366,6 +498,154 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$(branches)" = "afk/320-fix-the-bar-again-v2" ] \
       || fail "unsafe or unexpected branch name: $(branches)"
 
+    echo "case: a clean first attempt is one attempt, and the gate is what says so"
+    run implement-first mixed.json fresh good
+    [ "$rc" -eq 0 ] || fail "a converging ticket exited $rc: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 1 ] || fail "expected one attempt, got $(attempts)"
+    grep -qx -- --title "$state/args-1" || fail "the first attempt did not title its session"
+    if grep -qx -- --session "$state/args-1"; then
+      fail "the first attempt continued a session that cannot exist yet"
+    fi
+    [ "$(git -C "$state/worktrees/$ticket" rev-list --count origin/master..HEAD)" -eq 1 ] \
+      || fail "no commit landed on the ticket branch"
+    # The gate is this repository's own gate, not a cheaper proxy standing in
+    # for it. Each of these is a CI job that would otherwise go red on a branch
+    # this stage had already called finished.
+    grep -q -- "nix fmt -- --ci" "$state/nix.log" || fail "the gate does not check formatting"
+    grep -q -- "nix flake check" "$state/nix.log" || fail "the gate does not run the checks"
+    grep -q "nixosConfigurations.fixturehost.config.system.build.toplevel" "$state/nix.log" \
+      || fail "the gate did not build the hosts it discovered: $(cat "$state/nix.log")"
+    # The one gate `nix flake check` cannot see: a check added under checks/
+    # without a matching entry in ci.yml's hand-written matrix passes every
+    # Nix-level check and still fails CI (plan item 1, review-stage finding).
+    grep -q "checks.x86_64-linux" "$state/nix.log" || fail "the gate did not read the flake's checks"
+    grep -q "^yq " "$state/nix.log" || fail "the gate did not read ci.yml's matrix"
+    # The credential item 11 loads has to actually reach opencode, and loading
+    # it is not the same as handing it over: opencode reads providers from a
+    # file under its data directory, and this account has never run `opencode
+    # auth login`. Asserted on shape, and then asserted absent from the log,
+    # which is the other half of item 11's "done when".
+    jq -e '."opencode-go".type == "api" and (."opencode-go".key | length > 0)' \
+      "$state/.local/share/opencode/auth.json" > /dev/null \
+      || fail "opencode was never given the credential the unit loads for it"
+    if grep -q not-a-real-key "$state/out.log" "$state/err.log"; then
+      fail "the opencode credential was written to the journal"
+    fi
+
+    # Nothing the stage writes for itself may reach the diff it is gating: a
+    # prompt or a gate log inside the worktree would end up in the pull request.
+    [ "$(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)" = "fix-1.txt" ] \
+      || fail "the branch carries more than the work: $(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)"
+
+    echo "case: a failing gate is retried inside the session that failed"
+    # ADR 0004 §6. A retry that cannot see what it is retrying against is close
+    # to useless, and the model's own transcript is where that context lives -
+    # so the retry has to continue the session rather than open a new one, and
+    # the gate's verdict, which is the one thing the model could not see, has to
+    # cross back.
+    run implement-retry mixed.json fresh "broken repair"
+    [ "$rc" -eq 0 ] || fail "the repaired ticket exited $rc: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 2 ] || fail "expected two attempts, got $(attempts)"
+    grep -qx -- --session "$state/args-2" || fail "the retry opened a fresh session (ADR 0004 §6)"
+    awk '/^--session$/{getline; print; exit}' "$state/args-2" | grep -qx ses_fixture \
+      || fail "the retry continued a session other than the one that failed"
+    if grep -qx -- --title "$state/args-2"; then fail "the retry titled a second session"; fi
+    grep -q "the gate failed" "$state/args-2" || fail "the retry was not told what the gate said"
+
+    echo "case: a ticket that only converges on the third attempt still converges"
+    run implement-third mixed.json fresh "broken broken repair"
+    [ "$rc" -eq 0 ] || fail "exited $rc on the third attempt: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 3 ] || fail "expected three attempts, got $(attempts)"
+
+    echo "case: the loop stops after two retries rather than running on"
+    # The bound, and the reason this file exists at all for the implement stage:
+    # nothing else distinguishes a loop that is still trying from one that will
+    # never stop, and each turn of it spends money against OpenCode Go's cap.
+    run implement-exhausted mixed.json fresh "broken broken broken"
+    [ "$rc" -ne 0 ] || fail "a ticket that never passed the gate was reported as done"
+    [ "$(attempts)" -eq 3 ] || fail "expected exactly three attempts, got $(attempts)"
+    grep -q "3 attempts" "$state/err.log" || fail "did not say the budget ran out: $(cat "$state/err.log")"
+
+    echo "case: exiting 0 without committing is a failure, not a success"
+    # Measured in the pilot rather than imagined: runs that finished by
+    # explaining what they would do. Nothing downstream can tell that apart from
+    # a ticket that needed no change.
+    run implement-nocommit mixed.json fresh "none good"
+    [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 2 ] || fail "a run that committed nothing was accepted"
+    grep -q "nothing was committed" "$state/out.log" || fail "did not say why the attempt failed"
+
+    echo "case: work left in the working tree is a failure - item 7 pushes commits"
+    run implement-dirty mixed.json fresh "dirty tidy"
+    [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 2 ] || fail "uncommitted work was accepted as finished"
+    grep -q "left uncommitted" "$state/out.log" || fail "did not say why the attempt failed"
+
+    echo "case: a non-zero exit is a failure, and opens a session rather than continuing one"
+    # The one place ADR 0004 §6 does not apply, because there is nothing for it
+    # to apply to: an attempt that failed before opening a session left no
+    # transcript, so the next attempt is the first real one and gets the
+    # original prompt back rather than a message about a failure it cannot see.
+    run implement-error mixed.json fresh "error good"
+    [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 2 ] || fail "expected a retry after a failed run, got $(attempts) attempt(s)"
+    grep -q "opencode exited 3" "$state/out.log" || fail "did not report the exit status"
+    grep -q "opened no session" "$state/out.log" || fail "did not say the attempt left nothing to continue"
+    grep -qx -- --title "$state/args-2" || fail "the second attempt did not open a session of its own"
+    if grep -qx -- --session "$state/args-2"; then fail "continued a session that was never opened"; fi
+    grep -q "Implement GitHub issue #302" "$state/args-2" || fail "the fresh attempt was not given the prompt"
+
+    echo "case: a session that ran and cannot be found afterwards stops the ticket"
+    # The other side of that branch, and the one ADR 0004 §6 does rule out. An
+    # attempt that committed plainly had a session; not finding it means the
+    # next attempt would re-read the ticket knowing nothing about the failure,
+    # so the runner refuses rather than quietly degrading into that.
+    run implement-lost mixed.json fresh "lost repair"
+    [ "$rc" -ne 0 ] || fail "retried in a fresh context after losing the session"
+    [ "$(attempts)" -eq 1 ] || fail "expected one attempt, got $(attempts)"
+    grep -q "refusing to retry in a fresh context" "$state/err.log" \
+      || fail "did not say why it stopped: $(cat "$state/err.log")"
+
+    echo "case: a gate that discovers no hosts has not passed"
+    # The gate's one branch that decides pass/fail without running anything. A
+    # host list that came back empty means nothing was built, and a gate that
+    # built nothing must not read as a gate that agreed.
+    export NIX_NO_HOSTS=1
+    run implement-nohosts mixed.json fresh "good good good"
+    unset NIX_NO_HOSTS
+    [ "$rc" -ne 0 ] || fail "a gate that built no hosts was treated as a pass"
+    [ "$(attempts)" -eq 3 ] || fail "expected the budget to run out, got $(attempts) attempt(s)"
+    grep -q "the gate failed" "$state/out.log" || fail "the empty host list was not reported as a gate failure"
+    if grep -q "nix build" "$state/nix.log"; then fail "something was built from an empty host list"; fi
+
+    echo "case: the session is opened with the verbs it must not use denied"
+    # Read back from what the mock actually received, rather than grepped out of
+    # the script: what matters is that the guard reached the model, not that a
+    # string exists somewhere in a file. The prompt asks for the same things;
+    # this is the half that does not depend on the model reading it.
+    run implement-guard mixed.json fresh good
+    for verb in "git push*" "gh pr*" "gh issue edit*" "gh issue comment*" "gh issue close*"; do
+      jq -e --arg v "$verb" '.permission.bash[$v] == "deny"' "$state/overlay-1" > /dev/null \
+        || fail "the implement session was not denied '$verb'"
+    done
+
+    echo "case: the prompt names the skill, the ticket, and both halves of the denylist"
+    # Discovery is not invocation. OpenCode exposes skills through a `skill` tool
+    # the model chooses to call, and item 1 found a real session on this
+    # repository that made 41 tool calls without ever calling it - so naming the
+    # skill explicitly is the whole mitigation, and it is worth pinning.
+    run implement-prompt mixed.json fresh good
+    grep -q 'implement` skill' "$state/args-1" || fail "the prompt does not name the skill to use"
+    grep -q "issue #302" "$state/args-1" || fail "the ticket number was not substituted in"
+    grep -q "gh issue view 302" "$state/args-1" || fail "the prompt does not say how to read the ticket"
+    for path in ".github/workflows/" "secrets/" ".sops.yaml"; do
+      grep -qF -- "$path" "$state/args-1" || fail "the prompt does not carry the denied path $path"
+    done
+    # And the exception, without which "follow the checks/ pattern" is advice
+    # that cannot pass CI - the collision item 2 settled on 2026-09-08.
+    grep -q "jobs.checks.strategy.matrix.check" "$state/args-1" \
+      || fail "the prompt does not carry the ci.yml matrix exception"
+
     echo "case: one ticket at a time - a live worktree stops the next poll"
     # Reusing the state the `mixed` case left behind: #302 is claimed and its
     # worktree is on disk. systemd cannot prevent this on its own - two runs
@@ -383,9 +663,22 @@ pkgs.runCommand "check-afk-agent-runner"
     # out a second account, so an AFK PR is authored by the person who would
     # approve it, and GitHub does not let an author approve their own PR. This
     # grep is the whole control.
-    if grep -qE 'gh[[:space:]]+pr[[:space:]]+merge|--auto' "$script"; then
+    if grep -qE 'gh[[:space:]]+pr[[:space:]]+merge' "$script"; then
       fail "the runner can merge its own pull request"
     fi
+    # `--auto` was grepped for unconditionally here until the implement stage
+    # landed, as the flag `gh pr merge` takes to merge the moment the checks go
+    # green. It is also `opencode run`'s unattended-approval flag, which an
+    # unattended runner cannot work without - so the assertion is narrowed
+    # rather than dropped: every `--auto` in the script has to be opencode's.
+    # `opencode run` and not merely `opencode`: the loose form would be
+    # satisfied by a comment that happened to mention opencode on the same line.
+    while IFS= read -r auto_line; do
+      case "$auto_line" in
+        *"opencode run"*) ;;
+        *) fail "an --auto that is not opencode's: $auto_line" ;;
+      esac
+    done < <(grep -F -- '--auto' "$script")
 
     echo "case: the runner's denylist still matches the document it implements"
     # Two independent readings of one rule (ADR 0004 §5) only stay independent
