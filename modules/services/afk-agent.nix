@@ -127,6 +127,21 @@ let
   model = "opencode-go/glm-5.3-flash";
   variant = "high";
 
+  # Who the commits are by. ADR 0004 §4 rules out a second GitHub account, so
+  # everything this pipeline produces - the branch, the PR, and the commits on
+  # it - is already attributable to one person; naming that person here is what
+  # makes the commits match the PR that carries them rather than an accident of
+  # whatever git could infer.
+  #
+  # It has to be said explicitly because git cannot infer it. The unit runs
+  # with `environment.HOME` pointed at its StateDirectory and no XDG variables
+  # set, so there is no global config to read, and git's fallback - username at
+  # hostname - is refused as an author identity on a host whose hostname has no
+  # domain. Left unset, every attempt commits nothing, and the retry budget is
+  # spent three times over on the same error.
+  commitName = "Cory Gyarmathy";
+  commitEmail = "cory.gyarmathy@gmail.com";
+
   # ADR 0004 §6's retry budget, whose number plan item 5 owns: two retries,
   # three attempts. At the pilot's measured 4-6 cents per attempt this cannot
   # meaningfully threaten OpenCode Go's $12-per-5-hours cap, which is the only
@@ -309,6 +324,15 @@ let
       GH_TOKEN="$(cat "$creds/github-token")"
       export GH_PROMPT_DISABLED=1
       export GH_NO_UPDATE_NOTIFIER=1
+
+      # Exported rather than written into the checkout's config, so that it
+      # covers every `git` the agent runs as well as every one this script
+      # runs, and so that nothing has to be undone if a worktree outlives the
+      # run that made it.
+      export GIT_AUTHOR_NAME=${lib.escapeShellArg commitName}
+      export GIT_AUTHOR_EMAIL=${lib.escapeShellArg commitEmail}
+      export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+      export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 
       # OpenCode reads its provider credentials from a file under the data
       # directory, not from the environment, and this account has never run
