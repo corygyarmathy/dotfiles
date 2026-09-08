@@ -90,6 +90,21 @@ pkgs.runCommand "check-afk-agent-runner"
     git config --global init.defaultBranch master
     git config --global protocol.file.allow always
 
+    # ...and a second home, with everything above except an identity, for the
+    # runs. The unit gives the runner `HOME` pointed at its StateDirectory and
+    # sets no XDG variables, so in production git finds no global config and no
+    # `user.email`; a harness that leaves its own identity lying around where
+    # the runner can read it cannot see that. The settings that are about
+    # plumbing rather than identity stay, because the fixture origin is a local
+    # path and the runner has to be able to clone it.
+    mkdir -p "$work/home-run"
+    cat > "$work/home-run/.gitconfig" <<'GITCFG'
+    [init]
+      defaultBranch = master
+    [protocol "file"]
+      allow = always
+    GITCFG
+
     # --- the fixture the runner clones -----------------------------------
     #
     # A real repository, so `git worktree add -b afk/<slug> <path>
@@ -372,7 +387,8 @@ pkgs.runCommand "check-afk-agent-runner"
       printf '%s\n' $plan > "$OC_PLAN"
 
       set +e
-      PATH="$unit_path" "$script" > "$state/out.log" 2> "$state/err.log"
+      HOME="$work/home-run" PATH="$unit_path" "$script" \
+        > "$state/out.log" 2> "$state/err.log"
       rc=$?
       set -e
     }
@@ -508,6 +524,19 @@ pkgs.runCommand "check-afk-agent-runner"
     fi
     [ "$(git -C "$state/worktrees/$ticket" rev-list --count origin/master..HEAD)" -eq 1 ] \
       || fail "no commit landed on the ticket branch"
+
+    # And it is attributable. Nothing above would notice the difference between
+    # a commit by the right person and a commit by whoever the machine guessed,
+    # but git refuses to guess at all on a host with no domain in its hostname
+    # - so without an identity the runner supplies, every attempt commits
+    # nothing and the budget is spent three times on one error. Read out of the
+    # script rather than written down twice, for the reason checks/afk-agent.nix
+    # gives: a copy here would go on passing after the original changed.
+    want_author="$(sed -n "s/^ *export GIT_AUTHOR_EMAIL='\\?\\([^']*\\)'\\?$/\\1/p" "$script")"
+    [ -n "$want_author" ] || fail "the runner exports no author identity for git to commit under"
+    got_author="$(git -C "$state/worktrees/$ticket" log -1 --format=%ae origin/master..HEAD)"
+    [ "$got_author" = "$want_author" ] \
+      || fail "the commit is authored by '$got_author', not '$want_author'"
     # The gate is this repository's own gate, not a cheaper proxy standing in
     # for it. Each of these is a CI job that would otherwise go red on a branch
     # this stage had already called finished.
