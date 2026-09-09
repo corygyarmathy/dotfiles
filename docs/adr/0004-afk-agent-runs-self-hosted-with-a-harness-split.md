@@ -1,6 +1,6 @@
 # ADR 0004: AFK agent runs self-hosted, with a harness split from planning
 
-- **Status:** Accepted, with two clauses amended by [ADR 0006](0006-the-runner-is-a-github-app.md). §4's credential is an App installation token rather than a fine-grained PAT - its no-second-account clause is upheld rather than reversed, because a GitHub App is not a second account. §3's claim marker is a label rather than an assignee, because an App cannot hold an assignment. Every other decision here, §9 included, stands.
+- **Status:** Accepted, with three clauses amended by later ADRs. [ADR 0006](0006-the-runner-is-a-github-app.md): §4's credential is an App installation token rather than a fine-grained PAT - its no-second-account clause is upheld rather than reversed, because a GitHub App is not a second account; and §3's claim marker is a label rather than an assignee, because an App cannot hold an assignment. [ADR 0007](0007-the-pull-request-opens-before-the-review.md): §6's closing "never a PR" is narrowed - the pull request now opens before the review, so a run that fails after the push leaves one open, and the same section's retry-in-the-same-session rule is extended to a red CI run. Every other decision here, §9 included, stands.
 - **Date:** 2026-09-07
 - **Related Artefacts:**
   - Implemented by: `docs/plans/afk-agent-pipeline.md`, which also owns this design's parameters and findings - this ADR states decisions only; counts, prefixes, paths and option names live there
