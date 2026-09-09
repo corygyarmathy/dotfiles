@@ -14,10 +14,10 @@ roles to the actual label strings used in this repo's issue tracker.
 Two further labels are written by the AFK runner rather than applied at triage,
 and are here because they share the tracker with the ones above:
 
-| Label                    | Applied to     | Meaning                                                      |
-| ------------------------ | -------------- | ------------------------------------------------------------ |
-| `agent-working`          | the issue      | The AFK runner has claimed this ticket and is working it now  |
-| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run   |
+| Label                    | Applied to       | Meaning                                                      |
+| ------------------------ | ---------------- | ------------------------------------------------------------ |
+| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now |
+| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run    |
 
 The runner claims by swapping `ready-for-agent` for `agent-working` in a single
 edit, rather than by assigning itself, because GitHub will not let a GitHub App
