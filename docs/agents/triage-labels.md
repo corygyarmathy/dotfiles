@@ -11,20 +11,33 @@ roles to the actual label strings used in this repo's issue tracker.
 | `ready-for-human` | `ready-for-human`    | Requires human implementation            |
 | `wontfix`         | `wontfix`            | Will not be actioned                     |
 
-Two further labels are written by the AFK runner rather than applied at triage,
-and are here because they share the tracker with the ones above:
+Three further labels are written by the AFK runner rather than applied at
+triage, and are here because they share the tracker with the ones above:
 
-| Label                    | Applied to       | Meaning                                                      |
-| ------------------------ | ---------------- | ------------------------------------------------------------ |
-| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now |
-| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run    |
+| Label                    | Applied to       | Meaning                                                        |
+| ------------------------ | ---------------- | -------------------------------------------------------------- |
+| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now   |
+| `agent-stuck`            | the issue        | The AFK runner stopped without finishing; its comments say why |
+| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run      |
 
 The runner claims by swapping `ready-for-agent` for `agent-working` in a single
 edit, rather than by assigning itself, because GitHub will not let a GitHub App
 hold an issue assignment (ADR 0006). Dropping `ready-for-agent` is what stops
-the ticket being claimed twice; `agent-working` is what makes that visible. An
+the ticket being claimed twice; `agent-working` is what makes that visible.
+
+The stuck path (#175, `docs/plans/afk-agent-pipeline.md` item 8) hands a ticket
+the runner cannot finish back in the same one-edit shape: `agent-working`
+becomes `agent-stuck`, next to a comment saying what was tried and why it
+stopped. Before the push, nothing else the run built survives - no pull
+request, no worktree, no branch. Past the push there is a pull request to
+reach: it is commented on too and left open without the hand-off label below,
+because it holds real work (ADR 0007 §2). `agent-stuck` is deliberately not
+`ready-for-agent` again: re-applying the claim marker would send a ticket the
+runner cannot finish straight round the frontier query, to burn its retry
+budget on the same failure every poll. A human decides what happens next -
+reshape the ticket and re-apply `ready-for-agent`, or take it by hand. An
 `agent-working` ticket with no open pull request and no running unit is a run
-that died - handing it back is the stuck path (#175).
+that died - the runner's next poll hands it back through the same path.
 
 `agent-ready-for-review` is the runner's hand-off, and it goes on the pull
 request rather than on the issue. It arrives last, in the same `gh pr edit` that
@@ -32,8 +45,8 @@ writes the review's findings into the body, so a pull request carrying the label
 carries the findings too (ADR 0007). Deliberately **not** `ready-for-human`: that
 is an issue triage role meaning "requires human implementation", and on an
 agent's own pull request it would read as "an agent could not do this" - the
-opposite of what happened. It joins `agent-working` in an `agent-*` lifecycle
-family that `agent-stuck` (#175) and `agent-revise` (#196) will extend.
+opposite of what happened. It joins `agent-working` and `agent-stuck` in an
+`agent-*` lifecycle family that `agent-revise` (#196) will extend.
 
 **It is a signal, not a control.** It says CI is green and a review has run; it
 does not say "you may merge", and nothing stops a merge before it is applied.

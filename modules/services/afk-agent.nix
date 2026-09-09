@@ -36,10 +36,13 @@
 #
 # A successful ticket ends with a pull request open, green, carrying the
 # review's findings and the hand-off label, the worktree gone, and nothing in
-# flight. The stuck path that hands back a ticket that failed instead (#175) is
-# the one stage still missing, and it is why every refusal below still ends in
-# a red unit and a worktree somebody has to clear by hand - and now, past the
-# push, an open pull request as well.
+# flight. A ticket that cannot get there ends on the stuck path (#175, item
+# 8): a comment on the ticket saying what was tried and why it stopped,
+# `agent-working` swapped for `agent-stuck`, and nothing of the run left
+# behind. Where the failure came after the push, the hand-back reaches the
+# pull request too - a comment on it, and it is left open without the
+# hand-off label, because it holds real work (ADR 0007 §2). No pull request
+# is ever opened by the hand-back itself.
 #
 # THE REVIEW STAGE IS ADVISORY, AND THAT IS A MEASURED DECISION RATHER THAN A
 # GAP. It proves, from the session transcript rather than from the session's
@@ -264,9 +267,10 @@ let
   # Per-attempt ceiling. Every converged pilot run finished inside 12-36
   # minutes; the one run that reached 3600s had made no progress at all, so a
   # longer ceiling buys nothing a retry would not buy better. It exists so that
-  # a stuck attempt fails the runner's own way - countable, and about to become
-  # item 8's stuck path - rather than by systemd killing the unit mid-ticket
-  # and leaving behind the worktree the in-flight guard above then trips over.
+  # a stuck attempt fails the runner's own way - countable, and handed back by
+  # the stuck path when the budget runs out - rather than by systemd killing
+  # the unit mid-ticket and leaving behind the worktree the in-flight guard
+  # above then trips over.
   # `maxRuntime` has to stay clear of maxAttempts * this, plus the gate.
   attemptTimeout = 3600;
 
@@ -291,7 +295,7 @@ let
   # Ceiling on the review pass (item 6, #173), for the same reason
   # `attemptTimeout` exists: a stage that hangs should fail the runner's own
   # way, countable, rather than by systemd killing the unit mid-ticket and
-  # leaving a worktree the in-flight guard then refuses to poll past.
+  # leaving a worktree for the in-flight guard to hand back later.
   #
   # Measured runs of this stage finished in 2-10 minutes across both models and
   # all 25 arm runs, so this is generous by an order of magnitude rather than
@@ -731,6 +735,14 @@ let
       # The claim (ADR 0006). It replaces the assignee the tracker used to
       # carry here, because GitHub will not assign an issue to a GitHub App.
       working_label="agent-working"
+      # What a handed-back ticket carries instead. The stuck path (#175, item
+      # 8) swaps `$working_label` for this in one edit, next to the comment
+      # that says why the run stopped. Deliberately not `$label`: re-applying
+      # the claim marker would send a ticket the runner cannot finish straight
+      # round the frontier query again, to burn its retry budget on the same
+      # failure every poll. A human decides what happens to an
+      # `$stuck_label` ticket (docs/agents/triage-labels.md).
+      stuck_label="agent-stuck"
 
       checkout="$state_dir/checkout"
       worktrees="$state_dir/worktrees"
@@ -759,6 +771,239 @@ let
             && opencode session list -n ${toString sessionListDepth} --format json \
             | jq -r --arg t "$2" 'map(select(.title == $t)) | .[0].id // empty'
         ) 2>/dev/null || true
+      }
+
+      # --- the stuck path (item 8, #175) ------------------------------------
+      #
+      # A claimed ticket that cannot be carried to a hand-off is handed back
+      # rather than dropped: the reason goes to this unit's journal AND to the
+      # ticket as a comment, `$working_label` becomes `$stuck_label` in one
+      # edit, and everything the run built that nothing points at is torn
+      # down. No pull request is ever opened here, and the next poll starts
+      # clean - which is what makes it safe for the success path to leave
+      # nothing behind either.
+      #
+      # The two halves the plan item 8 spells out, split by the push because
+      # ADR 0007 moved the pull request in front of the review:
+      #
+      # - Before the push, ADR 0004 §6's "never a PR" holds in full, and so
+      #   does the plan's "no WIP branch left dangling for a run that never
+      #   pushed": the worktree and the local branch go, and nothing reaches
+      #   origin.
+      # - Past the push there is a pull request to reach. It is commented on
+      #   as well as the issue, and left open without the hand-off label -
+      #   which is the only signal, from outside, that nobody has finished
+      #   with it (ADR 0007 §2). It holds real work, so the branch stays on
+      #   origin and locally, and only the worktree goes.
+      #
+      # The order inside is load-bearing. The tracker writes come first
+      # because they are the part that outlives this process: a teardown that
+      # fails once is retried by the next poll's guard, but a comment that was
+      # never written is gone for good, and a ticket still carrying
+      # `$working_label` once its worktree is gone is stranded silently -
+      # invisible to the frontier query, missed by the guard, and known to
+      # nobody. `exit 1` at the end keeps the unit red: the hand-back is the
+      # designed outcome, and it is still a failure somebody has to act on.
+
+      # The tracker writes every hand-back shares, so the two stuck paths do
+      # not each restate them. Relabel is the durable half - it is what takes
+      # the ticket out of the frontier query - the comment is the explanation,
+      # and the closing paragraph names the decision a human now owes the
+      # ticket. A failed comment is non-fatal because the reason is already in
+      # this unit's journal; a failed relabel is the caller's call, because
+      # only the caller knows whether a ticket left carrying `$working_label`
+      # is about to be retried by the guard or stranded by a teardown.
+      stuck_closing() {
+        printf '%s\n' "The ticket is relabelled \`$stuck_label\`. It needs a human decision: reshape it and re-apply \`$label\`, or take it by hand (docs/agents/triage-labels.md)."
+      }
+
+      post_issue_comment() {
+        if ! gh issue comment "$number" --repo "$repo" --body-file "$1"; then
+          echo "afk-agent: #$number: the comment could not be posted; the reason above is in this unit's journal" >&2
+        fi
+      }
+
+      relabel_stuck() {
+        gh issue edit "$number" --repo "$repo" \
+          --remove-label "$working_label" --add-label "$stuck_label"
+      }
+
+      hand_back() {
+        local reason=$1
+        local body="$run_dir/stuck.md"
+
+        echo "afk-agent: #$number: $reason" >&2
+
+        {
+          printf '%s\n' \
+            "The AFK agent stopped work on this ticket and is handing it back, without opening a pull request."
+          printf '%s\n' ""
+          printf '%s\n' "Why it stopped:"
+          printf '%s\n' ""
+          printf '%s\n' "$reason"
+          printf '%s\n' ""
+          if [ "$pr_url" != "" ]; then
+            printf '%s\n' \
+              "The pull request ($pr_url) is left open without the \`${handoffLabel}\` label: it holds the branch's work, and the label's absence is what says from outside that nobody has finished with it (ADR 0007 §2). The worktree is removed and the branch is left untouched."
+          elif [ "$pushed" -eq 1 ]; then
+            printf '%s\n' \
+              "The worktree is removed. The branch \`$branch\` reached origin and is kept there - it holds the work the gate passed on, and a pull request can be opened from it by hand."
+          elif [ "$branch_created" -eq 1 ]; then
+            printf '%s\n' "The worktree and the branch \`$branch\` are removed."
+          else
+            printf '%s\n' "Nothing of this run was left behind."
+          fi
+          printf '%s\n' ""
+          stuck_closing
+        } > "$body"
+
+        post_issue_comment "$body"
+
+        # The other half of reaching a run that failed past the push (plan
+        # item 8): the pull request gets the same story the issue does, so a
+        # reader who arrives at the pull request rather than the ticket is
+        # not left guessing. A comment on a pull request is reportable and
+        # removable; the hand-off label's absence is still what says this
+        # pull request is not finished.
+        if [ "$pr_url" != "" ]; then
+          if ! gh pr comment "$pr_url" --repo "$repo" --body-file "$body"; then
+            echo "afk-agent: #$number: the pull request comment could not be posted" >&2
+          fi
+        fi
+
+        # One edit, like the claim, so the ticket is never briefly carrying
+        # both labels or neither. A failure here is not fatal to what
+        # follows - the teardown still runs - but the journal says the ticket
+        # is stranded with its claim marker on, which is the loudness a
+        # half-handed-back ticket deserves.
+        if ! relabel_stuck; then
+          echo "afk-agent: #$number: could not relabel to $stuck_label; the ticket still carries $working_label and is invisible to the frontier query" >&2
+        fi
+
+        if [ "$pushed" -eq 0 ]; then
+          remove_worktree_and_branch "$worktree" "$branch" "$branch_created"
+        else
+          # Pushed work stays: it is what the pull request is made of, and
+          # the success path keeps its local branch for the same reason.
+          remove_worktree_and_branch "$worktree" "$branch" 0
+        fi
+        exit 1
+      }
+
+      # The teardown both stuck paths share. Worktree first - a branch checked
+      # out in a living worktree cannot be deleted - then the local branch
+      # when the caller says so, which is only ever for a run that never
+      # pushed. Every step is guarded rather than fatal, because a teardown
+      # that half-fails must not stop the ticket being handed back; the next
+      # poll's guard retries whatever is left.
+      #
+      # --force on the worktree, where the success path's removal has none:
+      # a stuck run's tree is by definition not a tree anything vouched for,
+      # and a dirty one is exactly what a run killed mid-edit leaves.
+      remove_worktree_and_branch() {
+        local wt=$1 branch_name=$2 delete_local=$3
+
+        if [ -d "$wt" ]; then
+          git -C "$checkout" worktree remove --force "$wt" \
+            || echo "afk-agent: could not remove $wt; remove it by hand before the next poll" >&2
+        fi
+
+        if [ "$delete_local" -eq 1 ] \
+          && git -C "$checkout" show-ref --verify --quiet "refs/heads/$branch_name"; then
+          git -C "$checkout" branch -D "$branch_name" \
+            || echo "afk-agent: could not delete the local branch $branch_name" >&2
+        fi
+      }
+
+      # The other half of the stuck path, run by the in-flight guard below: a
+      # worktree on disk from a run that died before it could hand its ticket
+      # back. The ticket number is read out of the worktree's name, which is
+      # the slug the dead run built, so nothing has to have survived the run
+      # that died.
+      #
+      # The decision item 8 owns here is tear-down, not resume: the dead
+      # run's prompt, logs and attempt count died with it, and resuming
+      # unattended work nobody can vouch for is the shape ADR 0004 §6 exists
+      # to prevent. The comment says what is known, which is not much, and
+      # says it rather than guessing.
+      hand_back_dead_run() {
+        local path=$1 name number branch pushed_branch open_prs ls_rc body
+
+        name="$(basename "$path")"
+        number="''${name%%-*}"
+        branch="$branch_prefix$name"
+
+        # The slug is validated below as digits first, so what is in front of
+        # the first dash is the ticket number. A directory that does not
+        # parse is not this runner's worktree, and tearing down something
+        # unidentified is the one thing this path must not do.
+        if ! [[ "$number" =~ ^[0-9]+$ ]]; then
+          die "a worktree from an earlier run is still here ($path) but its name does not name a ticket; remove it by hand"
+        fi
+
+        # An open pull request for this branch means the run finished and only
+        # its worktree survived - the ticket is done, not stuck, and
+        # relabelling it under its own open pull request would be a lie. The
+        # worktree is cleared, the branch stays (it is what the pull request
+        # is from), and the ticket is not touched.
+        open_prs="$(gh pr list --repo "$repo" --head "$branch" --state open --json number \
+          | jq 'length')" \
+          || die "#$number: could not ask the tracker whether a pull request is open for $branch"
+
+        if [ "$open_prs" -gt 0 ]; then
+          log "#$number: a pull request is open for $branch, so the run finished and only its worktree survived; clearing it and moving on"
+          remove_worktree_and_branch "$path" "$branch" 0
+          return 0
+        fi
+
+        # Whether the dead run's branch reached origin. A run killed between
+        # the push and the pull request leaves exactly that, and pushed work
+        # is kept - it is what a pull request can be opened from, the same
+        # rule the hand-back above follows past the push.
+        pushed_branch=0
+        if git -C "$checkout" ls-remote --exit-code origin "refs/heads/$branch" > /dev/null 2>&1; then
+          pushed_branch=1
+        else
+          ls_rc=$?
+          if [ "$ls_rc" -ne 2 ]; then
+            die "#$number: could not ask origin whether $branch is there"
+          fi
+        fi
+
+        # The tracker writes first, for the reason hand_back gives - and are
+        # skipped when the ticket already carries `$stuck_label`, which is
+        # the shape a hand-back whose teardown failed last poll leaves.
+        # Relabel before comment here, unlike hand_back: a relabel that fails
+        # dies before anything is written, so the next poll retries both
+        # together rather than posting the comment a second time.
+        if gh issue view "$number" --repo "$repo" --json labels \
+          | jq -e "any(.labels[]?; .name == \"$stuck_label\")" > /dev/null 2>&1; then
+          log "#$number: already carries $stuck_label; clearing what is left of the dead run without writing to the tracker again"
+        else
+          if ! relabel_stuck; then
+            die "#$number: could not relabel to $stuck_label; refusing to start a new ticket beside a dead run's wreckage"
+          fi
+
+          body="$run_dir/stuck-leftover.md"
+          {
+            printf '%s\n' \
+              "The AFK agent found this ticket still claimed (\`$working_label\`) with a worktree left on disk by an earlier run that died before it could hand the ticket back. No pull request was open for \`$branch\`."
+            printf '%s\n' ""
+            if [ "$pushed_branch" -eq 1 ]; then
+              printf '%s\n' \
+                "The worktree is removed. The branch reached origin and is kept there - it holds the work the gate passed on, and a pull request can be opened from it by hand. Nothing of the dead run's state was kept: it did not survive the run, and resuming unattended work nobody can vouch for is the shape ADR 0004 §6 exists to prevent."
+            else
+              printf '%s\n' \
+                "The worktree and the branch are removed. Nothing of the dead run was kept: its state did not survive it, and resuming unattended work nobody can vouch for is the shape ADR 0004 §6 exists to prevent."
+            fi
+            printf '%s\n' ""
+            stuck_closing
+          } > "$body"
+
+          post_issue_comment "$body"
+        fi
+
+        remove_worktree_and_branch "$path" "$branch" "$(( 1 - pushed_branch ))"
       }
 
       # --- what item 4 hands over ------------------------------------------
@@ -922,21 +1167,41 @@ let
       jq -n --arg key "$(cat "$creds/opencode-api-key")" \
         '{"opencode-go": {type: "api", key: $key}}' > "$auth_dir/auth.json"
 
+      # Per-run scratch: prompts, gate logs, the pull request body, and the
+      # stuck path's comment bodies. Created before the guard, because the
+      # guard's hand-back writes into it. Everything here stays outside the
+      # worktree, for the reason the implement stage below repeats: a file
+      # written inside it would show up in the diff being gated, and then in
+      # the pull request.
+      run_dir="$state_dir/run"
+      rm -rf "$run_dir"
+      mkdir -p "$run_dir"
+
       # --- one ticket at a time --------------------------------------------
       #
       # systemd already makes two live runs impossible (see the module header),
       # but it has nothing to say about a run that died: a unit killed by the
       # runtime ceiling, or by the kill switch, leaves its worktree behind, and
       # the next poll would otherwise claim a second ticket beside the wreckage
-      # of the first. Refusing to start is the conservative half of that; the
-      # other half - deciding whether to resume or to tear it down - is the
-      # stuck path, item 8 (#175). Until that exists this goes red on every poll, which
-      # is the intended noise: a wedged pipeline should be loud, not quiet.
+      # of the first. Refusing to start was only ever the conservative half of
+      # that - it wedged the pipeline on its first casualty, and the wreckage
+      # stayed until a hand removed it. The stuck path (item 8, #175) owns the
+      # other half, and the decision it makes is tear-down, not resume: each
+      # leftover worktree is handed back to its ticket - comment, relabel,
+      # teardown - and the poll then carries on.
+      #
+      # Anything here that cannot be handed back cleanly stops the run: a
+      # directory whose name is not a slug, a tracker that will not answer, a
+      # relabel that will not land. A runner that quietly worked around a
+      # wreck it could not identify would be the louder failure.
       mkdir -p "$worktrees"
-      leftover="$(find "$worktrees" -mindepth 1 -maxdepth 1 -print -quit)"
-      if [ -n "$leftover" ]; then
-        die "a worktree from an earlier run is still here ($leftover); a run died mid-ticket. Clean-up is item 8 (#175); until then, remove it by hand"
-      fi
+      for leftover in "$worktrees"/*; do
+        [ -e "$leftover" ] || continue
+        if [ ! -d "$leftover" ]; then
+          die "a worktree path from an earlier run is still here ($leftover) but is not a directory; remove it by hand"
+        fi
+        hand_back_dead_run "$leftover"
+      done
 
       # --- poll -------------------------------------------------------------
       #
@@ -984,9 +1249,11 @@ let
       #
       # Oldest first, which is the only ordering the tracker offers that is
       # stable across polls. A ticket rejected here is skipped rather than
-      # relabelled: telling the tracker about it is the stuck path (#175), and
-      # a rejection that stopped the poll would let one ineligible ticket block
-      # every eligible one behind it.
+      # relabelled: a rejection that stopped the poll would let one ineligible
+      # ticket block every eligible one behind it, and the stuck path is not
+      # the answer either - a ticket refused here was never claimed, so there
+      # is nothing to hand back, and commenting on it every poll would be
+      # noise about a ticket nobody is working. It is triage that relabels.
       first_denied() {
         local text=$1 path
         for path in "''${denied[@]}"; do
@@ -1023,16 +1290,36 @@ let
       number="$(jq -r '.number' <<<"$picked")"
       title="$(jq -r '.title' <<<"$picked")"
 
-      # Everything past this point has a claimed ticket behind it, and nothing
-      # here gives it back: a failure below leaves #$number without its
-      # `$label`, which is also what filters it out of every later poll. That
-      # is the stuck path's job (#175, plan item 8) and is the main reason this
-      # half is not enough to switch the service on by itself.
+      # Everything past this point acts on a claimed ticket, and two things
+      # can now happen to it. They have different exits, and the difference is
+      # whether anything was tried:
       #
-      # One `gh issue edit` rather than two, so the ticket is never briefly
-      # carrying both labels or neither. Dropping `$label` is the half that
-      # locks; adding `$working_label` is the half a human can see, and it is
-      # what item 8 will swap for a stuck marker.
+      # - It cannot be *started*. The clone, the fetch and the worktree are
+      #   infrastructure the ticket did not choose, so nothing is handed back:
+      #   the claim is undone and the next poll tries again. Leaving the
+      #   ticket carrying `$working_label` instead would strand it - invisible
+      #   to the frontier query, and with no worktree behind, invisible to
+      #   the guard too.
+      # - It was *tried* and cannot be carried to a hand-off. That is
+      #   `hand_back` (item 8, #175): a comment saying what was tried and why
+      #   it stopped, `$working_label` swapped for `$stuck_label`, and a
+      #   teardown - never a pull request opened, nothing left in flight.
+      unclaim_and_die() {
+        if ! gh issue edit "$number" --repo "$repo" \
+          --remove-label "$working_label" --add-label "$label"; then
+          echo "afk-agent: #$number: could not undo the claim either; the ticket carries $working_label and is invisible to the frontier query" >&2
+        fi
+        die "$1"
+      }
+
+      # State the hand-back reads, initialised where the claim lands so that
+      # every exit past this point knows what this run created. `attempt`
+      # belongs to the implement loop and is read by nothing before it.
+      attempt=1
+      branch_created=0
+      pushed=0
+      pr_url=""
+
       log "claiming #$number: $title"
       gh issue edit "$number" --repo "$repo" \
         --remove-label "$label" --add-label "$working_label"
@@ -1042,8 +1329,8 @@ let
       # AGENTS.md's worktree-isolation pattern, with the worktrees gathered
       # under one directory rather than dropped beside the checkout as siblings:
       # that form exists for a human's interactive tree, and here it is what
-      # both the in-flight guard above and item 8 (#175)'s clean-up need to be able to
-      # enumerate.
+      # both the in-flight guard above and the stuck path's teardown (#175)
+      # need to be able to enumerate.
       #
       # The branch is cut from `origin/$base_branch` rather than from whatever
       # the checkout happens to be sitting on, so a checkout left dirty or
@@ -1057,26 +1344,27 @@ let
       }
 
       slug="$number-$(slugify "$title")"
+      branch="$branch_prefix$slug"
+      worktree="$worktrees/$slug"
 
       # The slug becomes both a git ref and a directory name, and its input is
       # an issue title. Checked rather than trusted, and checked against what
       # is allowed rather than against a list of what is not.
       if ! [[ "$slug" =~ ^[0-9]+(-[a-z0-9]+)*$ ]]; then
-        die "refusing to build a branch name from #$number: '$slug' is not a safe slug"
+        hand_back "refusing to build a branch name from the title: '$slug' is not a safe slug"
       fi
-
-      branch="$branch_prefix$slug"
-      worktree="$worktrees/$slug"
 
       if [ ! -d "$checkout/.git" ]; then
         log "cloning $repo_url into $checkout"
-        git clone "$repo_url" "$checkout"
+        git clone "$repo_url" "$checkout" \
+          || unclaim_and_die "cloning $repo_url failed; the claim is undone and the next poll will try again"
       fi
 
-      git -C "$checkout" fetch --prune origin
+      git -C "$checkout" fetch --prune origin \
+        || unclaim_and_die "fetching $repo_url failed; the claim is undone and the next poll will try again"
 
       if git -C "$checkout" show-ref --verify --quiet "refs/heads/$branch"; then
-        die "branch $branch already exists in $checkout; #$number looks half-worked"
+        hand_back "branch $branch already exists in $checkout, and this run did not cut it, so the ticket looks half-worked; the branch is left exactly as it was found"
       fi
 
       # --no-track is not a detail. Without it git sets the new branch's
@@ -1085,7 +1373,10 @@ let
       # branch. Protection on master would refuse it, so the failure would be
       # loud rather than dangerous, but a runner whose push target depends on a
       # branch protection rule holding is the wrong shape.
-      git -C "$checkout" worktree add --no-track -b "$branch" "$worktree" "origin/$base_branch"
+      git -C "$checkout" worktree add --no-track -b "$branch" "$worktree" "origin/$base_branch" \
+        || unclaim_and_die "cutting $branch at $worktree failed; the claim is undone and the next poll will try again"
+
+      branch_created=1
 
       log "claimed #$number, isolated on $branch at $worktree"
 
@@ -1106,10 +1397,6 @@ let
       # Nothing here is written inside the worktree. A prompt or a log that
       # landed there would show up in the diff being gated, and then in the
       # pull request.
-      run_dir="$state_dir/run"
-      rm -rf "$run_dir"
-      mkdir -p "$run_dir"
-
       sed "s/ISSUE/$number/g" ${implementPrompt} > "$run_dir/prompt"
 
 
@@ -1229,7 +1516,6 @@ let
         fi
       }
 
-      attempt=1
       session=""
       message="$(cat "$run_dir/prompt")"
 
@@ -1282,7 +1568,7 @@ let
         log "#$number: attempt $attempt did not pass, because $reason"
 
         if [ "$attempt" -ge ${toString maxAttempts} ]; then
-          die "#$number: ${toString maxAttempts} attempts and no passing implementation; handing the ticket back is the stuck path, item 8 (#175)"
+          hand_back "${toString maxAttempts} attempts and no passing implementation; the last one failed because $reason"
         fi
 
         # Read back once and then reused: the id does not change, and
@@ -1311,7 +1597,7 @@ let
           # Not being able to find it means the next attempt would re-read the
           # ticket in a fresh context with no idea what just failed, which is
           # the degrade ADR 0004 §6 rules out rather than a lesser form of it.
-          die "#$number: attempt $attempt ran, but no session titled '$slug' can be found to continue; refusing to retry in a fresh context (ADR 0004 §6)"
+          hand_back "attempt $attempt ran, but no session titled '$slug' can be found to continue; refusing to retry in a fresh context (ADR 0004 §6)"
         else
           # Nothing to continue, and nothing lost by not continuing: the attempt
           # failed before it opened a session, so there is no transcript for a
@@ -1359,10 +1645,11 @@ let
       # boundary. That reason is gone: under ADR 0007 the review runs after the
       # push, against a branch nothing pushes again.
       #
-      # Every refusal here leaves a claimed ticket, a local branch and a
-      # worktree, exactly as an exhausted retry budget does; handing those back
-      # is the stuck path, item 8 (#175). Past the first push it also leaves an
-      # open pull request, which is the cost ADR 0007 accepted.
+      # Every refusal here is a stuck-path exit (item 8, #175): the hand-back
+      # comments on the ticket with this gate's verdict, relabels it, and tears
+      # down what nothing points at. On a first push that is everything the
+      # run built; on a CI fix's push the pull request is already open, and the
+      # hand-back reaches it too - the cost ADR 0007 accepted.
       push_gate() {
         local changed path base_ci added removed name
 
@@ -1377,12 +1664,12 @@ let
           [ -n "$path" ] || continue
           case "$path" in
             secrets/* | .sops.yaml)
-              die "#$number: refusing to push $branch - its diff changes '$path', which no AFK diff may touch and which has no exception (docs/agents/afk-eligibility.md rule 1). Handing the ticket back is the stuck path, item 8 (#175)"
+              hand_back "refusing to push $branch - its diff changes '$path', which no AFK diff may touch and which has no exception (docs/agents/afk-eligibility.md rule 1)"
               ;;
             # The one file with an exception, checked below rather than here.
             .github/workflows/ci.yml) ;;
             .github/workflows/*)
-              die "#$number: refusing to push $branch - its diff changes '$path'. The only workflow file an AFK diff may touch is ci.yml, and only its checks matrix (docs/agents/afk-eligibility.md)"
+              hand_back "refusing to push $branch - its diff changes '$path'. The only workflow file an AFK diff may touch is ci.yml, and only its checks matrix (docs/agents/afk-eligibility.md)"
               ;;
           esac
         done <<<"$changed"
@@ -1401,11 +1688,11 @@ let
         # failed on it, which is why this is one line rather than a case in the
         # harness.
         [ -f "$worktree/.github/workflows/ci.yml" ] \
-          || die "#$number: refusing to push $branch - its diff deletes .github/workflows/ci.yml, and the only change the exception allows is an addition to one list in it"
+          || hand_back "refusing to push $branch - its diff deletes .github/workflows/ci.yml, and the only change the exception allows is an addition to one list in it"
 
         base_ci="$run_dir/ci-base.yml"
         git -C "$worktree" show "origin/$base_branch:.github/workflows/ci.yml" > "$base_ci" 2>/dev/null \
-          || die "#$number: refusing to push $branch - it adds .github/workflows/ci.yml rather than amending the one on $base_branch, and the exception is written against a file that already exists"
+          || hand_back "refusing to push $branch - it adds .github/workflows/ci.yml rather than amending the one on $base_branch, and the exception is written against a file that already exists"
 
         # "Nothing else in ci.yml may differ", asked by normalising the one
         # list that may differ away and comparing what is left. `yq` on both
@@ -1421,8 +1708,8 @@ let
           > "$run_dir/ci-head.normalised"
         diff -u "$run_dir/ci-base.normalised" "$run_dir/ci-head.normalised" \
           > "$run_dir/ci-normalised.diff" \
-          || die "$(printf '#%s: refusing to push %s - its ci.yml differs outside jobs.checks.strategy.matrix.check, which is the whole of what the exception allows:\n\n%s' \
-            "$number" "$branch" "$(cat "$run_dir/ci-normalised.diff")")"
+          || hand_back "$(printf 'refusing to push %s - its ci.yml differs outside jobs.checks.strategy.matrix.check, which is the whole of what the exception allows:\n\n%s' \
+            "$branch" "$(cat "$run_dir/ci-normalised.diff")")"
 
         yq -r ".jobs.checks.strategy.matrix.check[]" "$base_ci" \
           | LC_ALL=C sort > "$run_dir/matrix-was"
@@ -1435,7 +1722,7 @@ let
         # addition, so this catches that too.
         removed="$(comm -23 "$run_dir/matrix-was" "$run_dir/matrix-now")"
         [ -z "$removed" ] \
-          || die "#$number: refusing to push $branch - its ci.yml diff removes $(tr '\n' ' ' <<<"$removed")from the checks matrix, and a check that stops being listed stops running"
+          || hand_back "refusing to push $branch - its ci.yml diff removes $(tr '\n' ' ' <<<"$removed")from the checks matrix, and a check that stops being listed stops running"
 
         added="$(comm -13 "$run_dir/matrix-was" "$run_dir/matrix-now")"
 
@@ -1450,7 +1737,7 @@ let
             && nix eval --raw .#checks.x86_64-linux \
               --apply 'cs: builtins.concatStringsSep "\n" (builtins.attrNames cs)' ) \
           | LC_ALL=C sort > "$run_dir/push-checks" \
-          || die "#$number: refusing to push $branch - the flake's own checks could not be listed, so an added matrix entry cannot be checked against them"
+          || hand_back "refusing to push $branch - the flake's own checks could not be listed, so an added matrix entry cannot be checked against them"
 
         while IFS= read -r name; do
           [ -n "$name" ] || continue
@@ -1460,10 +1747,10 @@ let
           # shell context rather than data, and Nix attribute names can carry
           # arbitrary characters when quoted.
           [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] \
-            || die "#$number: refusing to push $branch - its ci.yml diff adds the matrix entry '$name', which is not a safe name; entries are interpolated into a shell script by the workflow"
+            || hand_back "refusing to push $branch - its ci.yml diff adds the matrix entry '$name', which is not a safe name; entries are interpolated into a shell script by the workflow"
 
           grep -qxF "$name" "$run_dir/push-checks" \
-            || die "#$number: refusing to push $branch - its ci.yml diff adds the matrix entry '$name', which names no check this flake exposes"
+            || hand_back "refusing to push $branch - its ci.yml diff adds the matrix entry '$name', which names no check this flake exposes"
         done <<<"$added"
 
         log "#$number: the ci.yml diff is additions-only to the checks matrix, adding $(tr '\n' ' ' <<<"$added")"
@@ -1506,13 +1793,18 @@ let
           -c credential.helper='!gh auth git-credential' \
           push origin "HEAD:refs/heads/$branch" \
           || if [ -n "$pr_url" ]; then
-            die "#$number: $branch did not push, so the CI fix never reached $pr_url - which is open, red, and now a commit behind this worktree. Handing it back is the stuck path, item 8 (#175)"
+            hand_back "$branch did not push, so the CI fix never reached $pr_url - which is open, red, and now a commit behind this worktree"
           else
-            die "#$number: $branch did not push, so nothing was opened for it. Handing the ticket back is the stuck path, item 8 (#175)"
+            hand_back "$branch did not push, so nothing was opened for it"
           fi
+
+        # What separates the hand-backs from here on from every one before it:
+        # the branch is on origin now, so pushed work is kept rather than
+        # torn down, and once the pull request is open the hand-back reaches
+        # it too.
+        pushed=1
       }
 
-      pr_url=""
       push_branch
 
       # --- raise the pull request, before anything reviews it ----------------
@@ -1608,7 +1900,7 @@ let
             --title "$pr_title" \
             --body-file "$run_dir/pr-body.md" \
             --label "$pr_label"
-      )" || die "#$number: $branch is pushed but the pull request could not be opened. Handing the ticket back is the stuck path, item 8 (#175)"
+      )" || hand_back "$branch is pushed but the pull request could not be opened"
 
       log "#$number: opened $pr_url"
 
@@ -1743,13 +2035,13 @@ let
         # from the outside that nobody has finished with it (ADR 0007 §2).
         case "$ci_state" in
           absent)
-            die "#$number: nothing has reported on $pushed_head after ${toString ciFirstCheckPolls} polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open and unfinished; handing it back is the stuck path, item 8 (#175)"
+            hand_back "nothing has reported on $pushed_head after ${toString ciFirstCheckPolls} polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open and unfinished"
             ;;
           unsettled)
-            die "#$number: CI on $pushed_head has not settled after ${toString ciSettlePolls} polls, and still has $ci_failed outstanding. $pr_url is open and unfinished. Handing it back is the stuck path, item 8 (#175)"
+            hand_back "CI on $pushed_head has not settled after ${toString ciSettlePolls} polls, and still has $ci_failed outstanding. $pr_url is open and unfinished"
             ;;
           cancelled)
-            die "#$number: CI on $pushed_head was cancelled ($ci_failed), so it reached no verdict. $pr_url is open and unfinished, and a re-run is a human's call. Handing it back is the stuck path, item 8 (#175)"
+            hand_back "CI on $pushed_head was cancelled ($ci_failed), so it reached no verdict. $pr_url is open and unfinished, and a re-run is a human's call"
             ;;
         esac
 
@@ -1762,7 +2054,7 @@ let
         log "#$number: CI is red on $pushed_head where the local gate passed. Not green: $ci_failed"
 
         if [ "$ci_round" -ge ${toString maxCiRounds} ]; then
-          die "#$number: ${toString maxCiRounds} CI round(s) and $branch is still red ($ci_failed). $pr_url is open with the work on it and without the hand-off label; nothing merges it (ADR 0004 §9). Handing it back is the stuck path, item 8 (#175)"
+          hand_back "${toString maxCiRounds} CI round(s) and $branch is still red ($ci_failed). $pr_url is open with the work on it and without the hand-off label; nothing merges it (ADR 0004 §9)"
         fi
 
         # ADR 0004 §6, applied to a failure it did not anticipate: the fix
@@ -1775,7 +2067,7 @@ let
           session="$(session_id_for "$worktree" "$slug")"
         fi
         [ -n "$session" ] \
-          || die "#$number: CI is red on $pr_url, but no session titled '$slug' can be found to fix it in; refusing to fix in a fresh context (ADR 0004 §6). Handing it back is the stuck path, item 8 (#175)"
+          || hand_back "CI is red on $pr_url, but no session titled '$slug' can be found to fix it in; refusing to fix in a fresh context (ADR 0004 §6)"
 
         # What crosses the boundary is what the model could not see for itself.
         # It is told which checks are not green and where to read them, and
@@ -1818,18 +2110,19 @@ let
         # a human can pick up, which is most of what a retry budget was buying.
         attempt_verdict "$ci_fix_rc" "$pushed_head"
         [ -z "$reason" ] \
-          || die "#$number: the CI fix did not pass, because $reason. $pr_url is open with a red CI run on it; a CI fix gets one session and no retry (ADR 0007). Handing it back is the stuck path, item 8 (#175)"
+          || hand_back "the CI fix did not pass, because $reason. $pr_url is open with a red CI run on it; a CI fix gets one session and no retry (ADR 0007)"
 
         push_branch
         ci_round=$((ci_round + 1))
       done
 
-      # Said once and appended to every refusal below, because from here on it
-      # is the same fact each time and it is the fact ADR 0007 changed: a
+      # Said once and appended to every hand-back below, because from here on
+      # it is the same fact each time and it is the fact ADR 0007 changed: a
       # review that cannot be shown to have run no longer means no pull
       # request, it means a pull request nobody has handed over. The label's
-      # absence is what says so from the outside.
-      unfinished="$pr_url is open and green, without the ${handoffLabel} label; nothing merges it (ADR 0004 §9). Handing it back is the stuck path, item 8 (#175)"
+      # absence is what says so from the outside, and the hand-back (item 8,
+      # #175) carries the fact onto the ticket and the pull request both.
+      unfinished="$pr_url is open and green, without the ${handoffLabel} label; nothing merges it (ADR 0004 §9)"
 
       # --- review, in a fresh context ---------------------------------------
       #
@@ -1901,15 +2194,15 @@ let
       ) > "$review_dir/run.log" 2>&1 || review_rc=$?
 
       if [ "$review_rc" -eq 124 ]; then
-        die "#$number: the review ran past its ${toString reviewTimeout}s ceiling. Review does not retry (ADR 0004 §6). $unfinished"
+        hand_back "the review ran past its ${toString reviewTimeout}s ceiling. Review does not retry (ADR 0004 §6). $unfinished"
       elif [ "$review_rc" -ne 0 ]; then
-        die "#$number: the review session exited $review_rc. Review does not retry (ADR 0004 §6). $unfinished"
+        hand_back "the review session exited $review_rc. Review does not retry (ADR 0004 §6). $unfinished"
       fi
 
       review_session="$(session_id_for "$worktree" "$review_title")"
 
       [ -n "$review_session" ] \
-        || die "#$number: the review exited 0 but no session titled '$review_title' can be found, so there is no transcript to verify it from. $unfinished"
+        || hand_back "the review exited 0 but no session titled '$review_title' can be found, so there is no transcript to verify it from. $unfinished"
 
       # Written to a file before jq is pointed at it, for the reason item 1
       # recorded: piping `opencode export` straight into jq truncates on large
@@ -1931,7 +2224,7 @@ let
       # worth more than a stack of unguarded reads below.
       jq -e 'has("messages") and (.messages | type == "array")' \
         "$review_dir/session.json" > /dev/null 2>&1 \
-        || die "#$number: the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (plan item 1). $unfinished"
+        || hand_back "the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (plan item 1). $unfinished"
 
       # --- did a review actually happen -------------------------------------
       #
@@ -1955,7 +2248,7 @@ let
       )"
 
       [ "$skill_calls" -gt 0 ] \
-        || die "#$number: the review never completed a \`skill\` call for code-review, so whatever it produced was not that skill's review. $unfinished"
+        || hand_back "the review never completed a \`skill\` call for code-review, so whatever it produced was not that skill's review. $unfinished"
 
       # The two axes are the point of the skill: standards and spec, in
       # genuinely separate contexts so that neither pollutes the other. They
@@ -1968,7 +2261,7 @@ let
       )"
 
       [ "$axes" -ge ${toString reviewAxes} ] \
-        || die "#$number: the review spawned $axes sub-agent(s), not ${toString reviewAxes}; the standards and spec axes collapsed into one context (ADR 0004 §6). $unfinished"
+        || hand_back "the review spawned $axes sub-agent(s), not ${toString reviewAxes}; the standards and spec axes collapsed into one context (ADR 0004 §6). $unfinished"
 
       # And that they are the two axes rather than two sub-agents of any kind.
       # A count alone is satisfied by a session that fanned out twice for its
@@ -1995,7 +2288,7 @@ let
       )"
 
       [ "$named_axes" = true ] \
-        || die "#$number: the review spawned $axes sub-agent(s), but neither a standards nor a spec subject is identifiable across them, so this was not the code-review skill's two-axis pass. $unfinished"
+        || hand_back "the review spawned $axes sub-agent(s), but neither a standards nor a spec subject is identifiable across them, so this was not the code-review skill's two-axis pass. $unfinished"
 
       log "#$number: review ran the code-review skill across $axes axes"
 
@@ -2032,7 +2325,7 @@ let
       # for the pull request to carry, and passing it on as though it had is
       # the same silent failure the checks above exist to refuse.
       grep -q '[^[:space:]]' "$review_dir/findings.md" \
-        || die "#$number: the review session produced no closing report, so this stage has nothing to hand to the pull request. $unfinished"
+        || hand_back "the review session produced no closing report, so this stage has nothing to hand to the pull request. $unfinished"
 
       # No verdict is read out of it, and that is the finding of plan item 6
       # rather than an omission - see the prompt above. The stage's outcome is
@@ -2089,7 +2382,7 @@ let
         --repo "$repo" \
         --body-file "$run_dir/pr-body.md" \
         --add-label "${handoffLabel}" \
-        || die "#$number: $pr_url is open and green, but the review's findings could not be written onto it, so it stays without the ${handoffLabel} label. Handing it back is the stuck path, item 8 (#175)"
+        || hand_back "$pr_url is open and green, but the review's findings could not be written onto it, so it stays without the ${handoffLabel} label"
 
       # --- and nothing is left in flight ------------------------------------
       #
@@ -2097,9 +2390,9 @@ let
       # in-flight guard at the top of this script refuses to poll past any
       # leftover worktree, so a ticket that finished and left one behind would
       # wedge every later poll: a pipeline that works exactly once. Item 8
-      # (#175) owns the same clean-up for a run that failed, where the question
-      # is harder because there is a claimed ticket to hand back; the
-      # successful half is one line and belongs where the run ends.
+      # (#175)'s guard is also what heals this if the removal ever does fail -
+      # it finds the leftover, sees the open pull request for the branch, and
+      # clears the worktree without touching the ticket.
       #
       # The local branch stays, deliberately. It costs nothing, `git worktree
       # remove` leaves it anyway, and it is what makes the "branch already
@@ -2110,10 +2403,10 @@ let
       # writes nothing into it, so a removal that fails means an uncommitted
       # file appeared after the last thing that checked - which is the review
       # stage getting past `edit: deny`, logged above but not otherwise
-      # stoppable. The next poll refusing to start is the correct amount of
-      # noise for that.
+      # stoppable. The next poll's guard clears it without touching the
+      # ticket, since a pull request is open for its branch.
       git -C "$checkout" worktree remove "$worktree" \
-        || die "#$number: $pr_url is open, but $worktree could not be removed; every later poll refuses to start until it is gone"
+        || die "#$number: $pr_url is open, but $worktree could not be removed; the next poll's guard clears it without touching the ticket"
 
       log "#$number: done - $pr_url is open on $branch. Merging it is a human act (ADR 0004 §9), and nothing here does it"
     '';
@@ -2125,22 +2418,17 @@ in
       the unattended AFK ticket runner.
 
       The pre-push denylist gate this switch used to wait on has landed (item
-      7, #174). The diff is read against docs/agents/afk-eligibility.md
-      immediately before every push, which is the last moment anything can:
-      the runner's App installation token carries the Workflows permission
-      (item 3), so nothing at GitHub's end stops this service pushing a branch
-      that edits `.github/workflows/`, and a pushed branch runs its own
-      workflow with the repository's secrets before anyone reads the pull
-      request.
+      7, #174), and so has the stuck path (item 8, #175): a ticket the runner
+      cannot carry to a hand-off is commented on, relabelled `agent-stuck`,
+      and torn down - so a failure neither wedges the next poll nor strands a
+      claimed ticket. Past the push the hand-back reaches the pull request
+      too: it is commented on and left open without the hand-off label, since
+      it holds real work (ADR 0007 §2).
 
-      Two things still argue for leaving it off. #190 asks whether `deploy`
+      One thing still argues for leaving it off: #190 asks whether `deploy`
       should restrict who may push, and `deploy` is a shorter route to the
       fleet than any workflow edit - worth answering before an unattended
-      process holds a credential that can take it. And the stuck path (item 8,
-      #175) does not exist yet, so a ticket that fails leaves itself claimed
-      and its worktree on disk, and every later poll refuses to start until a
-      person clears it - and since #201 opened the pull request before the
-      review, a failure past the push leaves that open too
+      process holds a credential that can take it.
     '';
 
     schedule = lib.mkOption {
@@ -2190,9 +2478,9 @@ in
         measured run of every stage is far inside it - but it is not free.
         Concurrency here is one (ADR 0004 §8), so a run that hangs blocks every
         later poll until this ceiling stops it, and a run that reaches it is
-        killed mid-ticket and leaves a worktree behind, which the in-flight
-        guard then refuses to poll past until item 8 (#175) can clear it. Past
-        the push it leaves an open pull request too (ADR 0007).
+        killed mid-ticket; the next poll's guard finds the worktree it left
+        and hands that ticket back (item 8, #175) - leaving an open pull
+        request untouched too, past the push (ADR 0007).
       '';
     };
   };
