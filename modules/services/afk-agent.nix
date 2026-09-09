@@ -12,13 +12,13 @@
 # WHAT THIS MODULE OWNS, AND HOW FAR THE RUNNER GETS. Item 4 settled everything
 # around the runner - the schedule, the runtime ceiling, the service account,
 # the credentials, the sandbox, and the toolchain on its PATH. The runner
-# itself is item 5, and lands in pieces: this file carries poll -> denylist ->
-# claim -> isolate (#171), the implement stage on top of it (#172), and the
-# review stage after that (#173, item 6). It stops with a ticket claimed, a
-# gate-passing commit on an `afk/*` branch, and a review of that commit written
-# to the run directory for the pull request to carry. The push and PR (#174)
-# and the stuck path that cleans up after a failure (#175) each extend the same
-# script.
+# itself is item 5, and landed in pieces: poll -> denylist -> claim -> isolate
+# (#171), the implement stage on top of it (#172), the review stage after that
+# (#173, item 6), and the push and pull request that end a run (#174, item 7).
+# A successful ticket now ends with a pull request open, the worktree gone, and
+# nothing in flight. The stuck path that hands back a ticket that failed
+# instead (#175) is the one stage still missing, and it is why every refusal
+# below still ends in a red unit and a worktree somebody has to clear by hand.
 #
 # THE REVIEW STAGE IS ADVISORY, AND THAT IS A MEASURED DECISION RATHER THAN A
 # GAP. It proves, from the session transcript rather than from the session's
@@ -39,13 +39,18 @@
 # nine true, on both models. This stage does not invent defects. What it did do
 # was vouch for what it had not tested - 9 of those 15 runs certified the very
 # criterion the diff breaks - which is what the prompt's certification clause
-# below now forbids. Item 7 attaches these findings; it must not read them as a
-# decision, and there is no longer a verdict for it to mistake for one.
+# below now forbids. Item 7 attaches these findings to the pull request; it
+# does not read them as a decision, there is no longer a verdict for it to
+# mistake for one, and `prBody` spends a paragraph telling the person who does
+# read them what they are not.
 #
-# Nothing here pushes, opens a pull request, or writes to the tracker past the
-# claim. That is not an omission: those verbs belong to the stages above, and
-# the implement session is denied them (`permissionOverlay`) rather than merely
-# asked not to use them.
+# THE MODEL NEVER PUSHES; THE RUNNER DOES. Both sessions are denied `git push`,
+# `gh pr` and every tracker verb through OpenCode's own permission layer
+# (`permissionOverlay`, `reviewOverlay`) rather than merely asked not to use
+# them, and the script pushes afterwards, from outside the session, only past
+# the pre-push gate that reads the diff. Nothing anywhere here merges or arms
+# auto-merge: ADR 0004 §9 cannot be a ruleset in this repository (plan item 3),
+# so it is a property of this script, asserted from outside by the harness.
 #
 # The script is written so that its whole state is relocatable through the
 # environment, which is how checks/afk-agent-runner.nix drives this exact
@@ -130,8 +135,8 @@ let
   # costs a workflow edit that runs with the repository's secrets before
   # anybody reads the PR (see afk-eligibility.md, "Why these three"). The
   # diff-shaped half of the denylist - including the narrow `ci.yml` matrix
-  # exception, which cannot be judged from prose at all - is a pre-push gate
-  # and belongs to item 7 (#174).
+  # exception, which cannot be judged from prose at all - is `push_gate` below,
+  # against the diff, immediately before the push.
   deniedPaths = [
     ".github/workflows/"
     "secrets/"
@@ -328,9 +333,9 @@ let
   # repository's own rules and that last match wins, so these take effect.
   #
   # It is a soft control - a pattern match on a command line, not a capability
-  # boundary - and this process holds a PAT that can push. That is why the
-  # `enable` option below says to leave the service off until item 7 (#174)
-  # lands the gate that reads the diff itself.
+  # boundary - and this process holds a PAT that can push. What does not depend
+  # on the model behaving is `push_gate` below, which reads the diff itself
+  # immediately before the push.
   permissionOverlay = builtins.toJSON {
     permission.bash = {
       "git push*" = "deny";
@@ -474,6 +479,60 @@ let
     };
   };
 
+  # The pull request's body, minus the review findings the script appends to
+  # it. A file in the store with substituted tokens, for the same reason the
+  # two prompts above are: this is prose, and prose does not survive being a
+  # shell literal in a script this one's shape.
+  #
+  # `ISSUE`, `BRANCH`, `IMPLEMODEL`, `REVIEWMODEL` and `ATTEMPTS` are
+  # substituted at run time; nothing else in it varies. No token is a substring
+  # of another, which is what keeps one `sed` expression from eating the next.
+  #
+  # WHAT THE BODY IS FOR. One person reads this, once, next to a diff nobody
+  # else has read, and decides whether to merge it (ADR 0004 §9). So it says
+  # where the branch came from, what was already checked and by what, and -
+  # at more length than reads comfortably - what the review under it is not.
+  # Item 6 measured that stage vouching for criteria it never tested in 9 of 15
+  # runs, four of them in the same report as the defect they were refuting. A
+  # reader who takes the findings as a verdict is making exactly the mistake
+  # the verdict was dropped to prevent, so the caveat travels with them rather
+  # than living in a plan document.
+  prBody = pkgs.writeText "afk-agent-pr-body" ''
+    Closes #ISSUE.
+
+    Opened unattended by the AFK agent (ADR 0004). The work on `BRANCH` was
+    claimed from `ready-for-agent`, implemented by `IMPLEMODEL` in ATTEMPTS
+    attempt(s), and pushed only once this repository's own gate passed on the
+    commit at the head of the branch: `nix fmt -- --ci`, `nix flake check`, a
+    build of every host, and agreement between the checks the flake exposes and
+    the matrix in `ci.yml`. The diff was checked against the path denylist in
+    `docs/agents/afk-eligibility.md` before the push as well as before the
+    claim.
+
+    **No person has read this diff.** Nothing in this pipeline merges and no
+    auto-merge is armed on this path: merging is a human act (ADR 0004 §9).
+
+    ## The review below is advisory, and is not an approval
+
+    `code-review` ran against this branch on `REVIEWMODEL`, in a fresh context,
+    across its standards and spec axes. The runner verified that from the
+    session transcript rather than from the session's own account of itself,
+    and would not have opened this pull request otherwise. It decided nothing,
+    and nothing downstream read it as a decision
+    (`docs/plans/afk-agent-pipeline.md`, item 6).
+
+    Two measured things are worth holding while reading it. Its findings are
+    accurate - nine recurring themes across 25 runs were checked against
+    source and all nine were true - but across 15 runs on a diff with an
+    independently graded defect it never once refused that diff for the defect
+    in it, and it has repeatedly written that a criterion holds without
+    running anything that shows it. A finding here is worth reading. A silence
+    here is worth nothing.
+
+    ---
+
+  '';
+
   runner = pkgs.writeShellApplication {
     name = "afk-agent-run";
 
@@ -497,6 +556,7 @@ let
       label="ready-for-agent"
       base_branch="master"
       branch_prefix="afk/"
+      pr_label="afk-agent"
 
       checkout="$state_dir/checkout"
       worktrees="$state_dir/worktrees"
@@ -796,8 +856,8 @@ let
       # outside GitHub Actions.
       #
       # Whether the ci.yml exception was *honoured* - a diff that adds matrix
-      # entries and does nothing else - is a different question, asked of the
-      # diff before the push, and belongs to item 7 (#174).
+      # entries and does nothing else - is a different question, and it is
+      # asked of the diff itself by `push_gate` below, before the push.
       #
       # Hosts are discovered from the branch under test rather than listed, so a
       # ticket that adds a host is gated on the host it added. CI names them by
@@ -1128,8 +1188,8 @@ let
       #
       # They are worth more on the pull request - where the human who has to
       # merge it reads them alongside the diff - than they ever were as a gate.
-      # Item 7 (#174) attaches this file; nothing here is the last reader of
-      # it, and nothing here decides anything from it.
+      # The pull request body below appends this file verbatim; nothing here is
+      # the last reader of it, and nothing here decides anything from it.
       #
       # Deliberately NOT fed back to the implement session to be fixed. Item 6
       # originally allowed one fix-and-recheck, and it was dropped on purpose:
@@ -1165,7 +1225,240 @@ let
       # died above.
       log "#$number: review ran and left $(wc -l < "$review_dir/findings.md") lines of findings in $review_dir/findings.md for the pull request; this stage is advisory and does not gate (plan item 6)"
 
-      log "#$number: implemented and reviewed on $branch; pushing and raising the pull request is item 7 (#174)"
+      # --- the last denylist check, asked of the diff ------------------------
+      #
+      # Rule 1 of docs/agents/afk-eligibility.md again, and this time against
+      # the thing that will actually be pushed. Item 5's pre-claim check reads
+      # a ticket's prose, which is all there is before a line of code exists;
+      # whether a diff is additions-only to one list in one file is a question
+      # about a diff that did not exist at claim time, and the harness pins
+      # that limit with a ticket that plainly means to edit ci.yml and never
+      # writes the path.
+      #
+      # THIS IS THE ONLY CONTROL, not an extra one. `AFK_AGENT_TOKEN` carries
+      # the Workflows permission (plan item 3) precisely so the ci.yml matrix
+      # exception can be exercised, so nothing at GitHub's end refuses a push
+      # that edits a workflow file. And after the push there is nothing left to
+      # gate: a pushed branch becomes a pull request, a `pull_request` event
+      # runs the workflow file *from the head branch* with this repository's
+      # secrets, and `deploy` - the only ref the fleet follows - is a
+      # fast-forward away from any credential with write access. The pull
+      # request could be read, rejected and closed with all three hosts already
+      # moved (afk-eligibility.md, "Why these three").
+      #
+      # Run here rather than the moment the implement stage converged, which
+      # would be cheaper by one review on a ticket that ends up refused. The
+      # review session is denied `edit` through a pattern match on a command
+      # line rather than by a capability boundary, so a gate placed before it
+      # is a gate something after it can still get past. Ten cents against the
+      # fleet is not a trade worth taking.
+      #
+      # Every refusal here leaves a claimed ticket, a local branch and a
+      # worktree, exactly as an exhausted retry budget does; handing those back
+      # is the stuck path, item 8 (#175).
+      push_gate() {
+        local changed path base_ci added removed name
+
+        # Three dots. `origin/$base_branch` has been moving underneath this run
+        # for as long as the ticket took, and a two-dot diff would read every
+        # commit master gained meanwhile as this branch's work, reversed - so a
+        # merge into master that touched `secrets/` would look like this branch
+        # deleting it.
+        changed="$(git -C "$worktree" diff --name-only "origin/$base_branch...HEAD")"
+
+        while IFS= read -r path; do
+          [ -n "$path" ] || continue
+          case "$path" in
+            secrets/* | .sops.yaml)
+              die "#$number: refusing to push $branch - its diff changes '$path', which no AFK diff may touch and which has no exception (docs/agents/afk-eligibility.md rule 1). Handing the ticket back is the stuck path, item 8 (#175)"
+              ;;
+            # The one file with an exception, checked below rather than here.
+            .github/workflows/ci.yml) ;;
+            .github/workflows/*)
+              die "#$number: refusing to push $branch - its diff changes '$path'. The only workflow file an AFK diff may touch is ci.yml, and only its checks matrix (docs/agents/afk-eligibility.md)"
+              ;;
+          esac
+        done <<<"$changed"
+
+        # Nothing under .github/workflows/ changed, so the exception below has
+        # nothing to say and the diff is clean.
+        grep -qxF ".github/workflows/ci.yml" <<<"$changed" || return 0
+
+        log "#$number: the diff changes ci.yml, so the checks-matrix exception is what has to hold"
+
+        # A diff that deletes ci.yml outright, which is neither an addition to
+        # the matrix nor something the reads below could survive: every one of
+        # them is a `yq` against a file that is no longer there, and an
+        # unguarded `yq` here would abort the runner with none of this
+        # explanation. Item 5's gate reads the same file and would already have
+        # failed on it, which is why this is one line rather than a case in the
+        # harness.
+        [ -f "$worktree/.github/workflows/ci.yml" ] \
+          || die "#$number: refusing to push $branch - its diff deletes .github/workflows/ci.yml, and the only change the exception allows is an addition to one list in it"
+
+        base_ci="$run_dir/ci-base.yml"
+        git -C "$worktree" show "origin/$base_branch:.github/workflows/ci.yml" > "$base_ci" 2>/dev/null \
+          || die "#$number: refusing to push $branch - it adds .github/workflows/ci.yml rather than amending the one on $base_branch, and the exception is written against a file that already exists"
+
+        # "Nothing else in ci.yml may differ", asked by normalising the one
+        # list that may differ away and comparing what is left. `yq` on both
+        # sides rather than a textual diff, because a re-indented or re-quoted
+        # file is not a changed one - and the same tool ci.yml's own lint job
+        # uses, so the two readings cannot disagree about what the file says.
+        #
+        # Its limit is written down in afk-eligibility.md and accepted there:
+        # yq drops comments on both sides, so a comment-only edit passes.
+        # Comments do not execute.
+        yq "del(.jobs.checks.strategy.matrix.check)" "$base_ci" > "$run_dir/ci-base.normalised"
+        yq "del(.jobs.checks.strategy.matrix.check)" "$worktree/.github/workflows/ci.yml" \
+          > "$run_dir/ci-head.normalised"
+        diff -u "$run_dir/ci-base.normalised" "$run_dir/ci-head.normalised" \
+          > "$run_dir/ci-normalised.diff" \
+          || die "$(printf '#%s: refusing to push %s - its ci.yml differs outside jobs.checks.strategy.matrix.check, which is the whole of what the exception allows:\n\n%s' \
+            "$number" "$branch" "$(cat "$run_dir/ci-normalised.diff")")"
+
+        yq -r ".jobs.checks.strategy.matrix.check[]" "$base_ci" \
+          | LC_ALL=C sort > "$run_dir/matrix-was"
+        yq -r ".jobs.checks.strategy.matrix.check[]" "$worktree/.github/workflows/ci.yml" \
+          | LC_ALL=C sort > "$run_dir/matrix-now"
+
+        # Additions only. An entry removed silently stops a check from running,
+        # which is the "gate that quietly stops gating" failure ci.yml's own
+        # lint job exists to catch; an entry altered is a removal and an
+        # addition, so this catches that too.
+        removed="$(comm -23 "$run_dir/matrix-was" "$run_dir/matrix-now")"
+        [ -z "$removed" ] \
+          || die "#$number: refusing to push $branch - its ci.yml diff removes $(tr '\n' ' ' <<<"$removed")from the checks matrix, and a check that stops being listed stops running"
+
+        added="$(comm -13 "$run_dir/matrix-was" "$run_dir/matrix-now")"
+
+        # What the flake actually exposes, re-derived here rather than read
+        # from the file the implement gate left behind. That gate already
+        # demands the matrix and this list agree exactly, which makes the
+        # second half of the loop below redundant today - and that is the
+        # point. This check is the last one standing between a workflow edit
+        # and a run holding the repository's secrets, so it must not be a
+        # reading of another check's homework.
+        ( cd "$worktree" \
+            && nix eval --raw .#checks.x86_64-linux \
+              --apply 'cs: builtins.concatStringsSep "\n" (builtins.attrNames cs)' ) \
+          | LC_ALL=C sort > "$run_dir/push-checks" \
+          || die "#$number: refusing to push $branch - the flake's own checks could not be listed, so an added matrix entry cannot be checked against them"
+
+        while IFS= read -r name; do
+          [ -n "$name" ] || continue
+
+          # The character class, and it is not belt-and-braces: a matrix entry
+          # is interpolated straight into a `run:` script by ci.yml, so it is
+          # shell context rather than data, and Nix attribute names can carry
+          # arbitrary characters when quoted.
+          [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] \
+            || die "#$number: refusing to push $branch - its ci.yml diff adds the matrix entry '$name', which is not a safe name; entries are interpolated into a shell script by the workflow"
+
+          grep -qxF "$name" "$run_dir/push-checks" \
+            || die "#$number: refusing to push $branch - its ci.yml diff adds the matrix entry '$name', which names no check this flake exposes"
+        done <<<"$added"
+
+        log "#$number: the ci.yml diff is additions-only to the checks matrix, adding $(tr '\n' ' ' <<<"$added")"
+      }
+
+      push_gate
+
+      # --- push, and raise the pull request ---------------------------------
+      #
+      # Item 7 (#174), and the step `implement` never does: everything above
+      # this line is reversible by deleting a directory.
+      log "#$number: pushing $branch"
+
+      # An explicit refspec rather than a bare `git push`: what gets pushed
+      # should not depend on push.default, nor on an upstream item 5 went out
+      # of its way not to set.
+      #
+      # The credential reaches git through `gh`, which already holds it in the
+      # environment, rather than through a remote URL or a config file - so the
+      # PAT never lands in .git/config, in a URL git will echo on failure, or
+      # on a command line `ps` can read. The empty helper ahead of it is git's
+      # own idiom for "use this one and nothing inherited".
+      git -C "$worktree" \
+        -c credential.helper= \
+        -c credential.helper='!gh auth git-credential' \
+        push origin "HEAD:refs/heads/$branch" \
+        || die "#$number: $branch did not push, so no pull request was opened. Handing the ticket back is the stuck path, item 8 (#175)"
+
+      # A squash merge takes the pull request's title as its commit subject, so
+      # this is a line that ends up in `git log` on master. Where the branch is
+      # one commit, that commit's subject is the better answer: the implement
+      # stage wrote it in this repository's house style and the gate passed on
+      # it. Where the ticket took several attempts, no single subject describes
+      # the branch, and the ticket's own title is the honest one.
+      commits="$(git -C "$worktree" rev-list --count "origin/$base_branch..HEAD")"
+      if [ "$commits" -eq 1 ]; then
+        pr_title="$(git -C "$worktree" log -1 --format=%s)"
+      else
+        pr_title="$title"
+      fi
+
+      sed -e "s/ISSUE/$number/g" \
+        -e "s|BRANCH|$branch|g" \
+        -e "s|IMPLEMODEL|${model}|g" \
+        -e "s|REVIEWMODEL|${reviewModel}|g" \
+        -e "s/ATTEMPTS/$attempt/g" \
+        ${prBody} > "$run_dir/pr-body.md"
+
+      # The findings the review stage left, carried to the one place they are
+      # worth anything: in front of the person deciding whether to merge, next
+      # to the diff they are about. The body above says what they are not.
+      cat "$review_dir/findings.md" >> "$run_dir/pr-body.md"
+
+      # `--label` rather than a second call, so a pull request that exists is a
+      # pull request that is already attributable at a glance - the other half
+      # of what plan item 3 asks the label for, since no ruleset can enforce
+      # ADR 0004 §9 here.
+      #
+      # Nothing arms auto-merge, here or anywhere: this opens the pull request
+      # and stops. That is a property of this script rather than of a ruleset
+      # (plan item 3), which is why the harness asserts it from both sides -
+      # the merge verb appearing nowhere in this script at all, and no
+      # auto-merge flag in what `gh` was actually called with. Both of its
+      # greps are deliberately crude enough to match prose, so this comment
+      # names neither command literally.
+      log "#$number: opening the pull request"
+      pr_url="$(
+        cd "$worktree" \
+          && gh pr create \
+            --repo "$repo" \
+            --base "$base_branch" \
+            --head "$branch" \
+            --title "$pr_title" \
+            --body-file "$run_dir/pr-body.md" \
+            --label "$pr_label"
+      )" || die "#$number: $branch is pushed but the pull request could not be opened. Handing the ticket back is the stuck path, item 8 (#175)"
+
+      log "#$number: opened $pr_url"
+
+      # --- and nothing is left in flight ------------------------------------
+      #
+      # The worktree goes now that the branch is somewhere durable. The
+      # in-flight guard at the top of this script refuses to poll past any
+      # leftover worktree, so a ticket that finished and left one behind would
+      # wedge every later poll: a pipeline that works exactly once. Item 8
+      # (#175) owns the same clean-up for a run that failed, where the question
+      # is harder because there is a claimed ticket to hand back; the
+      # successful half is one line and belongs where the run ends.
+      #
+      # The local branch stays, deliberately. It costs nothing, `git worktree
+      # remove` leaves it anyway, and it is what makes the "branch already
+      # exists" check above refuse a ticket whose pull request is still open,
+      # if one is ever unassigned and re-labelled while it is.
+      #
+      # No --force. The tree was asserted clean before the gate, the gate
+      # writes nothing into it, and the review stage cannot edit - so a removal
+      # that fails means something happened that none of those allow for, and
+      # the next poll refusing to start is the correct amount of noise.
+      git -C "$checkout" worktree remove "$worktree" \
+        || die "#$number: $pr_url is open, but $worktree could not be removed; every later poll refuses to start until it is gone"
+
+      log "#$number: done - $pr_url is open on $branch. Merging it is a human act (ADR 0004 §9), and nothing here does it"
     '';
   };
 in
@@ -1174,15 +1467,21 @@ in
     enable = lib.mkEnableOption ''
       the unattended AFK ticket runner.
 
-      Leave this off until item 7 (#174) has landed its pre-push denylist gate. That is
-      an ordering constraint rather than a preference: `AFK_AGENT_TOKEN`
-      carries the Workflows permission (item 3), so nothing at GitHub's end
-      stops this service pushing a branch that edits `.github/workflows/`, and
-      a pushed branch runs its own workflow with the repository's secrets
-      before anyone reads the PR. The pre-claim denylist below is a scope check
-      on ticket prose and does not replace it: the gate has to run against the
-      diff, before the push, or the `ci.yml` exception in
-      docs/agents/afk-eligibility.md is enforced by nothing
+      The pre-push denylist gate this switch used to wait on has landed (item
+      7, #174). The diff is now read against docs/agents/afk-eligibility.md
+      immediately before the push, which is the last moment anything can:
+      `AFK_AGENT_TOKEN` carries the Workflows permission (item 3), so nothing
+      at GitHub's end stops this service pushing a branch that edits
+      `.github/workflows/`, and a pushed branch runs its own workflow with the
+      repository's secrets before anyone reads the pull request.
+
+      Two things still argue for leaving it off. #190 asks whether `deploy`
+      should restrict who may push, and `deploy` is a shorter route to the
+      fleet than any workflow edit - worth answering before an unattended
+      process holds a credential that can take it. And the stuck path (item 8,
+      #175) does not exist yet, so a ticket that fails leaves itself claimed
+      and its worktree on disk, and every later poll refuses to start until a
+      person clears it
     '';
 
     schedule = lib.mkOption {

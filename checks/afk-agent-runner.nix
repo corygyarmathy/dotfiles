@@ -110,12 +110,37 @@ pkgs.runCommand "check-afk-agent-runner"
     # A real repository, so `git worktree add -b afk/<slug> <path>
     # origin/master` either produces a branch and a checked-out tree or fails
     # for a reason worth knowing about.
+    #
+    # It carries a `.github/workflows/ci.yml` with a checks matrix in it, which
+    # is not decoration: item 7's pre-push gate reads that file with the real
+    # `yq` on both sides of the diff, so the one exception the denylist has
+    # (docs/agents/afk-eligibility.md) is exercised against a real document
+    # rather than against a mock's idea of one. The matrix names the checks the
+    # `nix` mock reports the flake exposing, so the implement gate's own
+    # checks-versus-matrix comparison agrees to begin with and every case below
+    # starts from a repository that is internally consistent.
     mkdir -p "$work/seed"
     (
       cd "$work/seed"
       git init -q -b master
       echo "fixture" > README.md
-      git add README.md
+      mkdir -p .github/workflows
+      cat > .github/workflows/ci.yml <<'YAML'
+    name: ci
+    on:
+      pull_request: {}
+    jobs:
+      checks:
+        strategy:
+          matrix:
+            check: [alpha, beta]
+        steps:
+          - run: echo checking
+      lint:
+        steps:
+          - run: echo linting
+    YAML
+      git add -A
       git commit -qm "seed"
     )
     git clone -q --bare "$work/seed" "$work/origin.git"
@@ -153,6 +178,17 @@ pkgs.runCommand "check-afk-agent-runner"
           echo "mock gh: refusing to assign" >&2
           exit 1
         fi
+        ;;
+      # The one verb item 7 adds, and the only one that produces something a
+      # person has to act on. It prints a URL because the runner logs one, and
+      # it can be made to fail, which is how the case below observes that a
+      # pull request that never opened does not tear the worktree down.
+      "pr create")
+        if [ -n "''${GH_PR_FAIL:-}" ]; then
+          echo "mock gh: refusing to open a pull request" >&2
+          exit 1
+        fi
+        echo "https://github.com/corygyarmathy/dotfiles/pull/999"
         ;;
       *)
         echo "mock gh: unexpected invocation: $*" >&2
@@ -235,6 +271,29 @@ pkgs.runCommand "check-afk-agent-runner"
           # Exits before recording a session, which is what a run that failed
           # before it opened one looks like from the outside.
           error)  exit 3 ;;
+          # Diffs item 7's pre-push gate has to judge. Each writes what a real
+          # session would have written, because that gate reads the diff rather
+          # than anything the session said - and each is engineered to pass the
+          # implement gate first, since a diff that fails that never reaches
+          # the push at all.
+          matrix) mkdir -p checks; echo "{ }" > checks/gamma.nix
+                  sed -i 's/\[alpha, beta\]/[alpha, beta, gamma]/' .github/workflows/ci.yml
+                  git add -A; git commit -qm "afk: add the gamma check" ;;
+          matrixdrop) sed -i 's/\[alpha, beta\]/[alpha]/' .github/workflows/ci.yml
+                  git add -A; git commit -qm "afk: stop running beta" ;;
+          matrixbad) mkdir -p checks; echo "{ }" > checks/Gamma.nix
+                  sed -i 's/\[alpha, beta\]/[alpha, beta, Gamma]/' .github/workflows/ci.yml
+                  git add -A; git commit -qm "afk: add a check" ;;
+          matrixplus) mkdir -p checks; echo "{ }" > checks/gamma.nix
+                  sed -i -e 's/\[alpha, beta\]/[alpha, beta, gamma]/' \
+                    -e 's/echo linting/echo pwned/' .github/workflows/ci.yml
+                  git add -A; git commit -qm "afk: add the gamma check" ;;
+          workflow) printf 'name: other\n' > .github/workflows/other.yml
+                  git add -A; git commit -qm "afk: add a workflow" ;;
+          secret) mkdir -p secrets; printf 'nothing\n' > secrets/new.yaml
+                  git add -A; git commit -qm "afk: add a secret" ;;
+          sops)   printf 'creation_rules: []\n' > .sops.yaml
+                  git add -A; git commit -qm "afk: add a recipient" ;;
           *)      echo "mock opencode: no plan step $n" >&2; exit 64 ;;
         esac
         # The title is taken from whichever attempt first opened a session, and
@@ -377,18 +436,24 @@ pkgs.runCommand "check-afk-agent-runner"
       case "$*" in
         *".#nixosConfigurations "*)
           [ -n "''${NIX_NO_HOSTS:-}" ] || printf 'fixturehost' ;;
+        # What the flake exposes, which the seed's ci.yml matrix names exactly
+        # - so the implement gate's checks-versus-matrix comparison agrees
+        # until a case deliberately moves one of them. Item 7's cases move both
+        # together, because a diff has to pass that gate before it can reach
+        # the pre-push one.
+        *".#checks.x86_64-linux "*)
+          printf '%s' "''${NIX_CHECKS:-alpha beta}" | tr ' ' '\n' ;;
       esac
     fi
     exit 0
     MOCK
 
-    # Prints nothing, so the flake's checks and ci.yml's matrix compare equal
-    # and that half of the gate passes. Logged, because "the gate read ci.yml
-    # at all" is the assertion, not what it found there.
-    cat > "$work/bin/yq" <<'MOCK'
-    #!/bin/sh
-    printf '%s\n' "yq $*" >> "$NIX_LOG"
-    MOCK
+    # `yq` is deliberately NOT mocked: it is the real yq-go from the unit's own
+    # path, reading the real ci.yml in the fixture repository. Item 7's gate
+    # decides whether a ci.yml diff is additions-only to one list by comparing
+    # what yq makes of both sides, and a mock standing in for it would be this
+    # harness agreeing with itself about a question the whole exception turns
+    # on (docs/agents/afk-eligibility.md).
 
     chmod +x "$work/bin"/*
 
@@ -510,7 +575,15 @@ pkgs.runCommand "check-afk-agent-runner"
     run() {
       local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good} review=''${5:-pass}
       state="$work/state/$name"
-      if [ "$reuse" = "fresh" ]; then rm -rf "$state"; fi
+      if [ "$reuse" = "fresh" ]; then
+        rm -rf "$state"
+        # A fresh origin as well as fresh state. Several cases below push, and
+        # a bare repository shared between them would refuse the second push of
+        # the same branch for a reason that has nothing to do with the case
+        # doing the pushing.
+        rm -rf "$work/origin.git"
+        git clone -q --bare "$work/seed" "$work/origin.git"
+      fi
       mkdir -p "$state"
 
       export AFK_STATE_DIR="$state"
@@ -548,6 +621,9 @@ pkgs.runCommand "check-afk-agent-runner"
     # what is under test is which branch the runner cut, not that a clone has
     # the branch it was cloned from.
     branches() { git -C "$state/checkout" for-each-ref --format='%(refname:short)' refs/heads/afk 2>/dev/null | sort; }
+    # The other side of the push: what actually reached the fixture origin,
+    # which is the only place a refusal can be observed as an absence.
+    pushed() { git -C "$work/origin.git" for-each-ref --format='%(refname:short)' refs/heads/afk 2>/dev/null | sort; }
     attempts() { cat "$state/attempts" 2>/dev/null || echo 0; }
     # Every case below that reaches the implement stage runs `mixed.json`, which
     # claims #302; this is the worktree that ticket lands in.
@@ -592,21 +668,31 @@ pkgs.runCommand "check-afk-agent-runner"
     for skipped in 300 301 303; do
       if grep -q "gh issue edit $skipped " "$state/gh.log"; then fail "claimed #$skipped"; fi
     done
-    [ "$(worktrees)" = "302-unblocked-at-last" ] || fail "worktree not isolated: $(worktrees)"
     [ "$(branches)" = "afk/302-unblocked-at-last" ] || fail "branch not cut: $(branches)"
+    # And with no upstream. `git worktree add -b <b> <path> origin/master`
+    # tracks origin/master unless told not to, which would make item 7's push -
+    # under git's default push.default of `simple` - aim at master. The
+    # explicit refspec that push uses is the other half of not depending on
+    # that, and neither would be noticed before a push was attempted.
+    upstream="$(git -C "$state/checkout" for-each-ref \
+      --format='%(upstream:short)' refs/heads/afk/302-unblocked-at-last)"
+    [ -z "$upstream" ] || fail "the ticket branch tracks $upstream"
+
+    echo "case: the ticket is worked in a real, isolated checkout of the base branch"
+    # Asked of a run that stopped before the push, because a run that reaches
+    # the push takes its worktree with it (item 7 tears it down, or the next
+    # poll would refuse to start). Three attempts that exit non-zero without
+    # committing is the cheapest way to hold one still: the isolation is
+    # already complete by then, and nothing after it has run.
+    run isolate mixed.json fresh "error error error"
+    [ "$rc" -ne 0 ] || fail "an implementation that never ran was reported as done"
+    [ "$(worktrees)" = "302-unblocked-at-last" ] || fail "worktree not isolated: $(worktrees)"
     # An isolated worktree, not just a directory: a real checkout of the base
     # branch, on its own branch, with nothing of the seed's history missing.
     [ -f "$state/worktrees/302-unblocked-at-last/README.md" ] \
       || fail "the worktree has no working tree"
     head="$(git -C "$state/worktrees/302-unblocked-at-last" rev-parse --abbrev-ref HEAD)"
     [ "$head" = "afk/302-unblocked-at-last" ] || fail "worktree is on $head"
-    # And with no upstream. `git worktree add -b <b> <path> origin/master`
-    # tracks origin/master unless told not to, which would make #174's push -
-    # under git's default push.default of `simple` - aim at master. Nothing
-    # else in this pipeline would notice before the push was attempted.
-    upstream="$(git -C "$state/checkout" for-each-ref \
-      --format='%(upstream:short)' refs/heads/afk/302-unblocked-at-last)"
-    [ -z "$upstream" ] || fail "the ticket branch tracks $upstream"
 
     echo "case: a ticket whose scope names a denied path is refused before the claim"
     run denied-then-clean denied-then-clean.json
@@ -614,7 +700,7 @@ pkgs.runCommand "check-afk-agent-runner"
     if grep -q "gh issue edit 310 " "$state/gh.log"; then fail "claimed a denylisted ticket"; fi
     grep -q "skipping #310" "$state/out.log" || fail "the rejection was not reported"
     grep -q "gh issue edit 311 " "$state/gh.log" || fail "did not fall through to the clean ticket"
-    [ "$(worktrees)" = "311-clean-follow-up" ] || fail "isolated the wrong ticket: $(worktrees)"
+    [ "$(branches)" = "afk/311-clean-follow-up" ] || fail "worked the wrong ticket: $(branches)"
 
     echo "case: each denied path is refused on its own, in the body or in the title"
     for case_name in denied-workflows denied-secrets denied-sops denied-in-title; do
@@ -678,7 +764,10 @@ pkgs.runCommand "check-afk-agent-runner"
     # is what that costs when it goes wrong.
     [ "$(flag_value "$state/args-1" --dir)" = "$state/worktrees/$ticket" ] \
       || fail "the implement attempt was not pinned to its worktree with --dir: $(flag_value "$state/args-1" --dir)"
-    [ "$(git -C "$state/worktrees/$ticket" rev-list --count origin/master..HEAD)" -eq 1 ] \
+    # Read out of the checkout rather than out of the worktree, here and
+    # below: a run that reaches the push takes its worktree with it, and the
+    # branch is what is left.
+    [ "$(git -C "$state/checkout" rev-list --count "origin/master..afk/$ticket")" -eq 1 ] \
       || fail "no commit landed on the ticket branch"
 
     # And it is attributable. Nothing above would notice the difference between
@@ -690,7 +779,7 @@ pkgs.runCommand "check-afk-agent-runner"
     # gives: a copy here would go on passing after the original changed.
     want_author="$(sed -n "s/^ *export GIT_AUTHOR_EMAIL='\\?\\([^']*\\)'\\?$/\\1/p" "$script")"
     [ -n "$want_author" ] || fail "the runner exports no author identity for git to commit under"
-    got_author="$(git -C "$state/worktrees/$ticket" log -1 --format=%ae origin/master..HEAD)"
+    got_author="$(git -C "$state/checkout" log -1 --format=%ae "origin/master..afk/$ticket")"
     [ "$got_author" = "$want_author" ] \
       || fail "the commit is authored by '$got_author', not '$want_author'"
     # The gate is this repository's own gate, not a cheaper proxy standing in
@@ -704,7 +793,8 @@ pkgs.runCommand "check-afk-agent-runner"
     # without a matching entry in ci.yml's hand-written matrix passes every
     # Nix-level check and still fails CI (plan item 1, review-stage finding).
     grep -q "checks.x86_64-linux" "$state/nix.log" || fail "the gate did not read the flake's checks"
-    grep -q "^yq " "$state/nix.log" || fail "the gate did not read ci.yml's matrix"
+    [ "$(cat "$state/run/matrix-checks")" = "$(printf 'alpha\nbeta')" ] \
+      || fail "the gate did not read ci.yml's matrix: $(cat "$state/run/matrix-checks")"
     # The credential item 11 loads has to actually reach opencode, and loading
     # it is not the same as handing it over: opencode reads providers from a
     # file under its data directory, and this account has never run `opencode
@@ -719,8 +809,8 @@ pkgs.runCommand "check-afk-agent-runner"
 
     # Nothing the stage writes for itself may reach the diff it is gating: a
     # prompt or a gate log inside the worktree would end up in the pull request.
-    [ "$(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)" = "fix-1.txt" ] \
-      || fail "the branch carries more than the work: $(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)"
+    [ "$(git -C "$state/checkout" diff --name-only "origin/master...afk/$ticket")" = "fix-1.txt" ] \
+      || fail "the branch carries more than the work: $(git -C "$state/checkout" diff --name-only "origin/master...afk/$ticket")"
 
     echo "case: a failing gate is retried inside the session that failed"
     # ADR 0004 §6. A retry that cannot see what it is retrying against is close
@@ -876,10 +966,14 @@ pkgs.runCommand "check-afk-agent-runner"
     [ -s "$state/run/review/findings.md" ] || fail "the review's findings were not kept anywhere"
     grep -q "duplicated derivation" "$state/run/review/findings.md" \
       || fail "the findings file is not the review's closing report: $(cat "$state/run/review/findings.md")"
-    [ "$(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)" = "fix-1.txt" ] \
-      || fail "the review stage wrote into the diff: $(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)"
-    [ -z "$(git -C "$state/worktrees/$ticket" status --porcelain)" ] \
-      || fail "the review stage dirtied the worktree: $(git -C "$state/worktrees/$ticket" status --porcelain)"
+    [ "$(git -C "$state/checkout" diff --name-only "origin/master...afk/$ticket")" = "fix-1.txt" ] \
+      || fail "the review stage wrote into the diff: $(git -C "$state/checkout" diff --name-only "origin/master...afk/$ticket")"
+    # That it left the working tree clean is enforced rather than observed: the
+    # teardown at the end of a run is `git worktree remove` without --force,
+    # which refuses a dirty tree - so this run reaching a pull request at all
+    # is the assertion, and it holds in production rather than only here.
+    [ -z "$(worktrees)" ] \
+      || fail "the run did not finish, so nothing here says the review left the tree clean"
 
     echo "case: a critical review does not stop the ticket, and its findings travel anyway"
     # Item 6's first acceptance criterion as it now reads, and the assertion
@@ -1079,12 +1173,170 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$review_model" != "$implement_model" ] \
       || fail "review and implement ran the same model ($review_model); item 6 settled them separately"
 
+    echo "case: a clean ticket is pushed, opened as a pull request, and leaves nothing behind"
+    # Item 7's whole job, end to end. Everything before this line is reversible
+    # by deleting a directory; this is the step that puts work somewhere a
+    # person has to act on.
+    run raise mixed.json fresh good pass
+    [ "$rc" -eq 0 ] || fail "a clean ticket did not reach a pull request: $(cat "$state/err.log")"
+    [ "$(pushed)" = "afk/$ticket" ] || fail "the branch did not reach origin: $(pushed)"
+    # And what reached origin is the reviewed commit, not some other tip.
+    [ "$(git -C "$work/origin.git" rev-parse "refs/heads/afk/$ticket")" \
+      = "$(git -C "$state/checkout" rev-parse "refs/heads/afk/$ticket")" ] \
+      || fail "origin carries a different commit than the branch that was gated and reviewed"
+    grep -q "gh pr create" "$state/gh.log" || fail "no pull request was opened: $(ghlog)"
+    grep -q -- "--base master" "$state/gh.log" || fail "the pull request does not target master: $(ghlog)"
+    grep -q -- "--head afk/$ticket" "$state/gh.log" || fail "the pull request is not from the ticket branch: $(ghlog)"
+    grep -q -- "--repo corygyarmathy/dotfiles" "$state/gh.log" || fail "the pull request was opened against some other repository: $(ghlog)"
+
+    echo "case: the pull request carries the afk-agent label"
+    # Plan item 3 asks the label for the same at-a-glance distinction `deps/*`
+    # gives `FLAKE_UPDATE_TOKEN`, and item 3's finding gives it a second job:
+    # no ruleset can stop this token merging its own pull request, so a merge
+    # that did happen has to be attributable by looking.
+    grep -q -- "--label afk-agent" "$state/gh.log" || fail "the pull request was not labelled: $(ghlog)"
+
+    echo "case: auto-merge is never armed on this path"
+    # ADR 0004 §9. The static half of this - no `gh pr merge` anywhere in the
+    # script - is asserted further down; this is the other half, read from what
+    # `gh` was actually called with, so a merge assembled at run time out of
+    # something the grep would not recognise fails here.
+    if grep -q "pr merge" "$state/gh.log"; then fail "the runner merged its own pull request: $(ghlog)"; fi
+    if grep -q -- "--auto" "$state/gh.log"; then fail "auto-merge was armed: $(ghlog)"; fi
+
+    echo "case: the body links back to the source issue and carries the review's findings"
+    body="$state/run/pr-body.md"
+    [ -s "$body" ] || fail "no pull request body was assembled"
+    grep -qx "Closes #302." "$body" || fail "the body does not link back to the source issue: $(cat "$body")"
+    grep -q -- "--body-file $body" "$state/gh.log" || fail "the pull request was opened with some other body: $(ghlog)"
+    # The findings are the entire output of the review stage (item 6), and the
+    # pull request is the only place they are worth anything.
+    grep -q "duplicated derivation" "$body" || fail "the review's findings did not travel to the pull request"
+    # With the caveat attached to them. A reader who takes them for an approval
+    # is making exactly the mistake dropping the verdict was meant to prevent.
+    grep -q "is not an approval" "$body" || fail "the body does not say what the review is not"
+    grep -q "No person has read this diff" "$body" || fail "the body does not say the diff is unread"
+    grep -q "afk/$ticket" "$body" || fail "the body does not name the branch"
+
+    echo "case: the title of a one-commit branch is that commit's subject"
+    # A squash merge takes the pull request title as its commit subject, so it
+    # ends up in master's history. One commit means the implement stage already
+    # wrote one in this repository's house style, and the gate passed on it.
+    grep -q -- "--title afk: implement" "$state/gh.log" || fail "the pull request title is not the commit's subject: $(ghlog)"
+
+    echo "case: a finished ticket leaves nothing in flight, and the next poll runs"
+    # The in-flight guard refuses to poll past a leftover worktree, so a
+    # successful run that left one behind would be a pipeline that works
+    # exactly once. Asserted by actually polling again rather than by looking
+    # at the directory.
+    [ -z "$(worktrees)" ] || fail "a finished ticket left its worktree in flight: $(worktrees)"
+    # The local branch stays, which is what makes the half-worked check above
+    # refuse a ticket whose pull request is still open.
+    [ "$(branches)" = "afk/$ticket" ] || fail "the pushed branch was deleted locally: $(branches)"
+    run raise second-ticket.json reuse
+    [ "$rc" -eq 0 ] || fail "the poll after a finished ticket refused to start: $(cat "$state/err.log")"
+    grep -q "gh issue edit 330 " "$state/gh.log" || fail "the next ticket was never claimed: $(ghlog)"
+    grep -q "gh pr create" "$state/gh.log" || fail "the second ticket reached no pull request: $(ghlog)"
+
+    echo "case: a multi-attempt branch is titled after its ticket instead"
+    # Three commits, no one of which describes the branch. The ticket's own
+    # title is the honest answer, and it is the branch this case exists to
+    # distinguish - not a preference about wording.
+    run raise-retried mixed.json fresh "broken broken repair" pass
+    [ "$rc" -eq 0 ] || fail "a ticket that converged on its last attempt did not reach a pull request: $(cat "$state/err.log")"
+    grep -q -- "--title Unblocked at last" "$state/gh.log" \
+      || fail "a multi-commit branch was not titled after its ticket: $(ghlog)"
+
+    echo "case: a pull request that could not be opened leaves the run in flight"
+    # The branch is pushed by then and there is nothing to be done about that.
+    # What must not happen is the worktree being torn down as though the run
+    # had finished, which would hide a claimed ticket with no pull request
+    # behind a quiet, empty tracker.
+    export GH_PR_FAIL=1
+    run raise-prfail mixed.json fresh good pass
+    unset GH_PR_FAIL
+    [ "$rc" -ne 0 ] || fail "a pull request that was never opened was reported as success"
+    grep -q "could not be opened" "$state/err.log" || fail "did not say the pull request failed: $(cat "$state/err.log")"
+    [ -n "$(worktrees)" ] || fail "the worktree was torn down without a pull request"
+
+    echo "case: a diff that touches a denied path is refused at the push"
+    # docs/agents/afk-eligibility.md rule 1, asked of the diff. #302's prose
+    # names nothing denied - it is the diff that does, which is precisely what
+    # the pre-claim check cannot see and what this gate exists for. Nothing
+    # reaches origin in any of these, which is the property that matters: a
+    # pushed branch runs its own workflow with this repository's secrets before
+    # anybody reads it.
+    for denied in secret:secrets/new.yaml sops:.sops.yaml workflow:.github/workflows/other.yml; do
+      denied_plan="''${denied%%:*}"
+      denied_path="''${denied#*:}"
+      run "push-denied-$denied_plan" mixed.json fresh "$denied_plan"
+      [ "$rc" -ne 0 ] || fail "$denied_plan: a diff touching $denied_path was pushed anyway"
+      grep -qF "$denied_path" "$state/err.log" \
+        || fail "$denied_plan: the refusal did not name the path: $(cat "$state/err.log")"
+      [ -z "$(pushed)" ] || fail "$denied_plan: the branch reached origin: $(pushed)"
+      if grep -q "pr create" "$state/gh.log"; then fail "$denied_plan: a pull request was opened for a refused diff"; fi
+    done
+
+    echo "case: the one exception - a diff that only adds a checks-matrix entry is pushed"
+    # The collision item 2 settled: a check added under checks/ has to be added
+    # to ci.yml's hand-written matrix too, in an otherwise denied file, or no
+    # AFK ticket could ever add a check. This is that exception being taken.
+    export NIX_CHECKS="alpha beta gamma"
+    run push-matrix mixed.json fresh matrix pass
+    unset NIX_CHECKS
+    [ "$rc" -eq 0 ] || fail "an additions-only ci.yml diff was refused: $(cat "$state/err.log")"
+    [ "$(pushed)" = "afk/$ticket" ] || fail "the branch taking the exception did not reach origin: $(pushed)"
+    grep -q "additions-only" "$state/out.log" || fail "the gate did not say what it allowed: $(cat "$state/out.log")"
+    # And it checked the added entry against the flake's own checks rather than
+    # against the file the implement gate left behind. The implement gate
+    # already demands the two agree exactly, which makes that check redundant
+    # today - the point is that this one does not inherit it.
+    [ "$(grep -c "checks.x86_64-linux" "$state/nix.log")" -ge 2 ] \
+      || fail "the pre-push gate did not list the flake's checks for itself: $(cat "$state/nix.log")"
+
+    echo "case: a ci.yml diff that changes anything else is refused"
+    # The clause the whole exception rests on. Steps, permissions, triggers and
+    # secrets stay untouchable; an added matrix entry can only cause an
+    # existing sandboxed derivation to be built.
+    export NIX_CHECKS="alpha beta gamma"
+    run push-matrix-plus mixed.json fresh matrixplus pass
+    unset NIX_CHECKS
+    [ "$rc" -ne 0 ] || fail "a ci.yml diff that edited a run step was pushed"
+    grep -q "outside jobs.checks.strategy.matrix.check" "$state/err.log" \
+      || fail "did not say the diff left the exception: $(cat "$state/err.log")"
+    [ -z "$(pushed)" ] || fail "the branch reached origin: $(pushed)"
+
+    echo "case: a ci.yml diff that removes a matrix entry is refused"
+    # An entry removed silently stops a check from running, which is the
+    # failure ci.yml's own lint job exists to catch - so additions only, and an
+    # entry altered is a removal and an addition.
+    export NIX_CHECKS="alpha"
+    run push-matrix-drop mixed.json fresh matrixdrop pass
+    unset NIX_CHECKS
+    [ "$rc" -ne 0 ] || fail "a ci.yml diff that dropped a check was pushed"
+    grep -q "beta" "$state/err.log" || fail "the refusal did not name the entry removed: $(cat "$state/err.log")"
+    [ -z "$(pushed)" ] || fail "the branch reached origin: $(pushed)"
+
+    echo "case: an added matrix entry outside the character class is refused"
+    # A matrix entry is interpolated straight into a `run:` script by the
+    # workflow, so it is shell context rather than data, and "it names a real
+    # check" is not on its own enough to make the string safe - the agent
+    # writes checks/default.nix too, and Nix attribute names can be quoted.
+    export NIX_CHECKS="alpha beta Gamma"
+    run push-matrix-bad mixed.json fresh matrixbad pass
+    unset NIX_CHECKS
+    [ "$rc" -ne 0 ] || fail "an unsafe matrix entry was pushed"
+    grep -q "not a safe name" "$state/err.log" || fail "did not refuse the entry by name: $(cat "$state/err.log")"
+    [ -z "$(pushed)" ] || fail "the branch reached origin: $(pushed)"
+
     echo "case: one ticket at a time - a live worktree stops the next poll"
-    # Reusing the state the `mixed` case left behind: #302 is claimed and its
-    # worktree is on disk. systemd cannot prevent this on its own - two runs
-    # never overlap, but a run that died leaves exactly this behind - so the
-    # runner has to refuse, loudly, rather than start a second ticket beside it.
-    run mixed second-ticket.json reuse
+    # Reusing the state `implement-exhausted` left behind: #302 is claimed and
+    # its worktree is on disk because that run died mid-ticket. systemd cannot
+    # prevent this on its own - two runs never overlap, but a run that died
+    # leaves exactly this behind - so the runner has to refuse, loudly, rather
+    # than start a second ticket beside it. A run that *finished* leaves
+    # nothing, which is a different case and is asserted above.
+    run implement-exhausted second-ticket.json reuse
     [ "$rc" -ne 0 ] || fail "started a second ticket while one was still in flight"
     [ "$(claims)" -eq 0 ] || fail "claimed #330 with #302 unfinished: $(ghlog)"
     grep -qi "still here" "$state/err.log" || fail "did not say why it refused: $(cat "$state/err.log")"
