@@ -609,7 +609,7 @@ A PR needs to be opened and pushed by something other than `GITHUB_TOKEN`, or th
 
 ### Approach
 
-A fine-grained PAT scoped to this repo, held by the runner's own machine account (ADR 0006; a PAT rather than `GITHUB_TOKEN`, and - reversing ADR 0004 §4 - a separate GitHub account after all). This plan owns the naming the ADR delegates to it: branches it pushes use an **`afk/*`** prefix, and PRs it opens carry an **`afk-agent`** label, giving the same at-a-glance distinction `deps/*` already provides. Both are cosmetic and may be changed here without touching the ADR.
+An installation token from a GitHub App installed on this repo (ADR 0006; a credential of the runner's own rather than `GITHUB_TOKEN`, and - amending ADR 0004 §4 - an App rather than the fine-grained PAT that clause named, though §4's no-second-account reasoning is upheld, since an App is not a second account). This plan owns the naming the ADR delegates to it: branches it pushes use an **`afk/*`** prefix, and PRs it opens carry an **`afk-agent`** label, giving the same at-a-glance distinction `deps/*` already provides. Both are cosmetic and may be changed here without touching the ADR.
 
 The permission set is this plan's to fix too, and it is the smallest one the runner's verbs need:
 
@@ -617,7 +617,7 @@ The permission set is this plan's to fix too, and it is the smallest one the run
 | ------------- | -------------- | -------------------------------------------------------------- |
 | Contents      | Read and write | push the `afk/*` branch, and delete it again afterwards        |
 | Pull requests | Read and write | open the PR and label it (item 7)                              |
-| Issues        | Read and write | claim by assignee, comment, relabel (items 5 and 8)            |
+| Issues        | Read and write | claim by label, comment, relabel (items 5 and 8)               |
 | Metadata      | Read-only      | mandatory; GitHub selects it as soon as a repository is chosen |
 | Workflows     | Read and write | item 2's `ci.yml` checks-matrix exception - see below          |
 | Checks        | No access      | the runner opens a PR and stops - it never reads check status  |
@@ -648,7 +648,7 @@ The section above concludes that "the no-second-account decision and ruleset-enf
 
 So the conclusion of the section above survives: **ADR 0004 §9 is a property of the runner's code, asserted by item 5's harness, and not something the repository enforces.** Only its reason changes. What the second account does buy is item 12's author filter and item 15's move of the findings into a comment, neither of which needed the ruleset.
 
-One sentence in the `deploy` answer above goes stale with it. "A fine-grained PAT acts as the repository owner, and the owner is not on the bypass list either" covered every token here at once precisely because there was only one account. Once `AFK_AGENT_TOKEN` belongs to the machine account that is no longer an argument about it. The conclusion holds for a better reason - `restrict-deploy-updates` exempts only a deploy key, and a `write` collaborator is not one - but it is now two facts rather than one, so the new token gets checked against `deploy` directly (`gh api repos/{owner}/{repo}/rules/branches/deploy` under that token must still list `update`).
+One sentence in the `deploy` answer above goes stale with it. "A fine-grained PAT acts as the repository owner, and the owner is not on the bypass list either" covered every token here at once precisely because there was only one account. Once the runner authenticates as a GitHub App that is no longer an argument about it. The conclusion holds for a better reason - `restrict-deploy-updates` exempts only a deploy key, and an App installation is not one - but it is now two facts rather than one, so the runner's credential was checked against `deploy` directly: `gh api repos/{owner}/{repo}/rules/branches/deploy`, under the installation token, still lists `update`.
 
 ### Built, 2026-09-08
 
@@ -656,11 +656,17 @@ One sentence in the `deploy` answer above goes stale with it. "A fine-grained PA
 
 Proven the only way it can be, live. PR #189, opened by the token on `afk/token-smoke-test` and labelled `afk-agent`, ran `nixos ci` to green and was closed again. That is the whole claim: the same PR opened under `GITHUB_TOKEN` would have sat forever with its required check never firing. The narrowing was checked at the same time, from the other side - a private repo the token was not granted returns 404 to it.
 
-### To be reissued under the machine account (#200)
+### Replaced by an App installation token (#200)
 
-**Not yet done - this is the provisioning step #200 leaves open.** The token described above is issued by `corygyarmathy`. ADR 0006 moves it to the runner's own account: the same fine-grained PAT, with the same name, scope and permission table, issued by the machine account instead, and the old one revoked. The secret's path in `secrets/homelab01.yaml` and the module's `github-token` reference are both unchanged, so nothing in `modules/` or `.sops.yaml` moves.
+**Partly done.** The identity exists: the GitHub App `corygyarmathy-afk-agent`, App ID `4882603`, installed on `corygyarmathy/dotfiles` alone, carrying the permission table above as its installation permissions. Its bot login is `corygyarmathy-afk-agent[bot]` and its user id is `326868600`, so commits it authors carry `326868600+corygyarmathy-afk-agent[bot]@users.noreply.github.com` - the parameter item 12's filter needs. The private key is in `secrets/homelab01.yaml`.
 
-Both claims under Testing have to be re-proved under the new identity rather than inherited: a token's narrowing is a property of that token, and whether its pull requests fire `nixos ci` is a property of the account that opens them. Two more are worth taking at the same time, because they are cheap while the old token is still live - that the new token is refused an admin-only write, which is the ceiling this whole change buys, and that `deploy`'s `update` rule applies to it, which is the ADR 0005 re-check below.
+**The key's path is not yet where it belongs.** It sits at the top level as `corygyarmathy-afk-agent/private-key`; every other CI credential in that file is grouped under `gh-ci`, and `checks/secrets.nix` matches on the name a host declares. Move it to `gh-ci/afk-agent-app-private-key` before the module change lands, so the declaration and the file agree the first time rather than after a failed `nix flake check`.
+
+**What is left is the credential swap and the revocation.** `AFK_AGENT_TOKEN` as described above is a PAT issued by `corygyarmathy`, and it is still what `modules/services/afk-agent.nix` loads through `github-token = "gh-ci/dotfiles-afk-agent-PAT"`. Under an App the module loads the private key instead and mints from it, so `credentials` loses the PAT path and gains the key path, the App ID becomes a module option rather than a secret (it is not one - it is in the App's URL), and the old PAT is revoked once nothing reads it.
+
+**The mint is not a one-off at unit start, and that is the one genuinely new piece of code this costs.** An installation token lives one hour, while `attemptTimeout` is 3600 and `maxRuntime` covers three attempts plus their gates, so the token expires mid-run as the normal case rather than the exceptional one. `GH_TOKEN="$(cat "$creds/github-token")"` becomes a function that mints on first use, caches with an expiry, and re-mints when the cache is stale - checked before each stage rather than retried on a 401, so a token that dies between the push and the pull request surfaces as a re-mint rather than a confusing permission error. The JWT is RS256 over `{iat, exp, iss}` with `exp` at most ten minutes out, signed with `openssl dgst -sha256 -sign`; the installation id comes from `GET /app/installations` under that JWT, and the token from `POST /app/installations/{id}/access_tokens`. Roughly forty lines of shell, and testable against the mocked-`gh` harness item 5 already builds.
+
+Both claims under Testing were re-proved under the new identity rather than inherited, on throwaway PR #214. `nixos ci` fires: `event: pull_request`, `triggering_actor: corygyarmathy-afk-agent[bot]`, thirty check runs queued before it was cancelled. And `deploy`'s `update` rule applies to the installation token, which is the ADR 0005 re-check below. The narrowing claim is now structural rather than a property of a scope list: an App installed on one repository has no reach to another, and there is no equivalent of a PAT's repository selector to get wrong.
 
 ### Testing
 
@@ -838,6 +844,19 @@ Three things only that run can settle, and they are the reason it is not a forma
 Demonstrated in two halves rather than one run, which is worth writing down because the "Done when" reads as one: PR #194 ran the poll against the live tracker on #171 itself, claimed it, cut the branch clean, and then proved the guard from both sides - a second poll refused while the worktree stood, and a third found nothing once it was cleared, because the assignee it had written was doing the filtering. PR #195 ran the implement stage under the unit's own `ExecStart`, `PATH` and environment against #178, which converged on the first attempt to a commit on `afk/178-the-lock-screen-is-off-palette`.
 
 The branch from that run was deliberately left unpushed: pushing is item 7's job (#174), and wiring it here would have put a push behind a gate that did not exist yet.
+
+### Superseded in one line, 2026-09-09 (#200)
+
+The claim above is `gh issue edit <n> --add-assignee @me`, and ADR 0006 takes that away: the runner authenticates as a GitHub App, and GitHub refuses to assign an App to an issue. The work already done stands - what #194 demonstrated about the guard is still true, it just gets its filtering from a different field. Four places change, and no more than that:
+
+- `modules/services/afk-agent.nix`, the claim write. `--add-assignee @me` becomes `--remove-label ready-for-agent --add-label agent-working`.
+- `checks/afk-agent-runner.nix`, the assertion that pins it: `grep -q "gh issue edit 302 .* --add-assignee @me"` becomes the equivalent over the two label flags.
+- `docs/agents/issue-tracker.md`, which now carries the runner's claim as a clause beside the human one.
+- Item 3's permission table, whose Issues row reads "claim by assignee".
+
+**What does not change is the frontier query.** Reading assignees still works perfectly well under an installation token - only the write is refused - so `--label ready-for-agent` plus `select((.assignees | length) == 0)` stays exactly as it is, and a ticket a human has parked on themselves is still skipped. The double-processing guard also keeps its shape: the claim removes the label the query filters on, so a second poll stops seeing the ticket for the same structural reason it used to stop seeing an assigned one.
+
+**One parameter this leaves open:** when `agent-working` comes off. The assignee never had to be cleaned up, because a closed ticket is out of the query either way. A label is more visible and more likely to go stale, so it wants an owner - most likely item 7, dropping it when the pull request is opened, with item 8's stuck path swapping it for `agent-stuck` instead. `agent-working` and `agent-stuck` both belong in `docs/agents/triage-labels.md` before either ships.
 
 ---
 
@@ -1180,7 +1199,7 @@ A second entry point on the same runner, not a new service.
 - **Resume rather than claim.** The runner's existing path cuts a fresh branch from a fresh worktree; this one re-establishes the worktree at the PR's head branch. That is the real new machinery, and it is where the in-flight guard and the denylist have to be re-derived rather than assumed - the diff being revised is not the diff that was claimed.
 - **The comments are the prompt.** Fetched with `gh pr view --json reviews,comments`, threaded, and handed to the implement stage as its instruction, against the same bounded retry budget and the same gate. Nothing else about the implement stage changes.
 - **Author filtering is a safety property, not a nicety.** Only comments from accounts other than the agent's own are read. Without it, the agent's own PR body - which carries the advisory review's findings - becomes an instruction to itself on the next pass, which is precisely the loop item 6 refused.
-- **The filter is a login comparison, and it works as written since #200.** Drop every comment whose `author.login` is the machine account's, keep the rest. It was unimplementable while ADR 0004 §4 stood, because under one account the set it selects for was empty and the only distinction available was positional - body versus comment. ADR 0006 gives the runner its own account, so the filter now selects the thing it was always described as selecting. The login is a parameter, not a constant: it belongs next to the branch prefix and label above, and the runner should read it from the token (`gh api user --jq .login`) rather than hard-coding a string that a re-provisioned account would silently change.
+- **The filter is a login comparison, and it works as written since #200.** Drop every comment whose `author.login` is the runner's own, keep the rest. It was unimplementable while ADR 0004 §4 stood, because under one account the set it selects for was empty and the only distinction available was positional - body versus comment. ADR 0006 gives the runner an identity of its own, so the filter now selects the thing it was always described as selecting. The login is `corygyarmathy-afk-agent[bot]`, and it is a parameter rather than a constant - it belongs next to the branch prefix and label above. It cannot be read back from the credential the way a PAT's owner could be: `gh api user` returns `403 Resource not accessible by integration` under an installation token, which carries no user context. Derive it from the App slug the runner already needs in order to mint a token, so that a re-provisioned App changes it in one place rather than silently breaking the filter.
 - **A revision budget, the way implement has one.** Three rounds per pull request, then the ticket goes to the stuck path (item 8). A disagreement between a person and a model is otherwise unbounded spend, and the failure mode is not a crash but a slow argument nobody is watching.
 - **Push to the same branch, comment on the PR saying what was addressed and what was not.** Never force-push over a commit the human wrote themselves.
 - **Re-run the review stage on the revision**, advisory as before. It costs cents and the notes ride along.
@@ -1254,7 +1273,7 @@ And merge stays a human act only because the runner's script does not merge it. 
 
 ### Approach
 
-A machine account, added as a **write** collaborator, with `AFK_AGENT_TOKEN` reissued under it and item 3's permission table unchanged.
+A distinct identity for the runner, with item 3's permission table unchanged. ADR 0006 settles which one: a GitHub App installed on this repository, rather than the machine account this item first assumed.
 
 The question worth the most is not the one item 3 framed. `required_approving_review_count: 1` is the wrong instrument - the reviewer advises rather than approves, and requiring an approval binds human pull requests too. The right question is whether a ruleset can restrict **who may merge to `master`**, with the human as a bypass actor: the same shape #190 is weighing for `deploy`. If it works, §9 stops being a property of a shell script.
 
@@ -1278,13 +1297,37 @@ The merge-restriction question is settled, and the answer is no - for a reason t
 
 A pull request's mergeability is computed for the branch rather than for a viewer, which is why the same rule works on `deploy` (a push, evaluated against the pusher) and not here. Adopting it would cost the CI gate on every human merge and the nightly lock pipeline entirely, so ADR 0004 §9 stays where item 3 put it: in the runner's code, asserted by item 5's harness.
 
-The account is still worth having, on the two grounds that never depended on the ruleset - item 12's author filter and the permission ceiling. ADR 0006 records both, and reverses ADR 0004 §4.
+A distinct identity is still worth having, on the two grounds that never depended on the ruleset - item 12's author filter and the permission ceiling. ADR 0006 records both, and settles the identity as a GitHub App.
 
-**Still open, and only closable once the account exists:** that a `write` collaborator is refused both the plain merge and the `--admin` override. Every probe above ran as the admin, so the negative case is inferred from GitHub's permission model rather than observed.
+**Still open:** that the runner's own credential is refused the merge. It is not refused by its permissions - `Contents: write` and `Pull requests: write` are what pushing a branch and opening a pull request need, and they are also what merging needs - so §9 was never going to be enforced by the token. The `--admin` override is separately out of reach, since the installation reports no repository role at all, but that is inference from the permission set rather than an observed refusal.
+
+### Also answered, 2026-09-09: a GitHub App cannot hold the claim (#200)
+
+The identity question was reopened by an observation worth more than the article that prompted it: a GitHub App would _satisfy_ ADR 0004 §4's objection rather than override it. §4 refused a second account because of what a second account drags in - an email address, a 2FA secret, recovery codes - and an App has none of the three. So `corygyarmathy-afk-agent` was created and installed on this repository to test it, and the test was ADR 0004 §3's claim, because §3 uses `gh issue edit <n> --add-assignee @me` as the guard against double-processing and GitHub's REST documentation says an invalid assignee is _silently ignored_. A guard that fails silently is worse than no guard: the symptom is two runners on one ticket rather than an error.
+
+| Probed against the real API | Result |
+| ---------------------------- | ------ |
+| `GET /repos/{repo}/assignees/corygyarmathy-afk-agent[bot]` | `404` |
+| `suggestedActors(capabilities: [CAN_BE_ASSIGNED])` | only `corygyarmathy` |
+| REST `POST /issues/{n}/assignees` naming the bot | `403 Forbidden` |
+| GraphQL `addAssigneesToAssignable` naming the bot | `FORBIDDEN` - _"Could not assign agent: `corygyarmathy-afk-agent[bot]` cannot be assigned to issues or pull requests"_ |
+| _control:_ the same call naming `corygyarmathy` | assigned |
+| _control:_ the same call naming a login that does not exist | `200`, assignee silently dropped |
+
+The two controls are the point of the table. The silent-ignore behaviour is real and reproducible, so the failure mode §3 would have to fear does exist - but an App does not hit it. It is refused down a separate path, loudly, by both APIs, and GitHub's own assignable-agent feature is an allowlist a custom App does not inherit.
+
+An App identity therefore cannot use §3's claim as written. The marker has to move to something an App can hold, and the cheapest one already exists: the runner's frontier query is scoped by `ready-for-agent`, so dropping that label _is_ the claim. That leaves the assignee convention in `docs/agents/issue-tracker.md` untouched for humans reading the same tracker, and item 8's stuck path re-adds the label exactly as it now hands the ticket back.
+
+Two consequences found while checking, recorded before they are forgotten:
+
+- An installation token lives one hour, and `attemptTimeout` is already 3600 with `maxRuntime` covering three attempts plus their gates. The token expires mid-run as the normal case rather than the exceptional one, so reading `GH_TOKEN` stops being a file read and becomes a mint-and-cache with an expiry check.
+- Item 12's `gh api user --jq .login` does not work under an installation token, which carries no user context. The login has to come from the App's slug instead - still a parameter, just a differently-sourced one.
+
+**Verified, and the whole App path rested on it:** a pull request opened by an installation token does run `nixos ci`. `GITHUB_TOKEN` suppresses workflow events, and `GITHUB_TOKEN` is itself an installation token - of the `github-actions` App - so the suppression had to be shown to be specific to the default token rather than general to installation tokens, since that suppression is this repository's entire reason for holding a token of its own. A bot-authored commit was pushed under the App and PR #214 opened by it: `NixOS CI` started on `event: pull_request` with `triggering_actor: corygyarmathy-afk-agent[bot]` and thirty check runs queued. The run was cancelled and the branch deleted once the answer was visible.
 
 ### Done when
 
-The account exists as a write collaborator, the token is reissued under it and the old one revoked, a pull request it opens runs `nixos ci`, and the merge-restriction question is answered either way and written down.
+The runner has an identity of its own and a credential minted under it, the old PAT is revoked and out of `secrets/homelab01.yaml`, a pull request it opens runs `nixos ci`, and the merge-restriction question is answered either way and written down. Two of the four are met: the identity exists, and PR #214 proved the `nixos ci` trigger. The merge question is answered above. What is left is the credential swap in `modules/services/afk-agent.nix` and the revocation.
 
 ---
 
