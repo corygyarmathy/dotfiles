@@ -199,17 +199,18 @@ in
     # -------------------------------------------------------------------------
     # AFK agent (unattended ticket runner)
     # -------------------------------------------------------------------------
-    # Off. The pre-push denylist gate is no longer the reason: it landed with
-    # item 7 (#174), so docs/agents/afk-eligibility.md is now enforced against
-    # the diff immediately before every push (#201 made that more than one).
-    # What is left is an answer to #190 on whether `deploy` should restrict who
-    # may push, and the stuck path (#175), without which a failed ticket wedges
-    # every later poll - and since #201 opens the pull request before the
-    # review, a failure past the push leaves that open as well. All of it is
-    # named in the module's own `enable` description; this is the host writing
-    # the switch down so that turning it on later is one word here rather than
-    # a new block.
-    afk-agent.enable = false;
+    # On, 2026-09-10. Every condition this switch was held closed against has
+    # been met: the pre-push denylist gate landed with item 7 (#174) and runs
+    # against the diff before every push (#201 made that more than one); the
+    # stuck path landed with item 8 (#175), so a ticket the runner cannot
+    # finish is commented on, relabelled `agent-stuck` and torn down rather
+    # than left to wedge every later poll; the notifications landed with item
+    # 9 (#176), so both endings reach a phone; and #190 is answered and shipped
+    # - `restrict-deploy-updates` lets only `ci-promote-deploy`'s deploy key
+    # move `deploy`, proven on #198's merge with the rule active (ADR 0005).
+    # The kill switch is this word: back to `false` plus a rebuild removes the
+    # timer, the unit and the service account (checks/afk-agent.nix pins that).
+    afk-agent.enable = true;
 
     immich.enable = false;
     home-assistant.enable = false;
