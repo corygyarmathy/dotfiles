@@ -174,13 +174,17 @@ has to run **before the push**. The push becomes a PR, the PR runs the head
 branch's workflow with the repository's secrets before anyone reads it, and
 after that there is nothing left to gate.
 
-Item 7 built it (#174). It runs immediately before the push rather than as soon
-as the implementation converged, because the review session that sits between
-those two points is denied `edit` by a pattern match on a command line rather
-than by a capability boundary - a gate placed before it is a gate something
-after it can still get past. `checks/afk-agent-runner.nix` exercises it against
-a real `ci.yml` in the fixture repository with the real `yq`, since the
-exception below turns entirely on what yq makes of both sides of the diff.
+Item 7 built it (#174) and item 13 (#201) moved it. It is now the first line of
+the one function in the runner that pushes, `push_branch`, and the push is the
+last: nothing sits between them, and nothing else in the script pushes at all.
+That matters more than it did, because a run pushes more than once now - a red
+CI run is fixed and the fix goes to the same branch (ADR 0007) - and a second
+push is every bit as capable of putting a workflow file on a branch that runs
+with this repository's secrets. `checks/afk-agent-runner.nix` exercises the gate
+against a real `ci.yml` in the fixture repository with the real `yq`, since the
+exception below turns entirely on what yq makes of both sides of the diff; it
+also reads `push_branch` itself, so an edit that put something between the gate
+and the push fails there rather than in production.
 
 Item 5's runner does re-check the denylist before it claims (moment 2 above),
 but that check reads the ticket's prose and this exception cannot be judged
