@@ -6,12 +6,12 @@ Encrypted with [sops](https://github.com/getsops/sops) and age, decrypted by [so
 
 **A secret lives in the file for the host that needs it.** "Needs" means a `sops.secrets."<name>"` declaration in that host's evaluated configuration — not that the service happens to run there.
 
-| File             | Read by                | Holds                                                                                                                    |
-| ---------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `shared.yaml`    | both servers           | Only what two machines must agree on. Every entry is justified in `cg.sops-nix.sharedSecrets` (`modules/nixos/sops-nix.nix`). |
-| `homelab01.yaml` | homelab01              | Everything only homelab01 declares — the tunnel, Grafana, miniflux, wallabag, the garden, and the AFK agent's GitHub PAT and OpenCode credentials. |
-| `homelab02.yaml` | homelab02              | Everything only homelab02 declares — qBittorrent, the VPN, grimmory's database.                                            |
-| `xps15.yaml`     | xps15                  | The laptop's wifi PSKs. Nothing else on a machine that leaves the house.                                                   |
+| File             | Read by                | Holds                                                                                                                                                                  |
+| ---------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared.yaml`    | both servers           | Only what two machines must agree on. Every entry is justified in `cg.sops-nix.sharedSecrets` (`modules/nixos/sops-nix.nix`).                                          |
+| `homelab01.yaml` | homelab01              | Everything only homelab01 declares — the tunnel, Grafana, miniflux, wallabag, the garden, and the AFK agent's GitHub PAT and OpenCode credentials.                     |
+| `homelab02.yaml` | homelab02              | Everything only homelab02 declares — qBittorrent, the VPN, grimmory's database.                                                                                        |
+| `xps15.yaml`     | xps15                  | The laptop's wifi PSKs. Nothing else on a machine that leaves the house.                                                                                               |
 | `operator.yaml`  | nobody — the user only | Secrets that belong to a person rather than a machine: the user's SSH keys, CI tokens no host declares, and web logins for services that keep their own user database. |
 
 Two consequences worth stating, because both are easy to get wrong:
@@ -73,13 +73,13 @@ Reinstalling a host regenerates its SSH host key and therefore its age key, and 
 
 Every file is encrypted to the keys that read it and to nothing else:
 
-| File             | Recipients                     |
-| ---------------- | ------------------------------ |
-| `shared.yaml`    | user, homelab01, homelab02     |
-| `homelab01.yaml` | user, homelab01                |
-| `homelab02.yaml` | user, homelab02                |
-| `xps15.yaml`     | user, xps15                    |
-| `operator.yaml`  | user                           |
+| File             | Recipients                 |
+| ---------------- | -------------------------- |
+| `shared.yaml`    | user, homelab01, homelab02 |
+| `homelab01.yaml` | user, homelab01            |
+| `homelab02.yaml` | user, homelab02            |
+| `xps15.yaml`     | user, xps15                |
+| `operator.yaml`  | user                       |
 
 So the laptop cannot decrypt a server secret, neither server can decrypt the other's, and `operator.yaml` is opened by the user key alone. That last row is the one with an operational consequence: **`operator.yaml` has no second key.** Lose `~/.config/sops/age/keys.txt` and nothing else can open it — the host keys, which survive a lost workstation, do not read that file by design.
 
