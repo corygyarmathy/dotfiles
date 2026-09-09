@@ -95,7 +95,13 @@ Naming the shards rather than discovering them is what keeps that saving: discov
 
 **Never create a branch under `deploy/`.** Git stores refs as paths, so `deploy/my-branch` turns `refs/heads/deploy` into a directory and promotion fails with `directory file conflict` for as long as that branch exists. The `reserve-deploy-namespace` ruleset blocks this at the server; the failure is obscure enough to be worth naming twice.
 
-**`deploy` rejects non-fast-forward pushes, with zero bypass actors.** Not even an admin or `GITHUB_TOKEN` can force-push or delete it. This is deliberate, and it means the recovery below requires temporarily relaxing a ruleset - there is no way around it from the client side.
+**`deploy` rejects non-fast-forward pushes, with zero bypass actors.** Not even an admin, `GITHUB_TOKEN`, or the deploy key in the next invariant can force-push or delete it. This is deliberate, and it means the recovery below requires temporarily relaxing a ruleset - there is no way around it from the client side.
+
+**`deploy` accepts a push from exactly one identity, and it is not `GITHUB_TOKEN`.** The `restrict-deploy-updates` ruleset puts an `update` rule over `refs/heads/deploy` whose only bypass actor is `ci-promote-deploy`, a write deploy key, so `promote` pushes over SSH with the `PROMOTE_DEPLOY_KEY` secret and every PAT is refused - `FLAKE_UPDATE_TOKEN`, `AFK_AGENT_TOKEN`, and your own, since a fine-grained PAT acts as the repository owner and the owner is not on that list. `GITHUB_TOKEN` could not have been the exception: GitHub refuses the GitHub Actions app as a bypass actor on a **user-owned** repository (`422 Actor GitHub Actions integration must be part of the ruleset source or owner organization`) - the same organization-only shape as merge queues above, and the second time this repo has designed around it. It is a *second* ruleset rather than a rule inside `protect-deploy` because a bypass belongs to the whole ruleset, and the invariant above has to stay true. [ADR 0005](../../docs/adr/0005-only-a-deploy-key-may-move-deploy.md) has the reasoning and the probes that ruled out the alternatives.
+
+**The deploy key does not close the workflow path to `deploy`, and is not meant to.** `PROMOTE_DEPLOY_KEY` is a repository secret, and a `pull_request` event runs the workflow file from the PR's head branch, so an edited `ci.yml` can still read it and push. That is why `.github/workflows/` stays on the AFK path denylist (`docs/agents/afk-eligibility.md`) even though every diff is reviewed before merge. What the ruleset closes is the short way - one `git push` from any write credential - not the long one.
+
+**Two things have to move together to rotate that key.** The repository's deploy key and the `PROMOTE_DEPLOY_KEY` secret are separate objects, and replacing one without the other is a red `promote` on the next push to master. `gh api repos/{owner}/{repo}/keys` should list exactly one key, `ci-promote-deploy`; the `DeployKey` bypass names the actor *type* rather than one key, so a second write key added later silently joins the bypass list.
 
 **Promotion is deliberately not a force push.** `ci.yml` pushes without `--force`, so a `deploy` that has diverged fails the job loudly rather than silently discarding whatever is there. A red promote step is the pipeline working.
 
@@ -148,7 +154,7 @@ git cherry origin/master origin/deploy | grep '^+'   # expect no output
 
 Any `+` line is a commit that exists _only_ on the deployment ref - stop and work out where it came from, because realigning would discard it.
 
-**Relax the ruleset.** GitHub → Settings → Rules → Rulesets → `protect-deploy` → Enforcement status → Disabled. Prefer the UI: the API equivalent is a `PUT`, which replaces the whole ruleset, so a mistyped call is a rewrite rather than a toggle. `gh api repos/corygyarmathy/dotfiles/rulesets` lists them if you want the IDs.
+**Relax the rulesets - both of them.** GitHub → Settings → Rules → Rulesets → `protect-deploy` → Enforcement status → Disabled, and the same for `restrict-deploy-updates`. `protect-deploy` is what rejects the non-fast-forward; `restrict-deploy-updates` is what rejects *you*, since the push below comes from your own credential rather than from CI's deploy key. Prefer the UI: the API equivalent is a `PUT`, which replaces the whole ruleset, so a mistyped call is a rewrite rather than a toggle. `gh api repos/corygyarmathy/dotfiles/rulesets` lists them if you want the IDs.
 
 **Push the ref, with an explicit lease** so the push aborts if the remote is not where you think it is. The target is `origin/master`, since that is what it would have been fast-forwarded to anyway:
 
@@ -156,7 +162,7 @@ Any `+` line is a commit that exists _only_ on the deployment ref - stop and wor
 git push --force-with-lease=deploy:<old-deploy-sha> origin origin/master:refs/heads/deploy
 ```
 
-**Re-enable the ruleset immediately.** An unprotected `deploy` is the real risk in this procedure, and it is the step easiest to forget once the pipeline goes green.
+**Re-enable both rulesets immediately.** An unprotected `deploy` is the real risk in this procedure, and it is the step easiest to forget once the pipeline goes green. Two rulesets means two chances to forget one; `gh api repos/corygyarmathy/dotfiles/rulesets --jq '.[] | "\(.name)\t\(.enforcement)"'` reads back all of them at once.
 
 **Verify:**
 

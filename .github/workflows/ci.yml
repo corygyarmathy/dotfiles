@@ -43,7 +43,8 @@ on:
     branches: [master]
   workflow_dispatch: # Allows manual triggering
 
-# Read-only by default; the promote job opts into contents: write for itself.
+# Read-only, with no job opting out. `promote` moves `deploy` with a deploy key
+# over SSH rather than with `GITHUB_TOKEN` - see that job and ADR 0005.
 permissions:
   contents: read
 
@@ -295,24 +296,55 @@ jobs:
 
   # Fast-forward `deploy` to the commit that just passed the gate. This is the
   # only thing that moves what the fleet runs (ADR 0001).
+  #
+  # NOTE: this job has no `contents: write`, and that is not an oversight. The
+  # `restrict-deploy-updates` ruleset lets nothing but the `ci-promote-deploy`
+  # deploy key update `refs/heads/deploy`, so the push below authenticates with
+  # that key over SSH and the workflow's read-only `GITHUB_TOKEN` is enough for
+  # everything else here. `GITHUB_TOKEN` could not have been the exception:
+  # GitHub refuses the GitHub Actions app as a bypass actor on a user-owned
+  # repository (ADR 0005).
   promote:
     name: promote to deploy
     runs-on: ubuntu-latest
     needs: [gate]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # A shallow clone cannot be used to update another ref.
           fetch-depth: 0
+          # Nothing in this job writes with `GITHUB_TOKEN`, so it should not be
+          # left behind in the checkout's remote config either.
+          persist-credentials: false
 
       - name: Fast-forward deploy
+        env:
+          PROMOTE_DEPLOY_KEY: ${{ secrets.PROMOTE_DEPLOY_KEY }}
         run: |
           set -euo pipefail
+
+          # An absent secret would otherwise surface as an SSH auth failure
+          # against a ref nobody can push to - two layers away from the cause.
+          if [ -z "${PROMOTE_DEPLOY_KEY}" ]; then
+            echo "::error::PROMOTE_DEPLOY_KEY is empty - deploy cannot be promoted"
+            exit 1
+          fi
+
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$PROMOTE_DEPLOY_KEY" >"$key"
+          chmod 600 "$key"
+
+          # `accept-new` rather than `yes`: the runner image ships github.com in
+          # known_hosts, so this is normally a no-op, and failing the promotion
+          # over an image that stopped doing so would be a worse trade than
+          # trusting a first sighting here.
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+
           # Deliberately not a force push: if `deploy` has diverged from master,
           # something manual happened and it should fail loudly rather than
           # silently discard whatever is there.
-          git push origin "${{ github.sha }}:refs/heads/deploy"
+          git push "git@github.com:${{ github.repository }}.git" \
+            "${{ github.sha }}:refs/heads/deploy"
           echo "::notice::deploy now at ${{ github.sha }}"
