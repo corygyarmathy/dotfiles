@@ -140,7 +140,9 @@ What this buys is bounded: an added entry can cause an existing, sandboxed
 derivation to be built, and nothing else. It cannot introduce a step, reference
 a secret, or widen a permission.
 
-Checkable from the diff, roughly:
+Checkable from the diff, roughly - and this sketch is now implemented as
+`push_gate` in `modules/services/afk-agent.nix`, which runs it against
+`git diff origin/master...HEAD` immediately before the push:
 
 ```bash
 # 1. nothing else under .github/workflows/ changed
@@ -170,8 +172,15 @@ That leaves all three enforcement moments above as the agent checking itself, so
 the diff check sketched here is the only control rather than an extra - and it
 has to run **before the push**. The push becomes a PR, the PR runs the head
 branch's workflow with the repository's secrets before anyone reads it, and
-after that there is nothing left to gate. Item 7 owns implementing it as a
-pre-push gate, and the runner is not switched on before it exists.
+after that there is nothing left to gate.
+
+Item 7 built it (#174). It runs immediately before the push rather than as soon
+as the implementation converged, because the review session that sits between
+those two points is denied `edit` by a pattern match on a command line rather
+than by a capability boundary - a gate placed before it is a gate something
+after it can still get past. `checks/afk-agent-runner.nix` exercises it against
+a real `ci.yml` in the fixture repository with the real `yq`, since the
+exception below turns entirely on what yq makes of both sides of the diff.
 
 Item 5's runner does re-check the denylist before it claims (moment 2 above),
 but that check reads the ticket's prose and this exception cannot be judged

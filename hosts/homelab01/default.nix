@@ -199,13 +199,14 @@ in
     # -------------------------------------------------------------------------
     # AFK agent (unattended ticket runner)
     # -------------------------------------------------------------------------
-    # Off, and it stays off until two things land: item 5's pre-push denylist
-    # gate (docs/plans/afk-agent-pipeline.md), without which
-    # docs/agents/afk-eligibility.md is enforced by nothing on the push path,
-    # and an answer to #190 on whether `deploy` should restrict who may push.
-    # Both are named in the module's own `enable` description; this is the host
-    # writing the switch down so that turning it on later is one word here
-    # rather than a new block.
+    # Off. The pre-push denylist gate is no longer the reason: it landed with
+    # item 7 (#174), so docs/agents/afk-eligibility.md is now enforced against
+    # the diff immediately before the push. What is left is an answer to #190
+    # on whether `deploy` should restrict who may push, and the stuck path
+    # (#175), without which a failed ticket wedges every later poll. Both are
+    # named in the module's own `enable` description; this is the host writing
+    # the switch down so that turning it on later is one word here rather than
+    # a new block.
     afk-agent.enable = false;
 
     immich.enable = false;
