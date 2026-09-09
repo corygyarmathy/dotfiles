@@ -2572,10 +2572,13 @@ in
       is tracked separately against OpenCode's own usage API (see #221),
       not by a ledger this runner keeps.
 
-      One thing still argues for leaving it off: #190 asks whether `deploy`
-      should restrict who may push, and `deploy` is a shorter route to the
-      fleet than any workflow edit - worth answering before an unattended
-      process holds a credential that can take it.
+      Nothing argues for leaving it off any more. The last thing that did was
+      #190 - whether `deploy` should restrict who may push, `deploy` being a
+      shorter route to the fleet than any workflow edit - and it is answered
+      and shipped: `restrict-deploy-updates` allows the `update` rule to be
+      bypassed by a deploy key alone, so `ci-promote-deploy` moves `deploy`
+      and no token this pipeline can hold does (ADR 0005). homelab01 turned
+      the switch on 2026-09-10.
     '';
 
     schedule = lib.mkOption {
