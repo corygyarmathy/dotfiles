@@ -1055,6 +1055,30 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the review prompt does not ask for a closing summary"
     grep -q "worth less" "$state/review-args" || fail "the review prompt does not rank taste findings below the rest"
 
+    echo "case: the review prompt forbids certifying what it did not run"
+    # The largest quality defect in the 25 measured runs, and the one the
+    # verdict machinery was structurally blind to: 9 of 15 runs on the flawed
+    # subject certified the criterion that diff breaks, and 4 of the 5 runs
+    # that found the defect certified it anyway in the same report. Every one
+    # of those emitted a well-formed verdict line while doing it.
+    grep -q "unless you ran something that shows it" "$state/review-args" \
+      || fail "the review prompt does not forbid unverified certification"
+    grep -q "did not check it" "$state/review-args" \
+      || fail "the review prompt does not invite the reviewer to say what it left unchecked"
+
+    echo "case: review runs on its own model, not the implement stage's"
+    # Settled by different measurements answering different questions: item 1's
+    # ranking measured implementation, item 6's arms measured review. Review is
+    # one pass with no retry budget, which is what makes the expensive model
+    # affordable there and not here. A future edit that collapses these back
+    # into one binding fails this rather than silently doubling ticket cost or
+    # silently halving review quality.
+    review_model="$(flag_value "$state/review-args" --model)"
+    implement_model="$(flag_value "$state/args-1" --model)"
+    [ -n "$review_model" ] || fail "the review session was launched with no --model"
+    [ "$review_model" != "$implement_model" ] \
+      || fail "review and implement ran the same model ($review_model); item 6 settled them separately"
+
     echo "case: one ticket at a time - a live worktree stops the next poll"
     # Reusing the state the `mixed` case left behind: #302 is claimed and its
     # worktree is on disk. systemd cannot prevent this on its own - two runs
