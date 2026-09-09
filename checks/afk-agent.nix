@@ -157,6 +157,40 @@
             f"the run never reached the poll:\n{journal}"
         )
 
+    with subtest("the model gets a shell that will run a command"):
+        # This is here because its absence cost a live run. opencode spawns
+        # `$SHELL` for every bash call the model makes; systemd fills `$SHELL`
+        # in from the service account's passwd entry unless the unit says
+        # otherwise; and an `isSystemUser` account's passwd shell is `nologin`.
+        # So the first real ticket claimed, cloned and isolated, and then every
+        # command the agent ran answered "This account is currently not
+        # available." - while the runner's own `gh` and `git` calls, which
+        # never go through a shell, worked throughout.
+        #
+        # Two assertions rather than one, because they fail differently. The
+        # unit's own `$SHELL` is the fix; `require_shell` firing in the journal
+        # is what makes a future regression fail on an empty poll rather than
+        # on a ticket that has already been claimed.
+        shell = enabled.succeed(
+            "systemctl show -p Environment --value afk-agent.service"
+            " | tr ' ' '\n' | sed -n 's/^SHELL=//p'"
+        ).strip()
+        assert shell, "the unit sets no SHELL, so opencode inherits the account's nologin"
+        enabled.succeed(f"test -x {shell}")
+        enabled.succeed(f"{shell} -c 'exit 0'")
+
+        assert f"shell '{shell}' runs commands" in journal, (
+            f"the preflight did not check the shell, so a nologin would reach a claimed ticket:\n{journal}"
+        )
+
+        # And the account itself is still not one anybody can log into. The
+        # shell is a property of the unit, not a login shell handed to a system
+        # account that has no other use for one.
+        passwd_shell = enabled.succeed("getent passwd afk-agent | cut -d: -f7").strip()
+        assert "nologin" in passwd_shell, (
+            f"the fix gave the service account a login shell instead: {passwd_shell}"
+        )
+
     with subtest("no credential value reaches the journal"):
         # The unit reads four secrets on every poll. A debug echo left behind
         # in the runner would put a repo-write App key into the system journal,
