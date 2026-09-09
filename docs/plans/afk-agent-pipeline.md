@@ -892,6 +892,31 @@ So **2 of 3 runs saw the actual bug and neither gated on it**, where `glm-5.3-fl
 
 **Net: do not switch the review stage to `deepseek-v4-pro` on this evidence.** It is 15-25x the cost, it gates no more reliably, and its one `fail` was for a reason item 5's gate already catches. Keep `glm-5.3-flash` for both stages; the recorded reason to revisit is a rubric change, not a model change.
 
+Raw evidence for both arms - the frozen prompt, the pre-registration, the harness, and every run's log and export - is in `~/pilot/review-arm/`, with a README. The plan states the conclusions; that directory is what they rest on.
+
+### The rubric experiment, specified and not yet run
+
+What the finding above leaves. Written out here so it is not re-derived, and so the arms are fixed before anyone sees a result.
+
+**The claim under test.** The stage fails to gate not because the reviewer cannot see the defect but because the rubric lets it decline. Both `deepseek-v4-pro` runs that found the bug talked themselves out of it, and both cited something true - the ticket's own preference for over-refusal, and a pre-existing `taken` URL check in the same file with the same pass-1 ordering. So the question is whether a rubric can overrule that without simply converting misses into false positives.
+
+**Run it on `deepseek-v4-pro`, not on the pipeline default.** This is the one place the extra cost is justified as an experiment rather than as a setting: a rubric change cannot help a model that never detects the defect, and `glm-5.3-flash` went 0 of 3 on detection. One cheap `glm-5.3-flash` arm is worth adding only to confirm that - a null result there is the control.
+
+**Arms**, each 3 runs on the flawed subject and 2 on the clean one, exactly as before:
+
+- **R2, precedent is not permission.** Add to the fail rubric: behaviour identified as wrong is a fail, and may not be downgraded because a similar pattern exists elsewhere in the repository, or because the ticket is inferred to tolerate it. If the ticket appears to tolerate it, say so *and* fail.
+- **R3, derive the verdict from the skill's own categories.** The `code-review` skill already asks its spec axis for "(c) requirements that look implemented but where the implementation looks wrong". Run 1 filed the defect under exactly that heading and passed anyway. So: any entry under (c) or (a) makes the verdict `fail`, mechanically, with no judgement step between finding and verdict. This is the arm most likely to work and most likely to be noisy, which is why the clean subject matters as much as the flawed one.
+
+**Fix the pre-registration before reusing it.** `~/pilot/review-arm/PREREGISTERED.md` defines a catch as "verdict `fail` AND the findings name the defect", which conflated two things and made one run gradeable both ways. A catch is: **the verdict is `fail` and the stated ground for that verdict includes the defect.** A `fail` whose stated ground is only the `ci.yml` matrix gap is not a catch, on either subject.
+
+**What each outcome means, decided now.**
+
+- A rubric arm that gates on the flawed subject *and* leaves the clean one passing is the result that reopens the model question, because a review that actually catches things is worth 15-25x when the stage costs cents either way.
+- An arm that gates on both subjects has bought false positives, not catches, and makes the stage worse than advisory - a false refusal costs a human a hand-off for nothing.
+- No arm gating on the flawed subject retires the idea of review-as-gate on this pipeline. Make the stage advisory: keep the provenance checks and the findings on the pull request, drop the verdict, and reword item 6's first acceptance criterion rather than leaving it open forever.
+
+**Cost:** about $0.80 for both `deepseek-v4-pro` arms, plus a few cents for the `glm-5.3-flash` control. Under a dollar to settle whether this stage can gate at all.
+
 ### Built, 2026-09-08
 
 `modules/services/afk-agent.nix` gains `reviewPrompt`, `reviewOverlay`, `reviewTimeout` (1800s, an order of magnitude above the 3-6 minutes measured) and `reviewAxes` (2), and the runner gains the stage itself where it previously logged that the stage did not exist. `checks/afk-agent-runner.nix` gains sixteen cases and a review half to its `opencode` mock, which now answers `session list` and `export` as well as `run` and tells the two kinds of `run` apart by their prompt rather than their flags - so a runner that stopped titling its review session fails those cases rather than quietly falling through to the implement path.
