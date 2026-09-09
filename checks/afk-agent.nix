@@ -38,7 +38,7 @@
           ../modules/services/afk-agent.nix
 
           (import ./stub-secrets.nix {
-            secrets."gh-ci/dotfiles-afk-agent-PAT" = "stub-github-pat-VALUE-MUST-NOT-BE-LOGGED";
+            secrets."gh-ci/afk-agent-app-private-key" = "stub-app-key-VALUE-MUST-NOT-BE-LOGGED";
             secrets."opencode/api-key" = "stub-opencode-key-VALUE-MUST-NOT-BE-LOGGED";
             secrets."opencode/username" = "stub-opencode-user-VALUE-MUST-NOT-BE-LOGGED";
           })
@@ -102,11 +102,15 @@
         assert state == "inactive", f"the poller ran without the timer firing: {state}"
 
     with subtest("a run reaches every credential and every tool it requires"):
-        # The run fails, and is expected to: the VM has no network, so the
-        # first `gh issue list` cannot succeed. Everything asserted below
-        # happens before that call by design - a credential missing or a tool
-        # off the PATH should fail on an empty tracker rather than halfway
-        # through a ticket that has already been claimed.
+        # The run fails, and is expected to. Since ADR 0006 it fails a step
+        # earlier than it used to: the credential is a GitHub App private key
+        # now, the stub above is not one, and the runner mints its token before
+        # its first `gh` call rather than reading a bearer token off disk. (Had
+        # it got past that, the VM has no network and `gh issue list` would
+        # have failed anyway.) Everything asserted below still happens before
+        # either point by design - a credential missing or a tool off the PATH
+        # should fail on an empty tracker rather than halfway through a ticket
+        # that has already been claimed.
         enabled.fail("systemctl start afk-agent.service")
         journal = enabled.succeed("journalctl -u afk-agent.service --no-pager")
 
@@ -144,10 +148,12 @@
 
     with subtest("no credential value reaches the journal"):
         # The unit reads three secrets on every poll. A debug echo left behind
-        # in the runner would put a repo-write PAT into the system journal,
-        # which is exactly the mistake nothing else here would catch.
+        # in the runner would put a repo-write App key into the system journal,
+        # which is exactly the mistake nothing else here would catch. The key
+        # is the worse one to lose of the three: unlike the PAT it replaced, it
+        # has no expiry date to bound the damage.
         for value in [
-            "stub-github-pat-VALUE-MUST-NOT-BE-LOGGED",
+            "stub-app-key-VALUE-MUST-NOT-BE-LOGGED",
             "stub-opencode-key-VALUE-MUST-NOT-BE-LOGGED",
             "stub-opencode-user-VALUE-MUST-NOT-BE-LOGGED",
         ]:

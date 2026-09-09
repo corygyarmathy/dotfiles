@@ -90,8 +90,21 @@ let
   # Written once because three places need the same answer - the `sops.secrets`
   # declarations, the `LoadCredential` list, and the preflight below - and a
   # set that drifts between them fails at 04:00 on a host rather than here.
+  # The runner's own GitHub identity (ADR 0006). The App is installed on this
+  # repository and no other, which is what makes its reach a property of the
+  # installation rather than of a scope list somebody has to keep right. The id
+  # is the one in the App's settings URL and is not a secret - the private key
+  # under `credentials` is the whole of what has to stay one.
+  #
+  # `botUserId` is not decoration. GitHub resolves a noreply address to an
+  # account by the id in front of the `+`, so without it the commits below are
+  # authored by a name that links to nothing.
+  appId = "4882603";
+  botLogin = "corygyarmathy-afk-agent[bot]";
+  botUserId = "326868600";
+
   credentials = {
-    github-token = "gh-ci/dotfiles-afk-agent-PAT";
+    github-app-key = "gh-ci/afk-agent-app-private-key";
     opencode-api-key = "opencode/api-key";
     opencode-username = "opencode/username";
   };
@@ -106,6 +119,11 @@ let
     gh = pkgs.gh;
     opencode = pkgs.opencode;
     jq = pkgs.jq;
+    # Both belong to the credential: `openssl` signs the App JWT and `curl`
+    # exchanges it for an installation token. Neither is reachable through
+    # `gh`, which can only speak as an already-minted token.
+    openssl = pkgs.openssl;
+    curl = pkgs.curl;
     # For the checks-versus-matrix half of the gate, which reads ci.yml.
     # The same tool ci.yml's own lint job uses, so the two readings of that
     # file cannot disagree about what the file says.
@@ -204,8 +222,13 @@ let
   # hostname - is refused as an author identity on a host whose hostname has no
   # domain. Left unset, every attempt commits nothing, and the retry budget is
   # spent three times over on the same error.
-  commitName = "Cory Gyarmathy";
-  commitEmail = "cory.gyarmathy@gmail.com";
+  # The agent's commits say they are the agent's (ADR 0006). Until #200 this
+  # was the operator's name and address, which meant `git log` could not
+  # distinguish a commit a person wrote from one generated overnight - the
+  # ambiguity that ADR existed to remove, sitting in the one place a reviewer
+  # actually looks.
+  commitName = botLogin;
+  commitEmail = "${botUserId}+${botLogin}@users.noreply.github.com";
 
   # ADR 0004 §6's retry budget, whose number plan item 5 owns: two retries,
   # three attempts. At the pilot's measured 4-6 cents per attempt this cannot
@@ -568,7 +591,14 @@ let
     # the check can substitute a mocked `gh` for the real one - a runtimeInput
     # would be prepended to PATH and shadow it. `require_tool` below is what
     # turns that looser coupling into something that still fails loudly.
-    runtimeInputs = [ pkgs.coreutils ];
+    # `openssl` and `curl` here as well as in `toolchain`, unlike `git`, `gh`
+    # and `nix`: the check substitutes mocks for those three and needs the real
+    # thing for these two, because the preflight asserts every tool by name.
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.openssl
+      pkgs.curl
+    ];
 
     text = ''
       # Everything the runner keeps outside its own process is relocatable, so
@@ -584,6 +614,9 @@ let
       base_branch="master"
       branch_prefix="afk/"
       pr_label="afk-agent"
+      # The claim (ADR 0006). It replaces the assignee the tracker used to
+      # carry here, because GitHub will not assign an issue to a GitHub App.
+      working_label="agent-working"
 
       checkout="$state_dir/checkout"
       worktrees="$state_dir/worktrees"
@@ -646,8 +679,102 @@ let
 
       ${lib.concatMapStringsSep "\n      " (name: "require_tool ${name}") (lib.attrNames toolchain)}
 
-      export GH_TOKEN
-      GH_TOKEN="$(cat "$creds/github-token")"
+      # --- the credential, which expires part-way through a run -------------
+      #
+      # ADR 0006: the runner authenticates as a GitHub App, so what the secret
+      # store holds is a private key and what the API wants is an installation
+      # token minted from it. That token lives one hour, while `attemptTimeout`
+      # alone is 3600 and `maxRuntime` covers three attempts plus their gates -
+      # so a token expiring mid-run is the ordinary case here, not the
+      # exceptional one. Reading it once at startup would work all the way
+      # through the poll, the claim and the implement stage and then fail at
+      # the push, with a claimed ticket already behind it.
+      #
+      # So `gh` below is a shell function that refreshes first, and every `gh`
+      # in this script goes through it - which is why no call site has to think
+      # about token lifetime. `command gh` rather than a bare one, so the
+      # function does not call itself, and so the mock the check substitutes is
+      # still what runs.
+      #
+      # The cache is a file rather than a shell variable because most of the
+      # `gh` calls here are inside `$(...)`. A variable set by the refresh would
+      # be set in the subshell and discarded with it, so the token would be
+      # re-minted on every single call rather than once an hour. The file is 0600 under a 0700 StateDirectory, and
+      # the trap removes it - a token that outlives the run that minted it is a
+      # standing credential, which is the property this design is meant not to
+      # have.
+      #
+      # Nothing here is echoed. The key reaches openssl on a path and the token
+      # reaches `gh` through the environment; neither is ever a log line or a
+      # command-line argument.
+      app_id="${appId}"
+      token_cache="$state_dir/installation-token"
+      mkdir -p "$state_dir"
+      trap 'rm -f "$token_cache"' EXIT
+
+      b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+      refresh_gh_token() {
+        local now expires header payload signing_input signature jwt installation token
+
+        now="$(date +%s)"
+        if [ -s "$token_cache" ]; then
+          expires="$(head -n 1 "$token_cache")"
+          if [ "$now" -lt "$expires" ]; then
+            GH_TOKEN="$(tail -n 1 "$token_cache")"
+            export GH_TOKEN
+            return 0
+          fi
+        fi
+
+        # `iat` is backdated a minute because GitHub rejects a JWT whose clock
+        # runs ahead of its own, and ten minutes is the longest expiry it will
+        # accept. This JWT authenticates as the App itself and can do nothing
+        # to the repository; only the token it is exchanged for can.
+        header='{"alg":"RS256","typ":"JWT"}'
+        payload="$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' \
+          "$((now - 60))" "$((now + 540))" "$app_id")"
+        signing_input="$(printf '%s' "$header" | b64url).$(printf '%s' "$payload" | b64url)"
+        signature="$(printf '%s' "$signing_input" \
+          | openssl dgst -sha256 -sign "$creds/github-app-key" -binary | b64url)" \
+          || die "the App private key would not sign a JWT; it is not a usable RSA key"
+        jwt="$signing_input.$signature"
+
+        installation="$(curl -sS \
+          -H "Authorization: Bearer $jwt" \
+          -H 'Accept: application/vnd.github+json' \
+          https://api.github.com/app/installations | jq -r '.[0].id // empty')" \
+          || die "could not ask GitHub where this App is installed"
+        [ -n "$installation" ] \
+          || die "this App has no installations; it has to be installed on $repo before the runner can act as it"
+
+        token="$(curl -sS -X POST \
+          -H "Authorization: Bearer $jwt" \
+          -H 'Accept: application/vnd.github+json' \
+          "https://api.github.com/app/installations/$installation/access_tokens" \
+          | jq -r '.token // empty')" \
+          || die "could not mint an installation token for installation $installation"
+        [ -n "$token" ] \
+          || die "GitHub returned no installation token; the App's permissions may have been withdrawn"
+
+        # Fifty minutes against GitHub's sixty, so that no single `gh` call can
+        # outlive the token it started with.
+        printf '%s\n%s\n' "$((now + 3000))" "$token" > "$token_cache"
+        GH_TOKEN="$token"
+        export GH_TOKEN
+      }
+
+      gh() { refresh_gh_token; command gh "$@"; }
+
+      # The one seam the check needs: it drives a mocked `gh` against a fixture
+      # origin and has no App key to mint from. Everything else about the
+      # credential path - that the key is required, that `gh` refreshes before
+      # it runs, that the push refreshes too - is under test as written.
+      if [ -n "''${AFK_GH_TOKEN:-}" ]; then
+        export GH_TOKEN="$AFK_GH_TOKEN"
+        refresh_gh_token() { :; }
+      fi
+
       export GH_PROMPT_DISABLED=1
       export GH_NO_UPDATE_NOTIFIER=1
 
@@ -699,9 +826,12 @@ let
 
       # --- poll -------------------------------------------------------------
       #
-      # Unassigned, because the assignee *is* the claim (docs/agents/issue-tracker.md)
-      # and so also the lock that stops a ticket being worked twice - by this
-      # runner on a later poll, or by a human right now.
+      # Two filters, and they now guard against different people. The label is
+      # the runner's own claim (ADR 0006): it drops the label when it takes a
+      # ticket, so a ticket it already holds is not in this list at all. The
+      # assignee filter is what keeps it off a ticket a *human* has taken -
+      # reading assignees works perfectly well as an App, it is only writing
+      # one that GitHub refuses, so nothing about that half had to change.
       #
       # Unblocked has a trap in it worth naming: `blockedBy.totalCount` counts
       # every dependency edge, closed ones included, so it is not the gate it
@@ -780,12 +910,18 @@ let
       title="$(jq -r '.title' <<<"$picked")"
 
       # Everything past this point has a claimed ticket behind it, and nothing
-      # here gives it back: a failure below leaves #$number assigned, which is
-      # also what filters it out of every later poll. That is the stuck path's
-      # job (#175, plan item 8) and is the main reason this half is not enough
-      # to switch the service on by itself.
+      # here gives it back: a failure below leaves #$number without its
+      # `$label`, which is also what filters it out of every later poll. That
+      # is the stuck path's job (#175, plan item 8) and is the main reason this
+      # half is not enough to switch the service on by itself.
+      #
+      # One `gh issue edit` rather than two, so the ticket is never briefly
+      # carrying both labels or neither. Dropping `$label` is the half that
+      # locks; adding `$working_label` is the half a human can see, and it is
+      # what item 8 will swap for a stuck marker.
       log "claiming #$number: $title"
-      gh issue edit "$number" --repo "$repo" --add-assignee @me
+      gh issue edit "$number" --repo "$repo" \
+        --remove-label "$label" --add-label "$working_label"
 
       # --- isolate ----------------------------------------------------------
       #
@@ -1431,6 +1567,13 @@ let
       # PAT never lands in .git/config, in a URL git will echo on failure, or
       # on a command line `ps` can read. The empty helper ahead of it is git's
       # own idiom for "use this one and nothing inherited".
+      # `gh auth git-credential` runs in a shell of git's making and reads
+      # GH_TOKEN out of the environment, so it never passes through the wrapper
+      # above. This is the one call site that has to ask for itself - and it is
+      # the furthest point in the run from the last refresh, which is exactly
+      # where a one-hour token would have died.
+      refresh_gh_token
+
       git -C "$worktree" \
         -c credential.helper= \
         -c credential.helper='!gh auth git-credential' \

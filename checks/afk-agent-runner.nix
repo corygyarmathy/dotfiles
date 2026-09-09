@@ -148,10 +148,16 @@ pkgs.runCommand "check-afk-agent-runner"
 
     # --- the credentials item 4 hands over -------------------------------
     mkdir -p "$work/creds"
-    echo "not-a-real-token" > "$work/creds/github-token"
+    echo "not-a-real-key"   > "$work/creds/github-app-key"
     echo "not-a-real-key"   > "$work/creds/opencode-api-key"
     echo "not-a-real-user"  > "$work/creds/opencode-username"
     export CREDENTIALS_DIRECTORY="$work/creds"
+
+    # The runner mints its own GitHub token from an App private key (ADR 0006),
+    # which needs a real key and a real API. This is the only part of the
+    # credential path the check stubs; that the key is *required*, and that the
+    # push refreshes before it runs, are both still asserted below.
+    export AFK_GH_TOKEN="not-a-real-token"
 
     # --- the mocks --------------------------------------------------------
     #
@@ -175,7 +181,7 @@ pkgs.runCommand "check-afk-agent-runner"
         ;;
       "issue edit")
         if [ -n "''${GH_EDIT_FAIL:-}" ]; then
-          echo "mock gh: refusing to assign" >&2
+          echo "mock gh: refusing to relabel" >&2
           exit 1
         fi
         ;;
@@ -642,11 +648,11 @@ pkgs.runCommand "check-afk-agent-runner"
     echo "case: the plumbing is asserted before anything is polled"
     run plumbing none.json
     [ "$rc" -eq 0 ] || fail "an empty tracker should be a quiet success, got $rc: $(cat "$state/err.log")"
-    for credential in github-token opencode-api-key opencode-username; do
+    for credential in github-app-key opencode-api-key opencode-username; do
       grep -q "credential '$credential' present" "$state/out.log" \
         || fail "$credential was not asserted before the poll"
     done
-    for tool in git gh opencode nix jq; do
+    for tool in git gh opencode nix jq openssl curl; do
       grep -q "tool '$tool' present" "$state/out.log" || fail "$tool was not asserted before the poll"
     done
     [ "$(claims)" -eq 0 ] || fail "claimed something from an empty tracker"
@@ -671,8 +677,16 @@ pkgs.runCommand "check-afk-agent-runner"
     run mixed mixed.json
     [ "$rc" -eq 0 ] || fail "a clean run exited $rc: $(cat "$state/err.log")"
     [ "$(claims)" -eq 1 ] || fail "expected exactly one claim, got: $(ghlog)"
-    grep -q "gh issue edit 302 .* --add-assignee @me" "$state/gh.log" \
+    # Both halves of the claim, in one edit (ADR 0006). Dropping the label is
+    # what locks the ticket - a runner that only added `agent-working` would
+    # claim the same ticket again on the next poll - and adding it is what a
+    # human sees. Asserted on one line because two `gh issue edit` calls would
+    # leave a window where the ticket carries neither.
+    grep -q "gh issue edit 302 .* --remove-label ready-for-agent --add-label agent-working" "$state/gh.log" \
       || fail "did not claim #302 with the documented convention: $(ghlog)"
+    if grep -q -- "--add-assignee" "$state/gh.log"; then
+      fail "claimed by assignee, which GitHub refuses a GitHub App: $(ghlog)"
+    fi
     # The three it must not have touched, each for its own reason: assigned,
     # open blocker, and simply later in the queue.
     for skipped in 300 301 303; do
