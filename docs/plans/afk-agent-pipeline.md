@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); item 5 is in progress - both its halves are built and tested, poll → denylist → claim → isolate (#171) and the implement stage on a bounded retry budget (#172), but its "Done when" asks for one real ticket carried through by hand and that has not happened; item 6 is done (#173): the stage runs, is contained, verifies itself from the transcript, and is **advisory** - both experiments that might have made it a gate have been run, neither did, and the plan's pre-committed outcome was applied, dropping the verdict and rewording the first acceptance criterion; see its three Measured notes, the first of which also corrects item 1's review-stage finding; nothing else has started. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); item 5 is in progress - both its halves are built and tested, poll → denylist → claim → isolate (#171) and the implement stage on a bounded retry budget (#172), but its "Done when" asks for one real ticket carried through by hand and that has not happened; item 6 is done (#173): the stage runs, is contained, verifies itself from the transcript, and is **advisory** - both experiments that might have made it a gate have been run, neither did, and the plan's pre-committed outcome was applied, dropping the verdict and rewording the first acceptance criterion; see its three Measured notes, the first of which also corrects item 1's review-stage finding; nothing else has started - item 12 is new, added 2026-09-09 as the gap item 6's outcome exposed: the reviewer's notes and the human's notes now arrive in the same place with the same standing, and only the human's are worth acting on, but only the reviewer's have a path anywhere. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -19,6 +19,7 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | 9  | Notifications                        | small  | not started |
 | 10 | Peak-hour scheduling                 | small  | dropped     |
 | 11 | Secrets                              | small  | not started |
+| 12 | Revision loop: human review → agent  | medium | not started |
 
 ---
 
@@ -939,7 +940,7 @@ The section above, executed exactly as it specifies: three arms, `review-prompt.
 
 **One finding sharpens why the rubric could not work.** Reviewing the *clean* subject, `r3-pro-clean-r2` invented a pass-ordering false positive against correct code: a note dropped later in the write loop "would still have counted toward a shelf collision". The same reasoning shape as the real defect, on a diff that does not have it. The finding is not tracking the defect; the shape is available on any diff, and a rubric that gates on that shape gates on both subjects. Three separate runs, meanwhile, read the clean subject's ordering correctly and approvingly ("detection ... runs after unparseable notes are dropped"), so the two subjects do differ on exactly the axis the holdout tests - the reviewer's problem is deciding, not seeing.
 
-**Taken with the two arms before it: 9 runs on the flawed subject across two models and three rubrics, 0 catches.** The defect was detected in 5 of those 9 and gated on in none of them. Against item 1's bar - "a review pass that misses what a human found in five minutes is not a review stage" - review-as-gate does not clear it on this pipeline, and the plan's third outcome applies. The stage is now advisory.
+**Taken with the two arms before it: 15 runs on the flawed subject across five arms - two models and three prompts, 0 catches.** The defect was detected in 5 of those 15 and gated on in none of them. Detection per arm, which is the breakdown the aggregate hides: R1/`glm-5.3-flash` 0/3, R1/`deepseek-v4-pro` 2/3, R2/`deepseek-v4-pro` 2/3, R3/`deepseek-v4-pro` 0/3, R3/`glm-5.3-flash` 1/3. Against item 1's bar - "a review pass that misses what a human found in five minutes is not a review stage" - review-as-gate does not clear it on this pipeline, and the plan's third outcome applies. The stage is now advisory.
 
 **What that changed, 2026-09-09.** `reviewPrompt` no longer asks for `AFK-REVIEW-VERDICT` and tells the review its findings are advisory and read by a person; it asks instead for the closing summary every measured run produced unprompted, naming the worst finding on each axis. The runner drops the verdict grep and its `case`, and with them the only two branches that ended a ticket on a review's opinion. Everything else stands unchanged and still fails closed: the skill call, the two named axes, the containment, the report-only overlay, and a non-empty closing report - that last one still fatal, because the findings are now the entire output of the stage and a review that verifiably ran and then said nothing has left the pull request nothing to carry. `checks/afk-agent-runner.nix` still drives eighteen review runs, and the mock's review flavours lose the three that existed only to police the verdict - `fail`, `noverdict` and the quoted-sentinel decoy. Replacing them: a case asserting a review with a serious finding does *not* stop the ticket and its findings still reach the file item 7 attaches, and a case asserting the prompt never asks for a verdict. Both were confirmed to fail when the behaviour is removed - the second needed `! grep ... || fail` rather than `grep ... && fail`, which under the check's `set -e` would have aborted on the passing branch and been dead from the day it was written.
 
@@ -968,7 +969,7 @@ The live half - does a real model catch a real defect - is the finding above, an
 
 **Both criteria are met, and the first one has been reworded rather than met as it stood.** It read: "a deliberately flawed implementation is caught rather than proceeding to PR-raising". It now reads: **a review of every implementation demonstrably ran, was contained and report-only, and left findings on the pull request; the flawed and the clean implementation both proceed, and neither is stopped by the reviewer's opinion of it.** "A clean implementation proceeds through unchanged" holds as it always did, and is tested.
 
-The rewording is the outcome the section above committed to before the arms were run, applied as written. It is not a lowered bar - it is a bar moved off a thing that was measured 9 times and never once happened. Across two models and three fail rubrics, no run ever refused the graded diff *for the defect in it*: the defect was seen in 5 of the 9 and gated on in 0, and the rubric that refused most reliably refused the correct implementation just as often. Keeping "is caught" as a criterion would have meant keeping this item blocked on a property nothing in reach makes true, while shipping a gate whose refusals cost a person a hand-off and, in its own words, were "applied by the rule, not by re-weighing it".
+The rewording is the outcome the section above committed to before the arms were run, applied as written. It is not a lowered bar - it is a bar moved off a thing that was measured 15 times and never once happened. Across two models and three prompts, no run ever refused the graded diff *for the defect in it*: the defect was seen in 5 of the 15 and gated on in 0, and the rubric that refused most reliably refused the correct implementation just as often. Keeping "is caught" as a criterion would have meant keeping this item blocked on a property nothing in reach makes true, while shipping a gate whose refusals cost a person a hand-off and, in its own words, were "applied by the rule, not by re-weighing it".
 
 What is built and tested: the stage runs `code-review` in a genuinely separate, contained, report-only context; it proves from the transcript that it did so rather than assuming it; it fails closed on every way that proof can be missing, and on a review that produced no report at all; it keeps the findings for the human who merges; and it never hands a finding back to the model that wrote the code.
 
@@ -1065,3 +1066,57 @@ No test of secret content, by design - see item 4's note on `checks/stub-secrets
 ### Done when
 
 The service starts and authenticates using both, with neither value ever appearing in a build log or committed file.
+
+---
+
+## 12. Revision loop: the human's review, back to the agent (#196)
+
+### The problem
+
+The pipeline is one-shot. Item 7 opens a pull request and stops; nothing reads what the human says about it. So the only ways to act on a review comment are to fix the diff by hand or to close the PR and re-file the ticket - and the second throws away a claimed ticket, a worktree and three attempts' worth of context to change one line.
+
+That is a gap rather than a decision. ADR 0004 §9 settles that *merge* stays a human act; it says nothing about whether the agent may revise its own PR when the human asks it to, and no item covers it.
+
+It is also the point at which item 6's outcome starts to cost something. The review stage is advisory, so the reviewer's notes and the human's notes now arrive in the same place with the same standing, and only one of them can currently be acted on without a person editing files.
+
+### Not the fix-and-recheck this plan already rejected
+
+Item 6 dropped fix-and-recheck deliberately, and this item has to say why it is not that, or it will read as a reversal.
+
+What was rejected: handing **the reviewer's** findings back to the model that wrote the code. The stated objection was that a wrong finding costs a real edit *and* consumes the finding, and the gate cannot tell a correct change from a plausible green one. Item 6 then measured the reviewer's findings and found the objection well-founded: 15 runs, 0 catches, and refusals grounded on things that were true but immaterial.
+
+What this is: handing **the human's** findings back. The objection does not transfer, because its whole weight rested on the findings being unreliable. A comment written by the person who has to merge the change is the most reliable input in this pipeline, and it is the only input that currently has no path to the code.
+
+The distinction is worth keeping structural rather than trusting prose to hold it: this stage takes review comments from a human account and never the contents of `findings.md`.
+
+### Approach
+
+A second entry point on the same runner, not a new service.
+
+- **Trigger: a label the human applies**, `agent-revise`, rather than the presence of unresolved review threads. A half-written review should not start a run, and a label is the cheapest way to say "I have finished thinking". Added to `docs/agents/triage-labels.md` alongside the others.
+- **Resume rather than claim.** The runner's existing path cuts a fresh branch from a fresh worktree; this one re-establishes the worktree at the PR's head branch. That is the real new machinery, and it is where the in-flight guard and the denylist have to be re-derived rather than assumed - the diff being revised is not the diff that was claimed.
+- **The comments are the prompt.** Fetched with `gh pr view --json reviews,comments`, threaded, and handed to the implement stage as its instruction, against the same bounded retry budget and the same gate. Nothing else about the implement stage changes.
+- **Author filtering is a safety property, not a nicety.** Only comments from accounts other than the agent's own are read. Without it, the agent's own PR body - which carries the advisory review's findings - becomes an instruction to itself on the next pass, which is precisely the loop item 6 refused.
+- **A revision budget, the way implement has one.** Three rounds per pull request, then the ticket goes to the stuck path (item 8). A disagreement between a person and a model is otherwise unbounded spend, and the failure mode is not a crash but a slow argument nobody is watching.
+- **Push to the same branch, comment on the PR saying what was addressed and what was not.** Never force-push over a commit the human wrote themselves.
+- **Re-run the review stage on the revision**, advisory as before. It costs cents and the notes ride along.
+
+### What is deliberately not in scope
+
+- **Resolving review threads.** The agent says what it did; the human decides whether that closed the point. Marking your own homework resolved is the same class of error as the verdict item 6 just removed.
+- **Any merge behaviour whatsoever.** ADR 0004 §9, unchanged.
+- **Acting on comments from the agent's own account**, including its own PR body.
+
+### Testing
+
+The same mocked-`opencode` harness in `checks/afk-agent-runner.nix`, extended with a `gh pr` half: a PR carrying two human comments produces one implement session whose prompt contains both; a PR whose only comments are the agent's own produces no session at all; the budget stops a fourth round and hands to item 8; a revision that fails the gate consumes a retry and not a round; and the branch is pushed rather than replaced.
+
+The one thing the harness cannot answer is whether the model does what the comment asked, which is the same live half item 6 has, and the same answer: it is a person's judgement on the resulting diff.
+
+### Done when
+
+A pull request this pipeline opened, given a review comment and the `agent-revise` label, comes back with a commit that addresses the comment, a PR comment saying what was addressed, and the branch's own CI green - without a person editing a file.
+
+### Depends on
+
+Item 7 (#174) first: there is no pull request to revise until something opens one. Item 8 (#175) for where an exhausted revision budget goes.
