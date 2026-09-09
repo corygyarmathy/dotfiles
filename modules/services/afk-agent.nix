@@ -46,15 +46,20 @@
 # hand-off label, because it holds real work (ADR 0007 §2). No pull request
 # is ever opened by the hand-back itself.
 #
-# BOTH ENDINGS, AND THE TWO EVENTS BETWEEN THEM, push a ntfy notification
-# (item 9, #176): a pull request handed over, a ticket handed back stuck, and
-# OpenCode Go usage crossing a cap threshold. They publish straight to the
+# BOTH ENDINGS push a ntfy notification (item 9, #176): a pull request handed
+# over, and a ticket handed back stuck. They publish straight to the
 # self-hosted ntfy server this host already runs, at the push lane's own
 # severity conventions, rather than through Alertmanager - these are pipeline
 # events only the runner knows about, not metric states for Prometheus to
-# scrape. What does route through the existing stack is a runner that dies
-# outright: a `die` leaves the unit failed, which SystemdUnitFailed and the
-# journal-tail enrichment already report.
+# scrape. Both arrive at the lane's informational level (priority low, silent)
+# and are told apart by title and tag, because neither should buzz a phone:
+# nothing here is wrong, and a stuck ticket still needs a human to read it
+# rather than be woken by it. What does route through the existing stack is a
+# runner that dies outright: a `die` leaves the unit failed, which
+# SystemdUnitFailed and the journal-tail enrichment already report. The third
+# condition item 9 names - OpenCode Go usage approaching a cap - is tracked
+# separately, against OpenCode's own usage API rather than a ledger the runner
+# keeps (#176 closed without it; see #221).
 #
 # THE REVIEW STAGE IS ADVISORY, AND THAT IS A MEASURED DECISION RATHER THAN A
 # GAP. It proves, from the session transcript rather than from the session's
@@ -182,12 +187,6 @@ let
     # "command not found" on every attempt of every ticket, and the check could
     # not have caught it: the build sandbox has stdenv's `diff` on PATH.
     diff = pkgs.diffutils;
-    # For the same reason as `diff`: the usage accounting (item 9, #176)
-    # sums its spend windows and tests its threshold crossings with awk,
-    # which is in no NixOS unit's default path and in none of the tools
-    # above. Left undeclared, every record would die with "command not
-    # found" - found by the check before a real run could.
-    awk = pkgs.gawk;
     nix = config.nix.package;
   };
 
@@ -278,35 +277,6 @@ let
   # tunnel-outage alert would be competing with.
   ntfyUrl = "http://127.0.0.1:${toString config.cg.service.ntfy.port}";
   ntfyTopic = config.cg.service.monitoring.alertmanager.ntfy.topic;
-
-  # OpenCode Go's dollar caps, as plan item 1 measured them from the Go
-  # catalogue: $12 per rolling five hours, $30 per week, $60 per month - where
-  # the five-hour one is the binding constraint for a serial runner, a single
-  # dollar being irrelevant monthly and material inside the window. The alert
-  # fires when the runner's own recorded spend first crosses `usageThreshold`
-  # of any cap. Windows are rolling rather than aligned to a billing boundary;
-  # close enough for an alert whose job is "slow down, a cap is coming", and
-  # the direction it is wrong in (counting a session's whole cost at its last
-  # export, when part of that window has already slid past) is the safe one.
-  goCaps = {
-    fiveHours.window = 5 * 3600;
-    fiveHours.dollars = 12;
-    fiveHours.name = "five-hour";
-    week.window = 7 * 24 * 3600;
-    week.dollars = 30;
-    week.name = "weekly";
-    month.window = 30 * 24 * 3600;
-    month.dollars = 60;
-    month.name = "monthly";
-  };
-  goCapsSpec = lib.concatStringsSep "\n" (
-    lib.mapAttrsToList (_: c: "${toString c.window} ${toString c.dollars} ${c.name}") goCaps
-  );
-  usageThreshold = "0.8";
-  longestCapWindow = lib.foldlAttrs (
-    acc: _: c:
-    if c.window > acc then c.window else acc
-  ) 0 goCaps;
 
   # Who the commits are by. ADR 0004 §4 rules out a second GitHub account, so
   # everything this pipeline produces - the branch, the PR, and the commits on
@@ -823,20 +793,12 @@ let
       checkout="$state_dir/checkout"
       worktrees="$state_dir/worktrees"
 
-      # The ntfy server and topic the three notifications publish to (item 9,
+      # The ntfy server and topic the two notifications publish to (item 9,
       # #176). Deliberately not an environment seam: the URL and topic are the
       # behaviour under test, and the check asserts the exact POST the runner
       # would make against the values the module evaluated.
       ntfy_url="${ntfyUrl}"
       ntfy_topic="${ntfyTopic}"
-
-      # The runner's own spend accounting. One row per recorded session,
-      # `epoch<TAB>cumulative-cost`, and one line per session id already
-      # counted - the second file is what stops the same session's cumulative
-      # cost being recorded twice by the hand-back and the success path, or
-      # again by the next poll's dead-run guard.
-      usage_file="$state_dir/usage.tsv"
-      usage_recorded="$state_dir/usage-recorded"
 
       denied=(
         ${lib.concatMapStringsSep "\n        " (p: ''"${p}"'') deniedPaths}
@@ -866,18 +828,16 @@ let
 
       # --- notifications (item 9, #176) --------------------------------------
       #
-      # Three conditions have to reach a person who is not watching GitHub: a
-      # pull request is ready for review, the pipeline is stuck on a ticket
-      # and needs a decision, and OpenCode Go usage is approaching a cap. They
-      # publish straight to the self-hosted ntfy server and topic the push
-      # lane already uses, at the priority that lane's conventions give each
-      # kind of event - the same vocabulary the alertmanager-ntfy bridge
-      # speaks, minus the criticals: ready is informational (priority low,
-      # silent, the level warnings get), stuck and usage are a step up
-      # (priority default - ordinary, still short of the urgent buzz reserved
-      # for fleet criticals, and rightly so at 03:00), and all three name
-      # themselves in the title and carry their own tag so the phone tells
-      # them apart at a glance.
+      # Two conditions have to reach a person who is not watching GitHub: a
+      # pull request is ready for review, and the pipeline is stuck on a
+      # ticket and needs a decision. They publish straight to the self-hosted
+      # ntfy server and topic the push lane already uses, at the priority that
+      # lane's conventions give each kind of event - the same vocabulary the
+      # alertmanager-ntfy bridge speaks, minus the criticals: both arrive at
+      # the informational level (priority low, silent, the level warnings get)
+      # because neither is wrong and neither should buzz a phone at 03:00, and
+      # they are told apart by title and tag so the phone still distinguishes
+      # a ticket that needs a read from a pull request that needs a review.
       #
       # Best-effort, like every other write this script makes from inside a
       # run that has already decided its outcome: a notification that cannot
@@ -911,113 +871,17 @@ let
         fi
       }
 
-      # --- the runner's own spend, against the Go caps (item 9, #176) --------
-      #
-      # `opencode export` emits each session's cumulative dollar cost, which
-      # makes the runner the one thing in the fleet that can see its own
-      # spend accumulate - and the one thing that knows when a retry loop is
-      # turning cents into dollars. Records are appended per paid session and
-      # checked against the caps at the moment they land; a threshold that
-      # has been crossed stays crossed until the window slides, so the alert
-      # fires on the *crossing* - the window sum below the threshold before
-      # this record, at or above it after - rather than on the state, which
-      # would re-notify on every later record until the window emptied.
-      #
-      # What this cannot see is honest, and said in the alert: only the
-      # sessions this runner ran on this host. Interactive use of the same
-      # OpenCode Go account is invisible to it, so a low number is "the
-      # runner's share", never "the account's share".
-      session_cost_for() {
-        local dir=$1 sid=$2 out="$run_dir/usage-export.json"
-        # To a file first, for the reason the review stage's export gives:
-        # piping `opencode export` straight into jq truncates on large
-        # sessions - and it fails as a parse error rather than as a wrong
-        # answer, but only sometimes (plan item 1).
-        (
-          cd "$dir" && opencode export "$sid"
-        ) > "$out" 2>/dev/null || true
-        jq -r '.info.cost // empty' "$out" 2>/dev/null || true
-      }
-
-      # A session is counted once, ever: its cost is cumulative, so a second
-      # row for the same id would double-count it. Returns 0 only when the
-      # slot was free and is now claimed; every caller asks before recording.
-      claim_usage_slot() {
-        local sid=$1
-        [ -n "$sid" ] || return 1
-        if grep -qxF "$sid" "$usage_recorded" 2>/dev/null; then
-          return 1
-        fi
-        printf '%s\n' "$sid" >> "$usage_recorded"
-      }
-
-      # Appends one record and asks each cap whether this record is the one
-      # that crossed its threshold. The "before" sum is the window without
-      # the record just appended - the last line of the file, which is always
-      # inside every window, having been written at `now`.
-      record_usage() {
-        local cost=$1 now seconds cap name before after threshold pct
-        [ -n "$cost" ] || return 0
-        now="$(date +%s)"
-        printf '%s\t%s\n' "$now" "$cost" >> "$usage_file"
-
-        # Rows older than the longest window are past every threshold
-        # forever; drop them so the file does not grow without bound. A
-        # failed prune is left alone rather than fatal - it is housekeeping.
-        if [ -s "$usage_file" ]; then
-          if awk -F '\t' -v cut=$(( now - ${toString longestCapWindow} )) '$1 > cut' "$usage_file" \
-            > "$usage_file.next"; then
-            mv "$usage_file.next" "$usage_file"
-          else
-            rm -f "$usage_file.next"
-          fi
-        fi
-
-        # One "seconds dollars name" per line, straight from the module: the
-        # caps and the alert threshold are the behaviour under test, not
-        # fixture values the check substitutes.
-        for spec in ${lib.escapeShellArgs (lib.splitString "\n" goCapsSpec)}; do
-          read -r seconds cap name <<<"$spec"
-          [ -n "$seconds" ] || continue
-          read -r before after <<<"$(awk -F '\t' -v from=$(( now - seconds )) '
-            { line[NR] = $0 }
-            $1 > from { sum += $2 }
-            END {
-              split(line[NR], last, "\t")
-              before = sum
-              if (last[1] > from) before -= last[2]
-              printf "%.2f %.2f\n", before, sum
-            }' "$usage_file")"
-          threshold="$(awk -v cap="$cap" -v f="${usageThreshold}" 'BEGIN { printf "%.2f", cap * f }')"
-          if awk -v b="$before" -v a="$after" -v t="$threshold" \
-            'BEGIN { exit !(b + 0 < t + 0 && a + 0 >= t + 0) }'; then
-            pct="$(awk -v a="$after" -v cap="$cap" 'BEGIN { printf "%.0f", 100 * a / cap }')"
-            notify default chart_with_upwards_trend \
-              "OpenCode Go usage at ''${pct}% of the $name cap" \
-              "$(printf '%s\n%s\n%s\n%s' \
-                "The AFK runner has spent \$''${after} of the \$''${cap} $name cap; the alert threshold is 80%." \
-                "Past a cap, Go switches to the funded Zen balance, so this is the point to decide whether the spend should." \
-                "This counts the sessions this runner ran on this host; any other use of the same OpenCode Go account is invisible to it." \
-                "The rows behind this number: $usage_file")"
-          fi
-        done
-      }
-
-      # The implement-side entry point: finds the session, reads its
-      # cumulative cost, counts it once. The slot is only claimed once a cost
-      # is actually in hand, so an export that failed can be retried by a
-      # later call instead of being lost forever.
-      record_session_usage() {
-        local dir=$1 sid=$2 cost
-        [ -n "$sid" ] || return 0
-        cost="$(session_cost_for "$dir" "$sid")"
-        if [ -z "$cost" ]; then
-          log "session $sid's cost could not be read, so it is not counted toward the usage caps"
-          return 0
-        fi
-        if claim_usage_slot "$sid"; then
-          record_usage "$cost"
-        fi
+      # The stuck notification the two stuck paths share (item 8/9): one title,
+      # tag and priority, differing only in the prose that names the ticket.
+      # The ticket URL is the one line both must carry - a stuck notification
+      # that does not point at its ticket is a phone alert pointing at nothing.
+      notify_stuck() {
+        local reason=$1 status=$2
+        notify low octagonal_sign "AFK agent stuck on #$number" \
+          "$(printf '%s\n%s\n%s' \
+            "$reason" \
+            "$status" \
+            "$(printf 'Ticket: https://github.com/%s/issues/%s' "$repo" "$number")")"
       }
 
       # --- the stuck path (item 8, #175) ------------------------------------
@@ -1084,17 +948,6 @@ let
 
         echo "afk-agent: #$number: $reason" >&2
 
-        # Whatever this run spent is real even though the ticket is being
-        # handed back - a retry loop burning budget is exactly the case the
-        # usage-cap alert exists for - so the session's cumulative cost is
-        # counted before anything else, while the worktree can still answer
-        # for it. Both reads are best-effort and both are no-ops when the
-        # hand-back happened before either a session or a worktree existed.
-        if [ -z "$session" ]; then
-          session="$(session_id_for "$worktree" "$slug")"
-        fi
-        record_session_usage "$worktree" "$session"
-
         {
           printf '%s\n' \
             "The AFK agent stopped work on this ticket and is handing it back, without opening a pull request."
@@ -1143,15 +996,11 @@ let
 
         # The notification (item 9, #176). The tracker writes above are the
         # durable half of the hand-back; this is the half that reaches
-        # somebody who is not looking at GitHub. Priority default, not the
-        # lane's low: a stuck pipeline stops work until a human decides, and
-        # "a step up" from informational is what the plan asks for - still
-        # short of the urgent buzz fleet criticals get.
-        notify default octagonal_sign "AFK agent stuck on #$number" \
-          "$(printf '%s\n%s\n%s' \
-            "$reason" \
-            "$(printf 'Ticket: https://github.com/%s/issues/%s' "$repo" "$number")" \
-            "$(if [ "$pr_url" != "" ]; then printf '%s is open and unfinished' "$pr_url"; fi)")"
+        # somebody who is not looking at GitHub, at the lane's informational
+        # level (priority low, silent) - a stuck pipeline stops work until a
+        # human reads the ticket, but it should not wake them up to do it.
+        notify_stuck "$reason" \
+          "$(if [ "$pr_url" != "" ]; then printf '%s is open and unfinished' "$pr_url"; fi)"
 
         if [ "$pushed" -eq 0 ]; then
           remove_worktree_and_branch "$worktree" "$branch" "$branch_created"
@@ -1275,21 +1124,9 @@ let
 
           post_issue_comment "$body"
 
-          # The dead run's spend, best-effort, for the same reason the
-          # hand-back records its own: a run the ceiling killed is exactly
-          # the one that might have burned the cap, and its worktree is
-          # about to go. The session title a dead run used is the worktree's
-          # own name - the slug - which is all that survived it. Only the
-          # genuinely-stuck branch notifies and records: an orphaned
-          # worktree beside an open pull request is a finished ticket's
-          # leftover, and a ticket that is not stuck says nothing.
-          record_session_usage "$path" "$(session_id_for "$path" "$name")"
-          record_session_usage "$path" "$(session_id_for "$path" "$name-review")"
-          notify default octagonal_sign "AFK agent stuck on #$number" \
-            "$(printf '%s\n%s\n%s' \
-              "An earlier run of the AFK agent died on this ticket with a worktree left behind; the ticket has been handed back for a human decision." \
-              "$(if [ "$pushed_branch" -eq 1 ]; then printf '%s reached origin and is kept' "$branch"; else printf 'Nothing of the dead run was kept.'; fi)" \
-              "$(printf 'Ticket: https://github.com/%s/issues/%s' "$repo" "$number")")"
+          notify_stuck \
+            "An earlier run of the AFK agent died on this ticket with a worktree left behind; the ticket has been handed back for a human decision." \
+            "$(if [ "$pushed_branch" -eq 1 ]; then printf '%s reached origin and is kept' "$branch"; else printf 'Nothing of the dead run was kept.'; fi)"
         fi
 
         remove_worktree_and_branch "$path" "$branch" "$(( 1 - pushed_branch ))"
@@ -1612,14 +1449,10 @@ let
       # State the hand-back reads, initialised where the claim lands so that
       # every exit past this point knows what this run created. `attempt`
       # belongs to the implement loop and is read by nothing before it.
-      # `session` is here rather than in the implement loop because the
-      # hand-back reads it too - a slug refused before the worktree exists
-      # has no session to continue or to bill.
       attempt=1
       branch_created=0
       pushed=0
       pr_url=""
-      session=""
 
       log "claiming #$number: $title"
       gh issue edit "$number" --repo "$repo" \
@@ -1817,9 +1650,7 @@ let
         fi
       }
 
-      # `session` was initialised where the claim landed - the hand-back reads
-      # it too, and a slug refused before the worktree exists has no session
-      # to continue or to bill.
+      session=""
       message="$(cat "$run_dir/prompt")"
 
       while :; do
@@ -2419,20 +2250,6 @@ let
         ci_round=$((ci_round + 1))
       done
 
-      # --- the implement session's spend is now final ------------------------
-      #
-      # CI-fix rounds continue this same session, so its cumulative cost is
-      # only final once the watch has settled green - which is here, the last
-      # point anything will run it. The id is read back for the same reason
-      # the CI-fix path above does it: a ticket that converged on its first
-      # attempt never needed to look. On every earlier exit the hand-back
-      # records the same session instead, and the once-per-session slot
-      # keeps the two paths from both counting it.
-      if [ -z "$session" ]; then
-        session="$(session_id_for "$worktree" "$slug")"
-      fi
-      record_session_usage "$worktree" "$session"
-
       # Said once and appended to every hand-back below, because from here on
       # it is the same fact each time and it is the fact ADR 0007 changed: a
       # review that cannot be shown to have run no longer means no pull
@@ -2542,18 +2359,6 @@ let
       jq -e 'has("messages") and (.messages | type == "array")' \
         "$review_dir/session.json" > /dev/null 2>&1 \
         || hand_back "the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (plan item 1). $unfinished"
-
-      # The review's spend, counted the moment the transcript is proven
-      # readable. Its cumulative cost is already in that file, so no second
-      # export is asked for - large-session truncation is a measured failure
-      # mode (plan item 1), and the transcript on disk is the one read this
-      # stage has already vetted. An export-shaped cost of zero or nothing is
-      # not counted: the slot stays unclaimed, which is what makes the next
-      # attempt at reading it a retry rather than a double-count.
-      review_cost="$(jq -r '.info.cost // empty' "$review_dir/session.json" 2>/dev/null || true)"
-      if [ -n "$review_cost" ] && claim_usage_slot "$review_session"; then
-        record_usage "$review_cost"
-      fi
 
       # --- did a review actually happen -------------------------------------
       #
@@ -2761,9 +2566,11 @@ in
       claimed ticket. Past the push the hand-back reaches the pull request
       too: it is commented on and left open without the hand-off label, since
       it holds real work (ADR 0007 §2). Notifications through the self-hosted
-      ntfy server (item 9, #176) - a handed-over pull request, a handed-back
-      ticket, and OpenCode Go usage crossing a cap threshold - are wired to
-      the same switch and go off with it.
+      ntfy server (item 9, #176) - a handed-over pull request and a handed-back
+      ticket, both at the lane's silent, informational level - are wired to
+      the same switch and go off with it. OpenCode Go usage approaching a cap
+      is tracked separately against OpenCode's own usage API (see #221),
+      not by a ledger this runner keeps.
 
       One thing still argues for leaving it off: #190 asks whether `deploy`
       should restrict who may push, and `deploy` is a shorter route to the

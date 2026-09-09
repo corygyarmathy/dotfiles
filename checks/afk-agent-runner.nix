@@ -478,14 +478,10 @@ pkgs.runCommand "check-afk-agent-runner"
         # The review transcript, in the shape the real `opencode export`
         # produces: tool calls at .messages[].parts[] with .type == "tool", and
         # the closing report as the last assistant text part. Everything the
-        # runner decides about a review is read from here.
-        #
-        # Any other session's export is read only for its cumulative cost, by
-        # the usage accounting (item 9, #176). `OC_IMPL_COST` is what makes a
-        # case able to cross a cap threshold; the default is the review
-        # transcript's own cost, so nothing crosses one by accident.
+        # runner decides about a review is read from here. Any other session's
+        # export is never read: the runner only exports the review session.
         if [ "$2" != ses_review ]; then
-          printf '{"info":{"cost":%s},"messages":[]}\n' "''${OC_IMPL_COST:-0.004}"
+          printf '{"messages":[]}\n'
           exit 0
         fi
         plan="$(cat "$OC_STATE/review-plan" 2>/dev/null || echo pass)"
@@ -833,8 +829,6 @@ pkgs.runCommand "check-afk-agent-runner"
     # under a `body:` line.
     ntfylog() { cat "$state/ntfy.log"; }
     ntfy_posts() { grep -c '^curl ' "$state/ntfy.log" 2>/dev/null || true; }
-    # One row per counted session in the runner's own spend file.
-    usage_rows() { awk 'END { print NR + 0 }' "$state/usage.tsv" 2>/dev/null || echo 0; }
     # How many times the runner asked GitHub about its checks.
     ci_polls() { cat "$state/ci-polls" 2>/dev/null || echo 0; }
     # What actually reached the fixture origin, as a count of commits on the
@@ -941,13 +935,6 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the notification did not lead with the pull request: $(ntfylog)"
     grep -qF "Unblocked at last" "$state/ntfy.log" || fail "the notification did not name the ticket: $(ntfylog)"
 
-    # The run's spend, counted once per session: the implement session (whose
-    # CI fix would have landed in it too) and the review session.
-    [ "$(usage_rows)" -eq 2 ] || fail "a green run recorded $(usage_rows) usage row(s), not one per session"
-    if grep -qF "OpenCode Go usage at" "$state/ntfy.log"; then
-      fail "a few cents of recorded spend crossed a cap threshold: $(ntfylog)"
-    fi
-
     echo "case: the ticket is worked in a real, isolated checkout of the base branch"
     # Asked of a run that hands its ticket back at the end, because every exit
     # past the isolation - a pull request, and every kind of hand-back - takes
@@ -965,18 +952,16 @@ pkgs.runCommand "check-afk-agent-runner"
     [ -f "$state/worktree-tree" ] || fail "the worktree has no working tree"
     [ -z "$(worktrees)" ] || fail "a handed-back ticket left its worktree: $(worktrees)"
 
-    # The stuck notification (item 9, #176), one step up from informational
-    # and named for the ticket it stopped on.
+    # The stuck notification (item 9, #176), silent like the PR-ready one and
+    # told apart by title and tag - a stuck ticket needs a human's eyes, not
+    # their phone buzzing at 03:00.
     [ "$(ntfy_posts)" -eq 1 ] || fail "a handed-back ticket published $(ntfy_posts) notification(s): $(ntfylog)"
-    grep -qF -- "-H Priority: default" "$state/ntfy.log" || fail "stuck was not a step up from informational: $(ntfylog)"
+    grep -qF -- "-H Priority: low" "$state/ntfy.log" || fail "stuck was not at the silent, informational level: $(ntfylog)"
     grep -qF -- "-H Tags: octagonal_sign" "$state/ntfy.log" || fail "stuck carried no tag: $(ntfylog)"
     grep -qF -- "-H Title: AFK agent stuck on #302" "$state/ntfy.log" \
       || fail "the stuck notification was not named after its ticket: $(ntfylog)"
     grep -qF "Ticket: https://github.com/corygyarmathy/dotfiles/issues/302" "$state/ntfy.log" \
       || fail "the stuck notification did not point at the ticket: $(ntfylog)"
-    # And nothing was counted: three attempts that died before opening a
-    # session have no cost to record.
-    [ "$(usage_rows)" -eq 0 ] || fail "sessions that never opened were counted: $(cat "$state/usage.tsv" 2>/dev/null)"
 
     echo "case: a ticket whose scope names a denied path is refused before the claim"
     run denied-then-clean denied-then-clean.json
@@ -1177,7 +1162,7 @@ pkgs.runCommand "check-afk-agent-runner"
     echo "case: a notification that cannot be sent does not stop the hand-back"
     # The ntfy push is best-effort by design (item 9, #176): a run that could
     # not publish must still end in exactly the hand-back it would have made,
-    # with the failure in the journal and the spend still counted.
+    # with the failure in the journal.
     export NTFY_FAIL=1
     run stuck-ntfy-fails mixed.json fresh "broken broken broken"
     unset NTFY_FAIL
@@ -1190,7 +1175,6 @@ pkgs.runCommand "check-afk-agent-runner"
     fi
     grep -q "could not be published" "$state/err.log" \
       || fail "the failed notification was not reported to the journal: $(cat "$state/err.log")"
-    [ "$(usage_rows)" -eq 1 ] || fail "a stuck run that opened a session did not count its spend"
 
     echo "case: exiting 0 without committing is a failure, not a success"
     # Measured in the pilot rather than imagined: runs that finished by
@@ -1446,9 +1430,6 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "an unparseable review transcript was accepted"
     grep -q "not a readable session" "$state/err.log" \
       || fail "did not say the transcript was unreadable: $(cat "$state/err.log")"
-    # And the hand-back did not count the implement session a second time: its
-    # slot was claimed by the success path's own record (item 9, #176).
-    [ "$(usage_rows)" -eq 1 ] || fail "a session was counted twice across the success and hand-back paths"
 
     echo "case: a review that hangs or crashes stops the ticket without retrying"
     # Review has no retry budget at all (ADR 0004 §6): a retry is an implement
@@ -1573,27 +1554,6 @@ pkgs.runCommand "check-afk-agent-runner"
     # something the grep would not recognise fails here.
     if grep -q "pr merge" "$state/gh.log"; then fail "the runner merged its own pull request: $(ghlog)"; fi
     if grep -q -- "--auto" "$state/gh.log"; then fail "auto-merge was armed: $(ghlog)"; fi
-
-    echo "case: spend that crosses a cap threshold publishes the usage notification"
-    # Item 9's third condition, driven through the real numbers: the
-    # five-hour cap is $12 and the threshold is 80%, so a first session that
-    # cost $10 is the record that crosses it (before: $0, after: $10) - and
-    # neither the weekly nor the monthly cap moves, because $10 is nowhere
-    # near either. One notification, at the stuck path's priority level,
-    # naming the cap it crossed.
-    export OC_IMPL_COST=10
-    run usage-cap mixed.json fresh good pass
-    unset OC_IMPL_COST
-    [ "$rc" -eq 0 ] || fail "a usage notification stopped the run: $(cat "$state/err.log")"
-    [ "$(ntfy_posts)" -eq 2 ] || fail "expected a cap alert and a PR-ready alert, got $(ntfy_posts): $(ntfylog)"
-    grep -qF -- "-H Priority: default" "$state/ntfy.log" || fail "the cap alert was not at the stuck level: $(ntfylog)"
-    grep -qF -- "-H Tags: chart_with_upwards_trend" "$state/ntfy.log" \
-      || fail "the cap alert carried no tag: $(ntfylog)"
-    grep -qF -- "-H Title: OpenCode Go usage at 83% of the five-hour cap" "$state/ntfy.log" \
-      || fail "the cap alert did not name its cap and percentage: $(ntfylog)"
-    grep -qF '$10.00 of the $12 five-hour cap' "$state/ntfy.log" \
-      || fail "the cap alert did not say what was spent against what: $(ntfylog)"
-    [ "$(usage_rows)" -eq 2 ] || fail "the cap case recorded $(usage_rows) usage row(s), not one per session"
 
     echo "case: the body links back to the source issue, and carries the findings after the review"
     # Two bodies now, and they are different documents (item 13). At creation
