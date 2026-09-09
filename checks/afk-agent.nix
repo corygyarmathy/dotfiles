@@ -191,6 +191,38 @@
             f"the fix gave the service account a login shell instead: {passwd_shell}"
         )
 
+    with subtest("a run cannot exhaust the host's memory"):
+        # 2026-09-10: a run reached 8.3 GB in one `nix` process and the kernel
+        # OOM killer fired globally - `CONSTRAINT_NONE`, the whole machine
+        # rather than this cgroup. It picked this unit because it was biggest;
+        # it could have picked any service on the host. The ceiling is what
+        # makes that a contained failure, and the ticket then ends on the stuck
+        # path like any other dead run.
+        limit = enabled.succeed(
+            "systemctl show -p MemoryMax --value afk-agent.service"
+        ).strip()
+        assert limit not in ("", "infinity"), (
+            f"the unit has no memory ceiling, so a run can still take the host down: {limit}"
+        )
+
+        # And the gate does not put it straight back over. `nix flake check`
+        # evaluates every output of this flake in one process, which is what
+        # overran; the gate builds each check separately, the way ci.yml's
+        # matrix does.
+        #
+        # Matched on the invocation rather than on the phrase. The prompt in
+        # this same script names `nix flake check` on purpose - it is what
+        # tells the model not to run one - so a bare substring search reads
+        # the warning as the offence, which is exactly what it did when this
+        # subtest was first written.
+        body = enabled.succeed(f"cat {script}")
+        assert "step nix flake check" not in body, (
+            "the gate runs `nix flake check` again, which is what exhausted the host"
+        )
+        assert 'nix build --no-link ".#checks.' in body, (
+            "the gate no longer builds the checks one at a time"
+        )
+
     with subtest("no credential value reaches the journal"):
         # The unit reads four secrets on every poll. A debug echo left behind
         # in the runner would put a repo-write App key into the system journal,

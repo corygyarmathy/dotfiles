@@ -469,10 +469,17 @@ let
       not exist: the next stage pushes commits, and nothing else.
 
     The gate your work has to pass is this repository's own: `nix fmt -- --ci`,
-    `nix flake check`, a build of every host, and agreement between the checks
-    the flake exposes and the matrix in `ci.yml`. `AGENTS.md` is the rest of
-    the house style. You will be told what the gate said and given two further
-    attempts to fix it.
+    a `nix build` of each check the flake exposes, a build of every host, and
+    agreement between the checks the flake exposes and the matrix in `ci.yml`.
+    `AGENTS.md` is the rest of the house style. You will be told what the gate
+    said and given two further attempts to fix it.
+
+    Run the checks one `nix build .#checks.x86_64-linux.<name>` at a time, and
+    do not run `nix flake check`. It evaluates every output of this flake in
+    one process and peaks around 8 GB on this host, which is enough to invoke
+    the kernel's OOM killer and lose your session and your uncommitted work
+    with it. That is measured, on a run that had finished the work and was
+    killed proving it.
 
     Five ways real runs of this pipeline have produced work that looked
     finished and was not. They are measured, not hypothetical:
@@ -696,9 +703,9 @@ let
     Opened unattended by the AFK agent (ADR 0004). The work on `BRANCH` was
     claimed from `ready-for-agent`, implemented by `IMPLEMODEL` across ATTEMPTS
     session(s), and pushed only once this repository's own gate passed on the
-    commit at the head of the branch: `nix fmt -- --ci`, `nix flake check`, a
-    build of every host, and agreement between the checks the flake exposes and
-    the matrix in `ci.yml`. The diff was checked against the path denylist in
+    commit at the head of the branch: `nix fmt -- --ci`, a build of every check
+    the flake exposes, a build of every host, and agreement between the checks
+    the flake exposes and the matrix in `ci.yml`. The diff was checked against the path denylist in
     `docs/agents/afk-eligibility.md` immediately before every push, as well as
     before the claim.
 
@@ -1638,7 +1645,34 @@ let
             | LC_ALL=C sort > "$run_dir/matrix-checks" || exit 1
           step diff -u "$run_dir/flake-checks" "$run_dir/matrix-checks" || exit 1
 
-          step nix flake check || exit 1
+          # Every check the flake exposes, one `nix build` each, rather than
+          # the single `nix flake check` this used to be. Not a style
+          # preference - `nix flake check` evaluates every output in one
+          # process, and on this flake that is three `nixosConfigurations`
+          # plus the NixOS system each VM test builds inside itself, all live
+          # in one evaluator heap at once. Measured, on the run that found it:
+          # 8.3 GB resident in a single `nix`, on a 15 GB host with no swap
+          # that already had ~6 GB of services on it. The kernel's OOM killer
+          # took the unit (`CONSTRAINT_NONE` - the whole machine, not a
+          # cgroup), and with it a ticket that had already implemented itself
+          # and passed its own tests.
+          #
+          # One process per check is what CI has always done - `ci.yml`'s
+          # `checks` job is a matrix, one runner each - so this stops being a
+          # cheaper proxy for CI and starts being the same shape as CI. The
+          # `diff` immediately above is what makes the loop total: it has just
+          # asserted that this list and ci.yml's matrix name the same checks,
+          # so iterating it cannot silently skip one.
+          #
+          # What is lost is `nix flake check`'s own validation of the outputs
+          # around the checks - devShells, formatter, the flake's shape. CI
+          # does not gate on that either, and a gate that disagrees with CI is
+          # the thing this whole function exists not to be.
+          local check
+          while read -r check; do
+            [ -n "$check" ] || continue
+            step nix build --no-link ".#checks.x86_64-linux.$check" || exit 1
+          done < "$run_dir/flake-checks"
 
           local hosts
           hosts="$(step nix eval --raw .#nixosConfigurations \
@@ -2671,6 +2705,44 @@ in
         request untouched too, past the push (ADR 0007).
       '';
     };
+
+    maxMemory = lib.mkOption {
+      type = lib.types.str;
+      default = "6G";
+      example = "4G";
+      description = ''
+        Ceiling on a single run's memory, as `MemoryMax` (systemd.resource-control(5)).
+
+        `maxRuntime` above bounds how long a run may take and nothing bounded
+        how much of the host it may take while doing it. On 2026-09-10 a run
+        that had already implemented its ticket and passed its own tests was
+        killed proving it: `nix flake check` reached 8.3 GB resident on a 15 GB
+        host with no swap, and the kernel's OOM killer fired with
+        `CONSTRAINT_NONE` - a global out-of-memory, not a cgroup one. It chose
+        the biggest process, which happened to be this unit's. It could as
+        easily have chosen Grafana, Prometheus or Jellyfin: an unattended
+        coding agent had become a denial-of-service risk to every other service
+        on the machine.
+
+        This is the containment for that, and the per-check gate above is what
+        makes it comfortable rather than tight. Scope it honestly: a `nix
+        build` hands the work to `nix-daemon.service`, which has a cgroup of
+        its own, so what this actually bounds is the evaluator, opencode, and
+        anything the model runs directly - which is precisely what overran.
+
+        The default leaves roughly 9 GB for everything else on homelab01,
+        whose other services sit at about 6 GB. Reaching it kills inside this
+        cgroup: the run dies, its worktree is left, and the next poll's guard
+        hands the ticket back (item 8) - the same ending as the runtime
+        ceiling, and a far better one than taking the host with it.
+
+        `MemoryHigh` is deliberately not set alongside it. `MemoryHigh`
+        throttles and reclaims before killing, which earns its place when
+        there is swap to reclaim into; homelab01 has none, and the memory in
+        question is a Nix evaluator's anonymous heap. It would buy a stall
+        rather than a survival.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -2728,6 +2800,12 @@ in
         WorkingDirectory = stateDir;
         UMask = "0077";
         TimeoutStartSec = cfg.maxRuntime;
+
+        # See `maxMemory`. The runtime ceiling's counterpart: this unit runs a
+        # coding agent that builds things, and until 2026-09-10 nothing stopped
+        # it exhausting the host's memory and taking unrelated services down
+        # with it.
+        MemoryMax = cfg.maxMemory;
 
         LoadCredential = lib.mapAttrsToList (
           alias: name: "${alias}:${config.sops.secrets.${name}.path}"
