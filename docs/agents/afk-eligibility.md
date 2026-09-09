@@ -35,17 +35,26 @@ A `pull_request` event runs the workflow file **from the PR's head branch**, not
 from `master`. So an edited `ci.yml` executes the moment the PR opens, before
 anyone reads it. The AFK agent pushes to a branch in this repo rather than a
 fork (ADR 0004 §4), which makes that a same-repo run, which means it gets the
-repository secrets - `CACHIX_AUTH_TOKEN` and `FLAKE_UPDATE_TOKEN`, the latter a
-PAT that can open and merge PRs. A job's `permissions:` are declared in the
-workflow file itself, so the edited copy can grant itself `contents: write`;
-`ci.yml`'s own `promote` job does exactly that today despite the repo's
-read-only default.
+repository secrets - `CACHIX_AUTH_TOKEN`, `FLAKE_UPDATE_TOKEN` (a PAT that can
+open and merge PRs) and `PROMOTE_DEPLOY_KEY` (the one key allowed to move
+`deploy`; see below). A job's `permissions:` are declared in the
+workflow file itself, so the edited copy can grant itself `contents: write`
+whatever the repository's read-only default says.
 
-And `deploy` is reachable from a workflow run rather than from a merge. The
-`protect-deploy` ruleset forbids deletion and non-fast-forward pushes, but does
-not restrict *who* may push, and any agent branch is `master` plus commits -
-a fast-forward. `deploy` is the only ref the fleet follows (ADR 0001), and hosts
-pick it up on their nightly `system.autoUpgrade`.
+And `deploy` is reachable from a workflow run rather than from a merge. That
+used to be true of any credential at all: `protect-deploy` forbade deletion and
+non-fast-forward pushes but not *who* may push, and any agent branch is `master`
+plus commits - a fast-forward. #190 closed that short path (ADR 0005), and
+`restrict-deploy-updates` now refuses every PAT including this agent's. What it
+could not close is this one. The identity it exempts is a deploy key held as a
+repository secret, and an edited workflow running from the PR's head branch
+reads repository secrets, so the route described above is exactly as long as it
+was. `deploy` is the only ref the fleet follows (ADR 0001), and hosts pick it up
+on their nightly `system.autoUpgrade`.
+
+The ruleset therefore makes this rule matter *more*, not less. It used to be one
+control among several against a fleet-wide push; it is now the only one left
+standing in the only path that remains.
 
 So the denylist here is not protecting `master`, which review does protect. It
 is protecting `deploy`, which sits on the other side of the review gate
