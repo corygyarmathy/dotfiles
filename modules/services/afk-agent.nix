@@ -14,8 +14,10 @@
 # the credentials, the sandbox, and the toolchain on its PATH. The runner
 # itself is item 5, and landed in pieces: poll -> denylist -> claim -> isolate
 # (#171), the implement stage on top of it (#172), the review stage after that
-# (#173, item 6), the push and pull request that end a run (#174, item 7), and
-# the reorder that put them in the order below (#201, item 13).
+# (#173, item 6), the push and pull request that end a run (#174, item 7), the
+# reorder that put them in the order below (#201, item 13), and the
+# notifications that tell a person not watching GitHub how it ended (#176,
+# item 9).
 #
 # THE ORDER IS THE POINT OF #201, so it is worth reading once in full:
 #
@@ -43,6 +45,21 @@
 # pull request too - a comment on it, and it is left open without the
 # hand-off label, because it holds real work (ADR 0007 §2). No pull request
 # is ever opened by the hand-back itself.
+#
+# BOTH ENDINGS push a ntfy notification (item 9, #176): a pull request handed
+# over, and a ticket handed back stuck. They publish straight to the
+# self-hosted ntfy server this host already runs, at the push lane's own
+# severity conventions, rather than through Alertmanager - these are pipeline
+# events only the runner knows about, not metric states for Prometheus to
+# scrape. Both arrive at the lane's informational level (priority low, silent)
+# and are told apart by title and tag, because neither should buzz a phone:
+# nothing here is wrong, and a stuck ticket still needs a human to read it
+# rather than be woken by it. What does route through the existing stack is a
+# runner that dies outright: a `die` leaves the unit failed, which
+# SystemdUnitFailed and the journal-tail enrichment already report. The third
+# condition item 9 names - OpenCode Go usage approaching a cap - is tracked
+# separately, against OpenCode's own usage API rather than a ledger the runner
+# keeps (#176 closed without it; see #221).
 #
 # THE REVIEW STAGE IS ADVISORY, AND THAT IS A MEASURED DECISION RATHER THAN A
 # GAP. It proves, from the session transcript rather than from the session's
@@ -135,6 +152,13 @@ let
     github-app-key = "gh-ci/afk-agent-app-private-key";
     opencode-api-key = "opencode/api-key";
     opencode-username = "opencode/username";
+    # For the notifications (item 9, #176): the ntfy access token the push
+    # lane already publishes with. The alertmanager-ntfy bridge on this host
+    # uses exactly this token to reach exactly this server, so reusing it is
+    # the difference between wiring notifications and standing up a second
+    # credential - and a token is only ever as broad as the ntfy user it
+    # belongs to, which is the same user every push already goes out under.
+    ntfy-token = "monitoring/ntfy/alerts-token";
   };
 
   # The binaries the runner drives, keyed by the name it will invoke: `gh` for
@@ -237,6 +261,22 @@ let
   # the R3 rubric, where `glm-5.3-flash` managed 1/3 - n=3 cells pointing both
   # ways. The verification counts above are the only part that is not noise.
   reviewModel = "opencode-go/deepseek-v4-pro";
+
+  # Where the notifications publish (item 9, #176). Both values are read from
+  # the modules that own them rather than restated, for the same reason
+  # `repository` above gives for its own single value - a value restated in a
+  # second module is a value that drifts: ntfy.nix owns the server and its
+  # port, and monitoring.nix's push lane owns the topic the phone subscribes
+  # to. This module is evaluated standalone by its two checks, and both import
+  # the two modules these read from - the shape download-root-canary's check
+  # already uses for its monitoring read.
+  #
+  # The URL is loopback rather than the public base URL the bridges use,
+  # because the runner lives on the same host as the server: its notifications
+  # should not depend on the tunnel standing up, which is exactly what a
+  # tunnel-outage alert would be competing with.
+  ntfyUrl = "http://127.0.0.1:${toString config.cg.service.ntfy.port}";
+  ntfyTopic = config.cg.service.monitoring.alertmanager.ntfy.topic;
 
   # Who the commits are by. ADR 0004 §4 rules out a second GitHub account, so
   # everything this pipeline produces - the branch, the PR, and the commits on
@@ -709,13 +749,19 @@ let
     # the check can substitute a mocked `gh` for the real one - a runtimeInput
     # would be prepended to PATH and shadow it. `require_tool` below is what
     # turns that looser coupling into something that still fails loudly.
-    # `openssl` and `curl` here as well as in `toolchain`, unlike `git`, `gh`
-    # and `nix`: the check substitutes mocks for those three and needs the real
-    # thing for these two, because the preflight asserts every tool by name.
+    #
+    # `openssl` is the one exception, and it is here *because* a runtimeInput
+    # cannot be shadowed: the JWT it signs is the credential-critical path, so
+    # the check asserting the real binary by name is a property worth keeping.
+    # `curl` used to sit beside it, and moved out when the ntfy notifications
+    # (item 9, #176) became the one thing the check has to be able to
+    # intercept - with the App token mint stubbed through `AFK_GH_TOKEN`,
+    # curl's only reachable use in a check run is the notification POST, and
+    # the harness records those calls exactly like it records `gh`'s. In
+    # production curl is on the unit's PATH through `toolchain` either way.
     runtimeInputs = [
       pkgs.coreutils
       pkgs.openssl
-      pkgs.curl
     ];
 
     text = ''
@@ -747,6 +793,13 @@ let
       checkout="$state_dir/checkout"
       worktrees="$state_dir/worktrees"
 
+      # The ntfy server and topic the two notifications publish to (item 9,
+      # #176). Deliberately not an environment seam: the URL and topic are the
+      # behaviour under test, and the check asserts the exact POST the runner
+      # would make against the values the module evaluated.
+      ntfy_url="${ntfyUrl}"
+      ntfy_topic="${ntfyTopic}"
+
       denied=(
         ${lib.concatMapStringsSep "\n        " (p: ''"${p}"'') deniedPaths}
       )
@@ -771,6 +824,64 @@ let
             && opencode session list -n ${toString sessionListDepth} --format json \
             | jq -r --arg t "$2" 'map(select(.title == $t)) | .[0].id // empty'
         ) 2>/dev/null || true
+      }
+
+      # --- notifications (item 9, #176) --------------------------------------
+      #
+      # Two conditions have to reach a person who is not watching GitHub: a
+      # pull request is ready for review, and the pipeline is stuck on a
+      # ticket and needs a decision. They publish straight to the self-hosted
+      # ntfy server and topic the push lane already uses, at the priority that
+      # lane's conventions give each kind of event - the same vocabulary the
+      # alertmanager-ntfy bridge speaks, minus the criticals: both arrive at
+      # the informational level (priority low, silent, the level warnings get)
+      # because neither is wrong and neither should buzz a phone at 03:00, and
+      # they are told apart by title and tag so the phone still distinguishes
+      # a ticket that needs a read from a pull request that needs a review.
+      #
+      # Best-effort, like every other write this script makes from inside a
+      # run that has already decided its outcome: a notification that cannot
+      # be sent is one line in this unit's journal, and nothing downstream of
+      # it changes. The events it reports are already on the tracker or in
+      # this journal by the time it fires.
+      #
+      # The token reaches curl as a header file rather than as an argument,
+      # for the reason the App token reaches `gh` through the environment: a
+      # command line is readable by every process on the host through /proc,
+      # and neither credential is ever a log line or an argv element. The
+      # header file is written once per run next to `run_dir` below, 0600
+      # under the unit's umask inside a 0700 state directory.
+      notify() {
+        local priority=$1 tag=$2 title body
+        title="$(printf '%s' "$3" | tr -d '\r\n')"
+        body="$run_dir/ntfy-body"
+        # ntfy refuses a body over 4 KB. `|| true` because a body longer than
+        # the cap makes `head` close the pipe early, and a notification
+        # truncated at 3.8 KB is still a notification.
+        printf '%s\n' "$4" | head -c 3800 > "$body" || true
+        if ! curl -sS -m 30 \
+          -H "@$run_dir/ntfy-auth" \
+          -H "Title: $title" \
+          -H "Priority: $priority" \
+          -H "Tags: $tag" \
+          --data-binary "@$body" \
+          "$ntfy_url/$ntfy_topic"
+        then
+          echo "afk-agent: the ntfy notification '$title' could not be published; the event it reports is in this journal" >&2
+        fi
+      }
+
+      # The stuck notification the two stuck paths share (item 8/9): one title,
+      # tag and priority, differing only in the prose that names the ticket.
+      # The ticket URL is the one line both must carry - a stuck notification
+      # that does not point at its ticket is a phone alert pointing at nothing.
+      notify_stuck() {
+        local reason=$1 status=$2
+        notify low octagonal_sign "AFK agent stuck on #$number" \
+          "$(printf '%s\n%s\n%s' \
+            "$reason" \
+            "$status" \
+            "$(printf 'Ticket: https://github.com/%s/issues/%s' "$repo" "$number")")"
       }
 
       # --- the stuck path (item 8, #175) ------------------------------------
@@ -802,7 +913,10 @@ let
       # never written is gone for good, and a ticket still carrying
       # `$working_label` once its worktree is gone is stranded silently -
       # invisible to the frontier query, missed by the guard, and known to
-      # nobody. `exit 1` at the end keeps the unit red: the hand-back is the
+      # nobody. The ntfy push (item 9, #176) comes after the tracker writes
+      # for the same reason - the phone's copy is a pointer at the durable
+      # half, not a substitute for it - and before the teardown, which is the
+      # slow part. `exit 1` at the end keeps the unit red: the hand-back is the
       # designed outcome, and it is still a failure somebody has to act on.
 
       # The tracker writes every hand-back shares, so the two stuck paths do
@@ -879,6 +993,14 @@ let
         if ! relabel_stuck; then
           echo "afk-agent: #$number: could not relabel to $stuck_label; the ticket still carries $working_label and is invisible to the frontier query" >&2
         fi
+
+        # The notification (item 9, #176). The tracker writes above are the
+        # durable half of the hand-back; this is the half that reaches
+        # somebody who is not looking at GitHub, at the lane's informational
+        # level (priority low, silent) - a stuck pipeline stops work until a
+        # human reads the ticket, but it should not wake them up to do it.
+        notify_stuck "$reason" \
+          "$(if [ "$pr_url" != "" ]; then printf '%s is open and unfinished' "$pr_url"; fi)"
 
         if [ "$pushed" -eq 0 ]; then
           remove_worktree_and_branch "$worktree" "$branch" "$branch_created"
@@ -1001,6 +1123,10 @@ let
           } > "$body"
 
           post_issue_comment "$body"
+
+          notify_stuck \
+            "An earlier run of the AFK agent died on this ticket with a worktree left behind; the ticket has been handed back for a human decision." \
+            "$(if [ "$pushed_branch" -eq 1 ]; then printf '%s reached origin and is kept' "$branch"; else printf 'Nothing of the dead run was kept.'; fi)"
         fi
 
         remove_worktree_and_branch "$path" "$branch" "$(( 1 - pushed_branch ))"
@@ -1176,6 +1302,14 @@ let
       run_dir="$state_dir/run"
       rm -rf "$run_dir"
       mkdir -p "$run_dir"
+
+      # The ntfy token, as the header file `notify` reads. Written once per
+      # run rather than read per notification - it is read from
+      # $CREDENTIALS_DIRECTORY, which does not change under a running unit -
+      # and through a file rather than curl's argv, for the reason `notify`
+      # gives. Never echoed: the value reaches the file and stops there.
+      printf 'Authorization: Bearer %s\n' "$(cat "$creds/ntfy-token")" \
+        > "$run_dir/ntfy-auth"
 
       # --- one ticket at a time --------------------------------------------
       #
@@ -2384,6 +2518,14 @@ let
         --add-label "${handoffLabel}" \
         || hand_back "$pr_url is open and green, but the review's findings could not be written onto it, so it stays without the ${handoffLabel} label"
 
+      # The notification (item 9, #176): the whole point of the hand-off
+      # label, delivered to somebody who is not watching GitHub. Priority low
+      # - informational, silent, the lane's warning level - because nothing
+      # here is wrong and nothing is waiting on this beyond a person finding
+      # a quiet moment to read the diff.
+      notify low white_check_mark "AFK agent: PR ready for review (#$number)" \
+        "$(printf '%s\n%s' "$pr_url" "$title")"
+
       # --- and nothing is left in flight ------------------------------------
       #
       # The worktree goes now that the branch is somewhere durable. The
@@ -2423,7 +2565,12 @@ in
       and torn down - so a failure neither wedges the next poll nor strands a
       claimed ticket. Past the push the hand-back reaches the pull request
       too: it is commented on and left open without the hand-off label, since
-      it holds real work (ADR 0007 §2).
+      it holds real work (ADR 0007 §2). Notifications through the self-hosted
+      ntfy server (item 9, #176) - a handed-over pull request and a handed-back
+      ticket, both at the lane's silent, informational level - are wired to
+      the same switch and go off with it. OpenCode Go usage approaching a cap
+      is tracked separately against OpenCode's own usage API (see #221),
+      not by a ledger this runner keeps.
 
       One thing still argues for leaving it off: #190 asks whether `deploy`
       should restrict who may push, and `deploy` is a shorter route to the

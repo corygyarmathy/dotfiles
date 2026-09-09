@@ -50,6 +50,15 @@ let
     modules = [
       inputs.sops-nix.nixosModules.sops
       ../modules/services/afk-agent.nix
+      # The runner reads two values from the modules that own them - the ntfy
+      # server's port (ntfy.nix) and the push lane's topic
+      # (monitoring.nix) - so both are imported here for their declarations,
+      # exactly as download-root-canary-script.nix imports monitoring.nix for
+      # its canary's read. Neither is enabled: only the option defaults are
+      # read, which is what production evaluates to on the one host this
+      # service runs on.
+      ../modules/services/ntfy.nix
+      ../modules/services/monitoring/monitoring.nix
       {
         cg.service.afk-agent.enable = true;
         system.stateVersion = "24.11";
@@ -151,6 +160,7 @@ pkgs.runCommand "check-afk-agent-runner"
     echo "not-a-real-key"   > "$work/creds/github-app-key"
     echo "not-a-real-key"   > "$work/creds/opencode-api-key"
     echo "not-a-real-user"  > "$work/creds/opencode-username"
+    echo "not-a-real-token" > "$work/creds/ntfy-token"
     export CREDENTIALS_DIRECTORY="$work/creds"
 
     # The runner mints its own GitHub token from an App private key (ADR 0006),
@@ -468,7 +478,8 @@ pkgs.runCommand "check-afk-agent-runner"
         # The review transcript, in the shape the real `opencode export`
         # produces: tool calls at .messages[].parts[] with .type == "tool", and
         # the closing report as the last assistant text part. Everything the
-        # runner decides about a review is read from here.
+        # runner decides about a review is read from here. Any other session's
+        # export is never read: the runner only exports the review session.
         if [ "$2" != ses_review ]; then
           printf '{"messages":[]}\n'
           exit 0
@@ -590,6 +601,36 @@ pkgs.runCommand "check-afk-agent-runner"
       esac
     fi
     exit 0
+    MOCK
+
+    # `curl` is mocked the way `gh` is, for the notification POST (item 9,
+    # #176): every invocation is recorded one-per-line so a case can assert
+    # on the exact request the runner would have made - URL, headers, and the
+    # body's content, copied out of the `--data-binary @file` it is handed -
+    # and it can be made to fail, which is how the best-effort guarantee is
+    # exercised. The auth header reaches curl as `-H @file`, so the mock
+    # never sees the token; the file it points at is asserted to exist and to
+    # carry a Bearer line, its value never printed.
+    #
+    # The real curl is never reachable here: the App token mint that used it
+    # is stubbed through `AFK_GH_TOKEN`, and it left the runner's
+    # `runtimeInputs` for exactly this reason.
+    cat > "$work/bin/curl" <<'MOCK'
+    #!/bin/sh
+    printf '%s\n' "curl $*" >> "$NTFY_LOG"
+    prev=""
+    for a in "$@"; do
+      if [ "$prev" = "--data-binary" ]; then
+        printf '%s\n' "body:" >> "$NTFY_LOG"
+        cat "''${a#@}" >> "$NTFY_LOG" 2>/dev/null
+        printf '%s\n' "" >> "$NTFY_LOG"
+      fi
+      prev="$a"
+    done
+    if [ -n "''${NTFY_FAIL:-}" ]; then
+      echo "mock curl: ntfy is unreachable" >&2
+      exit 7
+    fi
     MOCK
 
     # `yq` is deliberately NOT mocked: it is the real yq-go from the unit's own
@@ -749,9 +790,11 @@ pkgs.runCommand "check-afk-agent-runner"
       export OC_REVIEW="$review"
       export NIX_LOG="$state/nix.log"
       export CI_PLAN="$state/ci.plan"
+      export NTFY_LOG="$state/ntfy.log"
       export CI_ORIGIN="$work/origin.git"
       : > "$GH_LOG"
       : > "$NIX_LOG"
+      : > "$NTFY_LOG"
       rm -f "$state"/args-* "$state"/overlay-* "$state/attempts" "$state/title" \
         "$state"/review-* "$state/ci-polls" "$state"/pr-*-body "$state/pr-branch" \
         "$state"/implement-saw-pr-*
@@ -781,6 +824,11 @@ pkgs.runCommand "check-afk-agent-runner"
     export AFK_CI_POLL_INTERVAL=0
 
     ghlog() { cat "$state/gh.log"; }
+    # The notifications the runner asked for (item 9, #176), recorded by the
+    # curl mock one invocation per `curl ...` line with the body appended
+    # under a `body:` line.
+    ntfylog() { cat "$state/ntfy.log"; }
+    ntfy_posts() { grep -c '^curl ' "$state/ntfy.log" 2>/dev/null || true; }
     # How many times the runner asked GitHub about its checks.
     ci_polls() { cat "$state/ci-polls" 2>/dev/null || echo 0; }
     # What actually reached the fixture origin, as a count of commits on the
@@ -819,6 +867,9 @@ pkgs.runCommand "check-afk-agent-runner"
       grep -q "tool '$tool' present" "$state/out.log" || fail "$tool was not asserted before the poll"
     done
     [ "$(claims)" -eq 0 ] || fail "claimed something from an empty tracker"
+    # And nothing to notify about: the three conditions (item 9, #176) are
+    # all downstream of a claim, and an empty poll has none of them.
+    [ "$(ntfy_posts)" -eq 0 ] || fail "an empty poll published a notification: $(ntfylog)"
 
     echo "case: the query asks the tracker for the right issues in the first place"
     # The mock answers `issue list` from a fixture whatever it is asked, which
@@ -865,6 +916,25 @@ pkgs.runCommand "check-afk-agent-runner"
       --format='%(upstream:short)' refs/heads/afk/302-unblocked-at-last)"
     [ -z "$upstream" ] || fail "the ticket branch tracks $upstream"
 
+    # The PR-ready notification (item 9, #176), exactly once and at the lane's
+    # informational level: a handed-over pull request is not an incident, so
+    # it gets the priority warnings get - low, silent - and is told apart by
+    # title and tag. The URL and topic are read out of the modules that own
+    # them at eval time, so what is asserted here is what production posts.
+    [ "$(ntfy_posts)" -eq 1 ] || fail "a handed-over pull request published $(ntfy_posts) notification(s): $(ntfylog)"
+    grep -qF "http://127.0.0.1:2586/alerts" "$state/ntfy.log" \
+      || fail "the notification did not go to the push lane's server and topic: $(ntfylog)"
+    grep -qF -- "-H Priority: low" "$state/ntfy.log" || fail "PR-ready was not low priority: $(ntfylog)"
+    grep -qF -- "-H Tags: white_check_mark" "$state/ntfy.log" || fail "PR-ready carried no tag: $(ntfylog)"
+    grep -qF -- "-H Title: AFK agent: PR ready for review (#302)" "$state/ntfy.log" \
+      || fail "PR-ready was not named after its ticket: $(ntfylog)"
+    grep -qF -- "-H @" "$state/ntfy.log" || fail "the token did not travel as a header file: $(ntfylog)"
+    grep -q '^Authorization: Bearer ' "$state/run/ntfy-auth" \
+      || fail "the ntfy auth header file is missing or malformed"
+    grep -qF "https://github.com/corygyarmathy/dotfiles/pull/999" "$state/ntfy.log" \
+      || fail "the notification did not lead with the pull request: $(ntfylog)"
+    grep -qF "Unblocked at last" "$state/ntfy.log" || fail "the notification did not name the ticket: $(ntfylog)"
+
     echo "case: the ticket is worked in a real, isolated checkout of the base branch"
     # Asked of a run that hands its ticket back at the end, because every exit
     # past the isolation - a pull request, and every kind of hand-back - takes
@@ -881,6 +951,17 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the worktree was not on its own branch: $(cat "$state/worktree-branch" 2>/dev/null)"
     [ -f "$state/worktree-tree" ] || fail "the worktree has no working tree"
     [ -z "$(worktrees)" ] || fail "a handed-back ticket left its worktree: $(worktrees)"
+
+    # The stuck notification (item 9, #176), silent like the PR-ready one and
+    # told apart by title and tag - a stuck ticket needs a human's eyes, not
+    # their phone buzzing at 03:00.
+    [ "$(ntfy_posts)" -eq 1 ] || fail "a handed-back ticket published $(ntfy_posts) notification(s): $(ntfylog)"
+    grep -qF -- "-H Priority: low" "$state/ntfy.log" || fail "stuck was not at the silent, informational level: $(ntfylog)"
+    grep -qF -- "-H Tags: octagonal_sign" "$state/ntfy.log" || fail "stuck carried no tag: $(ntfylog)"
+    grep -qF -- "-H Title: AFK agent stuck on #302" "$state/ntfy.log" \
+      || fail "the stuck notification was not named after its ticket: $(ntfylog)"
+    grep -qF "Ticket: https://github.com/corygyarmathy/dotfiles/issues/302" "$state/ntfy.log" \
+      || fail "the stuck notification did not point at the ticket: $(ntfylog)"
 
     echo "case: a ticket whose scope names a denied path is refused before the claim"
     run denied-then-clean denied-then-clean.json
@@ -1077,6 +1158,23 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the relabel did not survive a failed comment: $(ghlog)"
     [ -z "$(worktrees)" ] || fail "the teardown did not survive a failed comment"
     [ -z "$(branches)" ] || fail "the branch survived a failed comment"
+
+    echo "case: a notification that cannot be sent does not stop the hand-back"
+    # The ntfy push is best-effort by design (item 9, #176): a run that could
+    # not publish must still end in exactly the hand-back it would have made,
+    # with the failure in the journal.
+    export NTFY_FAIL=1
+    run stuck-ntfy-fails mixed.json fresh "broken broken broken"
+    unset NTFY_FAIL
+    [ "$rc" -ne 0 ] || fail "a failed notification was reported as success"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the relabel did not survive a failed notification: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "the teardown did not survive a failed notification"
+    if grep -q "the comment could not be posted" "$state/err.log"; then
+      fail "the issue comment failed without GH_COMMENT_FAIL"
+    fi
+    grep -q "could not be published" "$state/err.log" \
+      || fail "the failed notification was not reported to the journal: $(cat "$state/err.log")"
 
     echo "case: exiting 0 without committing is a failure, not a success"
     # Measured in the pilot rather than imagined: runs that finished by
