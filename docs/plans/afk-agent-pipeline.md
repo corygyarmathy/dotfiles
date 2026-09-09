@@ -609,7 +609,7 @@ A PR needs to be opened and pushed by something other than `GITHUB_TOKEN`, or th
 
 ### Approach
 
-A second fine-grained PAT scoped to this repo, under the existing account (ADR 0004 §4 - a PAT rather than `GITHUB_TOKEN`, and not a separate GitHub account). This plan owns the naming the ADR delegates to it: branches it pushes use an **`afk/*`** prefix, and PRs it opens carry an **`afk-agent`** label, giving the same at-a-glance distinction `deps/*` already provides. Both are cosmetic and may be changed here without touching the ADR.
+A fine-grained PAT scoped to this repo, held by the runner's own machine account (ADR 0006; a PAT rather than `GITHUB_TOKEN`, and - reversing ADR 0004 §4 - a separate GitHub account after all). This plan owns the naming the ADR delegates to it: branches it pushes use an **`afk/*`** prefix, and PRs it opens carry an **`afk-agent`** label, giving the same at-a-glance distinction `deps/*` already provides. Both are cosmetic and may be changed here without touching the ADR.
 
 The permission set is this plan's to fix too, and it is the smallest one the runner's verbs need:
 
@@ -640,11 +640,27 @@ The same shape, one ref over, and a ticket rather than a paragraph: `Contents: w
 
 **Answered, 2026-09-09.** `deploy` now restricts updates, and the only actor exempt is CI's `ci-promote-deploy` deploy key ([ADR 0005](../adr/0005-only-a-deploy-key-may-move-deploy.md)). So this token cannot fast-forward `deploy` at all, and neither can `FLAKE_UPDATE_TOKEN` nor the operator's own credential - a fine-grained PAT acts as the repository owner, and the owner is not on the bypass list either. `GITHUB_TOKEN` could not be the exception, which is why the identity is a deploy key rather than the obvious thing: GitHub refuses the GitHub Actions app as a ruleset bypass actor on a user-owned repository, the same organization-only shape as merge queues. What is unchanged is the long way round - the key is a repository secret, and a `pull_request` event runs the head branch's workflow - so `afk-eligibility.md`'s denylist and item 7's pre-push gate are now the only things standing in the only path that remains. Item 4's switch-on no longer waits on this one.
 
+### Corrected, 2026-09-09 (#200)
+
+The section above concludes that "the no-second-account decision and ruleset-enforced review are mutually exclusive". That is wrong, and worth leaving in place with the correction next to it, because it was reasoned twice from the same wrong premise - here, and again in #200's own framing.
+
+§4 was never what blocked it. ADR 0006 tested the instrument against the real API and the obstacle is in GitHub's merge path, not in the account count: an `update` rule over `refs/heads/master` does block a merge, but it blocks it for **every** actor including one on its own bypass list, because a pull request's mergeability is computed for the branch rather than for a viewer. The only way through is the admin override, which also skips `nixos ci`, and auto-merge stops draining entirely - which would take `flake-update.yml`, `dependabot-auto-merge.yml` and `automerge-nudge.yml` with it.
+
+So the conclusion of the section above survives: **ADR 0004 §9 is a property of the runner's code, asserted by item 5's harness, and not something the repository enforces.** Only its reason changes. What the second account does buy is item 12's author filter and item 15's move of the findings into a comment, neither of which needed the ruleset.
+
+One sentence in the `deploy` answer above goes stale with it. "A fine-grained PAT acts as the repository owner, and the owner is not on the bypass list either" covered every token here at once precisely because there was only one account. Once `AFK_AGENT_TOKEN` belongs to the machine account that is no longer an argument about it. The conclusion holds for a better reason - `restrict-deploy-updates` exempts only a deploy key, and a `write` collaborator is not one - but it is now two facts rather than one, so the new token gets checked against `deploy` directly (`gh api repos/{owner}/{repo}/rules/branches/deploy` under that token must still list `update`).
+
 ### Built, 2026-09-08
 
 `AFK_AGENT_TOKEN` exists: a fine-grained PAT named `dotfiles-afk-agent`, scoped to `corygyarmathy/dotfiles` alone, stored as `gh-ci/dotfiles-afk-agent-PAT` in `secrets/homelab01.yaml` - the file homelab01 reads, since homelab01's module is what will declare it (`secrets/README.md`). Not an Actions secret: the runner is a service on a host, not a workflow. It was provisioned by a throwaway wizard that also ran the verification below and cleaned up after itself; the wizard is not kept, because re-issuing a PAT is a browser task either way and the permission table above is the part worth having.
 
 Proven the only way it can be, live. PR #189, opened by the token on `afk/token-smoke-test` and labelled `afk-agent`, ran `nixos ci` to green and was closed again. That is the whole claim: the same PR opened under `GITHUB_TOKEN` would have sat forever with its required check never firing. The narrowing was checked at the same time, from the other side - a private repo the token was not granted returns 404 to it.
+
+### To be reissued under the machine account (#200)
+
+**Not yet done - this is the provisioning step #200 leaves open.** The token described above is issued by `corygyarmathy`. ADR 0006 moves it to the runner's own account: the same fine-grained PAT, with the same name, scope and permission table, issued by the machine account instead, and the old one revoked. The secret's path in `secrets/homelab01.yaml` and the module's `github-token` reference are both unchanged, so nothing in `modules/` or `.sops.yaml` moves.
+
+Both claims under Testing have to be re-proved under the new identity rather than inherited: a token's narrowing is a property of that token, and whether its pull requests fire `nixos ci` is a property of the account that opens them. Two more are worth taking at the same time, because they are cheap while the old token is still live - that the new token is refused an admin-only write, which is the ceiling this whole change buys, and that `deploy`'s `update` rule applies to it, which is the ADR 0005 re-check below.
 
 ### Testing
 
@@ -1164,6 +1180,7 @@ A second entry point on the same runner, not a new service.
 - **Resume rather than claim.** The runner's existing path cuts a fresh branch from a fresh worktree; this one re-establishes the worktree at the PR's head branch. That is the real new machinery, and it is where the in-flight guard and the denylist have to be re-derived rather than assumed - the diff being revised is not the diff that was claimed.
 - **The comments are the prompt.** Fetched with `gh pr view --json reviews,comments`, threaded, and handed to the implement stage as its instruction, against the same bounded retry budget and the same gate. Nothing else about the implement stage changes.
 - **Author filtering is a safety property, not a nicety.** Only comments from accounts other than the agent's own are read. Without it, the agent's own PR body - which carries the advisory review's findings - becomes an instruction to itself on the next pass, which is precisely the loop item 6 refused.
+- **The filter is a login comparison, and it works as written since #200.** Drop every comment whose `author.login` is the machine account's, keep the rest. It was unimplementable while ADR 0004 §4 stood, because under one account the set it selects for was empty and the only distinction available was positional - body versus comment. ADR 0006 gives the runner its own account, so the filter now selects the thing it was always described as selecting. The login is a parameter, not a constant: it belongs next to the branch prefix and label above, and the runner should read it from the token (`gh api user --jq .login`) rather than hard-coding a string that a re-provisioned account would silently change.
 - **A revision budget, the way implement has one.** Three rounds per pull request, then the ticket goes to the stuck path (item 8). A disagreement between a person and a model is otherwise unbounded spend, and the failure mode is not a crash but a slow argument nobody is watching.
 - **Push to the same branch, comment on the PR saying what was addressed and what was not.** Never force-push over a commit the human wrote themselves.
 - **Re-run the review stage on the revision**, advisory as before. It costs cents and the notes ride along.
@@ -1246,6 +1263,24 @@ Verify that against the real API before designing around it. This repository has
 ### Testing
 
 None automated, and for item 3's reason: what is being proven is GitHub's own behaviour. A pull request opened by the new identity must still run `nixos ci`, and the merge-restriction answer must be got from the API rather than from documentation.
+
+### Answered, 2026-09-09
+
+The merge-restriction question is settled, and the answer is no - for a reason that is not the one this item expected. Full evidence in ADR 0006's Verification; the short form:
+
+| Probed against the real API                                  | Result |
+| ------------------------------------------------------------ | ------ |
+| `update` rule targeting `refs/heads/master`                   | accepted - not another org-only feature |
+| Does it apply to a pull request merge, not just a push?       | yes - `mergeable_state: blocked` |
+| Does a `RepositoryRole` bypass actor restore the merge?       | **no** - blocked for the bypass actor too |
+| Is there any path through?                                    | `--admin` only, which also skips `nixos ci` |
+| Does auto-merge still drain?                                  | **no** - armed, check green, still blocked |
+
+A pull request's mergeability is computed for the branch rather than for a viewer, which is why the same rule works on `deploy` (a push, evaluated against the pusher) and not here. Adopting it would cost the CI gate on every human merge and the nightly lock pipeline entirely, so ADR 0004 §9 stays where item 3 put it: in the runner's code, asserted by item 5's harness.
+
+The account is still worth having, on the two grounds that never depended on the ruleset - item 12's author filter and the permission ceiling. ADR 0006 records both, and reverses ADR 0004 §4.
+
+**Still open, and only closable once the account exists:** that a `write` collaborator is refused both the plain merge and the `--admin` override. Every probe above ran as the admin, so the negative case is inferred from GitHub's permission model rather than observed.
 
 ### Done when
 
