@@ -479,25 +479,44 @@ let
     };
   };
 
-  # The pull request's body, minus the review findings the script appends to
-  # it. A file in the store with substituted tokens, for the same reason the
-  # two prompts above are: this is prose, and prose does not survive being a
-  # shell literal in a script this one's shape.
+  # The pull request's body, in two halves with the branch's own commit
+  # messages between them and the review's findings after them. Files in the
+  # store with substituted tokens, for the same reason the two prompts above
+  # are: this is prose, and prose does not survive being a shell literal in a
+  # script this one's shape.
   #
   # `ISSUE`, `BRANCH`, `IMPLEMODEL`, `REVIEWMODEL` and `ATTEMPTS` are
-  # substituted at run time; nothing else in it varies. No token is a substring
-  # of another, which is what keeps one `sed` expression from eating the next.
+  # substituted at run time; nothing else in them varies. No token is a
+  # substring of another, which is what keeps one `sed` expression from eating
+  # the next.
   #
   # WHAT THE BODY IS FOR. One person reads this, once, next to a diff nobody
   # else has read, and decides whether to merge it (ADR 0004 §9). So it says
-  # where the branch came from, what was already checked and by what, and -
-  # at more length than reads comfortably - what the review under it is not.
-  # Item 6 measured that stage vouching for criteria it never tested in 9 of 15
-  # runs, four of them in the same report as the defect they were refuting. A
-  # reader who takes the findings as a verdict is making exactly the mistake
-  # the verdict was dropped to prevent, so the caveat travels with them rather
-  # than living in a plan document.
-  prBody = pkgs.writeText "afk-agent-pr-body" ''
+  # where the branch came from, what the branch claims to do, what was already
+  # checked and by what, and - at more length than reads comfortably - what the
+  # review under it is not. Item 6 measured that stage vouching for criteria it
+  # never tested in 9 of 15 runs, four of them in the same report as the defect
+  # they were refuting. A reader who takes the findings as a verdict is making
+  # exactly the mistake the verdict was dropped to prevent, so the caveat
+  # travels with them rather than living in a plan document.
+  #
+  # THE COMMIT MESSAGES ARE THE IMPLEMENTER'S HALF, and they are quoted rather
+  # than summarised. A summary would be another paid call producing prose
+  # nothing checks, which is the shape item 6 spent twenty-five runs learning
+  # to distrust - and a summary of its own work by the session that did it is
+  # the self-account this pipeline refuses everywhere else. The commit messages
+  # are already the one piece of the implementer's prose that gets audited: the
+  # review prompt names "a claim in a commit message on this branch is not true
+  # of the diff" as one of the two findings worth the most. So they arrive
+  # having been read against the diff, and they are what `git log` keeps after
+  # a squash merge anyway.
+  #
+  # One known property, pre-existing rather than introduced here: a closing
+  # keyword written into a commit message closes that issue on merge whether or
+  # not this body repeats it, because the squash commit carries the message.
+  # Scrubbing them here would make the body disagree with the commit, which is
+  # worse than the thing it would prevent.
+  prIntro = pkgs.writeText "afk-agent-pr-intro" ''
     Closes #ISSUE.
 
     Opened unattended by the AFK agent (ADR 0004). The work on `BRANCH` was
@@ -512,6 +531,14 @@ let
     **No person has read this diff.** Nothing in this pipeline merges and no
     auto-merge is armed on this path: merging is a human act (ADR 0004 §9).
 
+    ## What the branch says it does
+
+    Quoted from its own commit messages, unedited. The review below was asked
+    to report any claim in them that is not true of the diff.
+
+  '';
+
+  prReviewIntro = pkgs.writeText "afk-agent-pr-review-intro" ''
     ## The review below is advisory, and is not an approval
 
     `code-review` ran against this branch on `REVIEWMODEL`, in a fresh context,
@@ -1060,6 +1087,12 @@ let
       # to review. Naming the directory explicitly rather than inheriting it
       # from a `cd` is what makes that unrepeatable. The `cd` stays as well:
       # `session list` and `export` below are project-scoped the same way.
+      # What the review is about to look at, kept so that what gets pushed can
+      # be checked against it below. Interim: #201 opens the pull request
+      # before this stage runs, which makes the same guarantee structural and
+      # this pin dead code to delete.
+      reviewed_head="$(git -C "$worktree" rev-parse HEAD)"
+
       review_dir="$run_dir/review"
       mkdir -p "$review_dir"
       review_title="$slug-review"
@@ -1224,6 +1257,25 @@ let
       # to have run gets its findings carried, and one that cannot has already
       # died above.
       log "#$number: review ran and left $(wc -l < "$review_dir/findings.md") lines of findings in $review_dir/findings.md for the pull request; this stage is advisory and does not gate (plan item 6)"
+
+      # --- the review changed nothing --------------------------------------
+      #
+      # Report-only is asked for in the review prompt and denied in
+      # `reviewOverlay`, and neither is a capability boundary: both are pattern
+      # matches on a command line, and `git -C . commit` matches neither. The
+      # implement stage's own checks do not cover this either - they run before
+      # the review, not after it - so without this a commit the review wrote
+      # would be pushed having never been through the gate.
+      #
+      # The tree being clean is not the same question and is not enough: a
+      # session that committed leaves a clean tree, and the teardown at the end
+      # of this run would happily remove it.
+      #
+      # Interim, and #201 is what removes it: with the pull request opened
+      # before the review, a commit written afterwards cannot reach it at all,
+      # and a check becomes an impossibility.
+      [ "$(git -C "$worktree" rev-parse HEAD)" = "$reviewed_head" ] \
+        || die "#$number: the review stage moved $branch from $reviewed_head to $(git -C "$worktree" rev-parse HEAD). Review is report-only, and a commit it wrote has not been through the gate"
 
       # --- the last denylist check, asked of the diff ------------------------
       #
@@ -1398,17 +1450,33 @@ let
         pr_title="$title"
       fi
 
-      sed -e "s/ISSUE/$number/g" \
-        -e "s|BRANCH|$branch|g" \
-        -e "s|IMPLEMODEL|${model}|g" \
-        -e "s|REVIEWMODEL|${reviewModel}|g" \
-        -e "s/ATTEMPTS/$attempt/g" \
-        ${prBody} > "$run_dir/pr-body.md"
+      pr_prose() {
+        sed -e "s/ISSUE/$number/g" \
+          -e "s|BRANCH|$branch|g" \
+          -e "s|IMPLEMODEL|${model}|g" \
+          -e "s|REVIEWMODEL|${reviewModel}|g" \
+          -e "s/ATTEMPTS/$attempt/g" \
+          "$1"
+      }
 
-      # The findings the review stage left, carried to the one place they are
-      # worth anything: in front of the person deciding whether to merge, next
-      # to the diff they are about. The body above says what they are not.
-      cat "$review_dir/findings.md" >> "$run_dir/pr-body.md"
+      {
+        pr_prose ${prIntro}
+
+        # What the branch claims to do, in the implementer's own words. Oldest
+        # first, subject as a heading and body under it, so a ticket that took
+        # three attempts reads as three steps rather than as one wall.
+        git -C "$worktree" log --reverse --format='### %s%n%n%b' \
+          "origin/$base_branch..HEAD"
+
+        pr_prose ${prReviewIntro}
+
+        # The findings the review stage left, carried to the one place they
+        # are worth anything: in front of the person deciding whether to
+        # merge, next to the diff they are about. The prose above says what
+        # they are not. #202 moves them to a comment, once there is an account
+        # that makes them distinguishable from the human's own.
+        cat "$review_dir/findings.md"
+      } > "$run_dir/pr-body.md"
 
       # `--label` rather than a second call, so a pull request that exists is a
       # pull request that is already attributable at a glance - the other half

@@ -1,6 +1,6 @@
 # Plan: the AFK agent pipeline
 
-Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); item 5 is done - both halves built, tested and proven live: poll → denylist → claim → isolate (#171, PR #194, which also demonstrated a second poll refusing while the worktree stood and a third finding nothing once cleared) and the implement stage on a bounded retry budget (#172, PR #195, which carried real ticket #178 from claim to a first-attempt commit on `afk/178-the-lock-screen-is-off-palette` under the unit's own ExecStart and environment); item 6 is done (#173): the stage runs, is contained, verifies itself from the transcript, and is **advisory** - both experiments that might have made it a gate have been run, neither did, and the plan's pre-committed outcome was applied, dropping the verdict and rewording the first acceptance criterion; see its Measured notes, the first of which also corrects item 1's review-stage finding, and the re-grade that moved review onto `deepseek-v4-pro` while implement stays on `glm-5.3-flash`; item 7 is done (#174) as code, and its live half is the join item 3 and the harness each prove separately - the runner pushes past a gate that reads the diff rather than the ticket's prose, opens the pull request with the review's findings and a paragraph saying what they are not, and clears up after itself; nothing else has started - item 12 is new, added 2026-09-09 as the gap item 6's outcome exposed: the reviewer's notes and the human's notes now arrive in the same place with the same standing, and only the human's are worth acting on, but only the reviewer's have a path anywhere. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
+Status: in progress — item 1 is done (`opencode-go/glm-5.3-flash` at `high`; see its Built note and cost-sustainability finding); item 2 is done (both eligibility rules written down, and the checks-matrix conflict settled with a narrow exception); item 3 is done (the token exists, is scoped to this repo alone, and was proven on a live PR); item 4 is done as a scaffold (the module, the kill-switch check, and the switch itself, written down as `false` on homelab01 - the runner it wraps is item 5, so its "Done when" only completes with that item); item 5 is done - both halves built, tested and proven live: poll → denylist → claim → isolate (#171, PR #194, which also demonstrated a second poll refusing while the worktree stood and a third finding nothing once cleared) and the implement stage on a bounded retry budget (#172, PR #195, which carried real ticket #178 from claim to a first-attempt commit on `afk/178-the-lock-screen-is-off-palette` under the unit's own ExecStart and environment); item 6 is done (#173): the stage runs, is contained, verifies itself from the transcript, and is **advisory** - both experiments that might have made it a gate have been run, neither did, and the plan's pre-committed outcome was applied, dropping the verdict and rewording the first acceptance criterion; see its Measured notes, the first of which also corrects item 1's review-stage finding, and the re-grade that moved review onto `deepseek-v4-pro` while implement stays on `glm-5.3-flash`; item 7 is done (#174) as code, and its live half is the join item 3 and the harness each prove separately - the runner pushes past a gate that reads the diff rather than the ticket's prose, opens the pull request with the review's findings and a paragraph saying what they are not, and clears up after itself; items 13, 14 and 15 are new, added 2026-09-09 out of reading item 7 back: the order it implements was chosen when the review was a gate, and with the gate gone the pull request should open first so that CI rather than an advisory pass is what catches correctness, which in turn wants the runner to have an identity of its own; nothing else has started - item 12 is new, added 2026-09-09 as the gap item 6's outcome exposed: the reviewer's notes and the human's notes now arrive in the same place with the same standing, and only the human's are worth acting on, but only the reviewer's have a path anywhere. Follows [ADR 0004](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md), which covers the architectural decisions (platform, harness split, identity, trigger, retries, kill switch) and the alternatives rejected along the way; this plan is the work items that implement it.
 
 The engineering skills (`.agents/skills/`) already carry a ticket from idea through `to-tickets`, which publishes a GitHub issue labelled `ready-for-agent` per `docs/agents/triage-labels.md`. `implement` already runs `/tdd`, tests, and a self-review, then commits. Everything below starts at the gap right after that: nothing currently claims a `ready-for-agent` ticket unattended, pushes it, opens a PR, or tells anyone.
 
@@ -20,6 +20,9 @@ Item 1 gates the stages that depend on a model choice - item 5's implement step 
 | 10 | Peak-hour scheduling                 | small  | dropped     |
 | 11 | Secrets                              | small  | not started |
 | 12 | Revision loop: human review → agent  | medium | not started |
+| 13 | PR before review, and watch CI       | medium | not started |
+| 14 | The runner's own GitHub account      | small  | not started |
+| 15 | Findings become a PR comment         | small  | not started |
 
 ---
 
@@ -1038,7 +1041,11 @@ The runner now ends a successful ticket with a pull request open and nothing in 
 
 **The push hands its credential to git through `gh`**, as `-c credential.helper='!gh auth git-credential'` with an empty helper ahead of it, so the PAT never reaches `.git/config`, a remote URL, or a command line that `ps` can read. The refspec is explicit (`HEAD:refs/heads/<branch>`) rather than relying on `push.default` or on an upstream item 5 deliberately did not set.
 
+**The body carries the implementer's own words as well as the reviewer's.** The branch's commit messages are quoted into it under a heading of their own, oldest first, before the review section - because a reader who gets only the findings gets someone's critique of a diff they have not been told the shape of. Quoted rather than summarised: a summary would be another paid call producing prose nothing checks, which is the shape item 6 spent 25 runs learning to distrust, and a session summarising its own work is the self-account this pipeline refuses everywhere else. The commit messages are already the one piece of implementer prose that gets audited - the review prompt names a false claim in one as a finding worth the most - so they arrive having been read against the diff.
+
 **The pull request carries the review's findings and a paragraph saying what they are not.** Item 6 left this stage advisory and its findings are the whole of what it produces; the body appends `findings.md` verbatim under a heading that says the review decided nothing, names the two things the 25 measured runs showed it doing badly - certifying criteria it never tested, and never once refusing a diff for the defect in it - and says plainly that no person has read the diff. A reader who takes those findings for an approval is making exactly the mistake dropping the verdict was meant to prevent, so the caveat travels with them rather than living here. The title is the commit's own subject when the branch is one commit, because a squash merge puts it in `master`'s history and the implement stage already wrote it in house style; where a ticket took several attempts no single subject describes the branch, and the ticket's title is the honest answer.
+
+**`HEAD` is pinned across the review stage**, and this one is interim. Report-only is asked for in the prompt and denied in `reviewOverlay`, and neither is a capability boundary - both are pattern matches on a command line, and `git -C . commit` matches neither. The implement stage's own checks run before the review rather than after it, so without the pin a commit the review wrote would be pushed having never been gated, and a clean working tree would not show it. Item 13 opens the pull request before this stage runs, which makes the same guarantee structural and this check dead code to delete.
 
 **A finished ticket now tears its own worktree down**, which was not in this item's brief and belongs in it anyway: the in-flight guard refuses to poll past any leftover worktree, so a successful run that left one behind would be a pipeline that works exactly once. Item 8 (#175) still owns the same clean-up for a run that *failed*, where there is also a claimed ticket to hand back. The local branch stays - `git worktree remove` leaves it, it costs nothing, and it is what makes the "branch already exists" check refuse a ticket whose pull request is still open. The removal is deliberately not forced: the tree was asserted clean before the gate, the gate writes nothing into it and the review cannot edit, so a removal that fails means something happened none of those allow for, and it is worth being loud about.
 
@@ -1180,3 +1187,88 @@ A pull request this pipeline opened, given a review comment and the `agent-revis
 ### Depends on
 
 Item 7 (#174) first: there is no pull request to revise until something opens one. Item 8 (#175) for where an exhausted revision budget goes.
+
+---
+
+## 13. Open the pull request before the review, and watch CI (#201)
+
+### The problem
+
+Item 7 raises the pull request after the review, and that ordering was decided when the review was a gate. Item 6 removed the gate: across 25 runs the stage never once refused a diff for the defect in it, so it advises and decides nothing. Nothing downstream of it depends on it any more, and what is left is an order nobody would choose now.
+
+Two things the current order costs. CI - the only check that runs the real workflow on the real runner - starts last, after a stage whose output no longer decides anything; and the review sits between the gate and the push, where a session that committed would have its commit pushed having never been gated. Item 7 pins `HEAD` across the review against exactly that, which is a check standing in for a structure.
+
+### Approach
+
+Implement, gate the diff, push, open the pull request, watch its checks, feed a red run back into the implement session, then review and write the findings onto the pull request that already exists.
+
+- **The pre-push denylist gate moves with the push** and stays immediately before it, with nothing between them. It is still the only enforcement of `docs/agents/afk-eligibility.md` on the push path.
+- **CI becomes the correctness gate and the review becomes a quality pass**, which is what each is good at. The runner's local gate is a reproduction of CI's steps and item 5 already records that it can drift; CI additionally runs what only CI has.
+- **A red run is fed back into the implement session** (ADR 0004 §6), on a bounded number of rounds, and pushed to the same branch. Whether a round spends a retry from the budget of three or gets its own is this item's to settle, and `maxRuntime` is already 7h of ceilings.
+- **Record what CI catches that the local gate did not.** If the answer is never anything, this stage is latency for its own sake; if it is drift, the drift is worth fixing where it starts.
+- **The hand-off label** says CI is green and a review has run. Not `ready-for-human`, which already means "requires human implementation" as an issue triage role and would read as "an agent could not do this" - a new label in the `agent-*` family `agent-stuck` (item 8) and `agent-revise` (item 12) are already forming. It is a signal, not a control: nothing prevents a merge before it is applied.
+- **Findings need a home that is not the creation-time body.** Interim: edit the body afterwards, which keeps the body/comment separation item 12 depends on. Item 15 moves them to a comment.
+
+### The decision this needs before code
+
+ADR 0004 §6 ends "never a PR" for a ticket that cannot proceed, and PR-first is in tension with that sentence: a review that cannot be shown to have run no longer means no pull request. Per `docs/agents/domain.md` this earns its own ADR rather than a quiet amendment, the way item 2's rule 2 did. Settle it first.
+
+### Testing
+
+The same harness, with `gh pr checks` mocked the way `gh issue list` is: a run that goes green first time, one that goes red and is fixed on a retry, one that never goes green and exhausts its rounds, and one where a required check never arrives at all - which has to be told apart from a slow one.
+
+### Done when
+
+A ticket opens its pull request before the review starts, a red CI run comes back green after the agent fixes it, and the hand-off label arrives only once CI is green and the review has run.
+
+---
+
+## 14. The runner's own GitHub account (#200)
+
+### The problem
+
+ADR 0004 §4 rejected a second account on the cost of a second set of credentials and 2FA, before any of the pipeline existed. Three things have since turned up that the decision blocks, none of them visible then.
+
+Nothing the agent writes is distinguishable from something the human wrote - both are `corygyarmathy`. Item 12 plans to read "comments from accounts other than the agent's own", and under one account that set is empty, so the filter it calls a safety property cannot be implemented as written. The only distinction that survives today is positional: the body is the agent's, comments are the human's, which is why item 15 has to wait.
+
+The token's ceiling is the owner's role, because a fine-grained PAT cannot exceed the permissions of the account that issued it, and that account is this repository's admin.
+
+And merge stays a human act only because the runner's script does not merge it. Item 3 recorded that no ruleset can carry ADR 0004 §9 here, reasoning from the single account.
+
+### Approach
+
+A machine account, added as a **write** collaborator, with `AFK_AGENT_TOKEN` reissued under it and item 3's permission table unchanged.
+
+The question worth the most is not the one item 3 framed. `required_approving_review_count: 1` is the wrong instrument - the reviewer advises rather than approves, and requiring an approval binds human pull requests too. The right question is whether a ruleset can restrict **who may merge to `master`**, with the human as a bypass actor: the same shape #190 is weighing for `deploy`. If it works, §9 stops being a property of a shell script.
+
+Verify that against the real API before designing around it. This repository has already been bitten by an org-only ruleset feature on a user-owned repo (merge queues, `422 invalid rule 'merge_queue'`).
+
+### Testing
+
+None automated, and for item 3's reason: what is being proven is GitHub's own behaviour. A pull request opened by the new identity must still run `nixos ci`, and the merge-restriction answer must be got from the API rather than from documentation.
+
+### Done when
+
+The account exists as a write collaborator, the token is reissued under it and the old one revoked, a pull request it opens runs `nixos ci`, and the merge-restriction question is answered either way and written down.
+
+---
+
+## 15. The review's findings become a pull request comment (#202)
+
+### The problem
+
+The findings sit in the pull request body because that is the only place a single GitHub account makes them distinguishable from the human's own review. That is a workaround holding up a safety property in item 12, not a choice about where findings read best.
+
+### Approach
+
+Once item 14 gives the agent its own identity and item 13 opens the pull request before the review runs, the findings move to a comment: resolvable, out of the body, and in the same channel item 12 already has to read. The caveat travels with them rather than staying in the body - a reader meeting the findings in a comment must still meet the paragraph saying the stage certified criteria it never tested in 9 of 15 runs.
+
+One comment rather than one per finding: the `code-review` skill's output is prose with no line anchors, so inline comments would be invented positions.
+
+### Testing
+
+The harness, asserting the comment is posted and the body no longer carries the findings; and item 12's filter exercised against a pull request carrying both the agent's comment and a human's.
+
+### Done when
+
+The findings arrive as a comment with the caveat attached, the body still says what the branch does, and item 12 can tell the two apart.
