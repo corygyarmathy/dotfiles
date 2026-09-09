@@ -210,7 +210,7 @@ pkgs.runCommand "check-afk-agent-runner"
             timeout) exit 124 ;;
             crash)   exit 7 ;;
             # Exited cleanly having opened nothing findable afterwards, which
-            # leaves the runner with no transcript to read a verdict out of.
+            # leaves the runner with no transcript to verify the review from.
             nosession) exit 0 ;;
             *) sed -n '/^--title$/{n;p;q}' "$OC_STATE/review-args" \
                  > "$OC_STATE/review-title" ;;
@@ -318,20 +318,20 @@ pkgs.runCommand "check-afk-agent-runner"
         # would have to start in column 0 to keep this file's indentation out
         # of the text, and a column-0 line inside a Nix indented string
         # collapses the dedent for the whole harness.
+        # The closing report, which since the stage went advisory (plan item 6)
+        # is the entire thing the runner takes from a review. There is no
+        # verdict in any of these and no runner branch reads for one: the two
+        # that matter are a report with something in it and a report with
+        # nothing in it.
         case "$plan" in
-          fail) text="$(printf '## Spec\n\nThe diff never implements acceptance criterion 3.\n\nAFK-REVIEW-VERDICT: fail')" ;;
-          # A closing report that never states a verdict at all.
-          noverdict) text="$(printf '## Standards\n\nNothing worth reporting. Looks fine to me.')" ;;
-          # No closing report whatsoever.
+          # A review that found something serious. It reports it and says so
+          # plainly, and the ticket carries on regardless - which is the whole
+          # of what "advisory" means and is asserted below.
+          critical) text="$(printf '## Spec\n\nThe diff never implements acceptance criterion 3.\n\nSummary: Standards - nothing. Spec - the diff does not do what the ticket asked.')" ;;
+          # No closing report whatsoever: verifiably ran, produced nothing for
+          # the pull request to carry.
           emptyreport) text="" ;;
-          # A report that mentions the sentinel three times and means it once.
-          # The decoys are placed to make both halves of the anchor load
-          # bearing: the first starts a line but carries trailing text, so `$`
-          # is what rejects it, and the last trails a real verdict on a line of
-          # its own prose, so `^` is what rejects it - and being last, it is
-          # what an unanchored match would settle on.
-          quoted) text="$(printf 'AFK-REVIEW-VERDICT: fail is the other spelling of this line.\n\nAFK-REVIEW-VERDICT: pass\nHad criterion 3 been missing I would have said AFK-REVIEW-VERDICT: fail here.')" ;;
-          *) text="$(printf '## Standards\n\nOne judgement call: the check duplicates a derivation.\n\n## Spec\n\nNo findings.\n\nAFK-REVIEW-VERDICT: pass')" ;;
+          *) text="$(printf '## Standards\n\nOne judgement call: the check duplicates a derivation.\n\n## Spec\n\nNo findings.\n\nSummary: Standards - a duplicated derivation. Spec - nothing.')" ;;
         esac
         jq -n \
           --arg status "$skill_status" \
@@ -845,7 +845,8 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -qx -- --title "$state/review-args" || fail "the review session is untitled, so nothing can find it again"
     [ "$(flag_value "$state/review-args" --title)" = "$ticket-review" ] \
       || fail "the review session is titled $(flag_value "$state/review-args" --title)"
-    grep -q "review passed" "$state/out.log" || fail "the stage did not report a passing review"
+    grep -q "review ran and left" "$state/out.log" || fail "the stage did not report that the review ran"
+    grep -q "does not gate" "$state/out.log" || fail "the stage did not record that the review is advisory"
 
     echo "case: the review is aimed at its worktree explicitly, not by working directory"
     # The root cause of item 1's entire review-stage finding, and the one
@@ -873,24 +874,30 @@ pkgs.runCommand "check-afk-agent-runner"
     # so item 7 (#174) attaches them - but a findings file written inside the
     # worktree would show up in the diff it is describing.
     [ -s "$state/run/review/findings.md" ] || fail "the review's findings were not kept anywhere"
-    grep -q "AFK-REVIEW-VERDICT" "$state/run/review/findings.md" || fail "the findings file is not the closing report"
+    grep -q "duplicated derivation" "$state/run/review/findings.md" \
+      || fail "the findings file is not the review's closing report: $(cat "$state/run/review/findings.md")"
     [ "$(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)" = "fix-1.txt" ] \
       || fail "the review stage wrote into the diff: $(git -C "$state/worktrees/$ticket" diff --name-only origin/master..HEAD)"
     [ -z "$(git -C "$state/worktrees/$ticket" status --porcelain)" ] \
       || fail "the review stage dirtied the worktree: $(git -C "$state/worktrees/$ticket" status --porcelain)"
 
-    echo "case: a refused implementation is stopped here rather than sent on to a pull request"
-    # Item 6's first acceptance criterion, and the whole point of the stage.
-    run review-fail mixed.json fresh good fail
-    [ "$rc" -ne 0 ] || fail "a review that refused the work reported success"
-    grep -q "refused this implementation" "$state/err.log" || fail "did not say the review refused it: $(cat "$state/err.log")"
-    # The findings travel with the refusal: the stuck path (#175) has to be able
-    # to say why, and a refusal with no reason attached is a ticket nobody can
-    # pick up.
-    grep -q "acceptance criterion 3" "$state/err.log" || fail "the refusal carried none of the findings"
-    # And it is not retried. Review has no budget (ADR 0004 §6), so exactly one
+    echo "case: a critical review does not stop the ticket, and its findings travel anyway"
+    # Item 6's first acceptance criterion as it now reads, and the assertion
+    # that pins the advisory decision in the code rather than only in the
+    # prose. The stage measured 0 catches in 9 runs on the one diff in this
+    # repository with a graded answer, and the rubric that refused most often
+    # refused the correct diff too (plan item 6, "The rubric experiment, run").
+    # So a review with a serious finding in it reports that finding and the
+    # ticket carries on to the pull request, where a person reads it.
+    run review-critical mixed.json fresh good critical
+    [ "$rc" -eq 0 ] || fail "a review with a serious finding stopped the ticket: $(cat "$state/err.log")"
+    grep -q "acceptance criterion 3" "$state/run/review/findings.md" \
+      || fail "the critical finding did not reach the findings file"
+    grep -q "review ran and left" "$state/out.log" || fail "the stage did not report the review running"
+    # And it is not retried. Review has no budget (ADR 0004 §6), and a finding
+    # is never handed back to the model that wrote the code, so exactly one
     # review session runs and the implement count is untouched.
-    [ "$(attempts)" -eq 1 ] || fail "a failing review re-ran the implement stage: $(attempts) attempt(s)"
+    [ "$(attempts)" -eq 1 ] || fail "a critical review re-ran the implement stage: $(attempts) attempt(s)"
 
     echo "case: a review that cannot be shown to have happened has not passed"
     # Every way item 1 saw this stage fail was silent - the skill error went to
@@ -928,24 +935,18 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "is identifiable across them" "$state/err.log" \
       || fail "did not say the axes were unidentifiable: $(cat "$state/err.log")"
 
-    echo "case: an unreadable verdict is a failure, not a pass"
-    # The stage needs one bit out of a page of prose. Not finding it means the
-    # stage does not know what the review decided, which is not the same as the
-    # review having approved anything.
+    echo "case: a review that produced no report has produced nothing, and stops the ticket"
+    # The one thing about the closing report that survived dropping the verdict.
+    # The findings are now the entire output of this stage, so a session that
+    # verifiably ran and then said nothing has left the pull request nothing to
+    # carry - which is the same silent failure the provenance checks above
+    # refuse, arriving one step later.
     #
-    # Asserted on each branch's own message rather than only on the exit
-    # status, because the two arrive at that status by different routes and the
-    # first draft's `[ -s ]` test conflated them: `jq -r` on a `// ""` fallback
-    # still emits a newline, so the no-report case was a one-byte file that
-    # read as a report and fell through to the no-verdict branch. Both were
-    # non-zero, so a status-only assertion passed while one branch was dead.
-    run review-noverdict mixed.json fresh good noverdict
-    [ "$rc" -ne 0 ] || fail "a review with no verdict was read as a pass"
-    grep -q "no readable verdict line" "$state/err.log" \
-      || fail "did not say the verdict was unreadable: $(cat "$state/err.log")"
-
+    # Tested for content rather than size, because `jq -r` on a `// ""` fallback
+    # still emits a newline: the no-report case is a one-byte file that `[ -s ]`
+    # would call a report.
     run review-emptyreport mixed.json fresh good emptyreport
-    [ "$rc" -ne 0 ] || fail "a review with no closing report was read as a pass"
+    [ "$rc" -ne 0 ] || fail "a review with no closing report was accepted"
     grep -q "no closing report" "$state/err.log" \
       || fail "did not say the report was empty: $(cat "$state/err.log")"
 
@@ -960,7 +961,7 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "did not name the transcript as unreadable: $(cat "$state/err.log")"
 
     echo "case: opencode failing to answer is reported, not silently fatal"
-    # Two command substitutions stand between the review and its verdict, and
+    # Two command substitutions stand between the review and its findings, and
     # under `set -euo pipefail` either would abort the runner mid-stage before
     # the message written to explain it could run. Both have to arrive at their
     # own die instead.
@@ -985,14 +986,6 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "not a readable session" "$state/err.log" \
       || fail "did not say the transcript was unreadable: $(cat "$state/err.log")"
 
-    echo "case: the verdict is the last whole line, not a mention of one"
-    # The prompt prints both spellings as examples, so a model that echoes its
-    # instructions back is ordinary rather than exceptional. Anchoring is what
-    # keeps a quoted verdict from becoming the verdict - once mid-line, once at
-    # the start of a line with text after it, and the real one last.
-    run review-quoted mixed.json fresh good quoted
-    [ "$rc" -eq 0 ] || fail "a quoted verdict was mistaken for the real one: $(cat "$state/err.log")"
-
     echo "case: a review that hangs or crashes stops the ticket without retrying"
     # Review has no retry budget at all (ADR 0004 §6): a retry is an implement
     # concept, because a retry needs a failure to work against and there is
@@ -1007,19 +1000,19 @@ pkgs.runCommand "check-afk-agent-runner"
 
     echo "case: a review session that cannot be found afterwards stops the ticket"
     # The same shape the implement stage refuses, for the same reason: there is
-    # no transcript, so there is nothing to verify and nothing to read a
-    # verdict out of.
+    # no transcript, so there is nothing to verify the review from and no
+    # findings to carry.
     run review-nosession mixed.json fresh good nosession
     [ "$rc" -ne 0 ] || fail "a review with no findable session was accepted"
     grep -q "no session titled" "$state/err.log" || fail "did not say the session was unfindable: $(cat "$state/err.log")"
 
     echo "case: review spends none of the implement stage's budget"
-    # A ticket that only just converged still gets a full review, and a review
-    # that then refuses it does not send it back for a fourth attempt - the two
+    # A ticket that only just converged still gets a full review, and whatever
+    # that review finds does not send it back for a fourth attempt - the two
     # stages have separate outcomes, which is what makes ADR 0004 §6's "review
     # is always a separate pass" true of the code rather than only of the prose.
-    run review-after-retries mixed.json fresh "broken broken repair" fail
-    [ "$rc" -ne 0 ] || fail "a refused review passed after a retried implementation"
+    run review-after-retries mixed.json fresh "broken broken repair" critical
+    [ "$rc" -eq 0 ] || fail "a ticket that converged on its last attempt failed review: $(cat "$state/err.log")"
     [ "$(attempts)" -eq 3 ] || fail "expected exactly three implement attempts, got $(attempts)"
     [ -s "$state/review-args" ] || fail "a ticket that converged on its last attempt was never reviewed"
 
@@ -1030,7 +1023,7 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "an unconverged ticket was reported as done"
     [ ! -s "$state/review-args" ] || fail "reviewed a ticket that never passed the gate"
 
-    echo "case: the review prompt carries the four clauses each measured failure needs"
+    echo "case: the review prompt carries the clauses each measured failure needs"
     run review-prompt mixed.json fresh good pass
     grep -q 'code-review` skill' "$state/review-args" || fail "the review prompt does not name the skill to use"
     grep -q "issue #302" "$state/review-args" || fail "the ticket number was not substituted into the review prompt"
@@ -1040,10 +1033,27 @@ pkgs.runCommand "check-afk-agent-runner"
     # and `cd` are unrestricted whatever `--dir` says.
     grep -q "stop immediately" "$state/review-args" || fail "the review prompt does not say to stop when the skill is missing"
     grep -q "do not \`cd\` out of it" "$state/review-args" || fail "the review prompt does not contain the session to its worktree"
-    grep -q "AFK-REVIEW-VERDICT" "$state/review-args" || fail "the review prompt does not ask for a verdict line"
-    # And the narrowness. A reviewer that cannot be trusted to catch a defect
-    # must not be trusted to invent one, so taste is reported and never fatal.
-    grep -q "never a fail" "$state/review-args" || fail "the review prompt does not keep style findings advisory"
+
+    echo "case: the review prompt asks for findings and never for a verdict"
+    # The measured outcome of plan item 6, pinned where it can regress. Across
+    # 25 runs on the holdout pair, no model and no rubric ever refused the
+    # defective diff for the defect in it, and the rubric that refused most
+    # reliably refused the correct diff too. A verdict this stage cannot act on
+    # is worse than none: item 7 puts these findings in front of a person, and
+    # a stray "pass" in them reads to that person as a decision that was made.
+    grep -q "advisory" "$state/review-args" || fail "the review prompt does not say the review is advisory"
+    grep -q "do not return a verdict" "$state/review-args" || fail "the review prompt does not forbid a verdict"
+    # Negated with `!` rather than `grep ... && fail`, which under this script's
+    # `set -e` would abort on the passing branch: a `grep` that finds nothing
+    # exits 1, and that is the outcome this line wants.
+    ! grep -q "AFK-REVIEW-VERDICT" "$state/review-args" \
+      || fail "the review prompt still asks for a verdict line"
+    # What replaced it: the closing summary, which is what a human merging
+    # actually reads, and the severity ordering that keeps taste findings in
+    # their place without making them an outcome.
+    grep -q "most serious finding on each axis" "$state/review-args" \
+      || fail "the review prompt does not ask for a closing summary"
+    grep -q "worth less" "$state/review-args" || fail "the review prompt does not rank taste findings below the rest"
 
     echo "case: one ticket at a time - a live worktree stops the next poll"
     # Reusing the state the `mixed` case left behind: #302 is claimed and its
