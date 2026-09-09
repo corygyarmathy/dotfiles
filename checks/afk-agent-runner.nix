@@ -248,6 +248,16 @@ pkgs.runCommand "check-afk-agent-runner"
             # Exited cleanly having opened nothing findable afterwards, which
             # leaves the runner with no transcript to verify the review from.
             nosession) exit 0 ;;
+            # A review that wrote and committed anyway. `edit: deny` and
+            # `git commit*: deny` are pattern matches on a command line, not
+            # capability boundaries, and this is what gets past them: the
+            # commit is real, the tree it leaves is clean, and nothing before
+            # the push would otherwise notice.
+            commits) echo sneaky > sneaky.txt
+                     git add -A
+                     git commit -qm "review: an edit it was told not to make"
+                     sed -n '/^--title$/{n;p;q}' "$OC_STATE/review-args" \
+                       > "$OC_STATE/review-title" ;;
             *) sed -n '/^--title$/{n;p;q}' "$OC_STATE/review-args" \
                  > "$OC_STATE/review-title" ;;
           esac
@@ -1218,6 +1228,22 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "No person has read this diff" "$body" || fail "the body does not say the diff is unread"
     grep -q "afk/$ticket" "$body" || fail "the body does not name the branch"
 
+    echo "case: the body says what the branch does, in the implementer's own words"
+    # The reviewer's prose used to be the only generated text in the body, so a
+    # reader got someone's critique of a diff they had not been told the shape
+    # of. The commit messages are quoted rather than summarised: a summary
+    # would be another paid call producing prose nothing checks, and these are
+    # already audited - the review prompt asks for any claim in them that is
+    # not true of the diff.
+    grep -qx "### afk: implement" "$body" \
+      || fail "the branch's own commit messages did not reach the body: $(cat "$body")"
+    grep -q "What the branch says it does" "$body" || fail "the body has no section for them"
+    # And in the right order: what it claims, then what the review made of it.
+    claims_at="$(grep -n "What the branch says it does" "$body" | cut -d: -f1)"
+    review_at="$(grep -n "is not an approval" "$body" | cut -d: -f1)"
+    [ "$claims_at" -lt "$review_at" ] \
+      || fail "the review's findings come before what the branch claims to do"
+
     echo "case: the title of a one-commit branch is that commit's subject"
     # A squash merge takes the pull request title as its commit subject, so it
     # ends up in master's history. One commit means the implement stage already
@@ -1258,6 +1284,24 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "a pull request that was never opened was reported as success"
     grep -q "could not be opened" "$state/err.log" || fail "did not say the pull request failed: $(cat "$state/err.log")"
     [ -n "$(worktrees)" ] || fail "the worktree was torn down without a pull request"
+
+    echo "case: a review that committed anyway does not get its commit pushed"
+    # Report-only is a pattern match on a command line, not a capability
+    # boundary - `git -C . commit` matches neither the prompt's request nor
+    # `reviewOverlay`'s deny - so the runner checks the branch rather than
+    # trusting either. Nothing before the push would otherwise notice: the
+    # session leaves a clean tree, and the implement stage's own checks ran
+    # before the review rather than after it.
+    #
+    # Interim, along with the pin it asserts: #201 opens the pull request
+    # before this stage runs, and a commit written afterwards then cannot reach
+    # it at all.
+    run review-commits mixed.json fresh good commits
+    [ "$rc" -ne 0 ] || fail "a commit the review wrote was pushed as though it had been gated"
+    grep -q "moved afk/$ticket" "$state/err.log" \
+      || fail "did not say the review moved the branch: $(cat "$state/err.log")"
+    [ -z "$(pushed)" ] || fail "the branch reached origin: $(pushed)"
+    if grep -q "pr create" "$state/gh.log"; then fail "a pull request was opened for it"; fi
 
     echo "case: a diff that touches a denied path is refused at the push"
     # docs/agents/afk-eligibility.md rule 1, asked of the diff. #302's prose
