@@ -26,17 +26,21 @@
 # across its two axes, and it fails closed when it cannot. It does not decide
 # whether the diff is correct, and it no longer asks for a verdict at all.
 #
-# Twenty-five runs against the one diff in this repository with an
-# independently graded answer say it cannot: two models and three fail rubrics
-# never once refused that diff *for the defect in it* (plan item 6, its three
-# "Measured" notes). The rubric that gated most reliably gated on both the
-# flawed diff and the correct one, for reasons neither model endorsed. So a
-# refusal here would have been noise with a human hand-off attached to it.
+# Fifteen runs against the one diff in this repository with an independently
+# graded defect - two models, three prompts, five arms - never once refused it
+# *for the defect in it* (plan item 6). Five of the fifteen saw the defect and
+# none gated on it. The rubric that gated most reliably gated on the correct
+# implementation too, for reasons neither model endorsed. So a refusal here
+# would have been noise with a human hand-off attached to it.
 #
 # What the stage is worth is the contained, verified pass itself and the
-# findings it leaves for whoever merges. Item 7 attaches those findings; it
-# must not read them as a decision, and there is no longer a verdict for it to
-# mistake for one.
+# findings it leaves for whoever merges - which a re-grade of all 25 arm runs
+# found to be accurate: nine recurring finding-themes checked against source,
+# nine true, on both models. This stage does not invent defects. What it did do
+# was vouch for what it had not tested - 9 of those 15 runs certified the very
+# criterion the diff breaks - which is what the prompt's certification clause
+# below now forbids. Item 7 attaches these findings; it must not read them as a
+# decision, and there is no longer a verdict for it to mistake for one.
 #
 # Nothing here pushes, opens a pull request, or writes to the tracker past the
 # claim. That is not an omission: those verbs belong to the stages above, and
@@ -144,8 +148,44 @@ let
   # fallback if this ever regresses. Plain bindings rather than options for the
   # same reason `repository` above is one: one fleet, one value, and swapping
   # them is a text edit rather than a configuration a host supplies.
+  #
+  # This is the IMPLEMENT model. Review uses a different one - see below, and
+  # the two are separate bindings rather than one because they were settled by
+  # different measurements answering different questions.
   model = "opencode-go/glm-5.3-flash";
   variant = "high";
+
+  # The REVIEW model, and the one place in this pipeline where the expensive
+  # option is the right one. Item 1's ranking measured implementation, and item
+  # 6's arms then measured review; they are not the same skill and they did not
+  # give the same answer.
+  #
+  # The recorded reason to refuse `deepseek-v4-pro` here was that it "gates no
+  # more reliably at 15-25x the cost". That reason died with the verdict: this
+  # stage no longer gates, so the only thing its output has to be is *worth a
+  # person's reading time*, which is a different question and was re-graded
+  # against the 25 runs already paid for (plan item 6, "Re-graded on findings
+  # quality"). What that found:
+  #
+  # - `deepseek-v4-pro` checked its own claims. It ran `nix build`/`nix eval`
+  #   in 8 of 15 runs; `glm-5.3-flash` did in 2 of 10. Four of those ten
+  #   `glm-5.3-flash` runs wrote a full review report having personally read
+  #   nothing, run nothing and searched nothing - relaying their sub-agents
+  #   wholesale. No `deepseek-v4-pro` run did that. For a stage whose entire
+  #   output is notes a human reads, that is the difference that matters.
+  # - It found the one thing nobody else did, including the human grading: that
+  #   the *clean* subject uses `""` as a live collision key and over-refuses two
+  #   folders that both slugify to nothing. One run in twenty-five.
+  #
+  # Cost: about 10c a review against implement's 4-9c, so roughly double a
+  # ticket and still a rounding error against OpenCode Go's $12-per-5-hours.
+  # That is affordable *because* review is one pass with no retry budget.
+  #
+  # What this is NOT evidence for: that it reviews better in general. Detection
+  # of the graded defect was 2/3 for this model on the base prompt and 0/3 under
+  # the R3 rubric, where `glm-5.3-flash` managed 1/3 - n=3 cells pointing both
+  # ways. The verification counts above are the only part that is not noise.
+  reviewModel = "opencode-go/deepseek-v4-pro";
 
   # Who the commits are by. ADR 0004 §4 rules out a second GitHub account, so
   # everything this pipeline produces - the branch, the PR, and the commits on
@@ -200,10 +240,12 @@ let
   # way, countable, rather than by systemd killing the unit mid-ticket and
   # leaving a worktree the in-flight guard then refuses to poll past.
   #
-  # Measured runs of this exact stage on this model finished in 3-6 minutes
-  # (223s, 338s and their repeats), so this is generous by an order of
-  # magnitude rather than tight. It matches the ceiling item 1's pilot used
-  # for the same call, which is the only number with real runs behind it.
+  # Measured runs of this stage finished in 2-10 minutes across both models and
+  # all 25 arm runs, so this is generous by an order of magnitude rather than
+  # tight. It matches the ceiling item 1's pilot used for the same call, which
+  # is the only number with real runs behind it. Left unchanged when review
+  # moved to `deepseek-v4-pro`: that model's slowest measured run was 10
+  # minutes, still a third of this.
   reviewTimeout = 1800;
 
   # How deep to look when turning a session title back into a session id.
@@ -341,6 +383,26 @@ let
   # below: naming the worst finding on each axis is the thing every measured
   # run did well and did unprompted, and it is what the human merging wants
   # from a page of review prose.
+  #
+  # THE CERTIFICATION CLAUSE is the largest single quality defect the 25 runs
+  # showed, and it is the one that survives dropping the verdict. Re-grading
+  # those runs on findings quality rather than on verdicts (plan item 6) found
+  # that **9 of 15 runs on the flawed subject affirmatively wrote that the
+  # criterion that diff breaks is satisfied** - "renders exactly as today", a
+  # tick against the acceptance criterion, "behaviorally unchanged". Worse:
+  #
+  #   4 of the 5 runs that DID find the defect also certified, elsewhere in the
+  #   same report, that the criterion it breaks holds.
+  #
+  # A person reading that report gets the bug and its refutation with nothing
+  # to separate them, which is worse than a report that missed it. Nothing in
+  # the verdict machinery could see this, because every one of those runs
+  # emitted a perfectly well-formed verdict line.
+  #
+  # The accuracy of the findings themselves was not the problem: nine recurring
+  # finding-themes were checked against both subjects' source and all nine were
+  # true, on both models. This stage does not invent defects. It vouches for
+  # things it did not test, so that is what the clause forbids.
   reviewPrompt = pkgs.writeText "afk-agent-review-prompt" ''
     Review the work on this branch. The fixed point is BASE. The spec is
     GitHub issue #ISSUE; read it with `gh issue view ISSUE`.
@@ -376,9 +438,15 @@ let
     Style, naming, structure and taste findings are worth reporting too, and
     are worth less. Judge the code, not the commit message's prose.
 
+    Do not write that a requirement is met, satisfied, verified, correct or
+    unchanged unless you ran something that shows it. If you checked it by
+    reading, say that you checked it by reading and say how far that goes. If
+    you did not check it, say you did not check it. "I did not verify this" is
+    a useful sentence here and an honest one; a tick against a criterion you
+    inferred is neither.
+
     Finish with a short summary naming the most serious finding on each axis,
-    or saying that the axis found nothing. Say how sure you are of anything
-    you could not check by running it.
+    or saying that the axis found nothing.
   '';
 
   # Report-only, enforced through the permission layer rather than only asked
@@ -952,7 +1020,7 @@ let
         OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg reviewOverlay} \
           timeout ${toString reviewTimeout} opencode run --auto \
             --dir "$worktree" \
-            --agent build --model ${model} --variant ${variant} \
+            --agent build --model ${reviewModel} --variant ${variant} \
             --title "$review_title" \
             "$(cat "$review_dir/prompt")"
       ) > "$review_dir/run.log" 2>&1 || review_rc=$?
