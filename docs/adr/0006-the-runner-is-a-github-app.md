@@ -42,14 +42,14 @@ All of it against `corygyarmathy/dotfiles` on 2026-09-09, on throwaway rulesets,
 
 **But an App cannot be an issue assignee**, which is what costs ADR 0004 §3 its claim marker. This mattered enough to check four ways, because GitHub's REST documentation says an invalid assignee is _silently ignored_, and a claim guard that fails silently is worse than no guard - the symptom would be two runners on one ticket rather than an error.
 
-| Probe                                                        | Result |
-| ------------------------------------------------------------ | ------ |
-| `GET /repos/{repo}/assignees/corygyarmathy-afk-agent[bot]`    | `404` |
-| `suggestedActors(capabilities: [CAN_BE_ASSIGNED])`            | only `corygyarmathy` |
-| REST `POST /issues/{n}/assignees` naming the bot              | `403 Forbidden` |
-| GraphQL `addAssigneesToAssignable` naming the bot             | `FORBIDDEN` - "Could not assign agent: `corygyarmathy-afk-agent[bot]` cannot be assigned to issues or pull requests" |
-| _control:_ the same call naming `corygyarmathy`               | assigned |
-| _control:_ the same call naming a login that does not exist   | `200`, assignee silently dropped |
+| Probe                                                       | Result                                                                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /repos/{repo}/assignees/corygyarmathy-afk-agent[bot]`  | `404`                                                                                                                |
+| `suggestedActors(capabilities: [CAN_BE_ASSIGNED])`          | only `corygyarmathy`                                                                                                 |
+| REST `POST /issues/{n}/assignees` naming the bot            | `403 Forbidden`                                                                                                      |
+| GraphQL `addAssigneesToAssignable` naming the bot           | `FORBIDDEN` - "Could not assign agent: `corygyarmathy-afk-agent[bot]` cannot be assigned to issues or pull requests" |
+| _control:_ the same call naming `corygyarmathy`             | assigned                                                                                                             |
+| _control:_ the same call naming a login that does not exist | `200`, assignee silently dropped                                                                                     |
 
 The two controls are the point of the table. The silent-ignore behaviour is real and reproducible, so the failure mode does exist - but an App does not hit it. It is refused down a separate path, loudly, by both APIs. GitHub's own assignable-agent feature is an allowlist a custom App does not inherit.
 
@@ -61,19 +61,19 @@ The two controls are the point of the table. The silent-ignore behaviour is real
 
 **The instrument exists here.** An `update` rule targeting `refs/heads/master` is accepted; this is not another organization-only feature like the merge queue. Bypass actors of type `RepositoryRole` are accepted for the roles that carry write - and the role ids are not in permission order. Resolved by GraphQL (`bypassActors { repositoryRoleDatabaseId repositoryRoleName }`) rather than inferred, because the refusals alone suggest the wrong mapping:
 
-| `actor_id` | role     | accepted as a bypass actor      |
-| ---------- | -------- | ------------------------------- |
+| `actor_id` | role     | accepted as a bypass actor             |
+| ---------- | -------- | -------------------------------------- |
 | 1          | read     | no - "does not have write permissions" |
-| 2          | maintain | yes                             |
+| 2          | maintain | yes                                    |
 | 3          | triage   | no - "does not have write permissions" |
-| 4          | write    | yes                             |
-| 5          | admin    | yes                             |
+| 4          | write    | yes                                    |
+| 5          | admin    | yes                                    |
 
 **The rule does apply to merges, not only to pushes.** With an `update` rule over a scratch base branch and no bypass actors, the pull request went to `mergeable_state: blocked` and `gh pr merge` was refused: "the base branch policy prohibits the merge."
 
-**But a bypass actor does not restore merging, for anyone.** With `RepositoryRole: 5` (admin) added - the operator's own role, with the API reporting `current_user_can_bypass: always` for them - the pull request was still `BLOCKED` and the plain merge still refused. The test was re-run from scratch with the bypass in place *before* the pull request existed, to rule out GitHub's cached mergeability, and the answer did not change. **This is the asymmetry to know about: a bypass actor is evaluated against the pusher at push time, which is why it works for `deploy` in ADR 0005, but a pull request's mergeability is computed for the branch rather than for a viewer, so an `update` rule blocks the merge button for every actor including one on the bypass list.**
+**But a bypass actor does not restore merging, for anyone.** With `RepositoryRole: 5` (admin) added - the operator's own role, with the API reporting `current_user_can_bypass: always` for them - the pull request was still `BLOCKED` and the plain merge still refused. The test was re-run from scratch with the bypass in place _before_ the pull request existed, to rule out GitHub's cached mergeability, and the answer did not change. **This is the asymmetry to know about: a bypass actor is evaluated against the pusher at push time, which is why it works for `deploy` in ADR 0005, but a pull request's mergeability is computed for the branch rather than for a viewer, so an `update` rule blocks the merge button for every actor including one on the bypass list.**
 
-**The only way through is the admin override**, `gh pr merge --admin` - GitHub's "bypass rules and merge". It succeeded where the plain merge did not. It is admin-only, so it would in fact distinguish the operator from the runner, but it bypasses *every* rule on the ref, including `nixos ci` and the strict up-to-date policy.
+**The only way through is the admin override**, `gh pr merge --admin` - GitHub's "bypass rules and merge". It succeeded where the plain merge did not. It is admin-only, so it would in fact distinguish the operator from the runner, but it bypasses _every_ rule on the ref, including `nixos ci` and the strict up-to-date policy.
 
 **And auto-merge does not survive it.** On a scratch base carrying a required status check plus a separate `update` ruleset - the two-ruleset split ADR 0005 uses - auto-merge armed, the required check was marked successful, and the pull request stayed `BLOCKED` and unmerged for the full polling window. `flake-update.yml`, `dependabot-auto-merge.yml` and `automerge-nudge.yml` all drain through ordinary auto-merge.
 
