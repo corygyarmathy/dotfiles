@@ -662,9 +662,18 @@ Proven the only way it can be, live. PR #189, opened by the token on `afk/token-
 
 The key is stored as `gh-ci/afk-agent-app-private-key`, grouped with the other CI credentials in that file rather than at the top level, because `checks/secrets.nix` matches on the name a host declares and the module's declaration has to agree with the file. That is the name `modules/services/afk-agent.nix` should reference.
 
-**What is left is the credential swap and the revocation.** `AFK_AGENT_TOKEN` as described above is a PAT issued by `corygyarmathy`, and it is still what `modules/services/afk-agent.nix` loads through `github-token = "gh-ci/dotfiles-afk-agent-PAT"`. Under an App the module loads the private key instead and mints from it, so `credentials` loses the PAT path and gains the key path, the App ID becomes a module option rather than a secret (it is not one - it is in the App's URL), and the old PAT is revoked once nothing reads it.
+**The credential swap is done; the revocation is not.** `modules/services/afk-agent.nix` no longer loads a PAT: `credentials` now reads `github-app-key = "gh-ci/afk-agent-app-private-key"`, and the App id sits beside the repository name as an ordinary constant, because it is not a secret - it is in the App's settings URL. `gh-ci/dotfiles-afk-agent-PAT` is still in `secrets/homelab01.yaml` and nothing reads it; `checks/secrets.nix` only fails on a name a host *declares* and its file lacks, so an orphaned entry passes. Revoking the PAT and dropping that entry is the last step, and it is a browser task.
 
-**The mint is not a one-off at unit start, and that is the one genuinely new piece of code this costs.** An installation token lives one hour, while `attemptTimeout` is 3600 and `maxRuntime` covers three attempts plus their gates, so the token expires mid-run as the normal case rather than the exceptional one. `GH_TOKEN="$(cat "$creds/github-token")"` becomes a function that mints on first use, caches with an expiry, and re-mints when the cache is stale - checked before each stage rather than retried on a 401, so a token that dies between the push and the pull request surfaces as a re-mint rather than a confusing permission error. The JWT is RS256 over `{iat, exp, iss}` with `exp` at most ten minutes out, signed with `openssl dgst -sha256 -sign`; the installation id comes from `GET /app/installations` under that JWT, and the token from `POST /app/installations/{id}/access_tokens`. Roughly forty lines of shell, and testable against the mocked-`gh` harness item 5 already builds.
+**The commit identity moved with it, and that was the point.** `commitName` and `commitEmail` were the operator's name and address, so `git log` could not distinguish a commit a person wrote from one generated overnight - the exact ambiguity #200 exists to remove, sitting in the one place a reviewer actually looks. They are now the bot's, with GitHub's noreply shape `<user id>+<login>@users.noreply.github.com`; the id is what makes the address resolve to the App rather than to nobody. `checks/afk-agent-runner.nix` already read the expected author out of the script rather than restating it, so that assertion followed the change without being touched.
+
+**The mint is not a one-off at unit start, and that was the one genuinely new piece of code this cost.** An installation token lives one hour, while `attemptTimeout` is 3600 and `maxRuntime` covers three attempts plus their gates, so the token expires mid-run as the normal case rather than the exceptional one. The JWT is RS256 over `{iat, exp, iss}` with `exp` ten minutes out, signed with `openssl dgst -sha256 -sign`; the installation id comes from `GET /app/installations` under that JWT and the token from `POST /app/installations/{id}/access_tokens`, both through `curl`, since `gh` can only speak as a token that already exists. `openssl` and `curl` joined the toolchain and the preflight's assertions with it.
+
+Two decisions in that code worth naming, because neither is the obvious one:
+
+- **`gh` is a shell function**, `gh() { refresh_gh_token; command gh "$@"; }`, rather than a refresh called at each stage boundary. Every call site then gets a live token without knowing the token has a lifetime, and a stage added later cannot forget. `command gh` keeps the mock the check substitutes in play. The push is the one exception and asks for itself: it borrows the credential through `gh auth git-credential`, which git runs in a shell of its own making that reads `GH_TOKEN` from the environment, so it never passes through the wrapper - and it is the furthest point in a run from the last refresh, which is precisely where a one-hour token would have died.
+- **The cache is a file, not a variable.** Most `gh` calls here sit inside `$(...)`; a variable set by the refresh would be set in the subshell and thrown away with it, so the token would be re-minted on every single call rather than once an hour. The file is 0600 under a 0700 `StateDirectory`, and an `EXIT` trap removes it - a token that outlives the run that minted it is a standing credential, which is the property this whole change exists not to have.
+
+The check keeps one seam, `AFK_GH_TOKEN`, because it drives a mocked `gh` against a fixture origin and has no App key to mint from. Everything else about the credential path is under test as written: that the key is required, that the tools are present, and that the push refreshes before it runs.
 
 Both claims under Testing were re-proved under the new identity rather than inherited, on throwaway PR #214. `nixos ci` fires: `event: pull_request`, `triggering_actor: corygyarmathy-afk-agent[bot]`, thirty check runs queued before it was cancelled. And `deploy`'s `update` rule applies to the installation token, which is the ADR 0005 re-check below. The narrowing claim is now structural rather than a property of a scope list: an App installed on one repository has no reach to another, and there is no equivalent of a PAT's repository selector to get wrong.
 
@@ -847,16 +856,16 @@ The branch from that run was deliberately left unpushed: pushing is item 7's job
 
 ### Superseded in one line, 2026-09-09 (#200)
 
-The claim above is `gh issue edit <n> --add-assignee @me`, and ADR 0006 takes that away: the runner authenticates as a GitHub App, and GitHub refuses to assign an App to an issue. The work already done stands - what #194 demonstrated about the guard is still true, it just gets its filtering from a different field. Four places change, and no more than that:
+**Done.** The claim above was `gh issue edit <n> --add-assignee @me`, and ADR 0006 takes that away: the runner authenticates as a GitHub App, and GitHub refuses to assign an App to an issue. The work already done stands - what #194 demonstrated about the guard is still true, it just gets its filtering from a different field. Four places changed, and no more than that:
 
-- `modules/services/afk-agent.nix`, the claim write. `--add-assignee @me` becomes `--remove-label ready-for-agent --add-label agent-working`.
-- `checks/afk-agent-runner.nix`, the assertion that pins it: `grep -q "gh issue edit 302 .* --add-assignee @me"` becomes the equivalent over the two label flags.
-- `docs/agents/issue-tracker.md`, which now carries the runner's claim as a clause beside the human one.
-- Item 3's permission table, whose Issues row reads "claim by assignee".
+- `modules/services/afk-agent.nix`, the claim write. `--add-assignee @me` became `--remove-label "$label" --add-label "$working_label"`, in one `gh issue edit` rather than two, so the ticket is never briefly carrying both labels or neither.
+- `checks/afk-agent-runner.nix`, the assertion that pins it, now over both flags on one line - plus a second assertion that no `--add-assignee` appears at all, because the first would still pass on a runner that relabelled *and* tried to assign.
+- `docs/agents/issue-tracker.md`, which carries the runner's claim as a clause beside the human one, and `docs/agents/triage-labels.md`, which now defines `agent-working`.
+- Item 3's permission table, whose Issues row read "claim by assignee".
 
 **What does not change is the frontier query.** Reading assignees still works perfectly well under an installation token - only the write is refused - so `--label ready-for-agent` plus `select((.assignees | length) == 0)` stays exactly as it is, and a ticket a human has parked on themselves is still skipped. The double-processing guard also keeps its shape: the claim removes the label the query filters on, so a second poll stops seeing the ticket for the same structural reason it used to stop seeing an assigned one.
 
-**One parameter this leaves open:** when `agent-working` comes off. The assignee never had to be cleaned up, because a closed ticket is out of the query either way. A label is more visible and more likely to go stale, so it wants an owner - most likely item 7, dropping it when the pull request is opened, with item 8's stuck path swapping it for `agent-stuck` instead. `agent-working` and `agent-stuck` both belong in `docs/agents/triage-labels.md` before either ships.
+**One parameter this still leaves open:** when `agent-working` comes off. The assignee never had to be cleaned up, because a closed ticket is out of the query either way. A label is more visible and more likely to go stale, so it wants an owner - most likely item 7, dropping it when the pull request is opened, with item 8's stuck path swapping it for `agent-stuck` instead. `agent-working` and `agent-stuck` both belong in `docs/agents/triage-labels.md` before either ships.
 
 ---
 
@@ -1327,7 +1336,11 @@ Two consequences found while checking, recorded before they are forgotten:
 
 ### Done when
 
-The runner has an identity of its own and a credential minted under it, the old PAT is revoked and out of `secrets/homelab01.yaml`, a pull request it opens runs `nixos ci`, and the merge-restriction question is answered either way and written down. Two of the four are met: the identity exists, and PR #214 proved the `nixos ci` trigger. The merge question is answered above. What is left is the credential swap in `modules/services/afk-agent.nix` and the revocation.
+The runner has an identity of its own and a credential minted under it, the old PAT is revoked and out of `secrets/homelab01.yaml`, a pull request it opens runs `nixos ci`, and the merge-restriction question is answered either way and written down.
+
+Three of the four are met. The identity exists and the runner authenticates as it - `modules/services/afk-agent.nix` mints installation tokens from the App key and commits under the bot. PR #214 proved the `nixos ci` trigger. The merge question is answered above, at length, and the answer is no.
+
+What is left is the revocation, and it cannot be done first: `homelab01` runs whatever `deploy` points at, so the PAT has to keep working until this change has actually reached the host. Deploy, watch one poll, then revoke the PAT in the browser and drop `gh-ci/dotfiles-afk-agent-PAT` from `secrets/homelab01.yaml`.
 
 ---
 

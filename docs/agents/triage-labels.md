@@ -11,6 +11,20 @@ roles to the actual label strings used in this repo's issue tracker.
 | `ready-for-human` | `ready-for-human`    | Requires human implementation            |
 | `wontfix`         | `wontfix`            | Will not be actioned                     |
 
+One further label is written by the AFK runner rather than applied at triage,
+and is here because it shares the tracker with the ones above:
+
+| Label           | Meaning                                                     |
+| --------------- | ----------------------------------------------------------- |
+| `agent-working` | The AFK runner has claimed this ticket and is working it now |
+
+The runner claims by swapping `ready-for-agent` for `agent-working` in a single
+edit, rather than by assigning itself, because GitHub will not let a GitHub App
+hold an issue assignment (ADR 0006). Dropping `ready-for-agent` is what stops
+the ticket being claimed twice; `agent-working` is what makes that visible. An
+`agent-working` ticket with no open pull request and no running unit is a run
+that died - handing it back is the stuck path (#175).
+
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the
 corresponding label string from this table.
 
