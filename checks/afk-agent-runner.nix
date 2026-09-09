@@ -1071,7 +1071,17 @@ pkgs.runCommand "check-afk-agent-runner"
     # for it. Each of these is a CI job that would otherwise go red on a branch
     # this stage had already called finished.
     grep -q -- "nix fmt -- --ci" "$state/nix.log" || fail "the gate does not check formatting"
-    grep -q -- "nix flake check" "$state/nix.log" || fail "the gate does not run the checks"
+    # One `nix build` per check rather than one `nix flake check`, which is
+    # what CI's own `checks` matrix does and, since 2026-09-10, what this gate
+    # does too: `nix flake check` evaluates every output of this flake in one
+    # process and reached 8.3 GB on homelab01, taking the run with it. Asserted
+    # as "built at least one check, and did not reach for the single-process
+    # form" - the exact set is the `diff` against ci.yml's matrix two lines
+    # above, which is a stronger statement than a list repeated here.
+    grep -q -- "nix build --no-link .#checks" "$state/nix.log" \
+      || fail "the gate does not build the flake's checks"
+    ! grep -q -- "nix flake check" "$state/nix.log" \
+      || fail "the gate ran 'nix flake check', which is what exhausted the host on 2026-09-10"
     grep -q "nixosConfigurations.fixturehost.config.system.build.toplevel" "$state/nix.log" \
       || fail "the gate did not build the hosts it discovered: $(cat "$state/nix.log")"
     # The one gate `nix flake check` cannot see: a check added under checks/
@@ -1226,7 +1236,15 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "a gate that built no hosts was treated as a pass"
     [ "$(attempts)" -eq 3 ] || fail "expected the budget to run out, got $(attempts) attempt(s)"
     grep -q "the gate failed" "$state/out.log" || fail "the empty host list was not reported as a gate failure"
-    if grep -q "nix build" "$state/nix.log"; then fail "something was built from an empty host list"; fi
+    # Narrowed to *host* builds on 2026-09-10, when the gate stopped running
+    # one `nix flake check` and started building each check with its own `nix
+    # build`. Those run before host discovery, so a bare "nix build" search
+    # now finds them and reads a working gate as a broken one. The property
+    # this case exists for is unchanged and still asserted: an empty host list
+    # fails the gate, and no host was built from it.
+    if grep -q -- "nix build --no-link .#nixosConfigurations" "$state/nix.log"; then
+      fail "something was built from an empty host list"
+    fi
 
     echo "case: the session is opened with the verbs it must not use denied"
     # Read back from what the mock actually received, rather than grepped out of
