@@ -201,9 +201,11 @@ in
     # -------------------------------------------------------------------------
     # Off. The pre-push denylist gate is no longer the reason: it landed with
     # item 7 (#174), so docs/agents/afk-eligibility.md is now enforced against
-    # the diff immediately before the push. What is left is an answer to #190
-    # on whether `deploy` should restrict who may push, and the stuck path
-    # (#175), without which a failed ticket wedges every later poll. Both are
+    # the diff immediately before every push (#201 made that more than one).
+    # What is left is an answer to #190 on whether `deploy` should restrict who
+    # may push, and the stuck path (#175), without which a failed ticket wedges
+    # every later poll - and since #201 opens the pull request before the
+    # review, a failure past the push leaves that open as well. All of it is
     # named in the module's own `enable` description; this is the host writing
     # the switch down so that turning it on later is one word here rather than
     # a new block.

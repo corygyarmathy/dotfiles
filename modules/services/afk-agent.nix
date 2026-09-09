@@ -14,11 +14,32 @@
 # the credentials, the sandbox, and the toolchain on its PATH. The runner
 # itself is item 5, and landed in pieces: poll -> denylist -> claim -> isolate
 # (#171), the implement stage on top of it (#172), the review stage after that
-# (#173, item 6), and the push and pull request that end a run (#174, item 7).
-# A successful ticket now ends with a pull request open, the worktree gone, and
-# nothing in flight. The stuck path that hands back a ticket that failed
-# instead (#175) is the one stage still missing, and it is why every refusal
-# below still ends in a red unit and a worktree somebody has to clear by hand.
+# (#173, item 6), the push and pull request that end a run (#174, item 7), and
+# the reorder that put them in the order below (#201, item 13).
+#
+# THE ORDER IS THE POINT OF #201, so it is worth reading once in full:
+#
+#   claim -> isolate -> implement until the local gate agrees
+#     -> denylist gate on the diff -> push -> open the pull request
+#     -> watch its CI -> feed a red run back into the implement session
+#        and push the fix to the same branch, up to a bounded number of rounds
+#     -> review in a fresh context
+#     -> write the findings onto the pull request and label it
+#     -> tear the worktree down
+#
+# It used to be implement -> review -> push -> pull request, which was decided
+# when the review was a gate. Item 6 measured that gate away, so the ordering
+# it forced was inheritance. ADR 0007 settles the replacement: CI is the
+# correctness gate, the review is a quality pass, and the review runs after the
+# push - which makes it structurally unable to change what is in the pull
+# request rather than merely denied the verbs to.
+#
+# A successful ticket ends with a pull request open, green, carrying the
+# review's findings and the hand-off label, the worktree gone, and nothing in
+# flight. The stuck path that hands back a ticket that failed instead (#175) is
+# the one stage still missing, and it is why every refusal below still ends in
+# a red unit and a worktree somebody has to clear by hand - and now, past the
+# push, an open pull request as well.
 #
 # THE REVIEW STAGE IS ADVISORY, AND THAT IS A MEASURED DECISION RATHER THAN A
 # GAP. It proves, from the session transcript rather than from the session's
@@ -39,18 +60,22 @@
 # nine true, on both models. This stage does not invent defects. What it did do
 # was vouch for what it had not tested - 9 of those 15 runs certified the very
 # criterion the diff breaks - which is what the prompt's certification clause
-# below now forbids. Item 7 attaches these findings to the pull request; it
-# does not read them as a decision, there is no longer a verdict for it to
-# mistake for one, and `prBody` spends a paragraph telling the person who does
-# read them what they are not.
+# below now forbids. The hand-off writes these findings onto the pull request
+# that is already open; it does not read them as a decision, there is no longer
+# a verdict for it to mistake for one, and `prHandoff` spends a paragraph
+# telling the person who does read them what they are not.
 #
 # THE MODEL NEVER PUSHES; THE RUNNER DOES. Both sessions are denied `git push`,
 # `gh pr` and every tracker verb through OpenCode's own permission layer
 # (`permissionOverlay`, `reviewOverlay`) rather than merely asked not to use
 # them, and the script pushes afterwards, from outside the session, only past
-# the pre-push gate that reads the diff. Nothing anywhere here merges or arms
-# auto-merge: ADR 0004 §9 cannot be a ruleset in this repository (plan item 3),
-# so it is a property of this script, asserted from outside by the harness.
+# the pre-push gate that reads the diff. That holds for the CI fix round's push
+# as well: `push_branch` is the gate and the push and nothing else, and it is
+# the only thing in this script that pushes. Nothing anywhere here merges or
+# arms auto-merge: ADR 0004 §9 cannot be a ruleset in this repository (plan
+# item 3), so it is a property of this script, asserted from outside by the
+# harness - and the hand-off label is a signal rather than a control for the
+# other half of the same reason (ADR 0007 §7).
 #
 # The script is written so that its whole state is relocatable through the
 # environment, which is how checks/afk-agent-runner.nix drives this exact
@@ -275,6 +300,66 @@ let
   # moved to `deepseek-v4-pro`: that model's slowest measured run was 10
   # minutes, still a third of this.
   reviewTimeout = 1800;
+
+  # --- watching the branch's own CI (ADR 0007, plan item 13) --------------
+  #
+  # The pull request now opens before the review, so CI is what decides
+  # whether the branch is correct and the review is a quality pass on top of
+  # it. That turns "has CI finished?" into a question the runner has to answer
+  # for itself, and the hard half of it is that a required check which never
+  # arrives looks exactly like one that is slow.
+  #
+  # Both bounds are therefore counted in POLLS rather than written as
+  # deadlines in seconds, and that is not a stylistic choice. The harness
+  # drives this exact script with the interval overridden to zero, so a bound
+  # expressed in seconds would either take three quarters of an hour to test or
+  # would have to be overridden too - at which point the number under test is
+  # the fixture's rather than production's. Counted in polls, the harness
+  # exercises the real numbers at no wall-clock cost.
+  ciPollInterval = 60;
+
+  # How many polls a run may go without any check appearing for the commit
+  # that was just pushed, before the runner calls it absent rather than slow.
+  # Ten minutes at the interval above. A workflow that was never triggered is
+  # a configuration problem rather than a problem with the diff, so it stops
+  # the run instead of being fed back to the model, which would have nothing
+  # to fix.
+  ciFirstCheckPolls = 10;
+
+  # And the ceiling on one whole watch: forty-five minutes at the interval
+  # above. This repository's gate is a 22-way check matrix and three host
+  # builds against a warm Cachix cache; every run measured has been well
+  # inside this, and a run that is not has stopped reporting rather than
+  # slowed down.
+  ciSettlePolls = 45;
+
+  # How many times CI is watched before the runner gives up: an initial watch
+  # and, if that one is red, one fix and one re-watch.
+  #
+  # Its own budget rather than a draw against `maxAttempts`, and ADR 0007
+  # records why: the two bound different failures. `maxAttempts` bounds "the
+  # model cannot converge against the local gate"; a round here bounds "the
+  # local gate and CI disagree". A ticket that needed all three attempts is if
+  # anything more likely to earn a CI round, so a shared budget would deny
+  # rounds exactly where they are most likely to be deserved.
+  #
+  # Two rather than three, which is where `maxAttempts` sits, because nobody
+  # knows yet how often CI is red on a branch this gate already passed - that
+  # is what plan item 13 asks the runner to record. Two is the smallest number
+  # that lets a red run be fixed at all. Raising it costs an hour of ceiling
+  # each and should be paid for with evidence rather than with a guess.
+  maxCiRounds = 2;
+
+  # The hand-off, applied to the pull request in the same `gh pr edit` that
+  # writes the findings into its body, so a labelled pull request is one whose
+  # body carries them. Deliberately not `ready-for-human`, which is an issue
+  # triage role meaning "requires human implementation" and would read on an
+  # agent's own pull request as "an agent could not do this"
+  # (docs/agents/triage-labels.md).
+  #
+  # A signal, not a control: nothing here or at GitHub's end stops a merge
+  # before it is applied, and ADR 0007 §7 says why that is the right way round.
+  handoffLabel = "agent-ready-for-review";
 
   # How deep to look when turning a session title back into a session id.
   # A named binding rather than a bare `-n 20` at two call sites, because every
@@ -502,16 +587,26 @@ let
     };
   };
 
-  # The pull request's body, in two halves with the branch's own commit
-  # messages between them and the review's findings after them. Files in the
-  # store with substituted tokens, for the same reason the two prompts above
-  # are: this is prose, and prose does not survive being a shell literal in a
-  # script this one's shape.
+  # The pull request's body, which is now written in TWO PASSES rather than
+  # assembled once. Files in the store with substituted tokens, for the same
+  # reason the two prompts above are: this is prose, and prose does not survive
+  # being a shell literal in a script this one's shape.
   #
-  # `ISSUE`, `BRANCH`, `IMPLEMODEL`, `REVIEWMODEL` and `ATTEMPTS` are
-  # substituted at run time; nothing else in them varies. No token is a
-  # substring of another, which is what keeps one `sed` expression from eating
-  # the next.
+  # ADR 0007 is what split it. The pull request opens before the review runs,
+  # so at creation time there are no findings to carry and no CI outcome to
+  # report - `prIntro` plus the branch's own commit messages is the whole of
+  # what is known. `prHandoff` is appended afterwards, by `gh pr edit`, once CI
+  # has settled green and the review has been verified to have run.
+  #
+  # That leaves a window in which a reader can meet a body with no hand-off
+  # section under it, so `prIntro` says what that means rather than leaving it
+  # to be inferred. A body without one is a run that has not finished, and the
+  # absence of `agent-ready-for-review` says the same thing from the outside.
+  #
+  # `ISSUE`, `BRANCH`, `IMPLEMODEL`, `REVIEWMODEL`, `ATTEMPTS`, `CIROUNDS` and
+  # `HANDOFF` are substituted at run time; nothing else in them varies. No
+  # token is a substring of another, which is what keeps one `sed` expression
+  # from eating the next.
   #
   # WHAT THE BODY IS FOR. One person reads this, once, next to a diff nobody
   # else has read, and decides whether to merge it (ADR 0004 §9). So it says
@@ -543,33 +638,51 @@ let
     Closes #ISSUE.
 
     Opened unattended by the AFK agent (ADR 0004). The work on `BRANCH` was
-    claimed from `ready-for-agent`, implemented by `IMPLEMODEL` in ATTEMPTS
-    attempt(s), and pushed only once this repository's own gate passed on the
+    claimed from `ready-for-agent`, implemented by `IMPLEMODEL` across ATTEMPTS
+    session(s), and pushed only once this repository's own gate passed on the
     commit at the head of the branch: `nix fmt -- --ci`, `nix flake check`, a
     build of every host, and agreement between the checks the flake exposes and
     the matrix in `ci.yml`. The diff was checked against the path denylist in
-    `docs/agents/afk-eligibility.md` before the push as well as before the
-    claim.
+    `docs/agents/afk-eligibility.md` immediately before every push, as well as
+    before the claim.
 
     **No person has read this diff.** Nothing in this pipeline merges and no
     auto-merge is armed on this path: merging is a human act (ADR 0004 §9).
 
+    This pull request was opened *before* its review ran, which is the order
+    ADR 0007 settled: CI on this branch is what decides correctness, and the
+    review is a quality pass whose findings are appended to this body once it
+    has run. **If there is no "Handed over" section below this one, the run has
+    not finished** - CI never went green, the review could not be shown to have
+    happened, or the runner died in between. The `HANDOFF` label says the same
+    thing from the outside, and is applied in the same edit that appends the
+    section.
+
     ## What the branch says it does
 
-    Quoted from its own commit messages, unedited. The review below was asked
-    to report any claim in them that is not true of the diff.
+    Quoted from its own commit messages, unedited.
 
   '';
 
-  prReviewIntro = pkgs.writeText "afk-agent-pr-review-intro" ''
-    ## The review below is advisory, and is not an approval
+  prHandoff = pkgs.writeText "afk-agent-pr-handoff" ''
+    ## Handed over: CI is green, and the review below is advisory
 
-    `code-review` ran against this branch on `REVIEWMODEL`, in a fresh context,
-    across its standards and spec axes. The runner verified that from the
-    session transcript rather than from the session's own account of itself,
-    and would not have opened this pull request otherwise. It decided nothing,
+    CI on this branch went green, over CIROUNDS watch(es) of its checks. That
+    is the correctness gate on this path (ADR 0007) - the runner's own local
+    gate is a reproduction of CI's steps and can drift from them, and CI runs
+    what only CI runs: a cold runner, the sharded check matrix, and every host
+    built from an empty store.
+
+    `code-review` then ran against this branch on `REVIEWMODEL`, in a fresh
+    context, across its standards and spec axes. The runner verified that from
+    the session transcript rather than from the session's own account of
+    itself, and would not have applied `HANDOFF` otherwise. It decided nothing,
     and nothing downstream read it as a decision
     (`docs/plans/afk-agent-pipeline.md`, item 6).
+
+    It also could not have changed what is in this pull request. It ran after
+    the push, against a branch nothing pushes again, so its report is the
+    entirety of what it was able to affect (ADR 0007).
 
     Two measured things are worth holding while reading it. Its findings are
     accurate - nine recurring themes across 25 runs were checked against
@@ -577,7 +690,8 @@ let
     independently graded defect it never once refused that diff for the defect
     in it, and it has repeatedly written that a criterion holds without
     running anything that shows it. A finding here is worth reading. A silence
-    here is worth nothing.
+    here is worth nothing. It was asked, among other things, to report any
+    claim in a commit message above that is not true of the diff.
 
     ---
 
@@ -1081,6 +1195,40 @@ let
         ) > "$run_dir/gate.log" 2>&1
       }
 
+      # Four ways a session that was asked to write code fails, in the order
+      # they can be told apart. The middle two are not defensive padding: the
+      # pilot measured runs that exited 0 having explained what they would do
+      # rather than doing it, and work left in the working tree is work the
+      # push would silently drop.
+      #
+      # A function rather than a block inside the loop, because ADR 0007 adds a
+      # second caller: a CI fix round runs an implement session too, and it has
+      # to be judged by exactly these four things rather than by a second copy
+      # of them that can drift. `$2` is what "committed something" is measured
+      # against - `origin/master` for an attempt at the whole ticket, and the
+      # commit already pushed for a round that is fixing it.
+      #
+      # `reason` and `committed` are set rather than returned: bash returns a
+      # status, and both callers need the prose as well as the verdict.
+      attempt_verdict() {
+        local rc=$1 since=$2
+        reason=""
+        committed="$(git -C "$worktree" rev-list --count "$since..HEAD")"
+        if [ "$rc" -eq 124 ]; then
+          reason="it ran past its ${toString attemptTimeout}s ceiling and was stopped"
+        elif [ "$rc" -ne 0 ]; then
+          reason="opencode exited $rc"
+        elif [ "$committed" -eq 0 ]; then
+          reason="nothing was committed to $branch"
+        elif [ -n "$(git -C "$worktree" status --porcelain)" ]; then
+          reason="$(printf 'work was left uncommitted:\n%s' \
+            "$(git -C "$worktree" status --porcelain)")"
+        elif ! gate; then
+          reason="$(printf 'the gate failed. Its last ${toString gateTailLines} lines:\n\n%s' \
+            "$(tail -n ${toString gateTailLines} "$run_dir/gate.log")")"
+        fi
+      }
+
       attempt=1
       session=""
       message="$(cat "$run_dir/prompt")"
@@ -1124,26 +1272,7 @@ let
               --dir "$worktree" "''${opencode_args[@]}" "$message"
         ) || attempt_rc=$?
 
-        # Four ways an attempt fails, in the order they can be told apart. The
-        # middle two are not defensive padding: the pilot measured runs that
-        # exited 0 having explained what they would do rather than doing it, and
-        # work left in the working tree is work that the push in item 7 (#174)
-        # would silently drop.
-        reason=""
-        committed="$(git -C "$worktree" rev-list --count "origin/$base_branch..HEAD")"
-        if [ "$attempt_rc" -eq 124 ]; then
-          reason="it ran past its ${toString attemptTimeout}s ceiling and was stopped"
-        elif [ "$attempt_rc" -ne 0 ]; then
-          reason="opencode exited $attempt_rc"
-        elif [ "$committed" -eq 0 ]; then
-          reason="nothing was committed to $branch"
-        elif [ -n "$(git -C "$worktree" status --porcelain)" ]; then
-          reason="$(printf 'work was left uncommitted:\n%s' \
-            "$(git -C "$worktree" status --porcelain)")"
-        elif ! gate; then
-          reason="$(printf 'the gate failed. Its last ${toString gateTailLines} lines:\n\n%s' \
-            "$(tail -n ${toString gateTailLines} "$run_dir/gate.log")")"
-        fi
+        attempt_verdict "$attempt_rc" "origin/$base_branch"
 
         if [ -z "$reason" ]; then
           log "#$number: implemented on $branch, in $attempt attempt(s)"
@@ -1195,224 +1324,6 @@ let
         attempt=$((attempt + 1))
       done
 
-      # --- review, in a fresh context ---------------------------------------
-      #
-      # ADR 0004 §6, and item 6 (#173). A self-review in the context that just
-      # wrote the code is the weakest form, so this is a new session against
-      # the same worktree - never `--session` - however many attempts the
-      # implementation took to converge.
-      #
-      # It is also the last stage that can stop a ticket before a human sees
-      # it, and the one whose output is prose. Both facts shape what follows:
-      # nothing here believes the session's own account of what it did, and
-      # the one bit this stage needs out of a page of English is asked for in
-      # a fixed shape rather than parsed out of it.
-      #
-      # `--dir` is the load-bearing flag, and it is worth saying why, because
-      # the cost of not knowing was item 6's whole first attempt. Item 1's
-      # review-stage run reported three separate failures - the `code-review`
-      # skill missing, the two axes collapsing into one context, and a sibling
-      # checkout reviewed instead of its own - and they were one failure.
-      # opencode resolves its project, and with it skill discovery, from the
-      # directory it is launched in; the pilot's harness launched it one level
-      # above the worktree, where there is no `.agents/skills/` and no git
-      # repository. From there `opencode debug skill` returns exactly one
-      # skill, `customize-opencode`, which is the error string that run
-      # recorded verbatim. The skill error is why no sub-agent ever spawned,
-      # and being a directory above its target is why a sibling was in reach
-      # to review. Naming the directory explicitly rather than inheriting it
-      # from a `cd` is what makes that unrepeatable. The `cd` stays as well:
-      # `session list` and `export` below are project-scoped the same way.
-      # What the review is about to look at, kept so that what gets pushed can
-      # be checked against it below. Interim: #201 opens the pull request
-      # before this stage runs, which makes the same guarantee structural and
-      # this pin dead code to delete.
-      reviewed_head="$(git -C "$worktree" rev-parse HEAD)"
-
-      review_dir="$run_dir/review"
-      mkdir -p "$review_dir"
-      review_title="$slug-review"
-
-      sed -e "s/ISSUE/$number/g" -e "s|BASE|origin/$base_branch|g" \
-        ${reviewPrompt} > "$review_dir/prompt"
-
-      log "#$number: reviewing $branch in a fresh session"
-
-      # The overlay is set on the one command it governs rather than exported
-      # for the rest of the run. An `export` here would outlive the stage, and
-      # what it would hand item 7 (#174) is a deny-set containing `gh pr*` and
-      # `git commit*` - the two verbs that stage exists to use. Scoping it is
-      # also the honest shape: it describes this session, not this process.
-      review_rc=0
-      (
-        cd "$worktree" || exit 1
-        OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg reviewOverlay} \
-          timeout ${toString reviewTimeout} opencode run --auto \
-            --dir "$worktree" \
-            --agent build --model ${reviewModel} --variant ${variant} \
-            --title "$review_title" \
-            "$(cat "$review_dir/prompt")"
-      ) > "$review_dir/run.log" 2>&1 || review_rc=$?
-
-      if [ "$review_rc" -eq 124 ]; then
-        die "#$number: the review ran past its ${toString reviewTimeout}s ceiling. Review does not retry (ADR 0004 §6); handing the ticket back is the stuck path, item 8 (#175)"
-      elif [ "$review_rc" -ne 0 ]; then
-        die "#$number: the review session exited $review_rc. Review does not retry (ADR 0004 §6); handing the ticket back is the stuck path, item 8 (#175)"
-      fi
-
-      review_session="$(session_id_for "$worktree" "$review_title")"
-
-      [ -n "$review_session" ] \
-        || die "#$number: the review exited 0 but no session titled '$review_title' can be found, so there is no transcript to verify it from"
-
-      # Written to a file before jq is pointed at it, for the reason item 1
-      # recorded: piping `opencode export` straight into jq truncates on large
-      # sessions, and it fails as a parse error rather than as a wrong answer -
-      # but only sometimes, which is the worse of the two.
-      # `|| true` because a failing `export` has to reach the check below
-      # rather than abort the runner here: this is the left side of a
-      # redirection, not a condition, so `set -e` would take it.
-      ( cd "$worktree" && opencode export "$review_session" ) \
-        > "$review_dir/session.json" 2>/dev/null || true
-
-      # And the transcript is checked for the shape the assertions below read,
-      # not merely for being JSON. Valid JSON of the wrong shape is the trap
-      # here: `jq -e .` is happy with anything parseable, and `.messages[]`
-      # against a document without a `messages` array exits 5 - aborting the
-      # runner with none of the diagnosis this stage exists to print. Item 1
-      # recorded that `opencode export` truncates on large sessions and fails
-      # as a parse error only sometimes, which is what makes checking here
-      # worth more than a stack of unguarded reads below.
-      jq -e 'has("messages") and (.messages | type == "array")' \
-        "$review_dir/session.json" > /dev/null 2>&1 \
-        || die "#$number: the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (plan item 1)"
-
-      # --- did a review actually happen -------------------------------------
-      #
-      # Asked of the transcript rather than of the session's own summary, and
-      # this is the part of the stage with the most evidence behind it. Every
-      # failure item 1 saw here was silent: the skill error was reported to the
-      # model and not to anybody else, the missing sub-agents left `subagents=0`
-      # in an export nobody was reading yet, and the substituted review read
-      # exactly like a real one. A stage whose failures all look like passes
-      # has to be checked from outside, so these two counts are read out of the
-      # tool calls the session actually made.
-      #
-      # Both are fatal, and fatal in the fail-closed direction: a review that
-      # cannot be shown to have happened is not a review that passed.
-      skill_calls="$(
-        jq '[ .messages[].parts[]?
-              | select(.type == "tool" and .tool == "skill")
-              | select(.state.status == "completed")
-              | select(.state.input.name == "code-review")
-            ] | length' "$review_dir/session.json"
-      )"
-
-      [ "$skill_calls" -gt 0 ] \
-        || die "#$number: the review never completed a \`skill\` call for code-review, so whatever it produced was not that skill's review"
-
-      # The two axes are the point of the skill: standards and spec, in
-      # genuinely separate contexts so that neither pollutes the other. They
-      # arrive as `task` calls, and item 1 expected two. Fewer means they
-      # collapsed into the parent context, which is the premise of this stage
-      # failing rather than erroring - so it is checked rather than assumed.
-      axes="$(
-        jq '[ .messages[].parts[]? | select(.type == "tool" and .tool == "task") ] | length' \
-          "$review_dir/session.json"
-      )"
-
-      [ "$axes" -ge ${toString reviewAxes} ] \
-        || die "#$number: the review spawned $axes sub-agent(s), not ${toString reviewAxes}; the standards and spec axes collapsed into one context (ADR 0004 §6)"
-
-      # And that they are the two axes rather than two sub-agents of any kind.
-      # A count alone is satisfied by a session that fanned out twice for its
-      # own reasons, which is not the same thing as standards and spec running
-      # in separate contexts - and it is the separation, not the fan-out, that
-      # ADR 0004 §6 is about.
-      #
-      # Matched over each call's description and prompt together and folded to
-      # lower case, because that wording is the model's rather than this
-      # repository's. What is asserted is only that both subjects are present
-      # across the calls, which is as much as can be checked from outside
-      # without pinning phrasing the skill never fixed. Deliberately loose in
-      # the passing direction and strict in the one that matters: two sub-agents
-      # sent to do something else entirely do not read as a two-axis review.
-      named_axes="$(
-        jq '[ .messages[].parts[]?
-              | select(.type == "tool" and .tool == "task")
-              | ((.state.input.description // "") + " " + (.state.input.prompt // ""))
-              | ascii_downcase
-            ]
-            | [ (map(select(test("standard"))) | length > 0),
-                (map(select(test("spec"))) | length > 0) ]
-            | all' "$review_dir/session.json"
-      )"
-
-      [ "$named_axes" = true ] \
-        || die "#$number: the review spawned $axes sub-agent(s), but neither a standards nor a spec subject is identifiable across them, so this was not the code-review skill's two-axis pass"
-
-      log "#$number: review ran the code-review skill across $axes axes"
-
-      # --- the findings, which are the whole output of this stage -----------
-      #
-      # They are worth more on the pull request - where the human who has to
-      # merge it reads them alongside the diff - than they ever were as a gate.
-      # The pull request body below appends this file verbatim; nothing here is
-      # the last reader of it, and nothing here decides anything from it.
-      #
-      # Deliberately NOT fed back to the implement session to be fixed. Item 6
-      # originally allowed one fix-and-recheck, and it was dropped on purpose:
-      # a finding handed back to the model that just wrote the code becomes a
-      # commit, and the gate cannot tell a correct change from a plausible
-      # green one. A wrong finding would then cost a real edit and consume the
-      # finding itself, where leaving it on the PR costs nothing and keeps it
-      # legible. That reasoning outlived the verdict it was written for: with
-      # the stage advisory, every finding now travels to the pull request, and
-      # none of them is ever handed back to the model that wrote the code.
-      jq -r '[ .messages[]
-               | select(.info.role == "assistant")
-               | .parts[]? | select(.type == "text") | .text
-             ] | last // ""' "$review_dir/session.json" > "$review_dir/findings.md"
-
-      # Tested for content rather than for size. `jq -r` on a `// ""` fallback
-      # still emits its newline, so the file is one byte when the session
-      # produced no text at all and `[ -s ]` would call that a report. Found by
-      # removing this branch and watching every case still pass.
-      #
-      # Still fatal now that the stage is advisory, and for a reason that
-      # survived the verdict: the findings are what this stage produces. A
-      # review that verifiably ran and then said nothing has produced nothing
-      # for the pull request to carry, and passing it on as though it had is
-      # the same silent failure the checks above exist to refuse.
-      grep -q '[^[:space:]]' "$review_dir/findings.md" \
-        || die "#$number: the review session produced no closing report, so this stage has nothing to hand to the pull request"
-
-      # No verdict is read out of it, and that is the finding of plan item 6
-      # rather than an omission - see the prompt above. The stage's outcome is
-      # decided entirely by the provenance checks: a review that can be shown
-      # to have run gets its findings carried, and one that cannot has already
-      # died above.
-      log "#$number: review ran and left $(wc -l < "$review_dir/findings.md") lines of findings in $review_dir/findings.md for the pull request; this stage is advisory and does not gate (plan item 6)"
-
-      # --- the review changed nothing --------------------------------------
-      #
-      # Report-only is asked for in the review prompt and denied in
-      # `reviewOverlay`, and neither is a capability boundary: both are pattern
-      # matches on a command line, and `git -C . commit` matches neither. The
-      # implement stage's own checks do not cover this either - they run before
-      # the review, not after it - so without this a commit the review wrote
-      # would be pushed having never been through the gate.
-      #
-      # The tree being clean is not the same question and is not enough: a
-      # session that committed leaves a clean tree, and the teardown at the end
-      # of this run would happily remove it.
-      #
-      # Interim, and #201 is what removes it: with the pull request opened
-      # before the review, a commit written afterwards cannot reach it at all,
-      # and a check becomes an impossibility.
-      [ "$(git -C "$worktree" rev-parse HEAD)" = "$reviewed_head" ] \
-        || die "#$number: the review stage moved $branch from $reviewed_head to $(git -C "$worktree" rev-parse HEAD). Review is report-only, and a commit it wrote has not been through the gate"
-
       # --- the last denylist check, asked of the diff ------------------------
       #
       # Rule 1 of docs/agents/afk-eligibility.md again, and this time against
@@ -1434,16 +1345,24 @@ let
       # request could be read, rejected and closed with all three hosts already
       # moved (afk-eligibility.md, "Why these three").
       #
-      # Run here rather than the moment the implement stage converged, which
-      # would be cheaper by one review on a ticket that ends up refused. The
-      # review session is denied `edit` through a pattern match on a command
-      # line rather than by a capability boundary, so a gate placed before it
-      # is a gate something after it can still get past. Ten cents against the
-      # fleet is not a trade worth taking.
+      # A FUNCTION CALLED FROM ONE PLACE, and that place is the line above the
+      # push. ADR 0007 §6 makes that structural rather than incidental: this
+      # run pushes more than once now - a CI fix round pushes to the same
+      # branch - and every one of those pushes has to be gated, because it is
+      # the push and not the pull request that makes a workflow file
+      # executable. `push_branch` below is the only caller and it does these
+      # two things and nothing else, so "immediately before, with nothing in
+      # between" is a property of that function rather than of anybody's care.
+      #
+      # It used to also have to sit after the review, which was denied `edit`
+      # by a pattern match on a command line rather than by a capability
+      # boundary. That reason is gone: under ADR 0007 the review runs after the
+      # push, against a branch nothing pushes again.
       #
       # Every refusal here leaves a claimed ticket, a local branch and a
       # worktree, exactly as an exhausted retry budget does; handing those back
-      # is the stuck path, item 8 (#175).
+      # is the stuck path, item 8 (#175). Past the first push it also leaves an
+      # open pull request, which is the cost ADR 0007 accepted.
       push_gate() {
         local changed path base_ci added removed name
 
@@ -1550,36 +1469,62 @@ let
         log "#$number: the ci.yml diff is additions-only to the checks matrix, adding $(tr '\n' ' ' <<<"$added")"
       }
 
-      push_gate
-
-      # --- push, and raise the pull request ---------------------------------
+      # --- push --------------------------------------------------------------
       #
       # Item 7 (#174), and the step `implement` never does: everything above
       # this line is reversible by deleting a directory.
-      log "#$number: pushing $branch"
-
+      #
+      # The gate is the first line of this function and the push is the last,
+      # with nothing between them (ADR 0007 §6). Called once for the branch's
+      # first push and once more for each CI fix round, so a fix that adds a
+      # workflow file is refused exactly as the original diff would have been.
+      #
       # An explicit refspec rather than a bare `git push`: what gets pushed
       # should not depend on push.default, nor on an upstream item 5 went out
-      # of its way not to set.
+      # of its way not to set. Never `--force`, and never a refspec that could
+      # become one: a branch a human may already be reading is not rewritten
+      # underneath them (ADR 0007 §4).
       #
       # The credential reaches git through `gh`, which already holds it in the
       # environment, rather than through a remote URL or a config file - so the
-      # PAT never lands in .git/config, in a URL git will echo on failure, or
+      # token never lands in .git/config, in a URL git will echo on failure, or
       # on a command line `ps` can read. The empty helper ahead of it is git's
       # own idiom for "use this one and nothing inherited".
       # `gh auth git-credential` runs in a shell of git's making and reads
       # GH_TOKEN out of the environment, so it never passes through the wrapper
-      # above. This is the one call site that has to ask for itself - and it is
-      # the furthest point in the run from the last refresh, which is exactly
-      # where a one-hour token would have died.
-      refresh_gh_token
+      # above. This is the one call site that has to ask for itself - and a
+      # second or third push is further still from the last refresh, which is
+      # exactly where a one-hour token would have died.
+      push_branch() {
+        push_gate
 
-      git -C "$worktree" \
-        -c credential.helper= \
-        -c credential.helper='!gh auth git-credential' \
-        push origin "HEAD:refs/heads/$branch" \
-        || die "#$number: $branch did not push, so no pull request was opened. Handing the ticket back is the stuck path, item 8 (#175)"
+        log "#$number: pushing $branch"
+        refresh_gh_token
 
+        git -C "$worktree" \
+          -c credential.helper= \
+          -c credential.helper='!gh auth git-credential' \
+          push origin "HEAD:refs/heads/$branch" \
+          || if [ -n "$pr_url" ]; then
+            die "#$number: $branch did not push, so the CI fix never reached $pr_url - which is open, red, and now a commit behind this worktree. Handing it back is the stuck path, item 8 (#175)"
+          else
+            die "#$number: $branch did not push, so nothing was opened for it. Handing the ticket back is the stuck path, item 8 (#175)"
+          fi
+      }
+
+      pr_url=""
+      push_branch
+
+      # --- raise the pull request, before anything reviews it ----------------
+      #
+      # ADR 0007 §1. This used to come after the review, which was decided when
+      # the review was a gate; item 6 measured that gate away, so what is left
+      # of the old order was inheritance. Opening here buys two things: CI - the
+      # only reading of this branch that is not the agent marking its own
+      # homework - starts now rather than after a stage that decides nothing,
+      # and the review that follows runs against a branch nothing will push
+      # again, so it is structurally unable to change what is in the pull
+      # request rather than merely denied the verbs to.
       # A squash merge takes the pull request's title as its commit subject, so
       # this is a line that ends up in `git log` on master. Where the branch is
       # one commit, that commit's subject is the better answer: the implement
@@ -1599,27 +1544,47 @@ let
           -e "s|IMPLEMODEL|${model}|g" \
           -e "s|REVIEWMODEL|${reviewModel}|g" \
           -e "s/ATTEMPTS/$attempt/g" \
+          -e "s/CIROUNDS/$ci_round/g" \
+          -e "s|HANDOFF|${handoffLabel}|g" \
           "$1"
       }
 
-      {
-        pr_prose ${prIntro}
+      # The body, rendered from whatever is known at the moment it is called.
+      # Called twice: once now, with the hand-off section absent because CI has
+      # not run and the review has not happened, and once at the end of the run
+      # with both. Re-rendered rather than appended to, so the second body is
+      # built from the branch as it finally stands - a CI fix round's commits
+      # are in the "what the branch says it does" section, and `ATTEMPTS`
+      # counts every session that touched it.
+      pr_body() {
+        {
+          pr_prose ${prIntro}
 
-        # What the branch claims to do, in the implementer's own words. Oldest
-        # first, subject as a heading and body under it, so a ticket that took
-        # three attempts reads as three steps rather than as one wall.
-        git -C "$worktree" log --reverse --format='### %s%n%n%b' \
-          "origin/$base_branch..HEAD"
+          # What the branch claims to do, in the implementer's own words.
+          # Oldest first, subject as a heading and body under it, so a ticket
+          # that took three attempts reads as three steps rather than as one
+          # wall.
+          git -C "$worktree" log --reverse --format='### %s%n%n%b' \
+            "origin/$base_branch..HEAD"
 
-        pr_prose ${prReviewIntro}
+          if [ "$1" = with-handoff ]; then
+            pr_prose ${prHandoff}
 
-        # The findings the review stage left, carried to the one place they
-        # are worth anything: in front of the person deciding whether to
-        # merge, next to the diff they are about. The prose above says what
-        # they are not. #202 moves them to a comment, once there is an account
-        # that makes them distinguishable from the human's own.
-        cat "$review_dir/findings.md"
-      } > "$run_dir/pr-body.md"
+            # The findings the review stage left, carried to the one place they
+            # are worth anything: in front of the person deciding whether to
+            # merge, next to the diff they are about. The prose above says what
+            # they are not. #202 moves them to a comment, which is why they are
+            # kept as their own file rather than assembled inline here.
+            cat "$review_dir/findings.md"
+          fi
+        } > "$run_dir/pr-body.md"
+      }
+
+      # Zero until CI has been watched at all, which is what the body says at
+      # creation time: the hand-off section is absent, so `CIROUNDS` is never
+      # read out of this rendering.
+      ci_round=0
+      pr_body without-handoff
 
       # `--label` rather than a second call, so a pull request that exists is a
       # pull request that is already attributable at a glance - the other half
@@ -1647,6 +1612,485 @@ let
 
       log "#$number: opened $pr_url"
 
+      # --- watch the branch's own CI ----------------------------------------
+      #
+      # ADR 0007 §3: CI is the correctness gate on this path and the review is
+      # a quality pass. The local gate above is not redundant - it is cheap,
+      # immediate, and it is what decides whether the implement stage converged
+      # at all - but it is this runner's reproduction of CI's steps, and the
+      # gate's own comment already records that a reproduction can drift from
+      # what it copies. CI runs what only CI runs: a cold runner, the sharded
+      # check matrix, and every host built from an empty store.
+      #
+      # THE HARD PART IS TELLING A CHECK THAT NEVER ARRIVES FROM A SLOW ONE,
+      # and there is no fact that distinguishes them - only a bound. So there
+      # are two, counted in polls rather than seconds (see `ciPollInterval`
+      # above): how long a run may go with no check reported for the commit
+      # that was just pushed, and how long the whole watch may take. The first
+      # is a workflow that was never triggered, which is a configuration
+      # problem rather than a problem with the diff and so is never fed back to
+      # a model that would have nothing to fix.
+      #
+      # READ FROM THE PULL REQUEST'S HEAD COMMIT RATHER THAN FROM `gh pr
+      # checks`, and the difference is load-bearing. Immediately after a fix is
+      # pushed, GitHub can still be reporting the *previous* commit's checks -
+      # which for a round that got here are red. A watch that trusted them
+      # would spend its second round refusing the fix it had just made, before
+      # the fix had been looked at. `statusCheckRollup` comes back beside
+      # `headRefOid` in one snapshot, so the commit the verdict belongs to
+      # arrives with the verdict and can be compared to the one that was
+      # pushed.
+      ci_poll_interval="''${AFK_CI_POLL_INTERVAL:-${toString ciPollInterval}}"
+
+      # One snapshot, reduced to a word and - for everything but green - the
+      # names behind it. Both check kinds GitHub reports through this field are
+      # handled: a `CheckRun` has a `status`/`conclusion` pair, a
+      # `StatusContext` has a single `state`, and a rollup can hold both.
+      #
+      # `|| rollup=""` on the `gh` call rather than a bare one, for the reason
+      # `session_id_for` carries a `|| true`: this whole function runs inside a
+      # command substitution under `set -euo pipefail`, so a transient API
+      # failure would abort the runner outright rather than counting as one
+      # poll that saw nothing. The same goes for the `|| printf` after `jq`,
+      # which catches an answer that parsed but was not a rollup.
+      ci_snapshot() {
+        local head=$1 rollup
+        rollup="$(gh pr view "$pr_url" --json headRefOid,statusCheckRollup 2>/dev/null)" || rollup=""
+        [ -n "$rollup" ] || { printf 'absent\n'; return 0; }
+
+        printf '%s' "$rollup" | jq -r --arg head "$head" '
+          def bucket:
+            if has("conclusion") then
+              if .status != "COMPLETED" then "pending"
+              elif .conclusion == null or .conclusion == "" then "pending"
+              elif (.conclusion | IN("SUCCESS", "NEUTRAL", "SKIPPED")) then "pass"
+              elif .conclusion == "CANCELLED" then "cancelled"
+              else "fail"
+              end
+            else
+              if .state == "SUCCESS" then "pass"
+              elif .state == "PENDING" or .state == "EXPECTED" then "pending"
+              else "fail"
+              end
+            end;
+          def named($b): map(select(.bucket == $b) | .name) | join(", ");
+          if (.headRefOid // "") != $head then "absent"
+          else
+            [ (.statusCheckRollup // [])[]
+              | { name: (.name // .context // "an unnamed check"), bucket: bucket } ]
+            | if length == 0 then "absent"
+              elif (map(select(.bucket == "fail")) | length) > 0 then "red\n" + named("fail")
+              elif (map(select(.bucket == "cancelled")) | length) > 0 then "cancelled\n" + named("cancelled")
+              elif (map(select(.bucket == "pending")) | length) > 0 then "pending\n" + named("pending")
+              else "green"
+              end
+          end' 2>/dev/null || printf 'absent\n'
+      }
+
+      # Poll until the checks on `$1` have settled, or until one of the two
+      # bounds runs out. Sets `ci_state` to one of green, red, cancelled,
+      # absent or unsettled, and `ci_failed` to whichever checks are behind it.
+      ci_state=""
+      ci_failed=""
+      watch_ci() {
+        local head=$1 tick=0 unseen=0 answer state
+        while :; do
+          answer="$(ci_snapshot "$head")"
+          state="$(printf '%s\n' "$answer" | head -n 1)"
+          ci_failed="$(printf '%s\n' "$answer" | tail -n +2)"
+
+          case "$state" in
+            green | red | cancelled)
+              ci_state="$state"
+              return 0
+              ;;
+            absent)
+              unseen=$((unseen + 1))
+              if [ "$unseen" -ge ${toString ciFirstCheckPolls} ]; then
+                ci_state=absent
+                return 0
+              fi
+              ;;
+            *)
+              # Pending, and the only state worth waiting through.
+              ;;
+          esac
+
+          tick=$((tick + 1))
+          if [ "$tick" -ge ${toString ciSettlePolls} ]; then
+            ci_state=unsettled
+            return 0
+          fi
+
+          sleep "$ci_poll_interval"
+        done
+      }
+
+      ci_round=1
+      while :; do
+        pushed_head="$(git -C "$worktree" rev-parse HEAD)"
+        log "#$number: watching CI on $pushed_head (round $ci_round of ${toString maxCiRounds})"
+        watch_ci "$pushed_head"
+
+        if [ "$ci_state" = green ]; then
+          log "#$number: CI is green on $pushed_head after $ci_round round(s)"
+          break
+        fi
+
+        # Three ways the watch ends without a verdict about the diff. None of
+        # them is something a model can fix, so none is fed back to one; each
+        # leaves $pr_url open, without the hand-off label, which is what says
+        # from the outside that nobody has finished with it (ADR 0007 §2).
+        case "$ci_state" in
+          absent)
+            die "#$number: nothing has reported on $pushed_head after ${toString ciFirstCheckPolls} polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open and unfinished; handing it back is the stuck path, item 8 (#175)"
+            ;;
+          unsettled)
+            die "#$number: CI on $pushed_head has not settled after ${toString ciSettlePolls} polls, and still has $ci_failed outstanding. $pr_url is open and unfinished. Handing it back is the stuck path, item 8 (#175)"
+            ;;
+          cancelled)
+            die "#$number: CI on $pushed_head was cancelled ($ci_failed), so it reached no verdict. $pr_url is open and unfinished, and a re-run is a human's call. Handing it back is the stuck path, item 8 (#175)"
+            ;;
+        esac
+
+        # THE RECORD PLAN ITEM 13 ASKS FOR, and the reason this line names both
+        # gates. The local gate passed on this exact commit; CI did not. If
+        # that never happens, this whole stage is latency for its own sake and
+        # should be cut. If it happens, the difference between the two readings
+        # is what to go and fix - in the local gate, which is the reproduction,
+        # rather than in ci.yml.
+        log "#$number: CI is red on $pushed_head where the local gate passed. Not green: $ci_failed"
+
+        if [ "$ci_round" -ge ${toString maxCiRounds} ]; then
+          die "#$number: ${toString maxCiRounds} CI round(s) and $branch is still red ($ci_failed). $pr_url is open with the work on it and without the hand-off label; nothing merges it (ADR 0004 §9). Handing it back is the stuck path, item 8 (#175)"
+        fi
+
+        # ADR 0004 §6, applied to a failure it did not anticipate: the fix
+        # happens inside the session that produced the failing commit, because
+        # a fix that cannot see what it is fixing is close to useless. The
+        # session id may never have been looked up - a ticket that converged on
+        # its first attempt never needed it - so this is the same read-back the
+        # retry path does, with the same refusal behind it.
+        if [ -z "$session" ]; then
+          session="$(session_id_for "$worktree" "$slug")"
+        fi
+        [ -n "$session" ] \
+          || die "#$number: CI is red on $pr_url, but no session titled '$slug' can be found to fix it in; refusing to fix in a fresh context (ADR 0004 §6). Handing it back is the stuck path, item 8 (#175)"
+
+        # What crosses the boundary is what the model could not see for itself.
+        # It is told which checks are not green and where to read them, and
+        # told plainly that it is not the one who pushes - `gh pr*` is denied
+        # to this session anyway, but a model that spends its round trying is a
+        # round spent.
+        #
+        # `gh run view` is deliberately not denied. It is the only way to turn
+        # a check's name into the log that explains it, and it can write
+        # nothing.
+        ci_message="$(printf '%s\n\n%s\n\n%s\n\n%s' \
+          "The pull request for this branch is $pr_url, and CI on it is red on the commit at the head of this branch. This repository's local gate - the same one you have already passed - agreed with that commit, so this is something only CI sees: a cold runner, the sharded check matrix, and every host built from an empty store." \
+          "$(printf 'These checks are not green:\n%s' "$ci_failed")" \
+          "Read the failing job's log before changing anything: \`gh run view --log-failed --job <id>\`, where <id> is the last path segment of that check's link on the pull request. \`gh run list --branch $branch\` will find the run." \
+          "Fix it here, in this worktree, and commit the fix. Do not push and do not touch the pull request - this runner pushes your commit to the same branch afterwards. The local gate has to pass on your fix as well, and there is no retry: this round is judged once.")"
+
+        attempt=$((attempt + 1))
+        log "#$number: feeding the red run back into session $session (implement session $attempt)"
+
+        ci_fix_rc=0
+        (
+          cd "$worktree" || exit 1
+          OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg permissionOverlay} \
+            timeout ${toString attemptTimeout} opencode run --auto \
+              --dir "$worktree" \
+              --agent build --model ${model} --variant ${variant} \
+              --session "$session" "$ci_message"
+        ) || ci_fix_rc=$?
+
+        # Judged by the same four checks an implement attempt is, against the
+        # commit that was pushed rather than against the base branch: what has
+        # to be true here is that something NEW was committed on top of the red
+        # commit.
+        #
+        # And judged once. A CI fix round gets one session and no retry, which
+        # is a deliberate asymmetry with the implement stage rather than an
+        # oversight: the local gate has already passed on this branch, so a fix
+        # that fails it is the model going backwards rather than failing to
+        # converge - and unlike the implement stage there is now a pull request
+        # a human can pick up, which is most of what a retry budget was buying.
+        attempt_verdict "$ci_fix_rc" "$pushed_head"
+        [ -z "$reason" ] \
+          || die "#$number: the CI fix did not pass, because $reason. $pr_url is open with a red CI run on it; a CI fix gets one session and no retry (ADR 0007). Handing it back is the stuck path, item 8 (#175)"
+
+        push_branch
+        ci_round=$((ci_round + 1))
+      done
+
+      # Said once and appended to every refusal below, because from here on it
+      # is the same fact each time and it is the fact ADR 0007 changed: a
+      # review that cannot be shown to have run no longer means no pull
+      # request, it means a pull request nobody has handed over. The label's
+      # absence is what says so from the outside.
+      unfinished="$pr_url is open and green, without the ${handoffLabel} label; nothing merges it (ADR 0004 §9). Handing it back is the stuck path, item 8 (#175)"
+
+      # --- review, in a fresh context ---------------------------------------
+      #
+      # ADR 0004 §6, and item 6 (#173). A self-review in the context that just
+      # wrote the code is the weakest form, so this is a new session against
+      # the same worktree - never `--session` - however many attempts the
+      # implementation took to converge.
+      #
+      # It runs LAST, after the push and after CI has gone green (ADR 0007
+      # §1), which changes what it is rather than only when it happens. It can
+      # no longer stop a pull request from existing - one is open - and it can
+      # no longer change what is in it: this branch has been pushed and nothing
+      # pushes it again, so a commit written here reaches a local ref and
+      # stops. `reviewOverlay` and the prompt still deny it the verbs, but the
+      # guarantee is now the shape of the run rather than a pattern match on a
+      # command line.
+      #
+      # What it still is: the one stage whose output is prose, and the one
+      # nothing downstream can check. So nothing here believes the session's
+      # own account of what it did - every claim below is read out of the
+      # transcript instead, and each of those checks is fatal, because a review
+      # that cannot be shown to have happened is not a review that passed.
+      #
+      # `--dir` is the load-bearing flag, and it is worth saying why, because
+      # the cost of not knowing was item 6's whole first attempt. Item 1's
+      # review-stage run reported three separate failures - the `code-review`
+      # skill missing, the two axes collapsing into one context, and a sibling
+      # checkout reviewed instead of its own - and they were one failure.
+      # opencode resolves its project, and with it skill discovery, from the
+      # directory it is launched in; the pilot's harness launched it one level
+      # above the worktree, where there is no `.agents/skills/` and no git
+      # repository. From there `opencode debug skill` returns exactly one
+      # skill, `customize-opencode`, which is the error string that run
+      # recorded verbatim. The skill error is why no sub-agent ever spawned,
+      # and being a directory above its target is why a sibling was in reach
+      # to review. Naming the directory explicitly rather than inheriting it
+      # from a `cd` is what makes that unrepeatable. The `cd` stays as well:
+      # `session list` and `export` below are project-scoped the same way.
+      # What the review is about to look at, kept only so that the log below can
+      # say if the branch moved under it. Under #174 this was a pin and a
+      # refusal, standing in for a guarantee the ordering did not provide; ADR
+      # 0007 provides it, so what is left is a fact worth recording rather than
+      # a gate.
+      reviewed_head="$(git -C "$worktree" rev-parse HEAD)"
+
+      review_dir="$run_dir/review"
+      mkdir -p "$review_dir"
+      review_title="$slug-review"
+
+      sed -e "s/ISSUE/$number/g" -e "s|BASE|origin/$base_branch|g" \
+        ${reviewPrompt} > "$review_dir/prompt"
+
+      log "#$number: reviewing $branch in a fresh session"
+
+      # The overlay is set on the one command it governs rather than exported
+      # for the rest of the run. An `export` here would outlive the stage, and
+      # what it would hand item 7 (#174) is a deny-set containing `gh pr*` and
+      # `git commit*` - the two verbs that stage exists to use. Scoping it is
+      # also the honest shape: it describes this session, not this process.
+      review_rc=0
+      (
+        cd "$worktree" || exit 1
+        OPENCODE_CONFIG_CONTENT=${lib.escapeShellArg reviewOverlay} \
+          timeout ${toString reviewTimeout} opencode run --auto \
+            --dir "$worktree" \
+            --agent build --model ${reviewModel} --variant ${variant} \
+            --title "$review_title" \
+            "$(cat "$review_dir/prompt")"
+      ) > "$review_dir/run.log" 2>&1 || review_rc=$?
+
+      if [ "$review_rc" -eq 124 ]; then
+        die "#$number: the review ran past its ${toString reviewTimeout}s ceiling. Review does not retry (ADR 0004 §6). $unfinished"
+      elif [ "$review_rc" -ne 0 ]; then
+        die "#$number: the review session exited $review_rc. Review does not retry (ADR 0004 §6). $unfinished"
+      fi
+
+      review_session="$(session_id_for "$worktree" "$review_title")"
+
+      [ -n "$review_session" ] \
+        || die "#$number: the review exited 0 but no session titled '$review_title' can be found, so there is no transcript to verify it from. $unfinished"
+
+      # Written to a file before jq is pointed at it, for the reason item 1
+      # recorded: piping `opencode export` straight into jq truncates on large
+      # sessions, and it fails as a parse error rather than as a wrong answer -
+      # but only sometimes, which is the worse of the two.
+      # `|| true` because a failing `export` has to reach the check below
+      # rather than abort the runner here: this is the left side of a
+      # redirection, not a condition, so `set -e` would take it.
+      ( cd "$worktree" && opencode export "$review_session" ) \
+        > "$review_dir/session.json" 2>/dev/null || true
+
+      # And the transcript is checked for the shape the assertions below read,
+      # not merely for being JSON. Valid JSON of the wrong shape is the trap
+      # here: `jq -e .` is happy with anything parseable, and `.messages[]`
+      # against a document without a `messages` array exits 5 - aborting the
+      # runner with none of the diagnosis this stage exists to print. Item 1
+      # recorded that `opencode export` truncates on large sessions and fails
+      # as a parse error only sometimes, which is what makes checking here
+      # worth more than a stack of unguarded reads below.
+      jq -e 'has("messages") and (.messages | type == "array")' \
+        "$review_dir/session.json" > /dev/null 2>&1 \
+        || die "#$number: the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (plan item 1). $unfinished"
+
+      # --- did a review actually happen -------------------------------------
+      #
+      # Asked of the transcript rather than of the session's own summary, and
+      # this is the part of the stage with the most evidence behind it. Every
+      # failure item 1 saw here was silent: the skill error was reported to the
+      # model and not to anybody else, the missing sub-agents left `subagents=0`
+      # in an export nobody was reading yet, and the substituted review read
+      # exactly like a real one. A stage whose failures all look like passes
+      # has to be checked from outside, so these two counts are read out of the
+      # tool calls the session actually made.
+      #
+      # Both are fatal, and fatal in the fail-closed direction: a review that
+      # cannot be shown to have happened is not a review that passed.
+      skill_calls="$(
+        jq '[ .messages[].parts[]?
+              | select(.type == "tool" and .tool == "skill")
+              | select(.state.status == "completed")
+              | select(.state.input.name == "code-review")
+            ] | length' "$review_dir/session.json"
+      )"
+
+      [ "$skill_calls" -gt 0 ] \
+        || die "#$number: the review never completed a \`skill\` call for code-review, so whatever it produced was not that skill's review. $unfinished"
+
+      # The two axes are the point of the skill: standards and spec, in
+      # genuinely separate contexts so that neither pollutes the other. They
+      # arrive as `task` calls, and item 1 expected two. Fewer means they
+      # collapsed into the parent context, which is the premise of this stage
+      # failing rather than erroring - so it is checked rather than assumed.
+      axes="$(
+        jq '[ .messages[].parts[]? | select(.type == "tool" and .tool == "task") ] | length' \
+          "$review_dir/session.json"
+      )"
+
+      [ "$axes" -ge ${toString reviewAxes} ] \
+        || die "#$number: the review spawned $axes sub-agent(s), not ${toString reviewAxes}; the standards and spec axes collapsed into one context (ADR 0004 §6). $unfinished"
+
+      # And that they are the two axes rather than two sub-agents of any kind.
+      # A count alone is satisfied by a session that fanned out twice for its
+      # own reasons, which is not the same thing as standards and spec running
+      # in separate contexts - and it is the separation, not the fan-out, that
+      # ADR 0004 §6 is about.
+      #
+      # Matched over each call's description and prompt together and folded to
+      # lower case, because that wording is the model's rather than this
+      # repository's. What is asserted is only that both subjects are present
+      # across the calls, which is as much as can be checked from outside
+      # without pinning phrasing the skill never fixed. Deliberately loose in
+      # the passing direction and strict in the one that matters: two sub-agents
+      # sent to do something else entirely do not read as a two-axis review.
+      named_axes="$(
+        jq '[ .messages[].parts[]?
+              | select(.type == "tool" and .tool == "task")
+              | ((.state.input.description // "") + " " + (.state.input.prompt // ""))
+              | ascii_downcase
+            ]
+            | [ (map(select(test("standard"))) | length > 0),
+                (map(select(test("spec"))) | length > 0) ]
+            | all' "$review_dir/session.json"
+      )"
+
+      [ "$named_axes" = true ] \
+        || die "#$number: the review spawned $axes sub-agent(s), but neither a standards nor a spec subject is identifiable across them, so this was not the code-review skill's two-axis pass. $unfinished"
+
+      log "#$number: review ran the code-review skill across $axes axes"
+
+      # --- the findings, which are the whole output of this stage -----------
+      #
+      # They are worth more on the pull request - where the human who has to
+      # merge it reads them alongside the diff - than they ever were as a gate.
+      # The body edit below appends this file verbatim to the pull request that
+      # is already open; nothing here is the last reader of it, and nothing
+      # here decides anything from it.
+      #
+      # Deliberately NOT fed back to the implement session to be fixed. Item 6
+      # originally allowed one fix-and-recheck, and it was dropped on purpose:
+      # a finding handed back to the model that just wrote the code becomes a
+      # commit, and the gate cannot tell a correct change from a plausible
+      # green one. A wrong finding would then cost a real edit and consume the
+      # finding itself, where leaving it on the PR costs nothing and keeps it
+      # legible. That reasoning outlived the verdict it was written for: with
+      # the stage advisory, every finding now travels to the pull request, and
+      # none of them is ever handed back to the model that wrote the code.
+      jq -r '[ .messages[]
+               | select(.info.role == "assistant")
+               | .parts[]? | select(.type == "text") | .text
+             ] | last // ""' "$review_dir/session.json" > "$review_dir/findings.md"
+
+      # Tested for content rather than for size. `jq -r` on a `// ""` fallback
+      # still emits its newline, so the file is one byte when the session
+      # produced no text at all and `[ -s ]` would call that a report. Found by
+      # removing this branch and watching every case still pass.
+      #
+      # Still fatal now that the stage is advisory, and for a reason that
+      # survived the verdict: the findings are what this stage produces. A
+      # review that verifiably ran and then said nothing has produced nothing
+      # for the pull request to carry, and passing it on as though it had is
+      # the same silent failure the checks above exist to refuse.
+      grep -q '[^[:space:]]' "$review_dir/findings.md" \
+        || die "#$number: the review session produced no closing report, so this stage has nothing to hand to the pull request. $unfinished"
+
+      # No verdict is read out of it, and that is the finding of plan item 6
+      # rather than an omission - see the prompt above. The stage's outcome is
+      # decided entirely by the provenance checks: a review that can be shown
+      # to have run gets its findings carried, and one that cannot has already
+      # died above.
+      log "#$number: review ran and left $(wc -l < "$review_dir/findings.md") lines of findings in $review_dir/findings.md for the pull request; this stage is advisory and does not gate (plan item 6)"
+
+      # --- did the review write anything anyway -----------------------------
+      #
+      # Report-only is asked for in the review prompt and denied in
+      # `reviewOverlay`, and neither is a capability boundary: both are pattern
+      # matches on a command line, and `git -C . commit` matches neither. Under
+      # #174 this was a refusal, because the push came afterwards and a commit
+      # written here would have gone out having never been gated. ADR 0007
+      # removed the reason: the push is behind us, nothing pushes this branch
+      # again, and the pull request cannot be reached from here.
+      #
+      # So it is a log line rather than a gate. Not deleted outright, because
+      # a review session that committed has bypassed both controls that were
+      # meant to stop it, and that is worth knowing about even when it can no
+      # longer do any harm - it is otherwise entirely invisible, since a
+      # session that commits leaves a clean tree behind it.
+      review_head="$(git -C "$worktree" rev-parse HEAD)"
+      if [ "$review_head" != "$reviewed_head" ]; then
+        log "#$number: the review stage moved $branch from $reviewed_head to $review_head. It is report-only and was denied both file edits and commits, so it got past both; nothing pushes this branch again and $pr_url is unaffected, but the deny-set is not doing what it claims"
+      fi
+
+      # --- hand over --------------------------------------------------------
+      #
+      # The findings could not be in the body at creation time, because the
+      # review had not run (ADR 0007). So the body is re-rendered with the
+      # hand-off section in it and written over the one already there, which is
+      # the interim `gh pr edit --body-file` this item accepted: it keeps the
+      # body/comment separation item 12's author filter depends on, where a
+      # comment would not until #202 lands.
+      #
+      # ONE `gh pr edit` RATHER THAN TWO, for the same reason the claim is one
+      # `gh issue edit`. The label is the hand-off signal - it says CI is green
+      # and a review has run - and a pull request that carried it while its
+      # body still had no findings under it would be saying something untrue
+      # for however long the second call took.
+      #
+      # The label is a signal and not a control (ADR 0007 §7). Nothing here or
+      # at GitHub's end stops a merge before it is applied, and nothing should:
+      # ADR 0004 §9 makes merging a human act, and a runner that could withhold
+      # a merge would hold a veto over the person rather than the other way
+      # round.
+      pr_body with-handoff
+
+      log "#$number: handing over - writing the findings onto $pr_url and labelling it ${handoffLabel}"
+
+      gh pr edit "$pr_url" \
+        --repo "$repo" \
+        --body-file "$run_dir/pr-body.md" \
+        --add-label "${handoffLabel}" \
+        || die "#$number: $pr_url is open and green, but the review's findings could not be written onto it, so it stays without the ${handoffLabel} label. Handing it back is the stuck path, item 8 (#175)"
+
       # --- and nothing is left in flight ------------------------------------
       #
       # The worktree goes now that the branch is somewhere durable. The
@@ -1662,10 +2106,12 @@ let
       # exists" check above refuse a ticket whose pull request is still open,
       # if one is ever unassigned and re-labelled while it is.
       #
-      # No --force. The tree was asserted clean before the gate, the gate
-      # writes nothing into it, and the review stage cannot edit - so a removal
-      # that fails means something happened that none of those allow for, and
-      # the next poll refusing to start is the correct amount of noise.
+      # No --force. The tree was asserted clean before the gate and the gate
+      # writes nothing into it, so a removal that fails means an uncommitted
+      # file appeared after the last thing that checked - which is the review
+      # stage getting past `edit: deny`, logged above but not otherwise
+      # stoppable. The next poll refusing to start is the correct amount of
+      # noise for that.
       git -C "$checkout" worktree remove "$worktree" \
         || die "#$number: $pr_url is open, but $worktree could not be removed; every later poll refuses to start until it is gone"
 
@@ -1679,12 +2125,13 @@ in
       the unattended AFK ticket runner.
 
       The pre-push denylist gate this switch used to wait on has landed (item
-      7, #174). The diff is now read against docs/agents/afk-eligibility.md
-      immediately before the push, which is the last moment anything can:
-      `AFK_AGENT_TOKEN` carries the Workflows permission (item 3), so nothing
-      at GitHub's end stops this service pushing a branch that edits
-      `.github/workflows/`, and a pushed branch runs its own workflow with the
-      repository's secrets before anyone reads the pull request.
+      7, #174). The diff is read against docs/agents/afk-eligibility.md
+      immediately before every push, which is the last moment anything can:
+      the runner's App installation token carries the Workflows permission
+      (item 3), so nothing at GitHub's end stops this service pushing a branch
+      that edits `.github/workflows/`, and a pushed branch runs its own
+      workflow with the repository's secrets before anyone reads the pull
+      request.
 
       Two things still argue for leaving it off. #190 asks whether `deploy`
       should restrict who may push, and `deploy` is a shorter route to the
@@ -1692,7 +2139,8 @@ in
       process holds a credential that can take it. And the stuck path (item 8,
       #175) does not exist yet, so a ticket that fails leaves itself claimed
       and its worktree on disk, and every later poll refuses to start until a
-      person clears it
+      person clears it - and since #201 opened the pull request before the
+      review, a failure past the push leaves that open too
     '';
 
     schedule = lib.mkOption {
@@ -1713,7 +2161,7 @@ in
 
     maxRuntime = lib.mkOption {
       type = lib.types.str;
-      default = "7h";
+      default = "9h";
       example = "90min";
       description = ''
         Ceiling on a single run, as `TimeoutStartSec` (systemd.time(7)).
@@ -1725,17 +2173,26 @@ in
         here is one unit - a run that hangs blocks every later poll until
         something stops it, and "something" should not have to be a person.
 
-        The default has to clear three attempts at their own hour-long ceiling
-        with a gate after each, and then the review pass at its own, which is
-        why it is neither the 4h item 4 guessed at before the implement stage
-        existed nor the 6h that stage left behind: three attempts, three gates
-        and one review come to 5h45m of ceilings, and a 6h bound left fifteen
+        The default is the sum of every ceiling underneath it, which is what
+        makes it an honest bound rather than a guess. Three implement attempts
+        at an hour each with a gate after each is 5h15m; watching CI twice at
+        forty-five minutes a watch is 1h30m; the one CI fix round between those
+        watches is another attempt and another gate, 1h45m; and the review pass
+        is 30m. Nine hours.
+
+        It grew from 7h with #201, which added the CI rounds - and 7h had
+        already grown from the 4h item 4 guessed at before the implement stage
+        existed and the 6h that stage left behind, where a 6h bound left fifteen
         minutes for a clone, a fetch, and everything else that is not one of
-        those. It is the outer bound rather than an expected duration - every
-        measured run of either stage is far inside it - and a run that reaches
-        it is killed mid-ticket and leaves a worktree behind, which the
-        in-flight guard then refuses to poll past until item 8 (#175) can
-        clear it.
+        those.
+
+        This is the outer bound rather than an expected duration - every
+        measured run of every stage is far inside it - but it is not free.
+        Concurrency here is one (ADR 0004 §8), so a run that hangs blocks every
+        later poll until this ceiling stops it, and a run that reaches it is
+        killed mid-ticket and leaves a worktree behind, which the in-flight
+        guard then refuses to poll past until item 8 (#175) can clear it. Past
+        the push it leaves an open pull request too (ADR 0007).
       '';
     };
   };

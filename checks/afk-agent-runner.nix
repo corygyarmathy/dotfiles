@@ -175,6 +175,23 @@ pkgs.runCommand "check-afk-agent-runner"
     cat > "$work/bin/gh" <<'MOCK'
     #!/bin/sh
     echo "gh $*" >> "$GH_LOG"
+
+    # Keep the value that followed a flag, so a case can assert on it later.
+    # `--body-file` is copied rather than recorded, because the runner renders
+    # the body twice over the same path and the first one would not survive.
+    keep_arg() {
+      dest=$1
+      flag=$2
+      shift 2
+      while [ "$#" -gt 0 ]; do
+        if [ "$1" = "$flag" ]; then
+          if [ "$flag" = "--body-file" ]; then cp "$2" "$dest"; else printf '%s\n' "$2" > "$dest"; fi
+          return 0
+        fi
+        shift
+      done
+    }
+
     case "$1 $2" in
       "issue list")
         cat "$GH_ISSUES"
@@ -189,12 +206,73 @@ pkgs.runCommand "check-afk-agent-runner"
       # person has to act on. It prints a URL because the runner logs one, and
       # it can be made to fail, which is how the case below observes that a
       # pull request that never opened does not tear the worktree down.
+      #
+      # The body it is handed is copied aside rather than only logged. Item 13
+      # renders the body twice - once here without the review, once again at
+      # the hand-off with it - over the same path, so the creation-time body
+      # does not survive to be asserted on unless it is kept now.
       "pr create")
         if [ -n "''${GH_PR_FAIL:-}" ]; then
           echo "mock gh: refusing to open a pull request" >&2
           exit 1
         fi
+        keep_arg "$OC_STATE/pr-create-body" --body-file "$@"
+        # The branch the pull request is on. `pr view` below needs it to answer
+        # about the right commit, and a run that works a second ticket leaves
+        # two `afk/*` refs in the fixture origin - so guessing at "the one that
+        # is there" stops working exactly when a second poll succeeds.
+        keep_arg "$OC_STATE/pr-branch" --head "$@"
         echo "https://github.com/corygyarmathy/dotfiles/pull/999"
+        ;;
+      # Item 13's two new verbs. `pr view` is the CI watch - it answers from a
+      # per-case plan, one line per poll, repeating the last line once the plan
+      # runs out so that "never settles" is a one-word plan rather than
+      # forty-five of them. `pr edit` is the hand-off.
+      "pr view")
+        polls=$(( $(cat "$OC_STATE/ci-polls" 2>/dev/null || echo 0) + 1 ))
+        echo "$polls" > "$OC_STATE/ci-polls"
+        step="$(sed -n "''${polls}p" "$CI_PLAN" 2>/dev/null)"
+        [ -n "$step" ] || step="$(tail -n 1 "$CI_PLAN")"
+        echo "pr view answered $step" >> "$GH_LOG"
+
+        # The commit the answer is about, taken from the fixture origin rather
+        # than made up: the runner refuses a rollup whose `headRefOid` is not
+        # the commit it just pushed, and a mock that invented one could not
+        # tell the difference between that working and it not.
+        sha="$(git --git-dir="$CI_ORIGIN" \
+          rev-parse "refs/heads/$(cat "$OC_STATE/pr-branch")")"
+
+        case "$step" in
+          # GitHub could not be asked at all, which from the runner's side has
+          # to count as one poll that saw nothing rather than kill it.
+          apifail) echo "mock gh: the API is unavailable" >&2; exit 1 ;;
+          # A green rollup on some *other* commit, which is what the API
+          # reports for the window after a fix is pushed and before its run
+          # exists. Trusting it would spend a round refusing the fix.
+          stale) sha=0000000000000000000000000000000000000000 ;;
+        esac
+
+        case "$step" in
+          none)      rollup='[]' ;;
+          red)       rollup='[{"__typename":"CheckRun","name":"check afk-agent-runner","status":"COMPLETED","conclusion":"FAILURE"},{"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"SUCCESS"}]' ;;
+          pending)   rollup='[{"__typename":"CheckRun","name":"nixos ci","status":"IN_PROGRESS","conclusion":null}]' ;;
+          cancelled) rollup='[{"__typename":"CheckRun","name":"nixos ci","status":"COMPLETED","conclusion":"CANCELLED"}]' ;;
+          # Green, and deliberately both kinds of entry GitHub reports through
+          # this field: a CheckRun with a status/conclusion pair and a legacy
+          # StatusContext with a single state. The runner reads one field for
+          # both, so the happy path has to exercise both branches of it.
+          *)         rollup='[{"__typename":"CheckRun","name":"nixos ci","status":"COMPLETED","conclusion":"SUCCESS"},{"__typename":"StatusContext","context":"legacy status","state":"SUCCESS"}]' ;;
+        esac
+
+        jq -n --arg sha "$sha" --argjson rollup "$rollup" \
+          '{ headRefOid: $sha, statusCheckRollup: $rollup }'
+        ;;
+      "pr edit")
+        if [ -n "''${GH_PR_EDIT_FAIL:-}" ]; then
+          echo "mock gh: refusing to edit the pull request" >&2
+          exit 1
+        fi
+        keep_arg "$OC_STATE/pr-edit-body" --body-file "$@"
         ;;
       *)
         echo "mock gh: unexpected invocation: $*" >&2
@@ -244,6 +322,12 @@ pkgs.runCommand "check-afk-agent-runner"
         if [ "$is_review" = yes ]; then
           printf '%s\n' "$@" > "$OC_STATE/review-args"
           printf '%s\n' "''${OPENCODE_CONFIG_CONTENT:-}" > "$OC_STATE/review-overlay"
+          # What the tracker had already been told by the time this session
+          # started. It is the only way to observe item 13's ordering from
+          # inside a mock: the pull request has to exist before the review
+          # runs, and the hand-off has to arrive after it.
+          grep -c "pr create" "$GH_LOG" > "$OC_STATE/review-saw-pr" || true
+          grep -c "pr edit" "$GH_LOG" > "$OC_STATE/review-saw-edit" || true
           plan="''${OC_REVIEW:-pass}"
           printf '%s\n' "$plan" > "$OC_STATE/review-plan"
           case "$plan" in
@@ -272,6 +356,7 @@ pkgs.runCommand "check-afk-agent-runner"
         n=$(( $(cat "$OC_STATE/attempts" 2>/dev/null || echo 0) + 1 ))
         echo "$n" > "$OC_STATE/attempts"
         printf '%s\n' "$@" > "$OC_STATE/args-$n"
+        grep -c "pr create" "$GH_LOG" > "$OC_STATE/implement-saw-pr-$n" || true
         printf '%s\n' "''${OPENCODE_CONFIG_CONTENT:-}" > "$OC_STATE/overlay-$n"
         opened=yes
         case "$(sed -n "''${n}p" "$OC_PLAN")" in
@@ -589,7 +674,7 @@ pkgs.runCommand "check-afk-agent-runner"
     # reads as "the ticket got worked". `review` is the same idea for the stage
     # after it, defaulting to a clean pass for the same reason.
     run() {
-      local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good} review=''${5:-pass}
+      local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good} review=''${5:-pass} ci=''${6:-green}
       state="$work/state/$name"
       if [ "$reuse" = "fresh" ]; then
         rm -rf "$state"
@@ -609,14 +694,22 @@ pkgs.runCommand "check-afk-agent-runner"
       export OC_PLAN="$state/opencode.plan"
       export OC_REVIEW="$review"
       export NIX_LOG="$state/nix.log"
+      export CI_PLAN="$state/ci.plan"
+      export CI_ORIGIN="$work/origin.git"
       : > "$GH_LOG"
       : > "$NIX_LOG"
       rm -f "$state"/args-* "$state"/overlay-* "$state/attempts" "$state/title" \
-        "$state"/review-*
+        "$state"/review-* "$state/ci-polls" "$state"/pr-*-body "$state/pr-branch" \
+        "$state"/implement-saw-pr-*
       # Unquoted on purpose: a plan is a whitespace-separated list of steps and
       # this is what turns it into one line each.
       # shellcheck disable=SC2086
       printf '%s\n' $plan > "$OC_PLAN"
+      # The CI watch's answers, one per poll, in the same shape and for the
+      # same reason. The mock repeats the last line once this runs out, so
+      # "never settles" is `pending` rather than forty-five of them.
+      # shellcheck disable=SC2086
+      printf '%s\n' $ci > "$CI_PLAN"
 
       set +e
       HOME="$work/home-run" PATH="$unit_path" "$script" \
@@ -625,7 +718,23 @@ pkgs.runCommand "check-afk-agent-runner"
       set -e
     }
 
+    # The one seam item 13's watch needs, and the reason its two bounds are
+    # counted in polls rather than seconds: at zero the harness exercises the
+    # real numbers - ten polls with nothing reported, forty-five without a
+    # settle - at no wall-clock cost. A bound written in seconds would have had
+    # to be overridden too, and then the number under test would be this file's
+    # rather than production's.
+    export AFK_CI_POLL_INTERVAL=0
+
     ghlog() { cat "$state/gh.log"; }
+    # How many times the runner asked GitHub about its checks.
+    ci_polls() { cat "$state/ci-polls" 2>/dev/null || echo 0; }
+    # What actually reached the fixture origin, as a count of commits on the
+    # ticket branch: the only way to tell a fix that was pushed from one that
+    # merely exists locally.
+    pushed_commits() {
+      git -C "$work/origin.git" rev-list --count "master..refs/heads/afk/$ticket" 2>/dev/null || echo 0
+    }
     # The value opencode was given for a flag, read out of the recorded
     # arguments. One line per argument is what makes this possible, and a
     # helper is what keeps the same awk out of four places - including out of
@@ -1030,6 +1139,22 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "a review whose skill call failed was accepted as a review"
     grep -q "never completed a" "$state/err.log" || fail "did not say the skill never ran: $(cat "$state/err.log")"
 
+    echo "case: a review that cannot be shown to have run leaves the pull request open"
+    # Item 13 changed what this failure means. It used to mean no pull request;
+    # it now means one nobody has handed over, because the push came first
+    # (ADR 0007 §2). What has to hold is that the pull request is left alone,
+    # nothing merges it, and the hand-off label is withheld - which is the only
+    # thing that says any of this from outside.
+    grep -q "gh pr create" "$state/gh.log" || fail "no pull request was left for a human: $(ghlog)"
+    if grep -q -- "--add-label agent-ready-for-review" "$state/gh.log"; then
+      fail "a ticket whose review never ran was handed over: $(ghlog)"
+    fi
+    if grep -qE "pr close|pr merge" "$state/gh.log"; then
+      fail "the runner closed or merged the pull request it could not finish: $(ghlog)"
+    fi
+    grep -q "is open and green, without the agent-ready-for-review label" "$state/err.log" \
+      || fail "the refusal did not say what state it left the pull request in: $(cat "$state/err.log")"
+
     echo "case: a skill call for something else is not a code-review"
     run review-wrongskill mixed.json fresh good wrongskill
     [ "$rc" -ne 0 ] || fail "a session that ran some other skill passed as a code review"
@@ -1228,19 +1353,36 @@ pkgs.runCommand "check-afk-agent-runner"
     if grep -q "pr merge" "$state/gh.log"; then fail "the runner merged its own pull request: $(ghlog)"; fi
     if grep -q -- "--auto" "$state/gh.log"; then fail "auto-merge was armed: $(ghlog)"; fi
 
-    echo "case: the body links back to the source issue and carries the review's findings"
+    echo "case: the body links back to the source issue, and carries the findings after the review"
+    # Two bodies now, and they are different documents (item 13). At creation
+    # time the review has not run, so there are no findings to carry; the
+    # hand-off edit renders the whole body again with them in it. The mock kept
+    # a copy of each, because the runner writes both over the same path.
+    created="$state/pr-create-body"
     body="$state/run/pr-body.md"
+    [ -s "$created" ] || fail "no pull request body was assembled at creation time"
     [ -s "$body" ] || fail "no pull request body was assembled"
-    grep -qx "Closes #302." "$body" || fail "the body does not link back to the source issue: $(cat "$body")"
+    grep -qx "Closes #302." "$created" || fail "the body does not link back to the source issue: $(cat "$created")"
     grep -q -- "--body-file $body" "$state/gh.log" || fail "the pull request was opened with some other body: $(ghlog)"
-    # The findings are the entire output of the review stage (item 6), and the
-    # pull request is the only place they are worth anything.
+    grep -q "No person has read this diff" "$created" || fail "the body does not say the diff is unread"
+    grep -q "afk/$ticket" "$created" || fail "the body does not name the branch"
+    # The creation-time body cannot carry findings, because nothing has
+    # reviewed anything yet - and it says so, rather than leaving a reader to
+    # wonder whether the section is missing or absent on purpose.
+    if grep -q "duplicated derivation" "$created"; then
+      fail "the body carried the review's findings before the review had run"
+    fi
+    grep -q "Handed over" "$created" \
+      || fail "the creation-time body does not say what a missing hand-off section means: $(cat "$created")"
+    # And the final body does carry them (item 6): they are the entire output
+    # of the review stage, and the pull request is the only place they are
+    # worth anything.
     grep -q "duplicated derivation" "$body" || fail "the review's findings did not travel to the pull request"
     # With the caveat attached to them. A reader who takes them for an approval
     # is making exactly the mistake dropping the verdict was meant to prevent.
-    grep -q "is not an approval" "$body" || fail "the body does not say what the review is not"
-    grep -q "No person has read this diff" "$body" || fail "the body does not say the diff is unread"
-    grep -q "afk/$ticket" "$body" || fail "the body does not name the branch"
+    grep -q "advisory" "$body" || fail "the body does not say what the review is not"
+    grep -q "never once refused that diff" "$body" \
+      || fail "the body does not carry the measured caveat the findings travel with"
 
     echo "case: the body says what the branch does, in the implementer's own words"
     # The reviewer's prose used to be the only generated text in the body, so a
@@ -1249,12 +1391,14 @@ pkgs.runCommand "check-afk-agent-runner"
     # would be another paid call producing prose nothing checks, and these are
     # already audited - the review prompt asks for any claim in them that is
     # not true of the diff.
-    grep -qx "### afk: implement" "$body" \
-      || fail "the branch's own commit messages did not reach the body: $(cat "$body")"
-    grep -q "What the branch says it does" "$body" || fail "the body has no section for them"
-    # And in the right order: what it claims, then what the review made of it.
+    grep -qx "### afk: implement" "$created" \
+      || fail "the branch's own commit messages did not reach the body: $(cat "$created")"
+    grep -q "What the branch says it does" "$created" || fail "the body has no section for them"
+    # And in the right order: what it claims, then what CI and the review made
+    # of it.
     claims_at="$(grep -n "What the branch says it does" "$body" | cut -d: -f1)"
-    review_at="$(grep -n "is not an approval" "$body" | cut -d: -f1)"
+    review_at="$(grep -n "^## Handed over" "$body" | cut -d: -f1)"
+    [ -n "$review_at" ] || fail "the final body has no hand-off section: $(cat "$body")"
     [ "$claims_at" -lt "$review_at" ] \
       || fail "the review's findings come before what the branch claims to do"
 
@@ -1263,6 +1407,55 @@ pkgs.runCommand "check-afk-agent-runner"
     # ends up in master's history. One commit means the implement stage already
     # wrote one in this repository's house style, and the gate passed on it.
     grep -q -- "--title afk: implement" "$state/gh.log" || fail "the pull request title is not the commit's subject: $(ghlog)"
+
+    echo "case: the pull request is opened before any review session starts"
+    # Item 13's first acceptance criterion, and the only way to observe an
+    # ordering between two different mocks: each one records, as it runs, what
+    # the tracker had already been told. The implement session must not see a
+    # pull request; the review session must.
+    [ "$(cat "$state/implement-saw-pr-1")" -eq 0 ] \
+      || fail "a pull request existed before the implementation had converged"
+    [ "$(cat "$state/review-saw-pr")" -ge 1 ] \
+      || fail "the review ran before the pull request was opened (ADR 0007)"
+    [ "$(cat "$state/review-saw-edit")" -eq 0 ] \
+      || fail "the hand-off edit landed before the review had run"
+
+    echo "case: CI is watched on the commit that was pushed, before the review"
+    grep -q "pr view" "$state/gh.log" || fail "CI was never watched: $(ghlog)"
+    [ "$(ci_polls)" -ge 1 ] || fail "the checks were never polled"
+    grep -q "CI is green" "$state/out.log" || fail "the run did not report CI going green: $(cat "$state/out.log")"
+
+    echo "case: the findings and the hand-off label arrive in one edit, at the end"
+    # One `gh pr edit` rather than two, for the reason the claim is one `gh
+    # issue edit`: a pull request carrying the label while its body still had
+    # no findings under it would be saying something untrue for as long as the
+    # second call took.
+    [ "$(grep -c "gh pr edit" "$state/gh.log")" -eq 1 ] \
+      || fail "the hand-off was not a single edit: $(ghlog)"
+    grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
+      || fail "the hand-off label was never applied: $(ghlog)"
+    grep -q "duplicated derivation" "$state/pr-edit-body" \
+      || fail "the edit did not carry the review's findings: $(cat "$state/pr-edit-body")"
+
+    echo "case: the denylist gate and the push are one function, with nothing between"
+    # ADR 0007 §6, asserted structurally rather than behaviourally, because
+    # what it forbids is a future edit rather than an input. The push now
+    # happens more than once per run, so "the gate runs immediately before the
+    # push" has to be a property of the code that pushes rather than of the one
+    # place it used to be written.
+    # Column zero, like the `denied=(` read further down: a Nix indented
+    # string is dedented on its way into the store, so the script on disk does
+    # not carry this file's indentation.
+    sed -n '/^push_branch() {$/,/^}$/p' "$script" > "$work/push-branch"
+    [ -s "$work/push-branch" ] || fail "there is no push_branch function to read"
+    grep -q "push_gate" "$work/push-branch" || fail "push_branch does not run the denylist gate"
+    grep -q "push origin" "$work/push-branch" || fail "push_branch does not push"
+    if grep -qE 'opencode|gh pr|gh issue|review' "$work/push-branch"; then
+      fail "something has been put between the gate and the push: $(cat "$work/push-branch")"
+    fi
+    # And it is the only thing in the runner that pushes.
+    [ "$(grep -c "push origin" "$script")" -eq 1 ] \
+      || fail "the runner pushes from somewhere other than push_branch"
 
     echo "case: a finished ticket leaves nothing in flight, and the next poll runs"
     # The in-flight guard refuses to poll past a leftover worktree, so a
@@ -1287,6 +1480,142 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q -- "--title Unblocked at last" "$state/gh.log" \
       || fail "a multi-commit branch was not titled after its ticket: $(ghlog)"
 
+    echo "case: a red CI run is fixed inside the implement session and pushed to the same branch"
+    # Item 13's third acceptance criterion, and ADR 0004 §6 applied to a
+    # failure it did not anticipate: the fix happens in the session that wrote
+    # the failing commit, because a fix that cannot see what it is fixing is
+    # close to useless. The plan is one clean implementation and one clean fix;
+    # the CI plan is red on the first watch and green on the second.
+    run ci-fix mixed.json fresh "good good" pass "red green"
+    [ "$rc" -eq 0 ] || fail "a branch CI could fix did not finish: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 2 ] || fail "expected one implementation and one CI fix, got $(attempts) session(s)"
+    grep -qx -- --session "$state/args-2" || fail "the CI fix opened a fresh session (ADR 0004 §6)"
+    [ "$(flag_value "$state/args-2" --session)" = ses_fixture ] \
+      || fail "the CI fix continued a session other than the one that wrote the commit"
+    # And it was told what CI said, which is the one thing the model could not
+    # see for itself.
+    grep -q "CI on it is red" "$state/args-2" || fail "the fix was not told CI was red: $(cat "$state/args-2")"
+    grep -q "check afk-agent-runner" "$state/args-2" \
+      || fail "the fix was not told which check was not green: $(cat "$state/args-2")"
+    grep -q "gh run view" "$state/args-2" || fail "the fix was not told how to read the failing log"
+    # The fix reached the same branch on origin, as a second commit rather than
+    # as a replacement: never a force-push (ADR 0007 §4).
+    [ "$(pushed_commits)" -eq 2 ] \
+      || fail "the fix did not reach origin as a further commit: $(pushed_commits) commit(s) there"
+    if grep -qE -- '--force|\+refs/' "$state/gh.log"; then fail "the branch was force-pushed"; fi
+    # One pull request, not two: the second push goes to the branch the first
+    # one opened.
+    [ "$(grep -c "gh pr create" "$state/gh.log")" -eq 1 ] \
+      || fail "a second pull request was opened for the fix: $(ghlog)"
+    grep -q "where the local gate passed" "$state/out.log" \
+      || fail "the runner did not record what CI caught that the local gate did not"
+
+    echo "case: the CI fix round's push is gated too"
+    # ADR 0007 §6. The push happens more than once now, and the second one is
+    # every bit as capable of putting a workflow file on a branch that runs
+    # with this repository's secrets. The fix here writes into secrets/, which
+    # passes the local gate and must not reach origin.
+    run ci-fix-denied mixed.json fresh "good secret" pass "red green"
+    [ "$rc" -ne 0 ] || fail "a CI fix touching a denied path was pushed anyway"
+    grep -qF "secrets/new.yaml" "$state/err.log" \
+      || fail "the refusal did not name the path: $(cat "$state/err.log")"
+    [ "$(pushed_commits)" -eq 1 ] || fail "the denied fix reached origin: $(pushed_commits) commit(s) there"
+
+    echo "case: a CI fix that fails the local gate stops the run without a retry"
+    # A deliberate asymmetry with the implement stage rather than an oversight
+    # (ADR 0007 §5): the local gate has already passed on this branch, so a fix
+    # that fails it is the model going backwards rather than failing to
+    # converge - and unlike the implement stage there is now a pull request a
+    # human can pick up, which is most of what a retry budget was buying.
+    run ci-fix-broken mixed.json fresh "good broken repair" pass "red green"
+    [ "$rc" -ne 0 ] || fail "a CI fix that failed the gate was pushed"
+    [ "$(attempts)" -eq 2 ] || fail "the CI fix was retried: $(attempts) session(s)"
+    grep -q "no retry" "$state/err.log" || fail "did not say the fix gets one session: $(cat "$state/err.log")"
+    [ "$(pushed_commits)" -eq 1 ] || fail "the failed fix reached origin"
+
+    echo "case: CI rounds do not spend the implement stage's retry budget"
+    # The budgets bound different failures, which is why they are separate
+    # (ADR 0007, "Alternatives considered"). This ticket uses all three
+    # implement attempts to converge and then still gets its CI round - which
+    # a shared budget would have refused, exactly where it was most likely to
+    # be earned.
+    run ci-budget mixed.json fresh "broken broken repair good" pass "red green"
+    [ "$rc" -eq 0 ] || fail "a ticket that converged on its last attempt got no CI round: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 4 ] \
+      || fail "expected three implement attempts and one CI fix, got $(attempts) session(s)"
+    [ "$(pushed_commits)" -eq 3 ] || fail "the CI fix did not reach origin: $(pushed_commits) commit(s) there"
+
+    echo "case: a run that exhausts its CI rounds stops, and leaves the pull request open"
+    # Item 13's fourth acceptance criterion. Nothing merges, nothing is closed,
+    # and the hand-off label is withheld - which is the whole of what says from
+    # outside that nobody has finished with this (ADR 0007 §2 and §7).
+    run ci-exhausted mixed.json fresh "good good" pass "red red"
+    [ "$rc" -ne 0 ] || fail "a branch that never went green was reported as done"
+    [ "$(attempts)" -eq 2 ] || fail "expected exactly one CI fix, got $(attempts) session(s)"
+    grep -q "CI round(s)" "$state/err.log" || fail "did not say the rounds ran out: $(cat "$state/err.log")"
+    grep -q "gh pr create" "$state/gh.log" || fail "the pull request is not open for a human to pick up: $(ghlog)"
+    if grep -q -- "--add-label agent-ready-for-review" "$state/gh.log"; then
+      fail "a branch that never went green was handed over: $(ghlog)"
+    fi
+    if grep -q "pr merge" "$state/gh.log"; then fail "the runner merged a red pull request"; fi
+    # And no review was paid for on a branch that cannot merge.
+    [ ! -s "$state/review-args" ] || fail "reviewed a branch whose CI never went green"
+
+    echo "case: a check that never arrives is told apart from a slow one"
+    # The hard half of watching CI, and there is no fact that separates them -
+    # only a bound. A workflow that was never triggered is a configuration
+    # problem rather than a problem with the diff, so it stops the run rather
+    # than being fed back to a model with nothing to fix.
+    run ci-absent mixed.json fresh good pass none
+    [ "$rc" -ne 0 ] || fail "a pull request with no checks at all was handed over"
+    [ "$(ci_polls)" -eq 10 ] || fail "expected ten polls before calling it absent, got $(ci_polls)"
+    grep -q "nothing has reported" "$state/err.log" \
+      || fail "did not say the checks never arrived: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 1 ] || fail "a workflow that never ran was fed back to the model"
+
+    echo "case: a slow one is waited for, and then bounded"
+    run ci-unsettled mixed.json fresh good pass pending
+    [ "$rc" -ne 0 ] || fail "a run that never settled was handed over"
+    [ "$(ci_polls)" -eq 45 ] || fail "expected forty-five polls before giving up, got $(ci_polls)"
+    grep -q "has not settled" "$state/err.log" \
+      || fail "did not say the checks never settled: $(cat "$state/err.log")"
+
+    echo "case: a green rollup on some other commit is not this branch's CI"
+    # The trap that would otherwise bite hardest right after a fix is pushed:
+    # for a window, GitHub still reports the previous commit's checks. Reading
+    # the rollup beside `headRefOid` in one snapshot is what makes the verdict
+    # arrive with the commit it belongs to.
+    run ci-stale mixed.json fresh good pass stale
+    [ "$rc" -ne 0 ] || fail "checks belonging to another commit were accepted as this branch's"
+    grep -q "nothing has reported" "$state/err.log" \
+      || fail "a rollup on the wrong commit did not read as nothing reported: $(cat "$state/err.log")"
+
+    echo "case: a cancelled run reaches no verdict, and is not fed back"
+    run ci-cancelled mixed.json fresh good pass cancelled
+    [ "$rc" -ne 0 ] || fail "a cancelled CI run was treated as green"
+    grep -q "was cancelled" "$state/err.log" || fail "did not say the run was cancelled: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 1 ] || fail "a cancelled run was fed back to the model, which has nothing to fix"
+
+    echo "case: an API that cannot be asked counts as a poll, not as a failure"
+    # Under `set -euo pipefail` a `gh` inside a command substitution takes the
+    # runner with it. One unavailable answer has to travel back as one poll
+    # that saw nothing, so that the bounds above are what stop the run.
+    run ci-apifail mixed.json fresh good pass "apifail apifail green"
+    [ "$rc" -eq 0 ] || fail "two unavailable answers killed the run: $(cat "$state/err.log")"
+    [ "$(ci_polls)" -eq 3 ] || fail "expected three polls, got $(ci_polls)"
+
+    echo "case: a hand-off that could not be written leaves the run in flight"
+    # The findings are the output of the review stage, and a pull request
+    # labelled ready without them would be saying something untrue. So a failed
+    # edit is a failed run rather than a quiet one.
+    export GH_PR_EDIT_FAIL=1
+    run ci-editfail mixed.json fresh good pass green
+    unset GH_PR_EDIT_FAIL
+    [ "$rc" -ne 0 ] || fail "a hand-off that never landed was reported as success"
+    grep -q "could not be written onto it" "$state/err.log" \
+      || fail "did not say the hand-off failed: $(cat "$state/err.log")"
+    [ -n "$(worktrees)" ] || fail "the worktree was torn down without a hand-off"
+
     echo "case: a pull request that could not be opened leaves the run in flight"
     # The branch is pushed by then and there is nothing to be done about that.
     # What must not happen is the worktree being torn down as though the run
@@ -1299,23 +1628,30 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "could not be opened" "$state/err.log" || fail "did not say the pull request failed: $(cat "$state/err.log")"
     [ -n "$(worktrees)" ] || fail "the worktree was torn down without a pull request"
 
-    echo "case: a review that committed anyway does not get its commit pushed"
+    echo "case: a review that committed anyway cannot reach the pull request"
     # Report-only is a pattern match on a command line, not a capability
     # boundary - `git -C . commit` matches neither the prompt's request nor
-    # `reviewOverlay`'s deny - so the runner checks the branch rather than
-    # trusting either. Nothing before the push would otherwise notice: the
-    # session leaves a clean tree, and the implement stage's own checks ran
-    # before the review rather than after it.
+    # `reviewOverlay`'s deny - and this is what gets past both. Under #174 that
+    # was fatal, because the push came afterwards and the commit would have
+    # gone out ungated. Item 13 moved the push in front of the review, so the
+    # guarantee is now the shape of the run: the branch is already on origin,
+    # nothing pushes it again, and the commit stays local.
     #
-    # Interim, along with the pin it asserts: #201 opens the pull request
-    # before this stage runs, and a commit written afterwards then cannot reach
-    # it at all.
+    # This case is that inversion. It used to assert a refusal; it now asserts
+    # that the ticket finishes and the extra commit is nowhere near the pull
+    # request - which is a stronger property than the check it replaced,
+    # because it holds without anything having to notice.
     run review-commits mixed.json fresh good commits
-    [ "$rc" -ne 0 ] || fail "a commit the review wrote was pushed as though it had been gated"
-    grep -q "moved afk/$ticket" "$state/err.log" \
-      || fail "did not say the review moved the branch: $(cat "$state/err.log")"
-    [ -z "$(pushed)" ] || fail "the branch reached origin: $(pushed)"
-    if grep -q "pr create" "$state/gh.log"; then fail "a pull request was opened for it"; fi
+    [ "$rc" -eq 0 ] || fail "a review that committed stopped the ticket: $(cat "$state/err.log")"
+    [ "$(pushed_commits)" -eq 1 ] \
+      || fail "the review's commit reached origin: $(pushed_commits) commit(s) on the branch there"
+    [ "$(git -C "$state/checkout" rev-list --count "origin/master..afk/$ticket")" -eq 2 ] \
+      || fail "the review's commit is not on the local branch, so this case is testing nothing"
+    # Not a gate any more, but not silent either: a session that got past both
+    # controls is worth a line, since it leaves a clean tree and is otherwise
+    # invisible.
+    grep -q "moved afk/$ticket" "$state/out.log" \
+      || fail "did not record that the review moved the branch: $(cat "$state/out.log")"
 
     echo "case: a diff that touches a denied path is refused at the push"
     # docs/agents/afk-eligibility.md rule 1, asked of the diff. #302's prose
