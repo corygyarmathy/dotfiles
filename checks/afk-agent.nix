@@ -37,10 +37,21 @@
         imports = [
           ../modules/services/afk-agent.nix
 
+          # ntfy.nix and monitoring.nix are imported for their option
+          # declarations only: the runner reads the ntfy port and the push
+          # lane's topic from the modules that own them (item 9, #176), so a
+          # node that boots this module needs both declared or the eval
+          # refuses. What is read here is those options' defaults, the same
+          # values production gets on homelab01 - neither stack has to be
+          # running for the module to name where it would publish.
+          ../modules/services/ntfy.nix
+          ../modules/services/monitoring/monitoring.nix
+
           (import ./stub-secrets.nix {
             secrets."gh-ci/afk-agent-app-private-key" = "stub-app-key-VALUE-MUST-NOT-BE-LOGGED";
             secrets."opencode/api-key" = "stub-opencode-key-VALUE-MUST-NOT-BE-LOGGED";
             secrets."opencode/username" = "stub-opencode-user-VALUE-MUST-NOT-BE-LOGGED";
+            secrets."monitoring/ntfy/alerts-token" = "stub-ntfy-token-VALUE-MUST-NOT-BE-LOGGED";
           })
         ];
 
@@ -147,15 +158,17 @@
         )
 
     with subtest("no credential value reaches the journal"):
-        # The unit reads three secrets on every poll. A debug echo left behind
+        # The unit reads four secrets on every poll. A debug echo left behind
         # in the runner would put a repo-write App key into the system journal,
         # which is exactly the mistake nothing else here would catch. The key
-        # is the worse one to lose of the three: unlike the PAT it replaced, it
-        # has no expiry date to bound the damage.
+        # is the worse one to lose of the four: unlike the PAT it replaced, it
+        # has no expiry date to bound the damage. The ntfy token (item 9,
+        # #176) is the newest, and the push credential a phone trusts.
         for value in [
             "stub-app-key-VALUE-MUST-NOT-BE-LOGGED",
             "stub-opencode-key-VALUE-MUST-NOT-BE-LOGGED",
             "stub-opencode-user-VALUE-MUST-NOT-BE-LOGGED",
+            "stub-ntfy-token-VALUE-MUST-NOT-BE-LOGGED",
         ]:
             assert value not in journal, "a credential value was logged"
 
