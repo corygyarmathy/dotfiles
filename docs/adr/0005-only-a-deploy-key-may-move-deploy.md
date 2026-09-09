@@ -24,6 +24,8 @@ POST /repos/corygyarmathy/dotfiles/rulesets
 
 Three further probes, each a throwaway ruleset on a ref that does not exist, separated the cause: the `update` rule type itself is available here (accepted with an empty bypass list), and both `DeployKey` and `RepositoryRole` are accepted as bypass actors. So the limitation is specific to the GitHub Actions app, and exactly one usable exception identity remains.
 
+**Sharpened 2026-09-09 by [ADR 0006](0006-the-runner-is-a-github-app.md).** "Specific to the GitHub Actions app" was the right reading and is now the verified one: the `422` is about _which_ integration, not about the actor type. A GitHub App owned by this account and installed on this repository is accepted as an `Integration` bypass actor, and the bypass works where it counts - at push time. Proven with a controlled pair on a throwaway `update` ruleset over `refs/heads/zz-probe-bypass/**`, the same commit to the same ref: rejected for `corygyarmathy` (`GH013: Cannot update this protected ref`), accepted for the App (`Bypassed rule violations`, and the ref moved). This changes no decision here - `promote` still moves `deploy` with a deploy key - but it removes the ground on which the App was rejected below, and an `Integration` bypass names one App rather than a whole actor type, which is the first negative in Consequences.
+
 ## Decision
 
 **1. `deploy` restricts updates, and the only actor exempt is a deploy key.** A `restrict-deploy-updates` ruleset carries a single `update` rule over `refs/heads/deploy`, with `ci-promote-deploy` - a write-enabled deploy key, and the only deploy key this repository has - as its one bypass actor. Every PAT is now refused, including the operator's, because a fine-grained PAT acts as the repository owner and the owner is not on that list.
@@ -47,7 +49,7 @@ Three further probes, each a throwaway ruleset on a ref that does not exist, sep
 
 - A new standing credential, in the secret store that the one remaining path to `deploy` can already read. It buys nothing against that path; it is only paying for the short one.
 - `promote` - the single step whose silent failure stops fleet upgrades - grew an SSH setup and a secret it can be missing. The empty-secret case fails loudly and says which secret, because the alternative is an SSH authentication error against a ref nobody may push to, which is two layers away from the cause.
-- The `DeployKey` bypass is all-or-nothing: it names the actor *type*, not one key. A second write deploy key added later silently joins the bypass list. There are none today and the audit above is the control.
+- The `DeployKey` bypass is all-or-nothing: it names the actor *type*, not one key. A second write deploy key added later silently joins the bypass list. There are none today and the audit above is the control. This is the negative an `Integration` bypass would remove, since that names one specific App - see the 2026-09-09 annotation above.
 - Recovery from a diverged `deploy` (`.github/workflows/README.md`) now means relaxing two rulesets rather than one.
 - Rotating the key is two coordinated steps - the repository's deploy key and the Actions secret - and getting one without the other means a red `promote` that night.
 
@@ -56,6 +58,8 @@ Three further probes, each a throwaway ruleset on a ref that does not exist, sep
 - **`github-actions[bot]` as the bypass actor**, which is what #190 proposed and what the rest of the pipeline would have made natural. Not available: `422`, above. This is the same organization-only shape as merge queues, and the second time this repository has designed around it.
 - **The repository admin role as the bypass actor.** Accepted by the API, and useless: ADR 0004 §4 rules out a second GitHub account, so `AFK_AGENT_TOKEN` acts as `corygyarmathy`, who is the repository admin. The exemption would cover the exact credential the rule exists to stop.
 - **A dedicated GitHub App**, installed on the repository, with `promote` minting an installation token. Works in principle and is the mechanism GitHub actually intends here. Rejected as strictly more machinery than a deploy key - an app to create and own, a private key with the same secret-store exposure, and a token-minting step in `promote` - for an identical residual risk.
+
+  **Revisited 2026-09-09:** "works in principle" is now "works", verified above, and most of the machinery this bullet priced is already built and owned, because ADR 0006 creates and installs such an App for the AFK runner. The residual risk is no longer identical either - an installation token expires in an hour where a deploy key stands until it is rotated by hand. What is left to weigh is whether `promote` should depend on the runner's App or hold one of its own, and that is a decision, so it belongs in its own ADR rather than in an annotation here.
 - **Accept the exposure and write down why.** Defensible while every write credential is one the operator issued, and it was the pre-committed fallback had no bypass identity existed. Rejected because one does: the cost of being wrong is the fleet moving overnight to an unreviewed revision, and the price of not being wrong turned out to be one key and one ruleset.
 
 ## Verification
