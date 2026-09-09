@@ -53,6 +53,8 @@ All of it against `corygyarmathy/dotfiles` on 2026-09-09, on throwaway rulesets,
 
 The two controls are the point of the table. The silent-ignore behaviour is real and reproducible, so the failure mode does exist - but an App does not hit it. It is refused down a separate path, loudly, by both APIs. GitHub's own assignable-agent feature is an allowlist a custom App does not inherit.
 
+**A custom App is accepted as a ruleset bypass actor, and the bypass works.** ADR 0005 recorded a `422` when it tried to exempt `github-actions[bot]` as an `Integration`, and concluded the limitation was specific to the GitHub Actions app rather than to the actor type. That reading is now verified: this App was accepted as an `Integration` bypass actor on a throwaway `update` ruleset, and a controlled pair showed the bypass working at push time - the same commit to the same ref was rejected for `corygyarmathy` and accepted for the App. It changes nothing here, since this ADR wants the runner restricted rather than exempted, but it is the instrument ADR 0005 could not get.
+
 **The App holds no repository role.** `GET /repos/{owner}/{repo}` under the installation token reports `admin`, `maintain`, `push`, `triage` and `pull` all false; its rights come from installation permissions instead. Two things follow. `gh api user` returns `403 Resource not accessible by integration`, so the runner cannot read its own login from the token - item 12's filter takes the App slug as a parameter instead. And ADR 0005's check passes for this identity directly: `GET /rules/branches/deploy` under the installation token still lists `update`, so the `deploy` restriction is not something the runner's credential is exempt from.
 
 ### The ruleset that #200 proposed
