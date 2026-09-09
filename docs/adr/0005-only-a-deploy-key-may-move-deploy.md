@@ -60,8 +60,12 @@ Three further probes, each a throwaway ruleset on a ref that does not exist, sep
 
 ## Verification
 
-The API refusal above is settled. The half that only a live run can prove is that a real merge to `master` still fast-forwards `deploy` through the new path, since a `promote` that fails is a silent stop to fleet upgrades. Proven in three parts, the first two before the ruleset existed:
+The API refusal above is settled, and so is the negative half: `GET /rulesets/22613803` reports `current_user_can_bypass: never` for `corygyarmathy`, and `GET /rules/branches/deploy` lists the `update` rule as applying. ADR 0004 §4 rules out a second account, so every fine-grained PAT in this repository acts as that user - which is what makes one API field cover `AFK_AGENT_TOKEN`, `FLAKE_UPDATE_TOKEN` and the operator's own credential at once. It is also the reason a live negative test was not run: the only push that would have demonstrated the refusal is a push that must not succeed, and there is no way to rewind `deploy` if it did.
+
+The positive half is that a real merge to `master` still fast-forwards `deploy`, since a `promote` that fails is a silent stop to fleet upgrades. Proven in three parts:
 
 - **The key can push.** `ci-promote-deploy` authenticates as `corygyarmathy/dotfiles` rather than as the user, and pushed and deleted a scratch ref on `github.com` by hand, 2026-09-09.
-- **The `promote` step's own shape works.** The same `GIT_SSH_COMMAND` and explicit refspec, run by hand against `github.com`.
-- **The join** - `promote`, on a runner, past the `update` rule - is the first merge to `master` after this lands, and is the acceptance criterion #190 keeps open until it happens.
+- **The `promote` step's own shape works on a runner.** The merge of #199 fast-forwarded `deploy` over SSH with the key (`7b317e7..ef1a4b4`, run 34315746687). That merge deliberately landed *before* the ruleset was created: creating it first would have left any merge already in flight running the old `GITHUB_TOKEN` promote straight into the new rule.
+- **The join** - `promote`, on a runner, past an active `update` rule - was the next merge after that, #198 (`ef1a4b4..2fdced5`, run 34318554853). The line worth knowing is in that job's log rather than in its exit status: `remote: Bypassed rule violations for refs/heads/deploy`. GitHub says there that the `update` rule fired and the key was the exemption, which is the whole claim - a green `promote` alone would look identical if the ruleset had silently failed to apply.
+
+Should that promotion ever be the thing that breaks, the ruleset is one call to remove (`gh api repos/{owner}/{repo}/rulesets/22613803 --method DELETE`) and the fleet simply stops moving in the meantime rather than moving somewhere wrong.
