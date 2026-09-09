@@ -188,6 +188,18 @@ let
     # not have caught it: the build sandbox has stdenv's `diff` on PATH.
     diff = pkgs.diffutils;
     nix = config.nix.package;
+    # Not a tool the runner drives - a tool the *model* drives, through
+    # opencode's bash tool, and the reason it is pinned here is that leaving it
+    # implicit cost a live run. opencode spawns `$SHELL` for every bash call it
+    # makes; systemd sets `$SHELL` from the service account's passwd entry; and
+    # `isSystemUser` accounts get `nologin`. So every command the model ran came
+    # back "This account is currently not available." while the runner's own
+    # `gh` and `git` calls, which never go through a shell, worked perfectly -
+    # a ticket that claims, clones and isolates and then cannot read a file.
+    # `environment.SHELL` below points at this, so the account keeps `nologin`
+    # and stays unloginnable; the shell is a property of the unit, not of the
+    # user.
+    bash = pkgs.bashInteractive;
   };
 
   # Rule 1 of docs/agents/afk-eligibility.md, held here as the runner's own
@@ -1163,6 +1175,32 @@ let
       )}
 
       ${lib.concatMapStringsSep "\n      " (name: "require_tool ${name}") (lib.attrNames toolchain)}
+
+      # A shell that will actually run a command, which is not the same
+      # question as `bash` being on the PATH above and is why this is asked
+      # separately. opencode spawns `$SHELL` for every bash call the model
+      # makes, so a `$SHELL` that refuses leaves the model unable to read a
+      # file, run a test or make a commit - while every `gh` and `git` call
+      # this script makes itself keeps working, because none of them go
+      # through a shell. That asymmetry is what made it expensive to find: the
+      # run claims a ticket, clones, cuts a worktree, and only then discovers
+      # that the agent inside it can do nothing.
+      #
+      # Executable is not enough to test: `nologin` is executable, and exits 1
+      # with a message. So run something through it.
+      require_shell() {
+        if [ -z "''${SHELL:-}" ]; then
+          echo "afk-agent: SHELL is unset; opencode's bash tool has no shell to spawn" >&2
+          exit 1
+        fi
+        if ! "$SHELL" -c 'exit 0' >/dev/null 2>&1; then
+          echo "afk-agent: SHELL is '$SHELL', which will not run a command - opencode's bash tool cannot work through it" >&2
+          exit 1
+        fi
+        echo "afk-agent: shell '$SHELL' runs commands"
+      }
+
+      require_shell
 
       # --- the credential, which expires part-way through a run -------------
       #
@@ -2671,6 +2709,15 @@ in
       # it from the account's passwd entry, which is the same directory - but
       # only by coincidence, and only until someone changes one of them.
       environment.HOME = stateDir;
+
+      # opencode spawns `$SHELL` for every bash call the model makes. Left
+      # unset, systemd fills it in from the service account's passwd entry,
+      # which is `nologin` for an `isSystemUser` account - so this is set here
+      # rather than by giving the account a login shell it has no other use
+      # for. See `toolchain.bash`, and `require_shell` in the preflight, which
+      # is what turns getting this wrong into a failed empty poll rather than a
+      # ticket claimed and then abandoned.
+      environment.SHELL = lib.getExe toolchain.bash;
 
       serviceConfig = {
         Type = "oneshot";
