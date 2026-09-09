@@ -20,16 +20,23 @@
 # and the stuck path that cleans up after a failure (#175) each extend the same
 # script.
 #
-# WHAT A PASSING REVIEW DOES AND DOES NOT MEAN. The review stage proves, from
-# the session transcript rather than from the session's own account, that the
-# `code-review` skill ran in a fresh contained context across its two axes,
-# and it fails closed when it cannot. What it does not establish is that the
-# diff is correct: measured against the one diff in this repository with an
-# independently graded answer, this model passed a known-defective
-# implementation three times out of three (plan item 6, "Measured"). So the
-# stage's value is a contained review, a set of findings for whoever merges,
-# and a refusal that is occasionally right - not a correctness guarantee, and
-# item 7 should not treat it as one.
+# THE REVIEW STAGE IS ADVISORY, AND THAT IS A MEASURED DECISION RATHER THAN A
+# GAP. It proves, from the session transcript rather than from the session's
+# own account, that the `code-review` skill ran in a fresh contained context
+# across its two axes, and it fails closed when it cannot. It does not decide
+# whether the diff is correct, and it no longer asks for a verdict at all.
+#
+# Twenty-five runs against the one diff in this repository with an
+# independently graded answer say it cannot: two models and three fail rubrics
+# never once refused that diff *for the defect in it* (plan item 6, its three
+# "Measured" notes). The rubric that gated most reliably gated on both the
+# flawed diff and the correct one, for reasons neither model endorsed. So a
+# refusal here would have been noise with a human hand-off attached to it.
+#
+# What the stage is worth is the contained, verified pass itself and the
+# findings it leaves for whoever merges. Item 7 attaches those findings; it
+# must not read them as a decision, and there is no longer a verdict for it to
+# mistake for one.
 #
 # Nothing here pushes, opens a pull request, or writes to the tracker past the
 # claim. That is not an omission: those verbs belong to the stages above, and
@@ -316,19 +323,24 @@ let
   # session that reasons its way toward a neighbouring tree is not contained
   # from reaching it by permissions alone.
   #
-  # THE VERDICT LINE exists because a shell script cannot read prose. The
-  # stage needs one bit out of a page of English, and asking for it in a fixed
-  # shape is cheaper and far more legible than parsing for it.
+  # THERE IS NO VERDICT LINE, AND ASKING FOR ONE WAS THE MISTAKE THIS PROMPT
+  # USED TO MAKE. Earlier drafts closed with `AFK-REVIEW-VERDICT: pass|fail`,
+  # because a shell script cannot read prose and the stage wanted one bit out
+  # of a page of English. It got the bit; the bit was not about the diff.
   #
-  # WHAT MAY FAIL A TICKET is deliberately narrow, and the narrowness is the
-  # finding rather than a caution. Measured on 2026-09-08 against the pilot's
-  # own holdout pair: this model, reviewing a diff with a known false-positive
-  # bug in it, returned `pass` on all three runs and twice certified in prose
-  # the one acceptance criterion that does not hold. A reviewer that cannot be
-  # trusted to catch a defect must not be trusted to invent one either, so
-  # style, naming and structure are reported and never fatal - they are for
-  # the human who merges - and the two things it may fail on are the two
-  # closest to a fact about the diff.
+  # Measured across twenty-five runs on the pilot's holdout pair, over two
+  # models and three fail rubrics (plan item 6). The rubric that produced
+  # `fail` most reliably produced it on the correct implementation too, and
+  # every refusal of the defective one was grounded on something other than
+  # its defect - twice on a missing CI matrix entry a `grep` finds every time
+  # and item 5's gate already catches. Asking a reviewer for a decision it
+  # cannot make does not get a worse decision, it gets a confident one.
+  #
+  # So this prompt asks for findings and a summary of them, and nothing that
+  # reads as an outcome. What replaced the verdict is the closing summary
+  # below: naming the worst finding on each axis is the thing every measured
+  # run did well and did unprompted, and it is what the human merging wants
+  # from a page of review prose.
   reviewPrompt = pkgs.writeText "afk-agent-review-prompt" ''
     Review the work on this branch. The fixed point is BASE. The spec is
     GitHub issue #ISSUE; read it with `gh issue view ISSUE`.
@@ -349,23 +361,24 @@ let
     - Report findings only. Change no files, commit nothing, push nothing,
       and do not edit, close or comment on the issue.
 
-    Finish your answer with a verdict line, exactly this shape and nothing
-    after it:
+    Your review is advisory. It does not decide whether this branch merges,
+    and nothing downstream reads it as a decision - a person does, next to
+    the diff. So do not return a verdict, a pass/fail, an approval or a
+    recommendation to merge or not to merge, and do not rank the diff as
+    acceptable or unacceptable overall. Report what you found.
 
-    AFK-REVIEW-VERDICT: pass
-
-    or
-
-    AFK-REVIEW-VERDICT: fail
-
-    Fail only for these two, and nothing else:
+    Two kinds of finding are worth the most to that person, so say plainly
+    when you have one:
 
     - the diff does not do what the ticket asked, or does it wrongly
     - a claim in a commit message on this branch is not true of the diff
 
-    Style, naming, structure and taste findings are worth reporting and are
-    never a fail: they go to the human who merges this. Judge the code, not
-    the commit message's prose.
+    Style, naming, structure and taste findings are worth reporting too, and
+    are worth less. Judge the code, not the commit message's prose.
+
+    Finish with a short summary naming the most serious finding on each axis,
+    or saying that the axis found nothing. Say how sure you are of anything
+    you could not check by running it.
   '';
 
   # Report-only, enforced through the permission layer rather than only asked
@@ -430,8 +443,9 @@ let
       # Turn a session title back into a session id, or print nothing.
       #
       # Written once because both stages need it and the pipeline is not
-      # trivial. `|| true` on the end is the same guard the verdict grep
-      # carries, and for the same reason: this is only ever called inside a
+      # trivial. `|| true` on the end is load-bearing rather than tidy, for the
+      # reason the review stage's own greps carry one: this is only ever
+      # called inside a
       # command substitution, and under `set -euo pipefail` an `opencode` that
       # fails or a `jq` that finds nothing would abort the runner right there -
       # before either caller's own `die` could say which session it was looking
@@ -952,7 +966,7 @@ let
       review_session="$(session_id_for "$worktree" "$review_title")"
 
       [ -n "$review_session" ] \
-        || die "#$number: the review exited 0 but no session titled '$review_title' can be found, so there is nothing to read a verdict out of"
+        || die "#$number: the review exited 0 but no session titled '$review_title' can be found, so there is no transcript to verify it from"
 
       # Written to a file before jq is pointed at it, for the reason item 1
       # recorded: piping `opencode export` straight into jq truncates on large
@@ -1042,12 +1056,12 @@ let
 
       log "#$number: review ran the code-review skill across $axes axes"
 
-      # --- the findings, and the one bit that decides --------------------
+      # --- the findings, which are the whole output of this stage -----------
       #
-      # The findings are kept whatever the verdict says, because they are worth
-      # more on the pull request - where the human who has to merge it reads
-      # them alongside the diff - than they are as a gate. Item 7 (#174)
-      # attaches this file; nothing here is the last reader of it.
+      # They are worth more on the pull request - where the human who has to
+      # merge it reads them alongside the diff - than they ever were as a gate.
+      # Item 7 (#174) attaches this file; nothing here is the last reader of
+      # it, and nothing here decides anything from it.
       #
       # Deliberately NOT fed back to the implement session to be fixed. Item 6
       # originally allowed one fix-and-recheck, and it was dropped on purpose:
@@ -1055,8 +1069,9 @@ let
       # commit, and the gate cannot tell a correct change from a plausible
       # green one. A wrong finding would then cost a real edit and consume the
       # finding itself, where leaving it on the PR costs nothing and keeps it
-      # legible. So a failing review hands the ticket to a person (#175), and
-      # never to another attempt.
+      # legible. That reasoning outlived the verdict it was written for: with
+      # the stage advisory, every finding now travels to the pull request, and
+      # none of them is ever handed back to the model that wrote the code.
       jq -r '[ .messages[]
                | select(.info.role == "assistant")
                | .parts[]? | select(.type == "text") | .text
@@ -1066,44 +1081,21 @@ let
       # still emits its newline, so the file is one byte when the session
       # produced no text at all and `[ -s ]` would call that a report. Found by
       # removing this branch and watching every case still pass.
-      grep -q '[^[:space:]]' "$review_dir/findings.md" \
-        || die "#$number: the review session produced no closing report to read a verdict out of"
-
-      # One line, one shape, last one wins. Anchored so that a verdict quoted
-      # mid-report - the prompt above prints both spellings as examples, and a
-      # model that echoes its instructions back is ordinary - cannot be
-      # mistaken for the verdict itself.
       #
-      # The trailing `|| true` is load-bearing rather than tidy. grep exits 1
-      # when it matches nothing, and under this script's `set -euo pipefail` an
-      # unguarded command substitution in an assignment aborts the runner right
-      # here - with a bare non-zero status and none of the diagnosis the `*)`
-      # branch below exists to print. A report with no verdict in it is the
-      # commonest thing this stage will see go wrong, so it has to reach that
-      # branch and be named. Found by removing the branch and watching the
-      # check still pass, which is the only way a dead-code path shows up.
-      verdict="$(
-        grep -oE '^AFK-REVIEW-VERDICT: (pass|fail)$' "$review_dir/findings.md" \
-          | tail -n 1 \
-          | sed 's/^AFK-REVIEW-VERDICT: //' || true
-      )"
+      # Still fatal now that the stage is advisory, and for a reason that
+      # survived the verdict: the findings are what this stage produces. A
+      # review that verifiably ran and then said nothing has produced nothing
+      # for the pull request to carry, and passing it on as though it had is
+      # the same silent failure the checks above exist to refuse.
+      grep -q '[^[:space:]]' "$review_dir/findings.md" \
+        || die "#$number: the review session produced no closing report, so this stage has nothing to hand to the pull request"
 
-      case "$verdict" in
-        pass)
-          log "#$number: review passed; findings are in $review_dir/findings.md for the pull request"
-          ;;
-        fail)
-          die "$(printf '#%s: the review refused this implementation. Its findings:\n\n%s' \
-            "$number" "$(cat "$review_dir/findings.md")")"
-          ;;
-        *)
-          # Fail closed, and say which of the two it was: a review whose
-          # verdict cannot be read has not passed, and the difference between
-          # "it said something else" and "it said nothing" is the difference
-          # between a prompt to fix and a stage to debug.
-          die "#$number: the review produced no readable verdict line, so nothing here can say whether it passed. Its closing report was:$(printf '\n\n%s' "$(cat "$review_dir/findings.md")")"
-          ;;
-      esac
+      # No verdict is read out of it, and that is the finding of plan item 6
+      # rather than an omission - see the prompt above. The stage's outcome is
+      # decided entirely by the provenance checks: a review that can be shown
+      # to have run gets its findings carried, and one that cannot has already
+      # died above.
+      log "#$number: review ran and left $(wc -l < "$review_dir/findings.md") lines of findings in $review_dir/findings.md for the pull request; this stage is advisory and does not gate (plan item 6)"
 
       log "#$number: implemented and reviewed on $branch; pushing and raising the pull request is item 7 (#174)"
     '';
