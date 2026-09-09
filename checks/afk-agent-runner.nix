@@ -202,6 +202,34 @@ pkgs.runCommand "check-afk-agent-runner"
           exit 1
         fi
         ;;
+      # Item 8's hand-back comment, recorded like every other verb and
+      # failable, because the relabel that follows it must not depend on it.
+      "issue comment")
+        if [ -n "''${GH_COMMENT_FAIL:-}" ]; then
+          echo "mock gh: refusing to comment" >&2
+          exit 1
+        fi
+        keep_arg "$OC_STATE/stuck-body" --body-file "$@"
+        ;;
+      # What the dead-run hand-back reads a ticket's labels from, to keep a
+      # hand-back whose teardown failed last poll from commenting twice.
+      "issue view")
+        if [ -n "''${GH_STUCK_ALREADY:-}" ]; then
+          printf '{"labels":[{"name":"agent-stuck"}]}\n'
+        else
+          printf '{"labels":[{"name":"agent-working"}]}\n'
+        fi
+        ;;
+      # The other question the dead-run hand-back asks before tearing a branch
+      # down: a leftover beside an open pull request is a finished ticket's
+      # orphaned worktree, not a stuck ticket's.
+      "pr list")
+        if [ -n "''${GH_PR_OPEN:-}" ]; then
+          printf '[{"number":999}]\n'
+        else
+          printf '[]\n'
+        fi
+        ;;
       # The one verb item 7 adds, and the only one that produces something a
       # person has to act on. It prints a URL because the runner logs one, and
       # it can be made to fail, which is how the case below observes that a
@@ -273,6 +301,14 @@ pkgs.runCommand "check-afk-agent-runner"
           exit 1
         fi
         keep_arg "$OC_STATE/pr-edit-body" --body-file "$@"
+        ;;
+      # The stuck path's second half on a run that failed past the push: the
+      # pull request gets the same story the issue does, and is left open.
+      "pr comment")
+        if [ -n "''${GH_PRCOMMENT_FAIL:-}" ]; then
+          echo "mock gh: refusing to comment on the pull request" >&2
+          exit 1
+        fi
         ;;
       *)
         echo "mock gh: unexpected invocation: $*" >&2
@@ -358,6 +394,13 @@ pkgs.runCommand "check-afk-agent-runner"
         printf '%s\n' "$@" > "$OC_STATE/args-$n"
         grep -c "pr create" "$GH_LOG" > "$OC_STATE/implement-saw-pr-$n" || true
         printf '%s\n' "''${OPENCODE_CONFIG_CONTENT:-}" > "$OC_STATE/overlay-$n"
+        # Where the runner put this attempt, recorded from inside it: every
+        # exit past the isolation - a pull request, and every kind of
+        # hand-back - tears the worktree down now, so this record is the only
+        # way to assert what the stage worked in.
+        pwd > "$OC_STATE/worktree-cwd"
+        git rev-parse --abbrev-ref HEAD > "$OC_STATE/worktree-branch" 2>/dev/null
+        [ -f README.md ] && : > "$OC_STATE/worktree-tree"
         opened=yes
         case "$(sed -n "''${n}p" "$OC_PLAN")" in
           good)   echo fix > "fix-$n.txt"; git add -A; git commit -qm "afk: implement" ;;
@@ -655,6 +698,17 @@ pkgs.runCommand "check-afk-agent-runner"
     ]
     JSON
 
+    # A title with nothing slugifiable in it: the slug collapses to the bare
+    # number plus a trailing dash, which the runner's own slug check refuses.
+    # It is the cheapest ticket that gets claimed and then cannot even name a
+    # branch, and the stuck path has to work without a worktree to tear down.
+    cat > "$work/fixtures/unsafe-slug.json" <<'JSON'
+    [
+      { "number": 321, "title": "!!!", "body": "Nothing denied.",
+        "assignees": [], "blockedBy": { "nodes": [], "totalCount": 0 } }
+    ]
+    JSON
+
     cat > "$work/fixtures/second-ticket.json" <<'JSON'
     [
       { "number": 330, "title": "A different ticket", "body": "Nothing denied.",
@@ -812,20 +866,21 @@ pkgs.runCommand "check-afk-agent-runner"
     [ -z "$upstream" ] || fail "the ticket branch tracks $upstream"
 
     echo "case: the ticket is worked in a real, isolated checkout of the base branch"
-    # Asked of a run that stopped before the push, because a run that reaches
-    # the push takes its worktree with it (item 7 tears it down, or the next
-    # poll would refuse to start). Three attempts that exit non-zero without
-    # committing is the cheapest way to hold one still: the isolation is
-    # already complete by then, and nothing after it has run.
+    # Asked of a run that hands its ticket back at the end, because every exit
+    # past the isolation - a pull request, and every kind of hand-back - takes
+    # the worktree with it now. Three attempts that exit non-zero without
+    # committing is the cheapest way to get there, and what the implement
+    # stage worked in is asserted from the record the mock kept from inside
+    # the worktree the runner put it in: the directory, the branch, and a
+    # working tree with the seed's files in it.
     run isolate mixed.json fresh "error error error"
     [ "$rc" -ne 0 ] || fail "an implementation that never ran was reported as done"
-    [ "$(worktrees)" = "302-unblocked-at-last" ] || fail "worktree not isolated: $(worktrees)"
-    # An isolated worktree, not just a directory: a real checkout of the base
-    # branch, on its own branch, with nothing of the seed's history missing.
-    [ -f "$state/worktrees/302-unblocked-at-last/README.md" ] \
-      || fail "the worktree has no working tree"
-    head="$(git -C "$state/worktrees/302-unblocked-at-last" rev-parse --abbrev-ref HEAD)"
-    [ "$head" = "afk/302-unblocked-at-last" ] || fail "worktree is on $head"
+    grep -qx "$state/worktrees/$ticket" "$state/worktree-cwd" \
+      || fail "the implement attempt did not run in the isolated worktree: $(cat "$state/worktree-cwd" 2>/dev/null)"
+    grep -qx "afk/$ticket" "$state/worktree-branch" \
+      || fail "the worktree was not on its own branch: $(cat "$state/worktree-branch" 2>/dev/null)"
+    [ -f "$state/worktree-tree" ] || fail "the worktree has no working tree"
+    [ -z "$(worktrees)" ] || fail "a handed-back ticket left its worktree: $(worktrees)"
 
     echo "case: a ticket whose scope names a denied path is refused before the claim"
     run denied-then-clean denied-then-clean.json
@@ -880,6 +935,22 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
     [ "$(branches)" = "afk/320-fix-the-bar-again-v2" ] \
       || fail "unsafe or unexpected branch name: $(branches)"
+
+    echo "case: a ticket that cannot even name a branch is still handed back"
+    # The hand-back starts before the worktree does. The claim has landed by
+    # the time a slug is refused, so a title with nothing slugifiable in it
+    # must still end in a comment, a relabel and a clean state - and the
+    # teardown must have nothing to trip over.
+    run stuck-unsafe-slug unsafe-slug.json
+    [ "$rc" -ne 0 ] || fail "an unnameable ticket was reported as done"
+    grep -q "not a safe slug" "$state/err.log" \
+      || fail "did not say why it stopped: $(cat "$state/err.log")"
+    grep -q "gh issue comment 321 " "$state/gh.log" \
+      || fail "no comment was left on the ticket: $(ghlog)"
+    grep -q "gh issue edit 321 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not relabelled: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "a worktree exists for a branch that was never cut"
+    [ -z "$(branches)" ] || fail "a branch was cut anyway"
 
     echo "case: a clean first attempt is one attempt, and the gate is what says so"
     run implement-first mixed.json fresh good
@@ -965,14 +1036,47 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "exited $rc on the third attempt: $(cat "$state/err.log")"
     [ "$(attempts)" -eq 3 ] || fail "expected three attempts, got $(attempts)"
 
-    echo "case: the loop stops after two retries rather than running on"
-    # The bound, and the reason this file exists at all for the implement stage:
-    # nothing else distinguishes a loop that is still trying from one that will
-    # never stop, and each turn of it spends money against OpenCode Go's cap.
-    run implement-exhausted mixed.json fresh "broken broken broken"
+    echo "case: a ticket that exhausts its retries is handed back - comment, relabel, teardown, no PR"
+    # The implement stage's bound, and item 8's acceptance criterion in the
+    # plan's own test shape: a ticket engineered to fail, as three attempts
+    # that can never pass the gate. What must come out the other end is on the
+    # tracker and in git, not in the exit code alone: a comment carrying the
+    # gate's verdict, `agent-working` swapped for `agent-stuck` in one edit,
+    # and neither a worktree, a branch, a push, nor a pull request left
+    # behind. The count below is still the implement stage's bound: the
+    # hand-back starts only after it.
+    run stuck-exhausted mixed.json fresh "broken broken broken"
     [ "$rc" -ne 0 ] || fail "a ticket that never passed the gate was reported as done"
     [ "$(attempts)" -eq 3 ] || fail "expected exactly three attempts, got $(attempts)"
-    grep -q "3 attempts" "$state/err.log" || fail "did not say the budget ran out: $(cat "$state/err.log")"
+    grep -q "3 attempts" "$state/err.log" \
+      || fail "did not say the budget ran out: $(cat "$state/err.log")"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "no comment was left on the ticket: $(ghlog)"
+    grep -q "the gate failed" "$state/stuck-body" \
+      || fail "the comment does not say why the run stopped: $(cat "$state/stuck-body" 2>/dev/null)"
+    grep -q "agent-stuck" "$state/stuck-body" \
+      || fail "the comment does not say what the ticket was relabelled to: $(cat "$state/stuck-body")"
+    grep -q "gh issue edit 302 .* --remove-label agent-working --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not relabelled away from the runner's claim: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "a handed-back ticket left its worktree: $(worktrees)"
+    [ -z "$(branches)" ] || fail "a handed-back ticket left its branch: $(branches)"
+    [ -z "$(pushed)" ] || fail "a handed-back ticket pushed something: $(pushed)"
+    if grep -q "pr create" "$state/gh.log"; then fail "a pull request was opened for a stuck ticket: $(ghlog)"; fi
+
+    echo "case: a comment that cannot be posted does not stop the hand-back"
+    # The relabel is the part that outlives the run; the comment is the part
+    # that explains it. A comment the tracker refused must still end in a
+    # handed-back ticket and a clean state, with the reason in the journal -
+    # which is why the hand-back's tracker writes are guarded rather than
+    # fatal, and the exit is red either way.
+    export GH_COMMENT_FAIL=1
+    run stuck-comment-fails mixed.json fresh "broken broken broken"
+    unset GH_COMMENT_FAIL
+    [ "$rc" -ne 0 ] || fail "a failed comment was reported as success"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the relabel did not survive a failed comment: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "the teardown did not survive a failed comment"
+    [ -z "$(branches)" ] || fail "the branch survived a failed comment"
 
     echo "case: exiting 0 without committing is a failure, not a success"
     # Measured in the pilot rather than imagined: runs that finished by
@@ -1604,29 +1708,56 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "two unavailable answers killed the run: $(cat "$state/err.log")"
     [ "$(ci_polls)" -eq 3 ] || fail "expected three polls, got $(ci_polls)"
 
-    echo "case: a hand-off that could not be written leaves the run in flight"
+    echo "case: a hand-off that could not be written hands the ticket back"
     # The findings are the output of the review stage, and a pull request
-    # labelled ready without them would be saying something untrue. So a failed
-    # edit is a failed run rather than a quiet one.
+    # labelled ready without them would be saying something untrue. So a
+    # failed edit is a failed run rather than a quiet one - and the failure is
+    # past the push, so the hand-back reaches the pull request too: the same
+    # story on both, the pull request left open without the hand-off label,
+    # the worktree gone and the branch untouched.
     export GH_PR_EDIT_FAIL=1
     run ci-editfail mixed.json fresh good pass green
     unset GH_PR_EDIT_FAIL
     [ "$rc" -ne 0 ] || fail "a hand-off that never landed was reported as success"
     grep -q "could not be written onto it" "$state/err.log" \
       || fail "did not say the hand-off failed: $(cat "$state/err.log")"
-    [ -n "$(worktrees)" ] || fail "the worktree was torn down without a hand-off"
+    [ -z "$(worktrees)" ] || fail "the hand-back left its worktree: $(worktrees)"
+    [ "$(branches)" = "afk/$ticket" ] \
+      || fail "the pushed branch did not survive the hand-back: $(branches)"
+    [ "$(pushed)" = "afk/$ticket" ] || fail "the branch left origin: $(pushed)"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "no comment was left on the ticket: $(ghlog)"
+    grep -q "gh pr comment" "$state/gh.log" \
+      || fail "the pull request was never told what stopped: $(ghlog)"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not relabelled: $(ghlog)"
+    if grep -qE "pr close|pr merge" "$state/gh.log"; then
+      fail "the hand-back closed or merged the pull request: $(ghlog)"
+    fi
 
-    echo "case: a pull request that could not be opened leaves the run in flight"
-    # The branch is pushed by then and there is nothing to be done about that.
-    # What must not happen is the worktree being torn down as though the run
-    # had finished, which would hide a claimed ticket with no pull request
-    # behind a quiet, empty tracker.
+    echo "case: a pull request that could not be opened hands the ticket back"
+    # The branch is pushed by then, so there is no pull request for the
+    # hand-back to reach - but the work it holds passed the gate, so the
+    # branch stays on origin and locally, with the comment saying a pull
+    # request can be opened from it by hand. The worktree is the only thing
+    # that goes.
     export GH_PR_FAIL=1
     run raise-prfail mixed.json fresh good pass
     unset GH_PR_FAIL
     [ "$rc" -ne 0 ] || fail "a pull request that was never opened was reported as success"
-    grep -q "could not be opened" "$state/err.log" || fail "did not say the pull request failed: $(cat "$state/err.log")"
-    [ -n "$(worktrees)" ] || fail "the worktree was torn down without a pull request"
+    grep -q "could not be opened" "$state/err.log" \
+      || fail "did not say the pull request failed: $(cat "$state/err.log")"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "no comment was left on the ticket: $(ghlog)"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not relabelled: $(ghlog)"
+    grep -q "reached origin and is kept there" "$state/stuck-body" \
+      || fail "the comment does not say the pushed branch was kept: $(cat "$state/stuck-body")"
+    if grep -q "pr comment" "$state/gh.log"; then fail "commented on a pull request that never opened: $(ghlog)"; fi
+    [ -z "$(worktrees)" ] || fail "the worktree survived the hand-back"
+    [ "$(branches)" = "afk/$ticket" ] \
+      || fail "the pushed branch did not survive the hand-back: $(branches)"
+    [ "$(pushed)" = "afk/$ticket" ] || fail "the pushed branch left origin: $(pushed)"
 
     echo "case: a review that committed anyway cannot reach the pull request"
     # Report-only is a pattern match on a command line, not a capability
@@ -1723,18 +1854,149 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "not a safe name" "$state/err.log" || fail "did not refuse the entry by name: $(cat "$state/err.log")"
     [ -z "$(pushed)" ] || fail "the branch reached origin: $(pushed)"
 
-    echo "case: one ticket at a time - a live worktree stops the next poll"
-    # Reusing the state `implement-exhausted` left behind: #302 is claimed and
-    # its worktree is on disk because that run died mid-ticket. systemd cannot
-    # prevent this on its own - two runs never overlap, but a run that died
-    # leaves exactly this behind - so the runner has to refuse, loudly, rather
-    # than start a second ticket beside it. A run that *finished* leaves
-    # nothing, which is a different case and is asserted above.
-    run implement-exhausted second-ticket.json reuse
-    [ "$rc" -ne 0 ] || fail "started a second ticket while one was still in flight"
-    [ "$(claims)" -eq 0 ] || fail "claimed #330 with #302 unfinished: $(ghlog)"
-    grep -qi "still here" "$state/err.log" || fail "did not say why it refused: $(cat "$state/err.log")"
-    [ "$(worktrees)" = "302-unblocked-at-last" ] || fail "the in-flight worktree was disturbed"
+    echo "case: a dead run that never pushed is handed back, and the next ticket runs"
+    # Item 8's other half: a worktree on disk beside a claimed ticket is what
+    # a run killed mid-ticket looks like to the next poll. The guard hands it
+    # back - comment, relabel, teardown - and the poll carries on to #330,
+    # which is the difference between a pipeline that wedges on its first
+    # casualty and one that does not. Built here the way a kill would leave
+    # it: a finished ticket's worktree put back by hand, with its branch
+    # struck from origin so nothing was ever pushed.
+    run stuck-guard mixed.json fresh good pass
+    git -C "$work/origin.git" update-ref -d "refs/heads/afk/$ticket"
+    git -C "$state/checkout" worktree add "$state/worktrees/$ticket" "afk/$ticket"
+    run stuck-guard second-ticket.json reuse
+    [ "$rc" -eq 0 ] || fail "the poll after a dead run refused to start: $(cat "$state/err.log")"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "the dead run's ticket got no comment: $(ghlog)"
+    grep -q "gh issue edit 302 .* --remove-label agent-working --add-label agent-stuck" "$state/gh.log" \
+      || fail "the dead run's ticket was not relabelled: $(ghlog)"
+    grep -q "gh issue edit 330 .* --remove-label ready-for-agent" "$state/gh.log" \
+      || fail "the next ticket was never claimed: $(ghlog)"
+    grep -q "gh pr create" "$state/gh.log" \
+      || fail "the next ticket reached no pull request: $(ghlog)"
+    [ -z "$(worktrees)" ] \
+      || fail "the dead run's worktree survived the hand-back: $(worktrees)"
+    [ "$(branches)" = "afk/330-a-different-ticket" ] \
+      || fail "the handed-back ticket's branch survived, or the next ticket's did not: $(branches)"
+    [ "$(pushed)" = "afk/330-a-different-ticket" ] \
+      || fail "expected only the next ticket's branch on origin: $(pushed)"
+    if git -C "$work/origin.git" show-ref --verify --quiet "refs/heads/afk/$ticket"; then
+      fail "the dead run's branch survived on origin"
+    fi
+
+    echo "case: a hand-back that already happened is not commented twice"
+    # The relabel lands before the teardown, so a hand-back whose teardown
+    # failed last poll leaves exactly this shape: an `agent-stuck` ticket and
+    # a worktree. The next pass must finish the teardown and write nothing.
+    run stuck-guard-already mixed.json fresh good pass
+    git -C "$work/origin.git" update-ref -d "refs/heads/afk/$ticket"
+    git -C "$state/checkout" worktree add "$state/worktrees/$ticket" "afk/$ticket"
+    export GH_STUCK_ALREADY=1
+    run stuck-guard-already second-ticket.json reuse
+    unset GH_STUCK_ALREADY
+    [ "$rc" -eq 0 ] \
+      || fail "the poll after a partial hand-back refused to start: $(cat "$state/err.log")"
+    if grep -q "gh issue comment 302 " "$state/gh.log"; then
+      fail "a handed-back ticket was commented on twice: $(ghlog)"
+    fi
+    if grep -q "gh issue edit 302 " "$state/gh.log"; then
+      fail "a handed-back ticket was relabelled twice: $(ghlog)"
+    fi
+    [ -z "$(worktrees)" ] || fail "the teardown did not finish: $(worktrees)"
+    grep -q "gh issue edit 330 " "$state/gh.log" \
+      || fail "the next ticket was never claimed: $(ghlog)"
+
+    echo "case: a dead run's pushed branch is kept, not torn down"
+    # A run killed between the push and the pull request leaves a branch on
+    # origin holding work the gate passed on. The hand-back asks origin
+    # directly - the dead run left no memory of what it did - and keeps
+    # pushed work, locally and on origin, with the comment saying a pull
+    # request can be opened from it by hand.
+    run stuck-guard-remote mixed.json fresh good pass
+    git -C "$state/checkout" worktree add "$state/worktrees/$ticket" "afk/$ticket"
+    run stuck-guard-remote second-ticket.json reuse
+    [ "$rc" -eq 0 ] || fail "the poll refused to start: $(cat "$state/err.log")"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "the dead run's ticket got no comment: $(ghlog)"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the dead run's ticket was not relabelled: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "the dead run's worktree survived: $(worktrees)"
+    [ "$(branches)" = "$(printf 'afk/302-unblocked-at-last\nafk/330-a-different-ticket')" ] \
+      || fail "the pushed branch did not survive the hand-back locally: $(branches)"
+    [ "$(pushed)" = "$(printf 'afk/302-unblocked-at-last\nafk/330-a-different-ticket')" ] \
+      || fail "the pushed branch did not survive the hand-back on origin: $(pushed)"
+
+    echo "case: a leftover beside an open pull request is cleared, not handed back"
+    # A run that finished but whose worktree removal failed leaves a worktree
+    # next to an open pull request. Relabelling that ticket `agent-stuck`
+    # under its own open pull request would be a lie, so the guard asks
+    # instead of assuming: a PR open means clear the worktree, leave the
+    # ticket and the branch alone, and move on.
+    run stuck-guard-pr-open mixed.json fresh good pass
+    git -C "$state/checkout" worktree add "$state/worktrees/$ticket" "afk/$ticket"
+    export GH_PR_OPEN=1
+    run stuck-guard-pr-open second-ticket.json reuse
+    unset GH_PR_OPEN
+    [ "$rc" -eq 0 ] \
+      || fail "the poll after a finished-but-unclean run refused to start: $(cat "$state/err.log")"
+    if grep -q "gh issue comment 302 " "$state/gh.log"; then
+      fail "a finished ticket was handed back as stuck: $(ghlog)"
+    fi
+    if grep -q "gh issue edit 302 " "$state/gh.log"; then
+      fail "a finished ticket was relabelled: $(ghlog)"
+    fi
+    grep -q "gh issue edit 330 " "$state/gh.log" \
+      || fail "the next ticket was never claimed: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "the orphaned worktree survived: $(worktrees)"
+    [ "$(branches)" = "$(printf 'afk/302-unblocked-at-last\nafk/330-a-different-ticket')" ] \
+      || fail "the pushed branch was deleted, or the next ticket's branch is missing: $(branches)"
+    [ "$(pushed)" = "$(printf 'afk/302-unblocked-at-last\nafk/330-a-different-ticket')" ] \
+      || fail "the finished ticket's branch left origin, or the next ticket's is missing: $(pushed)"
+
+    echo "case: a leftover the runner cannot identify stops the run"
+    # Tearing down something unidentified is the one thing this path must not
+    # do, so it refuses loudly instead of working around it.
+    run stuck-junk mixed.json fresh good pass
+    mkdir -p "$state/worktrees/junk"
+    run stuck-junk second-ticket.json reuse
+    [ "$rc" -ne 0 ] || fail "an unidentifiable leftover was worked around"
+    grep -q "does not name a ticket" "$state/err.log" \
+      || fail "did not say why it refused: $(cat "$state/err.log")"
+
+    echo "case: a run that cannot start hands the claim back instead of stranding it"
+    # The clone is infrastructure the ticket did not choose: nothing was
+    # tried, so nothing is handed back to a human. Undoing the claim returns
+    # the ticket to the next poll; leaving it `agent-working` would strand it
+    # - invisible to the frontier query, and with no worktree behind it,
+    # invisible to the guard too.
+    export AFK_REPO_URL="file://$work/does-not-exist.git"
+    run stuck-clone-fails mixed.json fresh good pass
+    export AFK_REPO_URL="file://$work/origin.git"
+    [ "$rc" -ne 0 ] || fail "a failed clone was reported as success"
+    grep -q "gh issue edit 302 .* --remove-label agent-working --add-label ready-for-agent" "$state/gh.log" \
+      || fail "the claim was not undone: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "a worktree exists for a ticket that never started"
+    [ -z "$(branches)" ] || fail "a branch was cut for a ticket that never started"
+
+    echo "case: a hand-back does not delete a branch the run did not cut"
+    # The half-worked ticket: a branch with this slug already exists when the
+    # runner arrives - from an earlier run whose worktree somebody cleared by
+    # hand. The ticket is handed back, and the branch is left exactly as it
+    # was found: it may be the branch a pull request is open from, and the
+    # runner has no way to know.
+    run stuck-foreign-branch mixed.json fresh good pass
+    git -C "$work/origin.git" update-ref -d "refs/heads/afk/$ticket"
+    run stuck-foreign-branch mixed.json reuse
+    [ "$rc" -ne 0 ] || fail "a half-worked ticket was reported as done"
+    grep -q "already exists" "$state/err.log" \
+      || fail "did not say why it stopped: $(cat "$state/err.log")"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "no comment was left on the ticket: $(ghlog)"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not relabelled: $(ghlog)"
+    [ "$(branches)" = "afk/$ticket" ] \
+      || fail "the pre-existing branch was disturbed: $(branches)"
 
     echo "case: merge is never in the runner's command surface"
     # ADR 0004 §9 - merge stays a human act - is enforced by nothing else.
