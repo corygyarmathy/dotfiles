@@ -1,6 +1,6 @@
 # ADR 0004: AFK agent runs self-hosted, with a harness split from planning
 
-- **Status:** Accepted
+- **Status:** Accepted. §4's no-second-account clause is reversed by [ADR 0006](0006-the-runner-has-its-own-github-account.md); every other decision here, §9 included, stands.
 - **Date:** 2026-09-07
 - **Related Artefacts:**
   - Implemented by: `docs/plans/afk-agent-pipeline.md`, which also owns this design's parameters and findings - this ADR states decisions only; counts, prefixes, paths and option names live there
