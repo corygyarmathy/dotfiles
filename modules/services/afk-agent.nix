@@ -465,8 +465,11 @@ let
       comment on the issue. Later stages do all of that.
     - Do not run `code-review`. Review is a separate pass, in its own context,
       after this one.
-    - Commit your work to this branch before you finish. Uncommitted work does
-      not exist: the next stage pushes commits, and nothing else.
+    - Before you commit, run `nix fmt` (write mode) from the repo root, so
+      formatting lands in your commits rather than as uncommitted drift the
+      push cannot carry. Then commit your work to this branch before you
+      finish. Uncommitted work does not exist: the next stage pushes commits,
+      and nothing else.
 
     The gate your work has to pass is this repository's own: `nix fmt -- --ci`,
     a `nix build` of each check the flake exposes, a build of every host, and

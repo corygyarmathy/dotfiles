@@ -18,14 +18,22 @@ This repository is Cory's NixOS fleet configuration. It manages the hosts throug
 
 ## Formatting
 
-`nix fmt` (nixfmt-tree) is the formatter of record, and CI gates on
-`nix fmt -- --ci`. Some harnesses format a file automatically after every write
-or edit; do not assume this one does.
+`nix fmt` (treefmt with ./treefmt.toml - nixfmt, prettier, markdownlint-cli2,
+black, shfmt, stylua, goimports/gofumpt, taplo) is the formatter of record,
+and CI gates on `nix fmt -- --ci`. The editor (conform.nvim) and the agent
+harnesses delegate to the same pipeline, so there is one formatting decision
+and it lives in ./treefmt.toml, .prettierrc.yaml and .markdownlint-cli2.yaml -
+see ADR 0008 for why it is shaped this way.
 
-- Run `nix fmt` once before finishing a change that touched `.nix` files.
-- Do not re-read a file and re-edit it purely to adjust formatting beyond that
-  single pass. If `nix fmt -- --ci` still disagrees afterwards, report the
-  mismatch instead of retrying.
+- Run `nix fmt` once from the repo root before finishing, whatever you
+  touched. Do not hand-format files the pipeline covers, and do not re-read a
+  file and re-edit it purely to adjust formatting beyond that single pass. If
+  `nix fmt -- --ci` still disagrees afterwards, report the mismatch instead
+  of retrying.
+- Some files are deliberately outside the pipeline: sops-encrypted payloads,
+  Hugo layouts (Go templates, not HTML), the garden's rendering fixture, and
+  generated lockfiles - see the `excludes` in ./treefmt.toml. Leave those
+  alone rather than formatting them by hand.
 
 ## Validation
 
