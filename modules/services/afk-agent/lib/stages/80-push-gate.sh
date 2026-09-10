@@ -136,5 +136,5 @@ push_gate() {
 	log "#$number: the ci.yml diff is additions-only to the checks matrix, adding $(tr '\n' ' ' <<<"$added")"
 }
 
-# --- push --------------------------------------------------------------
+# --- rebase onto the moved base ---------------------------------------
 #
