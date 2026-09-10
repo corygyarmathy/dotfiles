@@ -390,19 +390,44 @@
         };
       });
 
-      # `nix fmt` formats the tree; `nix fmt -- --ci` is what the `fmt` CI job
-      # runs, and fails on anything it would have changed.
+      # `nix fmt` formats the tree; `nix fmt -- --ci` is what the `lint` CI
+      # job runs, and fails on anything it would have changed.
       #
-      # `nixfmt-tree` rather than bare `nixfmt`: `nix fmt` hands the formatter
-      # a directory, and nixfmt has deprecated directory arguments in favour of
-      # exactly this wrapper. It is treefmt with nixfmt configured, so it also
-      # walks the tree honouring .gitignore instead of formatting whatever it
-      # is pointed at.
+      # treefmt with ./treefmt.toml, which mirrors what `conform.nvim` +
+      # LazyVim runs in the editor (authoritative per #219): nixfmt, prettier,
+      # markdownlint-cli2, black, shfmt, stylua, goimports/gofumpt, taplo.
+      # treefmt walks the tree honouring .gitignore, resolves its tree root
+      # from the enclosing git worktree, and formats a single file when one
+      # is handed to it (`nix fmt -- <file>`), which is also how the
+      # agent harnesses format after a write.
       #
-      # Taken from this flake's own nixpkgs rather than whatever happens to be
-      # on a PATH, so the version deciding the gate is the version in
-      # flake.lock - otherwise a contributor's newer nixfmt reformats files CI
-      # then rejects, and the two never agree.
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
+      # Every binary comes from this flake's own nixpkgs rather than whatever
+      # happens to be on a PATH, so the versions deciding the gate are the
+      # versions in flake.lock - otherwise a contributor's newer formatter
+      # reformats files CI then rejects, and the two never agree.
+      formatter = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.writeShellApplication {
+          name = "formatter";
+          runtimeInputs = with pkgs; [
+            black
+            gofumpt
+            gotools # goimports
+            markdownlint-cli2
+            nixfmt
+            prettier
+            shfmt
+            stylua
+            taplo
+            treefmt
+          ];
+          text = ''
+            exec treefmt "$@"
+          '';
+        }
+      );
     };
 }

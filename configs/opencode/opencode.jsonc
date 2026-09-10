@@ -68,44 +68,52 @@
       "poweroff*": "deny",
       "sudo poweroff*": "deny",
       "reboot*": "deny",
-      "sudo reboot*": "deny"
-    }
+      "sudo reboot*": "deny",
+    },
   },
 
-  // Format every file after it is written/edited. The built-in registry runs
-  // the binaries the nvim module already installs (nixfmt, gofmt, shfmt, ...)
-  // alongside project-local configs, so output matches the editor. Object form
-  // keeps built-ins enabled; only the Python pair and markdown are customized.
+  // Format every file after it is written/edited, through the one pipeline
+  // CI gates on: the flake's `formatter` output (`nix fmt -- --ci`, ci.yml),
+  // which is treefmt with ./treefmt.toml - the same nixfmt, prettier,
+  // markdownlint-cli2, black, shfmt, stylua, goimports/gofumpt and taplo the
+  // editor runs, from the nixpkgs pinned in flake.lock. `nix fmt -- $FILE`
+  // hands the single file to treefmt, which resolves its tree root from the
+  // enclosing git repo, so auto-format output is byte-identical to what CI
+  // accepts even across flake.lock bumps. (Outside this repo `nix fmt`
+  // follows the enclosing flake instead, which is the right default there
+  // too.)
+  //
+  // One custom entry rather than per-language commands, because per-language
+  // commands were the drift: ruff's formatter disagrees with black on
+  // Python, PATH-resolved prettier disagrees with the pinned one, and
+  // prettier and markdownlint-cli2 reformat each other's Markdown (see #219).
+  // The overlapping built-ins stay disabled so nothing formats a file twice
+  // with a different binary.
   "formatter": {
-    // The host formats Python with black (installed in nvim.nix; conform's
-    // default). Disable the built-in ruff/uv formatters so only black runs:
-    // ruff requires a config file and its formatting can disagree with black.
-    "ruff": { "disabled": true },
-    "uv": { "disabled": true },
-    "black": {
-      "command": ["black", "--quiet", "$FILE"],
-      "extensions": [".py", ".pyi"]
-    },
-
-    // Same markdownlint-cli2 the editor runs (eliminates --fix diff churn).
-    // Project-local config (.markdownlint-cli2.yaml up the tree) is
-    // auto-discovered; absent one, default rules apply in both tools.
-    "markdownlint-cli2": {
-      "command": ["markdownlint-cli2", "--fix", "$FILE"],
-      "extensions": [".md"]
-    },
-
-    // The CI gate (`nix fmt -- --ci`, ci.yml) resolves the flake's `formatter`
-    // output - nixfmt-tree built from the nixpkgs pinned in flake.lock. The
-    // built-in nixfmt would use whatever is on PATH (host-installed from the
-    // unstable channel), which can drift from the gate. Delegate to the flake's
-    // own formatter so auto-format output is byte-identical to what CI accepts,
-    // even across flake.lock bumps: `nix fmt -- $FILE` hands the single file to
-    // nixfmt-tree, which resolves its tree root from the enclosing git repo.
-    "nixfmt": {
+    "treefmt": {
       "command": ["nix", "fmt", "--", "$FILE"],
-      "extensions": [".nix"]
-    }
+      "extensions": [
+        ".css",
+        ".go",
+        ".html",
+        ".json",
+        ".jsonc",
+        ".lua",
+        ".md",
+        ".nix",
+        ".py",
+        ".sh",
+        ".toml",
+        ".yaml",
+        ".yml",
+      ],
+    },
+    "gofmt": { "disabled": true },
+    "nixfmt": { "disabled": true },
+    "prettier": { "disabled": true },
+    "ruff": { "disabled": true },
+    "shfmt": { "disabled": true },
+    "uv": { "disabled": true },
   },
 
   // LSP diagnostics fed back to the agent while it works. opencode starts its
@@ -123,7 +131,7 @@
     "pyright": { "disabled": true },
     "basedpyright": {
       "command": ["basedpyright-langserver"],
-      "extensions": [".py", ".pyi"]
-    }
-  }
+      "extensions": [".py", ".pyi"],
+    },
+  },
 }
