@@ -71,6 +71,10 @@ let
     "40-preflight.sh"
     "50-poll-claim.sh"
     "60-isolate.sh"
+    # The shared attempt loop (#243) rather than a stage: it defines the
+    # functions the build lanes call, and runs no flow of its own. It sits
+    # here because the first caller is the implement stage below it.
+    "65-attempt-loop.sh"
     "70-implement.sh"
     "80-push-gate.sh"
     "85-rebase.sh"
