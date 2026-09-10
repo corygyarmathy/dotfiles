@@ -35,7 +35,22 @@ return {
 			-- every file type prettier handles in this repo.)
 			prettier = {
 				condition = function(_, ctx)
-					return ctx.filename:find("digital-garden/lib/hugo/layouts/", 1, true) == nil
+					local path = ctx.filename
+					-- CI (treefmt) also skips the palette's generated files
+					-- (see the excludes in treefmt.toml): write-palette owns
+					-- them and the host builds assert them against the
+					-- generator, so a save must not reformat what the gate
+					-- does not check.
+					for _, generated in ipairs({
+						"configs/waybar/kanagawa-wave.css",
+						"configs/waybar/calendar.jsonc",
+						"configs/swayosd/style.css",
+					}) do
+						if path:find(generated, 1, true) ~= nil then
+							return false
+						end
+					end
+					return path:find("digital-garden/lib/hugo/layouts/", 1, true) == nil
 				end,
 			},
 		},
