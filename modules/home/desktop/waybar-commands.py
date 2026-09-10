@@ -61,7 +61,9 @@ def is_command_key(key):
     module-*internal* action name - clock's "mode", "shift_up" - which is not a
     command and must not be looked for on PATH.
     """
-    return key in ("exec", "exec-if", "on-update") or key.startswith(("on-click", "on-scroll"))
+    return key in ("exec", "exec-if", "on-update") or key.startswith(
+        ("on-click", "on-scroll")
+    )
 
 
 def commands(node, path=()):

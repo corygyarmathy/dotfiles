@@ -106,26 +106,26 @@ decision, and hiding it makes a major bump invisible.
 their entry. `media-service.nix` imports `publish.nix` once and renders every
 entry whose `image` is set.
 
-| option | type | default | notes |
-| ------ | ---- | ------- | ----- |
-| `image` | str, mandatory | — | full ref incl. major tag (`lscr.io/linuxserver/sonarr:4`). Asserted `ref:tag`, tag `!= latest`. |
-| `port` | port | `containerPort` | host-facing port; the thin module sets it from its `cg.service.<name>.port` option. |
-| `containerPort` | port | `port` | the app's fixed internal listen port (8989 for sonarr). Kept separate so changing the host port cannot move the app's internal port. |
-| `userMode` | enum `env`/`user`/`none` | `"env"` | `env` = PUID/PGID env vars (linuxserver style); `user` = podman `user = uid:gid` (maintainerr, cross-seed); `none` = neither (seerr, flaresolverr, wizarr, huntarr). |
-| `mountData` | bool | `false` | volume `${dataPath}:/data`. Opt-in; only sonarr/radarr/bazarr/cross-seed need it. |
-| `config` | nullOr submodule | `{}` | `host` default `${configPath}/<name>`, `target` default `/config`. `null` = no state volume and no tmpfiles dir (flaresolverr). |
-| `volumes` | listOf str | `[]` | extra `host:container` mappings (cleanuparr's downloads and blacklist, cross-seed's config.js). |
-| `environment` | attrsOf str | `{}` | merged _over_ the derived base env; caller wins (cleanuparr's `UMASK = "022"` overrides the `"002"` default). |
-| `extraOptions` | listOf str | `[]` | `--pull=newer` and `--network=` are always added; caller adds `--init`, `--add-host`, etc. |
-| `network` | str | `"arr-network"` | or `container:<other>`; shared namespaces suppress the derived port mapping and the firewall. |
-| `dependsOn` | listOf str | `[]` | podman `depends_on` plus systemd ordering (cross-seed on gluetun). |
-| `cmd` | nullOr listOf str | `null` | image command override (cross-seed `["daemon"]`). |
-| `publish.enable` | bool | `true` | `false` for headless services (flaresolverr, huntarr). |
-| `publish.subdomain` | str | `name` | seerr → `requests`, wizarr → `invite`. |
-| `publish.rateLimitProfile` | enum | `"admin"` | seerr → `media`, maintainerr → `none`. |
-| `publish.probePath` | str | `""` | cleanuparr → `/health`. |
-| `publish.proxyExtraConfig` | lines | `""` | kept for the qbittorrent special case. |
-| `openFirewall` | bool | `true` | the hook structural-cleanup item 5 will flip to false; auto-suppressed in shared namespaces. |
+| option                     | type                     | default         | notes                                                                                                                                                                |
+| -------------------------- | ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `image`                    | str, mandatory           | —               | full ref incl. major tag (`lscr.io/linuxserver/sonarr:4`). Asserted `ref:tag`, tag `!= latest`.                                                                      |
+| `port`                     | port                     | `containerPort` | host-facing port; the thin module sets it from its `cg.service.<name>.port` option.                                                                                  |
+| `containerPort`            | port                     | `port`          | the app's fixed internal listen port (8989 for sonarr). Kept separate so changing the host port cannot move the app's internal port.                                 |
+| `userMode`                 | enum `env`/`user`/`none` | `"env"`         | `env` = PUID/PGID env vars (linuxserver style); `user` = podman `user = uid:gid` (maintainerr, cross-seed); `none` = neither (seerr, flaresolverr, wizarr, huntarr). |
+| `mountData`                | bool                     | `false`         | volume `${dataPath}:/data`. Opt-in; only sonarr/radarr/bazarr/cross-seed need it.                                                                                    |
+| `config`                   | nullOr submodule         | `{}`            | `host` default `${configPath}/<name>`, `target` default `/config`. `null` = no state volume and no tmpfiles dir (flaresolverr).                                      |
+| `volumes`                  | listOf str               | `[]`            | extra `host:container` mappings (cleanuparr's downloads and blacklist, cross-seed's config.js).                                                                      |
+| `environment`              | attrsOf str              | `{}`            | merged _over_ the derived base env; caller wins (cleanuparr's `UMASK = "022"` overrides the `"002"` default).                                                        |
+| `extraOptions`             | listOf str               | `[]`            | `--pull=newer` and `--network=` are always added; caller adds `--init`, `--add-host`, etc.                                                                           |
+| `network`                  | str                      | `"arr-network"` | or `container:<other>`; shared namespaces suppress the derived port mapping and the firewall.                                                                        |
+| `dependsOn`                | listOf str               | `[]`            | podman `depends_on` plus systemd ordering (cross-seed on gluetun).                                                                                                   |
+| `cmd`                      | nullOr listOf str        | `null`          | image command override (cross-seed `["daemon"]`).                                                                                                                    |
+| `publish.enable`           | bool                     | `true`          | `false` for headless services (flaresolverr, huntarr).                                                                                                               |
+| `publish.subdomain`        | str                      | `name`          | seerr → `requests`, wizarr → `invite`.                                                                                                                               |
+| `publish.rateLimitProfile` | enum                     | `"admin"`       | seerr → `media`, maintainerr → `none`.                                                                                                                               |
+| `publish.probePath`        | str                      | `""`            | cleanuparr → `/health`.                                                                                                                                              |
+| `publish.proxyExtraConfig` | lines                    | `""`            | kept for the qbittorrent special case.                                                                                                                               |
+| `openFirewall`             | bool                     | `true`          | the hook structural-cleanup item 5 will flip to false; auto-suppressed in shared namespaces.                                                                         |
 
 The derived base env is `TZ = config.time.timeZone` always, plus PUID/PGID and
 `UMASK = "002"` when `userMode = "env"`, with the caller's `environment` merged

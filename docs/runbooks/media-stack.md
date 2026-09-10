@@ -12,7 +12,7 @@ What to do when alerts about the media stack fire.
 for 20+ minutes. This is **detection, not prevention**: the download root is a
 shared mutable directory several services are configured, in their own
 databases, to write to, and nothing claims to stop a misconfiguration from
-emptying it. What is promised is that it will not be *quietly* empty.
+emptying it. What is promised is that it will not be _quietly_ empty.
 
 **Do now.**
 

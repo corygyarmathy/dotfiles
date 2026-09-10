@@ -1,6 +1,6 @@
 # Backups
 
-Restic runs on both hosts: a cross-server repo (to the *other* host, over
+Restic runs on both hosts: a cross-server repo (to the _other_ host, over
 sftp) and an offsite OneDrive repo via rclone. Schedules are 02:30
 (cross-server) and 03:00 (offsite); homelab02's MariaDB dump for Grimmory
 lands at 02:00 so the 02:30 snapshot captures a consistent dump.

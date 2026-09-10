@@ -3,10 +3,10 @@
 - **Status:** Accepted
 - **Date:** 2026-08-16
 - **Related Artefacts:**
-  - Supersedes: ADR 0001 §1a (staged rollout via `deploy-stable`)
-  - Retires: the `deploy-stable` branch and `.github/workflows/promote-stable.yml`
-  - Depends on: the deployment metrics in `modules/services/monitoring/deploy-metrics.nix` and the `NixosDeployStale` alert in `modules/services/monitoring/alert-rules.yml`
-  - Planned in: `docs/plans/deployment-hardening.md`
+    - Supersedes: ADR 0001 §1a (staged rollout via `deploy-stable`)
+    - Retires: the `deploy-stable` branch and `.github/workflows/promote-stable.yml`
+    - Depends on: the deployment metrics in `modules/services/monitoring/deploy-metrics.nix` and the `NixosDeployStale` alert in `modules/services/monitoring/alert-rules.yml`
+    - Planned in: `docs/plans/deployment-hardening.md`
 
 ## Context
 

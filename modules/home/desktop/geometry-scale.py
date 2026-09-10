@@ -76,6 +76,7 @@ def strip_comments(text):
     Replaced with spaces rather than removed so that reported line numbers stay
     true to the file on disk.
     """
+
     def blank(match):
         return re.sub(r"\S", " ", match.group(0))
 
@@ -101,7 +102,9 @@ def check(path, scale):
         if part is None:
             continue
 
-        value = match.group("css") if match.group("css") is not None else match.group("lua")
+        value = (
+            match.group("css") if match.group("css") is not None else match.group("lua")
+        )
         line = text.count("\n", 0, match.start()) + 1
 
         for length in lengths(value):
@@ -112,7 +115,9 @@ def check(path, scale):
                     continue
                 why = "not a multiple of %d" % scale["space"]
                 if scale["space_extra"]:
-                    why += " (or %s)" % ", ".join(str(v) for v in sorted(scale["space_extra"]))
+                    why += " (or %s)" % ", ".join(
+                        str(v) for v in sorted(scale["space_extra"])
+                    )
             else:
                 if length in scale[part]:
                     continue
@@ -139,8 +144,11 @@ def main(argv):
 
     print("Lengths that are not on the geometry scale:\n", file=sys.stderr)
     for path, (line, name, value, length, why) in failures:
-        print("  %s:%d\n    %s: %s\n    -> %s is %s\n" % (path, line, name, value, length, why),
-              file=sys.stderr)
+        print(
+            "  %s:%d\n    %s: %s\n    -> %s is %s\n"
+            % (path, line, name, value, length, why),
+            file=sys.stderr,
+        )
     print(
         "The scale is lib/geometry.nix. Move the value onto it, or - if the\n"
         "scale is what is wrong - change the scale, which is the point of it\n"

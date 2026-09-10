@@ -12,7 +12,7 @@ target for 5 minutes. `job="node"` means a host's node_exporter is unreachable
 
 ### Do now
 
-- Which instance? The alert names it (`homelab01:9100`). If the *host itself*
+- Which instance? The alert names it (`homelab01:9100`). If the _host itself_
   is down, everything sourced from it is inhibited - this alert is the one
   thing you get.
 - Ping/ssh it: `ssh coryg@<host>`. If ssh works, check the exporter:

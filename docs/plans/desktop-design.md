@@ -33,14 +33,14 @@ The four questions at the foot of the 2026-09-05 draft were answered, and two re
 
 The six principles are the brief. To be useful in a review they have to be things a specific change can fail. This is that translation, and everything below is checked against it.
 
-| # | Principle | The rule it becomes |
-| - | --------- | ------------------- |
-| 1 | Performant | Anything the user initiates is complete within **150 ms**, including its animation. Anything the system initiates on its own may take longer but must never block input. No background poller runs faster than the thing it is watching changes. |
-| 2 | Keyboard, with mouse backups | Every action has a keybind. Every action that can be a pointer target is one. Neither path is the "real" one. A keyboard-first system is only usable if the keys are **discoverable**, so the binding list is itself a surface. |
-| 3 | I am the driver | Nothing takes focus that the user did not ask for. Notifications are for things the user did not know; information the user _asked_ for goes somewhere else. There is an off switch, and it is one keystroke. |
-| 4 | System processes visually exposed | Anything the user would otherwise open a terminal for daily — network, audio, bluetooth, power, mounts, what is running, what has failed — has a visual path that is at most two interactions deep. |
-| 5 | Consistent | **One palette, one geometry scale, one motion budget, one input grammar.** A colour is named in exactly one file. A surface that cannot be themed from that file is a surface to be replaced or accepted as an exception on the record. |
-| 6 | Maintainable | Prefer a declarative option over a script, a script over a daemon, and a daemon over a framework. Every new surface must be themeable from the same source as the others, or it does not go in. Anything that breaks should break loudly and be caught by a check. |
+| #   | Principle                         | The rule it becomes                                                                                                                                                                                                                                                |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Performant                        | Anything the user initiates is complete within **150 ms**, including its animation. Anything the system initiates on its own may take longer but must never block input. No background poller runs faster than the thing it is watching changes.                   |
+| 2   | Keyboard, with mouse backups      | Every action has a keybind. Every action that can be a pointer target is one. Neither path is the "real" one. A keyboard-first system is only usable if the keys are **discoverable**, so the binding list is itself a surface.                                    |
+| 3   | I am the driver                   | Nothing takes focus that the user did not ask for. Notifications are for things the user did not know; information the user _asked_ for goes somewhere else. There is an off switch, and it is one keystroke.                                                      |
+| 4   | System processes visually exposed | Anything the user would otherwise open a terminal for daily — network, audio, bluetooth, power, mounts, what is running, what has failed — has a visual path that is at most two interactions deep.                                                                |
+| 5   | Consistent                        | **One palette, one geometry scale, one motion budget, one input grammar.** A colour is named in exactly one file. A surface that cannot be themed from that file is a surface to be replaced or accepted as an exception on the record.                            |
+| 6   | Maintainable                      | Prefer a declarative option over a script, a script over a daemon, and a daemon over a framework. Every new surface must be themeable from the same source as the others, or it does not go in. Anything that breaks should break loudly and be caught by a check. |
 
 Two rules follow from the pairs rather than from any single principle, and they carry most of the weight below.
 
@@ -50,30 +50,30 @@ Two rules follow from the pairs rather than from any single principle, and they 
 
 ## What is here today
 
-| Layer | Tool | State |
-| ----- | ---- | ----- |
-| Compositor | Hyprland 0.55+, Lua config, UWSM session | **good** — 8 files, split for error isolation |
-| Session start | greetd + tuigreet | works; the one surface the palette does not reach |
-| Idle / lock | hypridle + hyprlock | works; hyprlock is off-palette, and a suspend-wake `FIXME` is open |
-| Bar | waybar, 16 modules, 5 of them custom | **good** — but 8 click actions are dead |
-| Launcher | rofi 2.0 (native Wayland), custom Kanagawa theme | **good** — and under-used; see item 7 |
-| Notifications | dunst | works; no history surface, no do-not-disturb |
-| Theming | stylix, Kanagawa Wave, base16 | **good** — but three surfaces bypass it |
-| Night shift | hyprsunset | works |
-| Mounts | udiskie, tray icon | works |
-| Files | yazi (keyboard), thunar (pointer) | works |
-| Terminal | ghostty | **good** |
-| Screenshot | `grimblast copy area` on `Print` | one mode, no file, no annotation |
-| Media | playerctl + a custom waybar module | **good** |
-| Projects | a custom Go daemon + waybar module | **good** |
-| Network | — | **absent** |
-| Bluetooth | — | **absent** (`blueman` installed, service off, no applet, no bar module) |
-| Audio devices | pavucontrol, two clicks away | thin |
-| Power / session | — | **absent** |
-| Privilege prompts | — | **absent**, and silently so |
-| Clipboard history | — | **absent** |
-| Volume / brightness feedback | — | **absent** |
-| Keybind reference | — | **absent** |
+| Layer                        | Tool                                             | State                                                                   |
+| ---------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
+| Compositor                   | Hyprland 0.55+, Lua config, UWSM session         | **good** — 8 files, split for error isolation                           |
+| Session start                | greetd + tuigreet                                | works; the one surface the palette does not reach                       |
+| Idle / lock                  | hypridle + hyprlock                              | works; hyprlock is off-palette, and a suspend-wake `FIXME` is open      |
+| Bar                          | waybar, 16 modules, 5 of them custom             | **good** — but 8 click actions are dead                                 |
+| Launcher                     | rofi 2.0 (native Wayland), custom Kanagawa theme | **good** — and under-used; see item 7                                   |
+| Notifications                | dunst                                            | works; no history surface, no do-not-disturb                            |
+| Theming                      | stylix, Kanagawa Wave, base16                    | **good** — but three surfaces bypass it                                 |
+| Night shift                  | hyprsunset                                       | works                                                                   |
+| Mounts                       | udiskie, tray icon                               | works                                                                   |
+| Files                        | yazi (keyboard), thunar (pointer)                | works                                                                   |
+| Terminal                     | ghostty                                          | **good**                                                                |
+| Screenshot                   | `grimblast copy area` on `Print`                 | one mode, no file, no annotation                                        |
+| Media                        | playerctl + a custom waybar module               | **good**                                                                |
+| Projects                     | a custom Go daemon + waybar module               | **good**                                                                |
+| Network                      | —                                                | **absent**                                                              |
+| Bluetooth                    | —                                                | **absent** (`blueman` installed, service off, no applet, no bar module) |
+| Audio devices                | pavucontrol, two clicks away                     | thin                                                                    |
+| Power / session              | —                                                | **absent**                                                              |
+| Privilege prompts            | —                                                | **absent**, and silently so                                             |
+| Clipboard history            | —                                                | **absent**                                                              |
+| Volume / brightness feedback | —                                                | **absent**                                                              |
+| Keybind reference            | —                                                | **absent**                                                              |
 
 ### Where it stands against each principle
 
@@ -102,30 +102,30 @@ These are the load-bearing ones. Each is argued in its item below; they are coll
 
 ## The items
 
-| # | Item | Size | Depends on | Status |
-| - | ---- | ---- | ---------- | ------ |
-| 1 | A check that the bar's commands exist | small | – | **done 2026-09-06** |
-| 2 | A polkit authentication agent | small | – | **done 2026-09-06** |
-| 3 | The eight dead click actions | small | 1 | **done 2026-09-06** — ten, in the end |
-| 4 | Autostart stops owning what systemd owns | small | – | **done 2026-09-06** |
-| 5 | One palette, one source | medium | – | **done 2026-09-06** — the repository owns the palette |
-| 6 | A geometry scale | small | – | **done 2026-09-06**; motion half withdrawn 2026-09-06 |
-| 7 | Rofi is the menu system | medium | 5 | **done 2026-09-06** — scaffolding, and the picker moved onto it |
-| 8 | Power and session | small | 7 | **done 2026-09-06** |
-| 9 | Network, bluetooth, audio | medium | 7 | **done 2026-09-06** |
-| 10 | Clipboard history that survives its window | small | 7 | **done 2026-09-06** |
-| 11 | The keybind sheet | small | 7 | **done 2026-09-06** |
-| 12 | Hardware feedback has nowhere to land | small | 5 | **done 2026-09-06** — rewritten for swayosd 2026-09-06 |
-| 13 | Do not disturb, and a history | small | 7 | **done 2026-09-06** |
-| 14 | What is running, and what has failed | medium | 3, 7 | **done 2026-09-06** |
-| 15 | The screenshot suite | small | – | **done 2026-09-06** |
-| 16 | Measure, then tune: blur and the cursor | medium | 22 | proposed; motion variable withdrawn 2026-09-06 |
-| 17 | The lock screen is off-palette | small | 5 | proposed |
-| 18 | The greeter, on the record | small | 5 | proposed |
-| 19 | Waybar, re-laid-out | medium | 3, 5, 6 | **superseded by 21** |
-| 20 | Rofi, refined | small | 5, 6, 7 | proposed |
-| 21 | The bar is vertical | large | 3, 5, 6 | proposed 2026-09-06 |
-| 22 | Motion comes out | small | – | **done 2026-09-06** |
+| #   | Item                                       | Size   | Depends on | Status                                                          |
+| --- | ------------------------------------------ | ------ | ---------- | --------------------------------------------------------------- |
+| 1   | A check that the bar's commands exist      | small  | –          | **done 2026-09-06**                                             |
+| 2   | A polkit authentication agent              | small  | –          | **done 2026-09-06**                                             |
+| 3   | The eight dead click actions               | small  | 1          | **done 2026-09-06** — ten, in the end                           |
+| 4   | Autostart stops owning what systemd owns   | small  | –          | **done 2026-09-06**                                             |
+| 5   | One palette, one source                    | medium | –          | **done 2026-09-06** — the repository owns the palette           |
+| 6   | A geometry scale                           | small  | –          | **done 2026-09-06**; motion half withdrawn 2026-09-06           |
+| 7   | Rofi is the menu system                    | medium | 5          | **done 2026-09-06** — scaffolding, and the picker moved onto it |
+| 8   | Power and session                          | small  | 7          | **done 2026-09-06**                                             |
+| 9   | Network, bluetooth, audio                  | medium | 7          | **done 2026-09-06**                                             |
+| 10  | Clipboard history that survives its window | small  | 7          | **done 2026-09-06**                                             |
+| 11  | The keybind sheet                          | small  | 7          | **done 2026-09-06**                                             |
+| 12  | Hardware feedback has nowhere to land      | small  | 5          | **done 2026-09-06** — rewritten for swayosd 2026-09-06          |
+| 13  | Do not disturb, and a history              | small  | 7          | **done 2026-09-06**                                             |
+| 14  | What is running, and what has failed       | medium | 3, 7       | **done 2026-09-06**                                             |
+| 15  | The screenshot suite                       | small  | –          | **done 2026-09-06**                                             |
+| 16  | Measure, then tune: blur and the cursor    | medium | 22         | proposed; motion variable withdrawn 2026-09-06                  |
+| 17  | The lock screen is off-palette             | small  | 5          | proposed                                                        |
+| 18  | The greeter, on the record                 | small  | 5          | proposed                                                        |
+| 19  | Waybar, re-laid-out                        | medium | 3, 5, 6    | **superseded by 21**                                            |
+| 20  | Rofi, refined                              | small  | 5, 6, 7    | proposed                                                        |
+| 21  | The bar is vertical                        | large  | 3, 5, 6    | proposed 2026-09-06                                             |
+| 22  | Motion comes out                           | small  | –          | **done 2026-09-06**                                             |
 
 Sequencing: **22 first**, out of order, because it is one line, it is free, and it changes how everything after it feels to work on — there is no sense tuning a desktop while a 400 ms fade sits in front of the launcher. Then **1–4**, because they are defects and cheap, and because item 1 is the harness that stops item 3 from recurring — the same reason the digital garden plan put its rendering fixture before its palette. **5–7 next**, because they are the spine every later item hangs from. **8–15** are the gaps, and each is a session-sized piece of work that can be taken independently once 7 exists. **16, 17, 18, 20 and 21** are tuning and taste, and want the rest in place first so that what is being looked at is the finished shape — item 21 especially, since it is the item that decides which of the modules from 9, 12, 13 and 14 earn a permanent place on a bar that no longer has room for all of them.
 
@@ -185,16 +185,16 @@ Minutes. Verify by asking for something that needs it rather than by reading the
 
 The bar declares an interaction grammar in a comment at the top of `config.jsonc` — left is the primary action, right is the alternate view, middle is contextual — and then does not honour it. Eight of roughly twenty declared actions do nothing:
 
-| Module | Button | Runs | Why it fails |
-| ------ | ------ | ---- | ------------ |
-| cpu | left | `foot -e btop` | neither `foot` nor `btop` is installed |
-| memory | left | `foot -e btop` | same |
-| temperature | left | `foot -e btop` | same |
-| temperature | right | `notify-send … sensors` | `lm_sensors` is on the servers only |
-| disk | middle | `foot -e … dust` | `foot` and `dust` both absent |
-| pulseaudio | middle | `foot -e pulsemixer` | `foot` and `pulsemixer` both absent |
-| battery | right | `notify-send … upower` | `services.upower.enable` is false |
-| network | middle | `nm-connection-editor` | `networkmanagerapplet` is not installed |
+| Module      | Button | Runs                    | Why it fails                            |
+| ----------- | ------ | ----------------------- | --------------------------------------- |
+| cpu         | left   | `foot -e btop`          | neither `foot` nor `btop` is installed  |
+| memory      | left   | `foot -e btop`          | same                                    |
+| temperature | left   | `foot -e btop`          | same                                    |
+| temperature | right  | `notify-send … sensors` | `lm_sensors` is on the servers only     |
+| disk        | middle | `foot -e … dust`        | `foot` and `dust` both absent           |
+| pulseaudio  | middle | `foot -e pulsemixer`    | `foot` and `pulsemixer` both absent     |
+| battery     | right  | `notify-send … upower`  | `services.upower.enable` is false       |
+| network     | middle | `nm-connection-editor`  | `networkmanagerapplet` is not installed |
 
 The two `notify-send` cases are worse than the others, because they succeed: a notification appears with an empty body, which reads as "there is nothing to report" rather than "this is broken".
 

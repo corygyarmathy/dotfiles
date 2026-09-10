@@ -28,27 +28,27 @@ There's a chicken-and-egg problem with sops:
 
 1. **Enter the dev shell** (provides sops, age, ssh-to-age):
 
-   ```bash
-   cd ~/dotfiles
-   nix develop
-   ```
+    ```bash
+    cd ~/dotfiles
+    nix develop
+    ```
 
 2. **Ensure your flake includes disko**:
 
-   ```nix
-   # flake.nix inputs
-   disko.url = "github:nix-community/disko";
-   disko.inputs.nixpkgs.follows = "nixpkgs";
-   ```
+    ```nix
+    # flake.nix inputs
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
+    ```
 
 3. **Add disko to your mkHost modules**:
 
-   ```nix
-   modules = [
-     # ... other modules
-     disko.nixosModules.disko
-   ];
-   ```
+    ```nix
+    modules = [
+      # ... other modules
+      disko.nixosModules.disko
+    ];
+    ```
 
 ### On the Target Machine
 
@@ -56,15 +56,15 @@ There's a chicken-and-egg problem with sops:
 2. **Close the graphical installer** (if it opens)
 3. **Set a password for SSH access**:
 
-   ```bash
-   sudo passwd nixos
-   ```
+    ```bash
+    sudo passwd nixos
+    ```
 
 4. **Get the IP address**:
 
-   ```bash
-   ip a
-   ```
+    ```bash
+    ip a
+    ```
 
 ## File Structure
 
@@ -195,22 +195,22 @@ fails on.
 
 ```yaml
 keys:
-  # ... existing keys
-  - &homelab02 age1abc123...  # The key from step 3
+    # ... existing keys
+    - &homelab02 age1abc123... # The key from step 3
 
 creation_rules:
-  - path_regex: secrets/shared\.yaml$
-    key_groups:
-      - age:
-          - *coryg
-          - *homelab01
-          - *homelab02  # Add new host
+    - path_regex: secrets/shared\.yaml$
+      key_groups:
+          - age:
+                - *coryg
+                - *homelab01
+                - *homelab02 # Add new host
 
-  - path_regex: secrets/homelab02\.yaml$
-    key_groups:
-      - age:
-          - *coryg
-          - *homelab02  # Add new host
+    - path_regex: secrets/homelab02\.yaml$
+      key_groups:
+          - age:
+                - *coryg
+                - *homelab02 # Add new host
 ```
 
 #### Step 5: Re-encrypt Secrets
@@ -450,10 +450,10 @@ ssh nixos@192.168.1.100 "ls -la /dev/disk/by-id/"
 
 1. Verify the SSH host key matches:
 
-   ```bash
-   # On the installed system
-   sudo cat /etc/ssh/ssh_host_ed25519_key.pub | ssh-to-age
-   ```
+    ```bash
+    # On the installed system
+    sudo cat /etc/ssh/ssh_host_ed25519_key.pub | ssh-to-age
+    ```
 
 2. Compare with the key in `.sops.yaml`
 
