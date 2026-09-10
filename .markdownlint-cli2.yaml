@@ -4,7 +4,9 @@
 # - `nix fmt` / CI, through treefmt's `markdownlint` formatter (auto-discovered
 #   up the tree from each file, so no --config flag is needed);
 # - the editor, through configs/nvim/lua/plugins/{conform.nvim,nvim-lint}.lua,
-#   which point at this file;
+#   which read it as ~/.config/nvim/.markdownlint-cli2.yaml - a symlink the
+#   nvim config carries to this file, placed by modules/home/development/
+#   nvim.nix's whole-dir config symlink;
 # - the opencode harness formatter, which auto-discovers it the same way.
 #
 # Rules are markdownlint defaults except where noted below. A rule is scoped

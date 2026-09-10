@@ -3,15 +3,17 @@ return {
 	opts = {
 		formatters = {
 			["markdownlint-cli2"] = {
-				-- The canonical config lives at the repo root (see #219):
-				-- the same file CI's treefmt and the harness resolve, so the
-				-- three cannot disagree about the rules. The repo is checked
-				-- out at ~/git/dotfiles on every host (modules/home/
-				-- development/nvim.nix), which is what makes this path stable.
+				-- The canonical config is the repo-root .markdownlint-cli2.yaml
+				-- (see #219): the same file CI's treefmt and the harness
+				-- resolve, so the three cannot disagree about the rules. It
+				-- reaches this path through the nvim config symlink
+				-- (modules/home/development/nvim.nix points ~/.config/nvim
+				-- at configs/nvim, which carries a symlink to the root
+				-- file) - nothing here names where the repo is checked out.
 				command = "markdownlint-cli2",
 				args = {
 					"--config",
-					vim.fn.expand("$HOME/git/dotfiles/.markdownlint-cli2.yaml"),
+					vim.fn.expand("$HOME/.config/nvim/.markdownlint-cli2.yaml"),
 					"--fix",
 					"$FILENAME",
 				},
