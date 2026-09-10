@@ -18,12 +18,11 @@ This repository is Cory's NixOS fleet configuration. It manages the hosts throug
 
 ## Formatting
 
-`nix fmt` (treefmt with ./treefmt.toml - nixfmt, prettier, markdownlint-cli2,
-black, shfmt, stylua, goimports/gofumpt, taplo) is the formatter of record,
-and CI gates on `nix fmt -- --ci`. The editor (conform.nvim) and the agent
-harnesses delegate to the same pipeline, so there is one formatting decision
-and it lives in ./treefmt.toml, .prettierrc.yaml and .markdownlint-cli2.yaml -
-see ADR 0008 for why it is shaped this way.
+`nix fmt` (treefmt with ./treefmt.toml) is the formatter of record, and CI
+gates on `nix fmt -- --ci`. The editor (conform.nvim) and the agent harnesses
+delegate to the same pipeline, so there is one formatting decision and it
+lives in ./treefmt.toml, .prettierrc.yaml and .markdownlint-cli2.yaml - see
+ADR 0008 for why it is shaped this way.
 
 - Run `nix fmt` once from the repo root before finishing, whatever you
   touched. Do not hand-format files the pipeline covers, and do not re-read a
@@ -34,6 +33,12 @@ see ADR 0008 for why it is shaped this way.
   Hugo layouts (Go templates, not HTML), the garden's rendering fixture, and
   generated lockfiles - see the `excludes` in ./treefmt.toml. Leave those
   alone rather than formatting them by hand.
+- Adding or changing a formatter means editing ./treefmt.toml first - it is
+  the canonical definition - plus the two lists that must mirror it: the
+  `runtimeInputs` in flake.nix (the pinned binaries) and the `extensions` in
+  configs/opencode/opencode.jsonc (the harness matches extensions exactly, so
+  there is no catch-all). checks/fmt-gate fails the gate when a formatter is
+  declared without its binary.
 
 ## Validation
 

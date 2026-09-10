@@ -393,18 +393,21 @@
       # `nix fmt` formats the tree; `nix fmt -- --ci` is what the `lint` CI
       # job runs, and fails on anything it would have changed.
       #
-      # treefmt with ./treefmt.toml, which mirrors what `conform.nvim` +
-      # LazyVim runs in the editor (authoritative per #219): nixfmt, prettier,
-      # markdownlint-cli2, black, shfmt, stylua, goimports/gofumpt, taplo.
-      # treefmt walks the tree honouring .gitignore, resolves its tree root
-      # from the enclosing git worktree, and formats a single file when one
-      # is handed to it (`nix fmt -- <file>`), which is also how the
-      # agent harnesses format after a write.
+      # The definition of what runs on each file type is ./treefmt.toml, which
+      # mirrors the editor's formatter set (authoritative per #219 - see
+      # ADR 0008). This wrapper only supplies the binaries. treefmt walks the
+      # tree honouring .gitignore, resolves its tree root from the enclosing
+      # git worktree, and formats a single file when one is handed to it
+      # (`nix fmt -- <file>`), which is also how the agent harnesses format
+      # after a write.
       #
       # Every binary comes from this flake's own nixpkgs rather than whatever
       # happens to be on a PATH, so the versions deciding the gate are the
       # versions in flake.lock - otherwise a contributor's newer formatter
-      # reformats files CI then rejects, and the two never agree.
+      # reformats files CI then rejects, and the two never agree. The list
+      # must cover every command treefmt.toml declares: a declared formatter
+      # without its binary is a hard error on every run, which
+      # checks/fmt-gate notices.
       formatter = forAllSystems (
         system:
         let

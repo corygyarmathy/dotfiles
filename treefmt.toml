@@ -1,15 +1,9 @@
-# The single formatting entry point for this repository.
+# The single formatting entry point for this repository, and the canonical
+# definition of what runs on each file type and in what order (see ADR 0008):
+# the [formatter.*] blocks below are that definition, not a copy of it.
 #
 # `nix fmt` formats the tree; `nix fmt -- --ci` is what the `lint` CI job
 # runs, and fails on anything it would have changed.
-#
-# Each entry mirrors what `conform.nvim` + LazyVim runs in the editor
-# (authoritative per #219): nixfmt for Nix, prettier for Markdown and the
-# web/JSON/YAML family, markdownlint-cli2 --fix after prettier for Markdown,
-# black for Python, shfmt for shell, stylua for Lua, goimports then gofumpt
-# for Go, taplo for TOML. The binaries come from the nixpkgs pinned in
-# flake.lock (flake.nix `formatter`), so the gate cannot drift from the
-# editor the way a PATH-resolved binary can.
 #
 # `priority` is load-bearing where two formatters share a file type:
 # prettier runs before markdownlint-cli2 on Markdown, goimports before
