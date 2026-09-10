@@ -112,8 +112,13 @@ attempt_loop() {
 		if [ "$attempt" -ge "$budget" ]; then
 			# The verdict is spliced in where the %s sits rather than through
 			# printf: the format is the caller's prose, and a variable format
-			# string is exactly what shellcheck refuses (SC2059).
-			hand_back "${exhaust_message/\%s/$reason}"
+			# string is exactly what shellcheck refuses (SC2059). The splice is
+			# a split-and-concatenate rather than ${var/pat/repl}: in the
+			# replacement of that form, `&` and `\` are special, and $reason
+			# embeds gate output and git status, which contain both. The
+			# exhaust message carries exactly one %s; splitting on it keeps
+			# $reason as plain text in both halves.
+			hand_back "${exhaust_message%%'%s'*}$reason${exhaust_message#*'%s'}"
 		fi
 
 		# Read back once and then reused: the id does not change, and

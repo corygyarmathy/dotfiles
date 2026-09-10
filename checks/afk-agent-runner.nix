@@ -750,7 +750,13 @@ pkgs.runCommand "check-afk-agent-runner"
     #!/bin/sh
     printf '%s\n' "nix $*" >> "$NIX_LOG"
     if [ -e BROKEN ]; then
-      echo "mock nix: the tree still contains BROKEN" >&2
+      # The message carries an `&` and a `\` on purpose: this text is what a
+      # failing gate puts in gate.log, which is what the verdict splices into
+      # the exhaustion hand-back. In a ''${var/pat/repl} splice, both would be
+      # special in the replacement - `&` re-expands the match, `\` escapes -
+      # so the hand-back body carrying this line verbatim is the regression
+      # test for the split-and-concatenate splice in 65-attempt-loop.sh.
+      printf '%s\n' "mock nix: the tree still contains BROKEN & \\ (refused to build)" >&2
       exit 1
     fi
     if [ "$1" = "eval" ]; then
@@ -1570,6 +1576,13 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "no comment was left on the ticket: $(ghlog)"
     grep -q "the gate failed" "$state/stuck-body" \
       || fail "the comment does not say why the run stopped: $(cat "$state/stuck-body" 2>/dev/null)"
+    # The gate's own words, through the splice. The mock nix's failure line
+    # carries an `&` and a `\` (see the mock above); in a ''${var/pat/repl}
+    # splice the `&` would re-expand the matched text and drop them, so this
+    # fixed-string match is what pins the splice to plain concatenation.
+    gate_words="mock nix: the tree still contains BROKEN & \\ (refused to build)"
+    grep -qF -- "$gate_words" "$state/stuck-body" \
+      || fail "the hand-back body mangled the gate's words: $(cat "$state/stuck-body" 2>/dev/null)"
     grep -q "agent-stuck" "$state/stuck-body" \
       || fail "the comment does not say what the ticket was relabelled to: $(cat "$state/stuck-body")"
     grep -q "gh issue edit 302 .* --remove-label agent-working --add-label agent-stuck" "$state/gh.log" \
