@@ -17,8 +17,10 @@
 # back to the model that wrote the code, and it was measured: 15 runs,
 # 0 catches, refusals grounded on true but immaterial observations. This
 # hands back the *human's* findings, the most reliable input in the
-# pipeline and the only one that had no path to the code. The
-# distinction is structural, not prose, and it is held at three places:
+# pipeline and the only one that drives the round's address list - the
+# advisory findings may be read, but nothing feeds them in unchosen. The
+# distinction is structural in what drives a round, and it is held at
+# three places:
 #
 # - The frontier query asks the tracker for the pull request's comments
 #   and review summaries, and for the inline review comments beside
@@ -33,8 +35,17 @@
 #   has posted - so a round is fed only the comments written since the
 #   last one, and never its own output from a previous round.
 # - The revision prompt repeats the boundary: what follows it is the
-#   only review input, and the body and the agent's own comments are off
-#   limits.
+#   input the round was started with, and what its author will judge the
+#   round against - and the agent's own words in the thread are
+#   background to read, never instructions that drive the round.
+# - The session may read the pull request itself: `gh pr view` is
+#   allowed in permissionOverlay (`gh pr view*` beside a `gh pr *` deny
+#   that sorts before it), carved out of the write verbs. A
+#   `/revise` comment may reference the findings without quoting them -
+#   "address findings 1-6, not 7" - and the reference has to resolve to
+#   something the round can read. What the overlay still holds is every
+#   write verb: the round's prose reaches the pull request only through
+#   the runner's round comment, past the gate and the push.
 #
 # The pull request is resumed at its head rather than claimed fresh: the
 # worktree is cut at `origin/$branch`, which is what the reviewer read.

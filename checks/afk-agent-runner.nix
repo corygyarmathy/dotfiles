@@ -434,7 +434,7 @@ pkgs.runCommand "check-afk-agent-runner"
         # a runner that stopped addressing the model as a revision would
         # then fail the cases below rather than quietly fall through to
         # the implement path and pass.
-        "Address the human review comments"*) is_revise=yes ;;
+        "Address the review comments"*) is_revise=yes ;;
         "Revision attempt"*) is_revise=yes ;;
         "The revision on this branch"*) is_revise=yes ;;
         # The rebase-conflict session (#242): detected on the payload like
@@ -1732,10 +1732,25 @@ pkgs.runCommand "check-afk-agent-runner"
     # string exists somewhere in a file. The prompt asks for the same things;
     # this is the half that does not depend on the model reading it.
     run implement-guard mixed.json fresh good
-    for verb in "git push*" "gh pr*" "gh issue edit*" "gh issue comment*" "gh issue close*"; do
+    for verb in "git push*" "gh pr *" "gh issue edit*" "gh issue comment*" "gh issue close*"; do
       jq -e --arg v "$verb" '.permission.bash[$v] == "deny"' "$state/overlay-1" > /dev/null \
         || fail "the implement session was not denied '$verb'"
     done
+    # Read access: `gh pr view` is the one tracker verb allowed, so a
+    # session can read the pull request it is working on by number. The
+    # deny is written `gh pr *` - with the subcommand's separating space,
+    # which every real invocation carries - because the rules arrive
+    # sorted and the allow has to sort after the deny to win: opencode
+    # evaluates the LAST matching rule. A deny written `gh pr*` (no
+    # space) would sort after every gh pr-subcommand allow and starve it.
+    jq -e '.permission.bash["gh pr view*"] == "allow"' "$state/overlay-1" > /dev/null \
+      || fail "the implement session was not allowed to read its pull request"
+    # And the order that makes it win, asserted against the order the mock
+    # actually received, so a reordering that re-opens the write verbs is
+    # caught here rather than in production.
+    jq -e '.permission.bash | keys_unsorted as $keys
+      | ($keys | index("gh pr view*")) > ($keys | index("gh pr *"))' "$state/overlay-1" > /dev/null \
+      || fail "the gh pr view allow is not ordered after the gh pr deny"
 
     echo "case: the prompt names the skill, the ticket, and both halves of the denylist"
     # Discovery is not invocation. OpenCode exposes skills through a `skill` tool
@@ -2900,6 +2915,8 @@ pkgs.runCommand "check-afk-agent-runner"
     fi
     jq -e --arg v "git push*" '.permission.bash[$v] == "deny"' "$state/revise-overlay-1" >/dev/null \
       || fail "the revision session was not denied the tracker verbs"
+    jq -e '.permission.bash["gh pr view*"] == "allow"' "$state/revise-overlay-1" >/dev/null \
+      || fail "the revision session was not allowed to read its pull request"
     # It ran in the worktree named after the branch, on the branch itself.
     [ "$(cat "$state/revise-cwd")" = "$state/worktrees/$ticket" ] \
       || fail "the revision did not run in the resumed worktree: $(cat "$state/revise-cwd")"
@@ -3134,6 +3151,8 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the revision's CI fix was not pinned to its worktree with --dir: $(flag_value "$state/revise-args-2" --dir)"
     jq -e --arg v "git push*" '.permission.bash[$v] == "deny"' "$state/revise-overlay-2" >/dev/null \
       || fail "the revision's CI fix session was not denied the tracker verbs"
+    jq -e '.permission.bash["gh pr view*"] == "allow"' "$state/revise-overlay-2" >/dev/null \
+      || fail "the revision's CI fix session was not allowed to read its pull request"
     [ "$(pushed_commits)" -eq 3 ] || fail "the fix did not reach origin"
     grep -q "gh pr edit 999 .* --add-label agent-ready-for-review" "$state/gh.log" \
       || fail "the branch did not come back to the reviewer: $(ghlog)"
