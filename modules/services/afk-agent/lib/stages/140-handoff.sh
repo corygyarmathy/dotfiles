@@ -1,15 +1,21 @@
 # shellcheck shell=bash
 # The findings could not be in the body at creation time, because the
-# review had not run (ADR 0007). So the body is re-rendered with the
-# hand-off section in it and written over the one already there: it keeps
-# the body/comment separation the author filter depends on, where a
-# comment would not (#202).
+# review had not run (ADR 0007). Since #202 they are not in the body at
+# all: they are a comment on the pull request, posted by the agent's own
+# account (ADR 0006), and the body keeps the issue link, the provenance
+# and what the branch says it does. The comment is the agent's by its
+# author, which is the filter the revision lane (#196) reads - the
+# body/comment distinction it used to depend on is gone, and nothing else
+# depended on it.
 #
-# ONE `gh pr edit` RATHER THAN TWO, for the same reason the claim is one
-# `gh issue edit`. The label is the hand-off signal - it says CI is green
-# and a review has run - and a pull request that carried it while its
-# body still had no findings under it would be saying something untrue
-# for however long the second call took.
+# THE COMMENT BEFORE THE LABEL, and the reason is the one the single edit
+# used to carry: the label says a review has run, and a pull request
+# carrying it while the findings were still in flight would be saying
+# something untrue for however long the second call took. A comment that
+# cannot be posted is a handed-back run rather than a silent one, for the
+# same reason the edit below is: the findings are the review stage's
+# entire output, and a pull request labelled ready without them would be
+# saying something untrue.
 #
 # The label is a signal and not a control (ADR 0007 §7). Nothing here or
 # at GitHub's end stops a merge before it is applied, and nothing should:
@@ -21,15 +27,31 @@
 # comment and the hand-off label, without re-running the review
 # (150-revise.sh).
 if [ "$flow" = issue ]; then
-	pr_body with-handoff
+	# The body is re-rendered first, for the reason 100-pr.sh gives: the
+	# hand-off edit rewrites it with the CI fix round's commits and the
+	# final attempt count in the sections that are already there.
+	pr_body
 
-log "#$number: handing over - writing the findings onto $pr_url and labelling it @HANDOFF_LABEL@"
+	# The comment: the caveat prose first, the findings appended under it
+	# verbatim. One comment, not one per finding - the review's output is
+	# prose and carries no line anchors, so inline comments would be
+	# invented positions.
+	findings_comment="$run_dir/findings-comment.md"
+	{
+		pr_prose @PR_HANDOFF@
+		cat "$review_dir/findings.md"
+	} >"$findings_comment"
 
-gh pr edit "$pr_url" \
-	--repo "$repo" \
-	--body-file "$run_dir/pr-body.md" \
-	--add-label "@HANDOFF_LABEL@" ||
-	hand_back "$pr_url is open and green, but the review's findings could not be written onto it, so it stays without the @HANDOFF_LABEL@ label"
+	log "#$number: handing over - posting the review's findings on $pr_url and labelling it @HANDOFF_LABEL@"
+
+	gh pr comment "$pr_url" --repo "$repo" --body-file "$findings_comment" ||
+		hand_back "$pr_url is open and green, but the review's findings could not be posted on it, so it stays without the @HANDOFF_LABEL@ label"
+
+	gh pr edit "$pr_url" \
+		--repo "$repo" \
+		--body-file "$run_dir/pr-body.md" \
+		--add-label "@HANDOFF_LABEL@" ||
+		hand_back "$pr_url is open and green with the review's findings posted on it, but the hand-off label could not be applied"
 
 # The notification (#176): the whole point of the hand-off
 # label, delivered to somebody who is not watching GitHub. Priority low

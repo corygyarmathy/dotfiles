@@ -15,11 +15,12 @@
 #     -> watch its CI -> feed a red run back into the implement session
 #        and push the fix to the same branch, up to a bounded number of rounds
 #     -> review in a fresh context
-#     -> write the findings onto the pull request and label it
+#     -> post the review's findings as a comment on the pull request and label it
 #     -> tear the worktree down
 #
 # Success ends with a pull request open, green, carrying the review's
-# findings and the hand-off label. Anything else ends on the stuck path: a
+# findings as a comment and the hand-off label. Anything else ends on the
+# stuck path: a
 # comment saying what was tried, `agent-working` swapped for `agent-stuck`,
 # and nothing left behind (past the push, the pull request is commented on
 # and left open without the hand-off label instead; ADR 0007 §2). Both
@@ -226,10 +227,12 @@ let
   # as the other two prompts. The clause that matters most is the one that
   # is a property of the pipeline rather than of the prose: the runner
   # hands this session the human's review comments and nothing else, so
-  # the prompt has to say that the pull request body - which carries the
-  # advisory review's findings - is not review input. `PRNUMBER` is
-  # substituted at run time; the comments travel beside the prompt, not
-  # inside it.
+  # the prompt has to say that the agent's own words - the round comments,
+  # and the advisory review's findings, which since #202 arrive as a
+  # comment posted by the agent's own account - are not review input. The
+  # author filter below drops them before the prompt is built; the prose
+  # says the same. `PRNUMBER` is substituted at run time; the comments
+  # travel beside the prompt, not inside it.
   revisePrompt = pkgs.writeText "afk-agent-revise-prompt" (
     builtins.readFile ./afk-agent/lib/prompts/revise.md
   );
@@ -261,20 +264,31 @@ let
     };
   };
 
-  # The pull request body, written in two passes (ADR 0007): `prIntro` plus
-  # the branch's commit messages at creation, `prHandoff` appended once CI
-  # is green and the review verified. The commit messages are quoted rather
-  # than summarised: a summary would be unchecked prose about its own work,
-  # the shape this pipeline refuses everywhere else. `ISSUE`, `BRANCH`,
-  # `IMPLEMODEL`, `REVIEWMODEL`, `ATTEMPTS`, `CIROUNDS` and `HANDOFF` are
-  # substituted at run time; no token is a substring of another, which keeps
-  # one `sed` expression from eating the next. A closing keyword in a commit
-  # message still closes the issue on squash-merge; scrubbing them would
-  # make the body disagree with the commit.
+  # The pull request body (ADR 0007): `prIntro` plus the branch's commit
+  # messages, rendered at creation and re-rendered at hand-off, so a CI fix
+  # round's commits and the final attempt count are in it. The review's
+  # findings are not part of it at either call: #202 moves them to a
+  # comment on the pull request, posted by the agent's own account
+  # (ADR 0006), where they are resolvable like any other comment and
+  # dropped by the revision loop's author filter like the agent's other
+  # words. The commit messages are quoted rather than summarised: a
+  # summary would be unchecked prose about its own work, the shape this
+  # pipeline refuses everywhere else. `ISSUE`, `BRANCH`, `IMPLEMODEL`,
+  # `REVIEWMODEL`, `ATTEMPTS`, `CIROUNDS` and `HANDOFF` are substituted at
+  # run time; no token is a substring of another, which keeps one `sed`
+  # expression from eating the next. A closing keyword in a commit message
+  # still closes the issue on squash-merge; scrubbing them would make the
+  # body disagree with the commit.
   prIntro = pkgs.writeText "afk-agent-pr-intro" (
     builtins.readFile ./afk-agent/lib/prompts/pr-intro.md
   );
 
+  # The advisory review's findings comment (#202): the caveat paragraph
+  # that travels with the findings, rather than with the body - a reader
+  # meeting the findings must meet the measured reasons not to take them
+  # for an approval. The findings are appended verbatim under it at
+  # hand-off; `REVIEWMODEL`, `CIROUNDS` and `HANDOFF` are substituted at
+  # run time.
   prHandoff = pkgs.writeText "afk-agent-pr-handoff" (
     builtins.readFile ./afk-agent/lib/prompts/pr-handoff.md
   );
@@ -543,8 +557,9 @@ in
       type = lib.types.str;
       default = "agent-ready-for-review";
       description = ''
-        Label applied to the pull request together with the review findings,
-        once CI is green. A signal, not a merge control (ADR 0007 §7).
+        Label applied to the pull request once CI is green, the review has
+        verified, and the review's findings have been posted as its comment.
+        A signal, not a merge control (ADR 0007 §7).
       '';
     };
 

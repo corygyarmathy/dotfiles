@@ -188,7 +188,8 @@ pkgs.runCommand "check-afk-agent-runner"
 
     # Keep the value that followed a flag, so a case can assert on it later.
     # `--body-file` is copied rather than recorded, because the runner renders
-    # the body twice over the same path and the first one would not survive.
+    # the body twice over the same path and the first one would not survive,
+    # and the comment files are asserted on after their runs end.
     keep_arg() {
       dest=$1
       flag=$2
@@ -353,8 +354,9 @@ pkgs.runCommand "check-afk-agent-runner"
         ;;
       # The stuck path's second half on a run that failed past the push: the
       # pull request gets the same story the issue does, and is left open.
-      # The revision lane's round comment and hand-back reach the same verb,
-      # and the round comment is asserted on, so its body is kept too.
+      # The revision lane's round comment, the ticket lane's findings
+      # comment (#202) and the hand-back reach the same verb, and each is
+      # asserted on, so every body is kept too.
       "pr comment")
         if [ -n "''${GH_PRCOMMENT_FAIL:-}" ]; then
           echo "mock gh: refusing to comment on the pull request" >&2
@@ -939,7 +941,10 @@ pkgs.runCommand "check-afk-agent-runner"
 
     # One review summary and one issue comment, both by the reviewer, both
     # at the watermark's floor: with no bot comments on the pull request,
-    # every human comment is in.
+    # every human comment is in. The bot-authored comment is the advisory
+    # findings comment the hand-off posted (#202): the author filter must
+    # drop it exactly as it drops the round comments, or the agent's own
+    # critique of its own work becomes an instruction to itself.
     cat > "$work/fixtures/revise-comments.json" <<'JSON'
     {
       "reviews": [
@@ -949,6 +954,9 @@ pkgs.runCommand "check-afk-agent-runner"
           "body": "The check name does not match what the check builds." }
       ],
       "comments": [
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-10T09:00:00Z",
+          "body": "## The advisory review's findings\n\nOne judgement call: the check duplicates a derivation." },
         { "author": { "login": "corygyarmathy" },
           "createdAt": "2026-09-10T12:00:00Z",
           "body": "Please also bump the flake lock file." }
@@ -969,11 +977,17 @@ pkgs.runCommand "check-afk-agent-runner"
     JSON
 
     # The acceptance criterion that must start no session: comments, but
-    # only the agent's own.
+    # only the agent's own. Both shapes it takes now: the round comments
+    # this loop posts, and the advisory findings comment the hand-off
+    # posted (#202) - both by the agent's account, both dropped by the
+    # author filter.
     cat > "$work/fixtures/revise-bot-only.json" <<'JSON'
     {
       "reviews": [],
       "comments": [
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-10T11:00:00Z",
+          "body": "## The advisory review's findings\n\nOne judgement call: the check duplicates a derivation." },
         { "author": { "login": "corygyarmathy-afk-agent[bot]" },
           "createdAt": "2026-09-10T12:00:00Z",
           "body": "AFK agent: revision round 1 of 3." }
@@ -1908,11 +1922,12 @@ pkgs.runCommand "check-afk-agent-runner"
     if grep -q "pr merge" "$state/gh.log"; then fail "the runner merged its own pull request: $(ghlog)"; fi
     if grep -q -- "--auto" "$state/gh.log"; then fail "auto-merge was armed: $(ghlog)"; fi
 
-    echo "case: the body links back to the source issue, and carries the findings after the review"
-    # Two bodies now, and they are different documents (item 13). At creation
-    # time the review has not run, so there are no findings to carry; the
-    # hand-off edit renders the whole body again with them in it. The mock kept
-    # a copy of each, because the runner writes both over the same path.
+    echo "case: the body links back to the source issue, and stays about the change"
+    # The body is rendered at creation and re-rendered at the hand-off, and
+    # it carries no review-shaped prose at either call: the issue link, the
+    # provenance, and what the branch says it does. The findings travel as
+    # a comment (#202). The mock kept a copy of each body, because the
+    # runner writes both over the same path.
     created="$state/pr-create-body"
     body="$state/run/pr-body.md"
     [ -s "$created" ] || fail "no pull request body was assembled at creation time"
@@ -1922,22 +1937,23 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "No person has read this diff" "$created" || fail "the body does not say the diff is unread"
     grep -q "afk/$ticket" "$created" || fail "the body does not name the branch"
     # The creation-time body cannot carry findings, because nothing has
-    # reviewed anything yet - and it says so, rather than leaving a reader to
-    # wonder whether the section is missing or absent on purpose.
+    # reviewed anything yet - and it says where they will arrive instead of
+    # leaving a reader to wonder whether a section is missing or absent on
+    # purpose.
     if grep -q "duplicated derivation" "$created"; then
       fail "the body carried the review's findings before the review had run"
     fi
-    grep -q "Handed over" "$created" \
-      || fail "the creation-time body does not say what a missing hand-off section means: $(cat "$created")"
-    # And the final body does carry them (item 6): they are the entire output
-    # of the review stage, and the pull request is the only place they are
-    # worth anything.
-    grep -q "duplicated derivation" "$body" || fail "the review's findings did not travel to the pull request"
-    # With the caveat attached to them. A reader who takes them for an approval
-    # is making exactly the mistake dropping the verdict was meant to prevent.
-    grep -q "advisory" "$body" || fail "the body does not say what the review is not"
-    grep -q "never once refused that diff" "$body" \
-      || fail "the body does not carry the measured caveat the findings travel with"
+    grep -q "findings arrive as a comment" "$created" \
+      || fail "the body does not say where the review's findings arrive: $(cat "$created")"
+    grep -q "agent-ready-for-review" "$created" \
+      || fail "the body does not say what a missing hand-off means: $(cat "$created")"
+    # And the re-rendered body is the same shape: what the branch says it
+    # does, with the review's findings still nowhere in it.
+    grep -q "What the branch says it does" "$body" \
+      || fail "the final body has no claims section: $(cat "$body")"
+    if grep -q "duplicated derivation" "$body"; then
+      fail "the body carried the review's findings, which travel as a comment"
+    fi
 
     echo "case: the body says what the branch does, in the implementer's own words"
     # The reviewer's prose used to be the only generated text in the body, so a
@@ -1949,13 +1965,26 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -qx "### afk: implement" "$created" \
       || fail "the branch's own commit messages did not reach the body: $(cat "$created")"
     grep -q "What the branch says it does" "$created" || fail "the body has no section for them"
-    # And in the right order: what it claims, then what CI and the review made
-    # of it.
-    claims_at="$(grep -n "What the branch says it does" "$body" | cut -d: -f1)"
-    review_at="$(grep -n "^## Handed over" "$body" | cut -d: -f1)"
-    [ -n "$review_at" ] || fail "the final body has no hand-off section: $(cat "$body")"
-    [ "$claims_at" -lt "$review_at" ] \
-      || fail "the review's findings come before what the branch claims to do"
+
+    echo "case: the findings arrive as a comment, with the caveat above them"
+    # #202's whole point: the findings are resolvable, the body stays about
+    # the change, and the caveat travels with the findings rather than with
+    # the body. A reader who takes them for an approval is making exactly
+    # the mistake dropping the verdict was meant to prevent.
+    [ -s "$state/pr-comment-body" ] || fail "no findings comment was posted: $(ghlog)"
+    grep -q "duplicated derivation" "$state/pr-comment-body" \
+      || fail "the review's findings did not travel to the comment: $(cat "$state/pr-comment-body")"
+    grep -q "advisory" "$state/pr-comment-body" \
+      || fail "the comment does not say what the review is not"
+    grep -q "never once refused that diff" "$state/pr-comment-body" \
+      || fail "the comment does not carry the measured caveat the findings travel with"
+    # And in the right order: the caveat is what a reader meets first.
+    caveat_at="$(grep -n "never once refused that diff" "$state/pr-comment-body" | cut -d: -f1)"
+    findings_at="$(grep -n "duplicated derivation" "$state/pr-comment-body" | cut -d: -f1)"
+    [ -n "$caveat_at" ] && [ -n "$findings_at" ] \
+      || fail "the comment is missing the caveat or the findings: $(cat "$state/pr-comment-body")"
+    [ "$caveat_at" -lt "$findings_at" ] \
+      || fail "the review's findings come before the caveat that carries them"
 
     echo "case: the title of a one-commit branch is that commit's subject"
     # A squash merge takes the pull request title as its commit subject, so it
@@ -1980,17 +2009,24 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$(ci_polls)" -ge 1 ] || fail "the checks were never polled"
     grep -q "CI is green" "$state/out.log" || fail "the run did not report CI going green: $(cat "$state/out.log")"
 
-    echo "case: the findings and the hand-off label arrive in one edit, at the end"
-    # One `gh pr edit` rather than two, for the reason the claim is one `gh
-    # issue edit`: a pull request carrying the label while its body still had
-    # no findings under it would be saying something untrue for as long as the
-    # second call took.
+    echo "case: the findings comment is posted before the hand-off edit lands"
+    # The label says a review has run; a pull request carrying it while the
+    # findings were still in flight would be saying something untrue for as
+    # long as the second call took. The comment goes first; the edit that
+    # re-renders the body and applies the label goes second.
+    comment_at="$(grep -n "gh pr comment" "$state/gh.log" | head -1 | cut -d: -f1)"
+    edit_at="$(grep -n "gh pr edit" "$state/gh.log" | head -1 | cut -d: -f1)"
+    [ -n "$comment_at" ] && [ -n "$edit_at" ] \
+      || fail "the hand-off never reached the tracker: $(ghlog)"
+    [ "$comment_at" -lt "$edit_at" ] \
+      || fail "the hand-off label was applied before the findings comment: $(ghlog)"
     [ "$(grep -c "gh pr edit" "$state/gh.log")" -eq 1 ] \
       || fail "the hand-off was not a single edit: $(ghlog)"
     grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
       || fail "the hand-off label was never applied: $(ghlog)"
-    grep -q "duplicated derivation" "$state/pr-edit-body" \
-      || fail "the edit did not carry the review's findings: $(cat "$state/pr-edit-body")"
+    if grep -q "duplicated derivation" "$state/pr-edit-body"; then
+      fail "the hand-off edit carried the review's findings, which travel as a comment: $(cat "$state/pr-edit-body")"
+    fi
 
     echo "case: the denylist gate and the push are one function, with nothing between"
     # ADR 0007 §6, asserted structurally rather than behaviourally, because
@@ -2309,18 +2345,46 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "two unavailable answers killed the run: $(cat "$state/err.log")"
     [ "$(ci_polls)" -eq 3 ] || fail "expected three polls, got $(ci_polls)"
 
-    echo "case: a hand-off that could not be written hands the ticket back"
+    echo "case: a findings comment that cannot be posted hands the ticket back"
     # The findings are the output of the review stage, and a pull request
     # labelled ready without them would be saying something untrue. So a
-    # failed edit is a failed run rather than a quiet one - and the failure is
-    # past the push, so the hand-back reaches the pull request too: the same
-    # story on both, the pull request left open without the hand-off label,
-    # the worktree gone and the branch untouched.
+    # failed comment is a failed run rather than a quiet one - and the
+    # failure is past the push, so the hand-back reaches the pull request
+    # too: the same story on both, the pull request left open without the
+    # hand-off label, the worktree gone and the branch untouched.
+    export GH_PRCOMMENT_FAIL=1
+    run ci-commentfail mixed.json fresh good pass green
+    unset GH_PRCOMMENT_FAIL
+    [ "$rc" -ne 0 ] || fail "a hand-off that never landed was reported as success"
+    grep -q "could not be posted on it" "$state/err.log" \
+      || fail "did not say the hand-off failed: $(cat "$state/err.log")"
+    [ -z "$(worktrees)" ] || fail "the hand-back left its worktree: $(worktrees)"
+    [ "$(branches)" = "afk/$ticket" ] \
+      || fail "the pushed branch did not survive the hand-back: $(branches)"
+    [ "$(pushed)" = "afk/$ticket" ] || fail "the branch left origin: $(pushed)"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "no comment was left on the ticket: $(ghlog)"
+    grep -q "gh pr comment" "$state/gh.log" \
+      || fail "the pull request was never told what stopped: $(ghlog)"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not relabelled: $(ghlog)"
+    if grep -q -- "--add-label agent-ready-for-review" "$state/gh.log"; then
+      fail "the hand-off label was applied without the findings: $(ghlog)"
+    fi
+    if grep -qE "pr close|pr merge" "$state/gh.log"; then
+      fail "the hand-back closed or merged the pull request: $(ghlog)"
+    fi
+
+    echo "case: a hand-off edit that cannot land hands the ticket back"
+    # The other half: the findings are on the pull request but the label is
+    # not - still a failed run, since the label is what says from outside
+    # that somebody has finished with this, and the message says which half
+    # landed.
     export GH_PR_EDIT_FAIL=1
     run ci-editfail mixed.json fresh good pass green
     unset GH_PR_EDIT_FAIL
     [ "$rc" -ne 0 ] || fail "a hand-off that never landed was reported as success"
-    grep -q "could not be written onto it" "$state/err.log" \
+    grep -q "label could not be applied" "$state/err.log" \
       || fail "did not say the hand-off failed: $(cat "$state/err.log")"
     [ -z "$(worktrees)" ] || fail "the hand-back left its worktree: $(worktrees)"
     [ "$(branches)" = "afk/$ticket" ] \
@@ -2671,7 +2735,10 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the inline review comment never reached the session"
     grep -q "corygyarmathy" "$state/revise-args-1" \
       || fail "the comments were not attributed to their author"
-    # And the advisory findings did not: the body is never requested.
+    # And the advisory findings did not: the comment carrying them is the
+    # agent's own, which the author filter drops before anything is
+    # rendered. The findings fixture above is how this is a test rather
+    # than a tautology.
     if grep -q "duplicated derivation" "$state/revise-args-1"; then
       fail "the advisory findings were fed back, which is the thing item 6 rejected"
     fi
@@ -2737,7 +2804,8 @@ pkgs.runCommand "check-afk-agent-runner"
     echo "case: a pull request whose only comments are the agent's own starts no session"
     # The acceptance criterion that keeps the loop from teaching itself:
     # without the author filter, the agent's own round comments - and the
-    # advisory findings quoted in the body it never reads - would be an
+    # advisory findings comment the hand-off posted, now in the same
+    # channel the reviewer's comments arrive through (#202) - would be an
     # instruction to the model that wrote them.
     export GH_PRS="$work/fixtures/revise-pr.json"
     export GH_PR_COMMENTS="$work/fixtures/revise-bot-only.json"

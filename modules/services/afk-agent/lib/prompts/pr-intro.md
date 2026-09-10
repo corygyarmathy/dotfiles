@@ -14,12 +14,13 @@ auto-merge is armed on this path: merging is a human act (ADR 0004 §9).
 
 This pull request was opened _before_ its review ran, which is the order
 ADR 0007 settled: CI on this branch is what decides correctness, and the
-review is a quality pass whose findings are appended to this body once it
-has run. **If there is no "Handed over" section below this one, the run has
-not finished** - CI never went green, the review could not be shown to have
-happened, or the runner died in between. The `HANDOFF` label says the same
-thing from the outside, and is applied in the same edit that appends the
-section.
+review is a quality pass whose findings arrive as a comment on this pull
+request, posted by the agent's own account. **If there is no such comment
+and no `HANDOFF` label, the run has not finished** - CI never went green,
+the review could not be shown to have happened, or the runner died in
+between. The label says the same thing from the outside, and is applied
+only once the comment is up, so a pull request carrying it carries the
+findings too.
 
 ## What the branch says it does
 

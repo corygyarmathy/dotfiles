@@ -1,4 +1,4 @@
-## Handed over: CI is green, and the review below is advisory
+## The advisory review's findings
 
 CI on this branch went green, over CIROUNDS watch(es) of its checks. That
 is the correctness gate on this path (ADR 0007) - the runner's own local
@@ -22,8 +22,9 @@ accurate - nine recurring themes across 25 runs were checked against
 source and all nine were true - but across 15 runs on a diff with an
 independently graded defect it never once refused that diff for the defect
 in it, and it has repeatedly written that a criterion holds without
-running anything that shows it. A finding here is worth reading. A silence
-here is worth nothing. It was asked, among other things, to report any
-claim in a commit message above that is not true of the diff.
+running anything that shows it. A finding below is worth reading. A
+silence below is worth nothing. It was asked, among other things, to
+report any claim in the commit messages quoted in this pull request's
+description that is not true of the diff.
 
 ---
