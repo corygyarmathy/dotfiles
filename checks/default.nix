@@ -320,6 +320,88 @@ in
         touch $out
       '';
 
+  # deploy-rs's own `deployChecks` would run the same two validations, but
+  # against the *realised* profiles: both of its checks build the activatable
+  # profiles, and an activatable profile's `activate-rs` script embeds the
+  # deploy-rs binary - built from source by deploy-rs's own overlay, and in no
+  # cache this CI substitutes from - so each run paid a full Rust compile for
+  # a check that only reads file names and JSON. These two assert the same
+  # properties of `self.deploy` at evaluation level, realising nothing the
+  # host build matrix has not already built; see the individual notes.
+  deploy-schema =
+    pkgs.runCommand "check-deploy-schema"
+      {
+        nativeBuildInputs = [ pkgs.check-jsonschema ];
+        passAsFile = [ "deployJson" ];
+        # The deploy's profile paths carry the activatable profiles in their
+        # string context; realising them here would build every host closure
+        # (and, through `activate-rs`, deploy-rs itself) just to schema-check
+        # the JSON text.
+        deployJson = builtins.unsafeDiscardStringContext (builtins.toJSON self.deploy);
+      }
+      ''
+        check-jsonschema --schemafile ${inputs.deploy-rs}/interface.json "$deployJsonPath"
+        touch $out
+      '';
+
+  # What deploy-rs's own deploy-activate check proves about a realised
+  # profile, asserted here against the derivations instead of the store:
+  #   - every node profile is an activatable profile produced by
+  #     `deploy-rs.lib.activate.*` (a bare toplevel wired straight into
+  #     `path` would have neither script and fail the first deploy);
+  #   - the two scripts deploy-rs looks for are actually generated: the
+  #     `activate-rs` helper it invokes on the target, and, because these
+  #     are nixos profiles, the `switch-to-configuration` activation that
+  #     `deploy-rs-activate` runs.
+  deploy-activate =
+    let
+      lib = pkgs.lib;
+
+      profiles = lib.concatLists (
+        lib.mapAttrsToList (
+          node: n: lib.mapAttrsToList (profile: { path, ... }: { inherit node profile path; }) n.profiles
+        ) self.deploy.nodes
+      );
+
+      failures = lib.concatMap (
+        {
+          node,
+          profile,
+          path,
+        }:
+        # `?` is false for anything that is not an activatable wrapper, so
+        # the deeper assertions below never throw on a mis-wired profile -
+        # they are skipped, and the name assertion above reports it.
+        lib.optional (!(path ? name && lib.hasPrefix "activatable-" path.name))
+          "${node}.${profile} is not an activatable profile - deploy-rs would find no deploy-rs-activate in it"
+        ++ lib.optionals (path ? paths) (
+          lib.optional (
+            !lib.any (p: p ? text && lib.hasInfix "switch-to-configuration switch" p.text) path.paths
+          ) "${node}.${profile} does not activate with switch-to-configuration"
+          ++ lib.optional (
+            !lib.any (p: p ? text && lib.hasInfix "/bin/activate" p.text) path.paths
+          ) "${node}.${profile} is missing the activate-rs helper deploy-rs invokes"
+        )
+      ) profiles;
+    in
+    pkgs.runCommand "check-deploy-activate"
+      {
+        passAsFile = [ "failures" ];
+        failures = lib.concatStringsSep "\n" failures;
+        # Reported so a passing run says what it covered rather than only
+        # that it passed.
+        counts = toString (lib.length profiles) + " deploy profiles checked";
+      }
+      ''
+        if [ -s "$failuresPath" ]; then
+          echo "deploy profile invariants violated:" >&2
+          cat "$failuresPath" >&2
+          exit 1
+        fi
+        printf '%s\n' "$counts"
+        touch $out
+      '';
+
   afk-agent = testLib.mkTest ./afk-agent.nix;
 
   # Not a VM: the runner talks to the GitHub API and clones a repository,

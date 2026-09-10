@@ -324,16 +324,14 @@
       # another system needs a builder for it - `nix flake check` would
       # evaluate a whole foreign NixOS system just to skip building it.
       checks = {
-        x86_64-linux =
-          (import ./checks {
-            pkgs = import nixpkgs {
-              system = "x86_64-linux";
-              overlays = builtins.attrValues self.overlays;
-              config.allowUnfree = true;
-            };
-            inherit self inputs;
-          })
-          // deploy-rs.lib.x86_64-linux.deployChecks self.deploy;
+        x86_64-linux = import ./checks {
+          pkgs = import nixpkgs {
+            system = "x86_64-linux";
+            overlays = builtins.attrValues self.overlays;
+            config.allowUnfree = true;
+          };
+          inherit self inputs;
+        };
       };
 
       # deploy-rs (item 6 of the hardening plan): the laptop pushes a change
