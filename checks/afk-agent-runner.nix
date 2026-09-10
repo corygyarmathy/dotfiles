@@ -504,6 +504,23 @@ pkgs.runCommand "check-afk-agent-runner"
             error)  exit 3 ;;
             secret) mkdir -p secrets; printf 'nothing\n' > secrets/new.yaml
                     git add -A; git commit -qm "afk: revise into a denied path" ;;
+            # The rewrite the revision lane's push now permits (ADR 0007 §4,
+            # amended): amend the branch's own pushed commit rather than
+            # stacking a fixup on it. The push must land despite being
+            # non-fast-forward, because its lease still holds.
+            amend)  echo amended > fix-amend.txt; git add -A
+                    git commit -q --amend -m "afk: revise (amended)" ;;
+            # The lease's negative case: while the round ran, somebody pushed
+            # a commit of their own to the branch; the session here rewrites
+            # the pre-foreign head anyway. The leased push must refuse - a
+            # foreign push holds everything back - and the round hands back
+            # with nothing pushed.
+            foreign)
+              new="$(git commit-tree "HEAD^{tree}" -p HEAD -m "afk: a foreign push while this round ran")"
+              git push -q "$CI_ORIGIN" "$new:refs/heads/$(cat "$OC_STATE/pr-branch")"
+              echo amended > fix-amend.txt; git add -A
+              git commit -q --amend -m "afk: revise (amended over a moved head)" ;;
+
             *)      echo "mock opencode: no revise plan step $n" >&2; exit 64 ;;
           esac
           if [ "$opened" = yes ] && [ ! -s "$OC_STATE/revise-title" ]; then
@@ -2953,6 +2970,65 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the revision notification was not named: $(ntfylog)"
     [ -z "$(worktrees)" ] || fail "a revised pull request left its worktree: $(worktrees)"
     [ "$(branches)" = "afk/$ticket" ] || fail "the branch was disturbed: $(branches)"
+
+    echo "case: a revision that rewrites the branch's own head is pushed behind the lease"
+    # ADR 0007 §4, amended: the revise lane may amend or replay what the
+    # agent itself pushed, and the lease makes that land - a rewritten head
+    # is not a rejected one unless the remote moved. This is the shape a
+    # plain push rejected on #263, burning a whole revision round.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export REVISE_SETUP=1
+    run revise-amend none.json fresh amend pass green
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP
+    [ "$rc" -eq 0 ] || fail "a leased rewrite did not finish: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 1 ] || fail "expected one revision session, got $(revise_attempts)"
+    # The push landed: origin carries the amended commit, and the amended
+    # commit is pushed, not the pre-rewrite head it replaced - one push is
+    # what tells the amend from a fixup stacked beside it.
+    [ "$(pushed_commits)" -eq 1 ] \
+      || fail "the rewrite did not reach origin whole: $(pushed_commits) commit(s) there"
+    [ "$(git -C "$work/origin.git" rev-parse "refs/heads/afk/$ticket")" \
+      = "$(git -C "$state/checkout" rev-parse "refs/heads/afk/$ticket")" ] \
+      || fail "origin and the local branch disagree after the rewrite"
+    # The old head did not quietly get a sibling commit: the pushed tree
+    # carries the amend's marker file.
+    git -C "$work/origin.git" cat-file -p "refs/heads/afk/$ticket:fix-amend.txt" >/dev/null 2>&1 \
+      || fail "the amended tree did not reach origin"
+    grep -q "revision round 1 of 3" "$state/pr-comment-body" \
+      || fail "the round comment did not name itself: $(cat "$state/pr-comment-body")"
+    grep -q "gh pr edit 999 .* --remove-label agent-revising --add-label agent-ready-for-review" "$state/gh.log" \
+      || fail "a rewritten branch was not handed back to the reviewer: $(ghlog)"
+
+    echo "case: a foreign push while the round ran holds the rewrite back"
+    # The other half of the lease, and why the old rule existed at all: the
+    # remote moved after the round resumed, the session still rewrote the
+    # pre-foreign head, and the leased push must refuse it. The hand-back
+    # shape is the revision lane's usual one - nothing pushed, the round
+    # comment never posted, the stuck path reaches the pull request.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export REVISE_SETUP=1
+    run revise-lease-refused none.json fresh foreign pass green
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP
+    [ "$rc" -ne 0 ] || fail "a rewrite over a foreign push was pushed: $(cat "$state/err.log")"
+    grep -q "did not push, so the CI fix never reached" "$state/err.log" \
+      || fail "did not say why it stopped: $(cat "$state/err.log")"
+    # The only commit beyond master on origin is the foreign one - the
+    # session's rewrite never landed.
+    [ "$(pushed_commits)" -eq 1 ] \
+      || fail "the refused rewrite left more than the foreign commit on origin: $(pushed_commits) commit(s) there"
+    if git -C "$work/origin.git" cat-file -e "refs/heads/afk/$ticket:fix-amend.txt" 2>/dev/null; then
+      fail "the rewritten tree overrode the foreign push"
+    fi
+    # Exactly two comments reach the pull request - the claim reply and the
+    # hand-back - never a round comment for a push that never happened.
+    [ "$(grep -c "gh pr comment" "$state/gh.log")" -eq 2 ] \
+      || fail "a round comment was posted for a push that never happened: $(ghlog)"
+    grep -q "Nothing was pushed" "$state/pr-comment-body" \
+      || fail "the hand-back does not say what state it left: $(cat "$state/pr-comment-body")"
+    grep -q "gh pr edit 999 .* --remove-label agent-revising --add-label agent-stuck" "$state/gh.log" \
+      || fail "the pull request was not relabelled on the stuck path: $(ghlog)"
 
     echo "case: a /revise with an instruction of its own drives the round from that text"
     # The inline text is the request; the review comments behind it are
