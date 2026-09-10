@@ -49,7 +49,7 @@
 # surface the reviewer is actually looking at.
 stuck_closing() {
 	if [ "$tracker_kind" = pr ]; then
-		printf '%s\n' "The pull request is relabelled \`$stuck_label\`. It needs a human decision: address the review comments by hand, or write another \`/revise\` comment to spend another revision round (docs/agents/triage-labels.md)."
+		printf '%s\n' "The pull request is relabelled \`$stuck_label\`, so the runner can no longer see it. It needs a human decision: address the review comments by hand, or re-apply \`$handoff_label\` and write a fresh \`/revise\` comment to spend another revision round (docs/agents/triage-labels.md)."
 	else
 		printf '%s\n' "The ticket is relabelled \`$stuck_label\`. It needs a human decision: reshape it and re-apply \`$label\`, or take it by hand (docs/agents/triage-labels.md)."
 	fi

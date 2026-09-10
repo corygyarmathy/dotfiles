@@ -952,6 +952,57 @@ pkgs.runCommand "check-afk-agent-runner"
     }
     JSON
 
+    # The last shape that starts no session: a bare `/revise`, with nothing
+    # behind it - no instruction in the comment, and no review comment the
+    # fallback could feed the round.
+    cat > "$work/fixtures/revise-empty.json" <<'JSON'
+    {
+      "reviews": [],
+      "comments": [
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-10T12:00:00Z",
+          "body": "/revise" }
+      ]
+    }
+    JSON
+
+    # A pull request the stuck path handed back: the hand-back comment is the
+    # runner's own and carries the anchor, so the watermark moves past the
+    # `/revise` the previous round was started with. Returned to the frontier,
+    # that stale request starts nothing.
+    cat > "$work/fixtures/revise-handback-stale.json" <<'JSON'
+    {
+      "reviews": [],
+      "comments": [
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-10T12:00:00Z",
+          "body": "/revise" },
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-10T13:00:00Z",
+          "body": "AFK agent: revision handed back. The run could not push." }
+      ]
+    }
+    JSON
+
+    # And what re-enters it: a fresh `/revise`, written after the hand-back,
+    # with an instruction of its own - a round runs from that text.
+    cat > "$work/fixtures/revise-handback-fresh.json" <<'JSON'
+    {
+      "reviews": [],
+      "comments": [
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-10T12:00:00Z",
+          "body": "/revise" },
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-10T13:00:00Z",
+          "body": "AFK agent: revision handed back. The run could not push." },
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-10T14:00:00Z",
+          "body": "/revise assume the worktree never knew about the fixup; try again" }
+      ]
+    }
+    JSON
+
     # A `/revise` that carries an instruction of its own: the text after
     # the command drives the round, and the review comments behind it do
     # not cross.
@@ -2640,6 +2691,48 @@ pkgs.runCommand "check-afk-agent-runner"
     if grep -q "gh pr edit 999 " "$state/gh.log"; then fail "claimed a pull request nobody asked it to revise: $(ghlog)"; fi
     grep -q "starting no session" "$state/out.log" \
       || fail "did not say why it skipped: $(cat "$state/out.log")"
+
+    echo "case: a bare /revise with nothing behind it starts no session"
+    # The trigger answers, but there is nothing to run the round on: no text
+    # in the comment, and no review comment left behind for the fallback.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-empty.json"
+    run revise-empty none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS
+    [ "$rc" -eq 0 ] || fail "an empty request stopped the poll: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 0 ] || fail "a session started with nothing to feed it"
+    if grep -q "gh pr edit 999 " "$state/gh.log"; then fail "claimed a pull request before anything to revise arrived: $(ghlog)"; fi
+    grep -q "no instruction and no review comment" "$state/out.log" \
+      || fail "did not say why it skipped: $(cat "$state/out.log")"
+
+    echo "case: a /revise the last round already consumed does not re-trigger after a hand-back"
+    # Re-entry, the negative half: the hand-back comment carries the anchor,
+    # so the watermark moves past the `/revise` the last round was started
+    # with, and returning the pull request to the frontier on that stale
+    # request alone starts nothing.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-handback-stale.json"
+    run revise-handback-stale none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS
+    [ "$rc" -eq 0 ] || fail "a returned hand-back stopped the poll: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 0 ] || fail "a session started on a request the last round consumed"
+    if grep -q "gh pr edit 999 " "$state/gh.log"; then fail "claimed a hand-back whose request was already consumed: $(ghlog)"; fi
+    grep -q "starting no session" "$state/out.log" \
+      || fail "did not say why it skipped: $(cat "$state/out.log")"
+
+    echo "case: a fresh /revise after a hand-back re-enters the loop"
+    # Re-entry, the positive half: the hand-off label re-applied and a new
+    # `/revise`, written after the hand-back comment, spend another round
+    # from the comment's own instruction.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-handback-fresh.json"
+    export REVISE_SETUP=1
+    run revise-handback-fresh none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP
+    [ "$rc" -eq 0 ] || fail "a re-entered revision did not finish: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 1 ] || fail "the fresh /revise did not start a session"
+    grep -q "assume the worktree never knew about the fixup" "$state/revise-args-1" \
+      || fail "the re-entry instruction never reached the session: $(cat "$state/revise-args-1")"
 
     echo "case: a fourth revision round does not run; the pull request goes to the stuck path"
     # Three round comments on the pull request and a `/revise` written

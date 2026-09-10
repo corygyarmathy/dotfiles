@@ -63,6 +63,11 @@ comment carries no text, the review comments written since its last word on
 the pull request - back into a revision session that pushes to the same
 branch, three rounds per pull request before the stuck path. A review comment
 without `/revise` starts nothing, and a half-written review is exactly that.
+The trigger is only visible on a pull request carrying `agent-ready-for-review`:
+once the stuck path relabels it `agent-stuck`, re-entering the loop takes both
+the hand-off label re-applied and a fresh `/revise` written after the hand-back
+comment - the request that started the last round was consumed by the round
+that acknowledged it.
 
 **It is a signal, not a control.** It says CI is green and a review has run; it
 does not say "you may merge", and nothing stops a merge before it is applied.
