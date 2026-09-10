@@ -26,13 +26,13 @@ The laptop follows `deploy` too, but never switches on its own: it builds in the
 | -------------------- | --------------------------- | ------------------------------------------------------------------ |
 | `ci.yml`             | every PR and push to master | builds all three hosts, runs each check in `checks/` on its own runner, lints, fast-forwards `deploy` |
 | `flake-update.yml`   | daily, 15:00 UTC            | `nix flake update`, per-host closure diff, PR, auto-merge on green |
-| `package-update.yml` | Mondays, 03:00 UTC          | runs each package's own updater, one PR per package                |
+| `package-update.yml` | Mondays, 03:00 UTC          | runs each package's own updater, one PR per package, auto-merged only when the package opts in via `passthru.autoMerge` |
 | `dependabot-auto-merge.yml` | every Dependabot PR  | schedules the merge; `nixos ci` is still the gate                  |
 | `automerge-nudge.yml`       | push to master + 15-min cron | rebases the first stale auto-merge PR on a `deps/*` branch onto `master` |
 
 CI builds are pushed to a [Cachix](https://cachix.org) cache that the hosts substitute from, so a closure is built once rather than once per machine.
 
-Lock updates auto-merge when green. Package updates do not - they cross an upstream release boundary, where "it built" is the weakest form of evidence.
+Lock updates auto-merge when green. Package updates do not by default - they cross an upstream release boundary, where "it built" is the weakest form of evidence. The exception is a package that opts in with `passthru.autoMerge` (currently only `caddy-with-plugins`): its diff is a version string plus a SHA no review can validate, and a stale hash keeps the whole gate red, so holding it for a human buys nothing and the `nixos ci` check remains the gate.
 
 ### Dependabot
 
@@ -97,11 +97,11 @@ Naming the shards rather than discovering them is what keeps that saving: discov
 
 **`deploy` rejects non-fast-forward pushes, with zero bypass actors.** Not even an admin, `GITHUB_TOKEN`, or the deploy key in the next invariant can force-push or delete it. This is deliberate, and it means the recovery below requires temporarily relaxing a ruleset - there is no way around it from the client side.
 
-**`deploy` accepts a push from exactly one identity, and it is not `GITHUB_TOKEN`.** The `restrict-deploy-updates` ruleset puts an `update` rule over `refs/heads/deploy` whose only bypass actor is `ci-promote-deploy`, a write deploy key, so `promote` pushes over SSH with the `PROMOTE_DEPLOY_KEY` secret and every PAT is refused - `FLAKE_UPDATE_TOKEN`, `AFK_AGENT_TOKEN`, and your own, since a fine-grained PAT acts as the repository owner and the owner is not on that list. `GITHUB_TOKEN` could not have been the exception: GitHub refuses the GitHub Actions app as a bypass actor on a **user-owned** repository (`422 Actor GitHub Actions integration must be part of the ruleset source or owner organization`) - the same organization-only shape as merge queues above, and the second time this repo has designed around it. It is a *second* ruleset rather than a rule inside `protect-deploy` because a bypass belongs to the whole ruleset, and the invariant above has to stay true. [ADR 0005](../../docs/adr/0005-only-a-deploy-key-may-move-deploy.md) has the reasoning and the probes that ruled out the alternatives.
+**`deploy` accepts a push from exactly one identity, and it is not `GITHUB_TOKEN`.** The `restrict-deploy-updates` ruleset puts an `update` rule over `refs/heads/deploy` whose only bypass actor is `ci-promote-deploy`, a write deploy key, so `promote` pushes over SSH with the `PROMOTE_DEPLOY_KEY` secret and every PAT is refused - `FLAKE_UPDATE_TOKEN`, `AFK_AGENT_TOKEN`, and your own, since a fine-grained PAT acts as the repository owner and the owner is not on that list. `GITHUB_TOKEN` could not have been the exception: GitHub refuses the GitHub Actions app as a bypass actor on a **user-owned** repository (`422 Actor GitHub Actions integration must be part of the ruleset source or owner organization`) - the same organization-only shape as merge queues above, and the second time this repo has designed around it. It is a _second_ ruleset rather than a rule inside `protect-deploy` because a bypass belongs to the whole ruleset, and the invariant above has to stay true. [ADR 0005](../../docs/adr/0005-only-a-deploy-key-may-move-deploy.md) has the reasoning and the probes that ruled out the alternatives.
 
 **The deploy key does not close the workflow path to `deploy`, and is not meant to.** `PROMOTE_DEPLOY_KEY` is a repository secret, and a `pull_request` event runs the workflow file from the PR's head branch, so an edited `ci.yml` can still read it and push. That is why `.github/workflows/` stays on the AFK path denylist (`docs/agents/afk-eligibility.md`) even though every diff is reviewed before merge. What the ruleset closes is the short way - one `git push` from any write credential - not the long one.
 
-**Two things have to move together to rotate that key.** The repository's deploy key and the `PROMOTE_DEPLOY_KEY` secret are separate objects, and replacing one without the other is a red `promote` on the next push to master. `gh api repos/{owner}/{repo}/keys` should list exactly one key, `ci-promote-deploy`; the `DeployKey` bypass names the actor *type* rather than one key, so a second write key added later silently joins the bypass list.
+**Two things have to move together to rotate that key.** The repository's deploy key and the `PROMOTE_DEPLOY_KEY` secret are separate objects, and replacing one without the other is a red `promote` on the next push to master. `gh api repos/{owner}/{repo}/keys` should list exactly one key, `ci-promote-deploy`; the `DeployKey` bypass names the actor _type_ rather than one key, so a second write key added later silently joins the bypass list.
 
 **Promotion is deliberately not a force push.** `ci.yml` pushes without `--force`, so a `deploy` that has diverged fails the job loudly rather than silently discarding whatever is there. A red promote step is the pipeline working.
 
@@ -154,7 +154,7 @@ git cherry origin/master origin/deploy | grep '^+'   # expect no output
 
 Any `+` line is a commit that exists _only_ on the deployment ref - stop and work out where it came from, because realigning would discard it.
 
-**Relax the rulesets - both of them.** GitHub → Settings → Rules → Rulesets → `protect-deploy` → Enforcement status → Disabled, and the same for `restrict-deploy-updates`. `protect-deploy` is what rejects the non-fast-forward; `restrict-deploy-updates` is what rejects *you*, since the push below comes from your own credential rather than from CI's deploy key. Prefer the UI: the API equivalent is a `PUT`, which replaces the whole ruleset, so a mistyped call is a rewrite rather than a toggle. `gh api repos/corygyarmathy/dotfiles/rulesets` lists them if you want the IDs.
+**Relax the rulesets - both of them.** GitHub → Settings → Rules → Rulesets → `protect-deploy` → Enforcement status → Disabled, and the same for `restrict-deploy-updates`. `protect-deploy` is what rejects the non-fast-forward; `restrict-deploy-updates` is what rejects _you_, since the push below comes from your own credential rather than from CI's deploy key. Prefer the UI: the API equivalent is a `PUT`, which replaces the whole ruleset, so a mistyped call is a rewrite rather than a toggle. `gh api repos/corygyarmathy/dotfiles/rulesets` lists them if you want the IDs.
 
 **Push the ref, with an explicit lease** so the push aborts if the remote is not where you think it is. The target is `origin/master`, since that is what it would have been fast-forwarded to anyway:
 
@@ -190,4 +190,4 @@ If it fails to build, the same revision will fail identically in CI - reproduce 
 
 **Adding a check** means adding it to `checks/default.nix` _and_ to the `check` matrix in `ci.yml`. A check that CI does not run is a check that protects nothing. The `lint` job compares the two lists and fails if they disagree, so forgetting is a red gate rather than a silent gap.
 
-**Adding an auto-updating package** means editing the package, not `package-update.yml`, which discovers anything declaring `passthru.autoUpdate`. The updater contract is in that workflow's header comment.
+**Adding an auto-updating package** means editing the package, not `package-update.yml`, which discovers anything declaring `passthru.autoUpdate`. The updater contract is in that workflow's header comment. A package whose update diff no review can validate (a version string plus a SHA) may additionally set `passthru.autoMerge` so the PR merges on green; anything crossing an upstream release boundary on "it built" evidence stays manual.
