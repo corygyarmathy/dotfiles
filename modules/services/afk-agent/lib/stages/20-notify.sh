@@ -53,5 +53,9 @@ notify_stuck() {
 		"$(printf '%s\n%s\n%s' \
 			"$reason" \
 			"$status" \
-			"$(printf 'Ticket: https://github.com/%s/issues/%s' "$repo" "$number")")"
+			"$(if [ "$tracker_kind" = pr ]; then
+				printf 'Pull request: https://github.com/%s/pull/%s' "$repo" "$number"
+			else
+				printf 'Ticket: https://github.com/%s/issues/%s' "$repo" "$number"
+			fi)")"
 }

@@ -22,6 +22,37 @@ working_label="@WORKING_LABEL@"
 # failure every poll. A human decides what happens to an
 # `$stuck_label` ticket (docs/agents/triage-labels.md).
 stuck_label="@STUCK_LABEL@"
+# The hand-off signal (ADR 0007 §7). The ticket lane applies it beside the
+# review findings in one edit; the revision lane re-applies it in one edit
+# once a revised commit's CI is green. A variable here rather than the
+# inline token the ticket lane uses, because the revision lane and the
+# hand-off both read it.
+handoff_label="@HANDOFF_LABEL@"
+
+# The revision loop's trigger (#196): a pull request this
+# runner opened, carrying this label, has its human review comments read
+# back into a revision session. Applied by a person, like `$label` - the
+# label is the whole of the trigger, not the presence of unresolved
+# threads, because a half-written review must not start a run.
+revise_label="@REVISE_LABEL@"
+# Revision rounds per pull request before the stuck path. Three, then a
+# human: a disagreement between a reviewer and the model is otherwise
+# unbounded spend.
+max_revision_rounds="@MAX_REVISION_ROUNDS@"
+# The runner's own login (ADR 0006). The revision loop's author filter
+# reads it, so that the agent's own words on a pull request - the round
+# comments, and the advisory findings quoted in the body - never become
+# instructions to the model that wrote them.
+bot_login="@BOT_LOGIN@"
+
+# Which lane this run is on. The issue poll sets `revise` when its queue
+# is empty; every issue-stage between here and the hand-off reads this
+# and steps aside, and the revision flow at the end of the script runs
+# only when it is set.
+flow="issue"
+# Which tracker surface the stuck path writes to: the issue for the
+# ticket lane, the pull request itself for the revision lane.
+tracker_kind="issue"
 
 checkout="$state_dir/checkout"
 worktrees="$state_dir/worktrees"

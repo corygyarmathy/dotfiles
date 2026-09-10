@@ -73,6 +73,14 @@ three moments:
    That is a stuck-path exit (the runner's `hand_back`, `modules/services/afk-agent.nix`):
    comment, relabel, no PR.
 
+The revision loop (#196) binds at moment 3 only, and that is deliberate rather
+than an oversight. Its diff is the one thing being judged, and `push_gate` runs
+against it immediately before the push, exactly as it does for a first push.
+Moment 2 deliberately does not: the prose a revision poll could read - the pull
+request's body - quotes commit messages written under an implement prompt that
+names these paths, so a literal prose match would refuse this loop its own
+pull requests. The diff, not the prose, is what is enforceable there.
+
 The list is **literal paths**. It does not stretch to cover things merely
 adjacent to them, and two of those are worth naming so nobody assumes a cover
 that isn't there:

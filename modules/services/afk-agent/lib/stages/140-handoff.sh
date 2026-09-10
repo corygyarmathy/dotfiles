@@ -16,7 +16,12 @@
 # ADR 0004 §9 makes merging a human act, and a runner that could withhold
 # a merge would hold a veto over the person rather than the other way
 # round.
-pr_body with-handoff
+#
+# Ticket lane only: the revision lane hands back to the reviewer with a
+# comment and the hand-off label, without re-running the review
+# (150-revise.sh).
+if [ "$flow" = issue ]; then
+	pr_body with-handoff
 
 log "#$number: handing over - writing the findings onto $pr_url and labelling it @HANDOFF_LABEL@"
 
@@ -58,3 +63,4 @@ git -C "$checkout" worktree remove "$worktree" ||
 	die "#$number: $pr_url is open, but $worktree could not be removed; the next poll's guard clears it without touching the ticket"
 
 log "#$number: done - $pr_url is open on $branch. Merging it is a human act (ADR 0004 §9), and nothing here does it"
+fi

@@ -233,13 +233,33 @@ pkgs.runCommand "check-afk-agent-runner"
       # The other question the dead-run hand-back asks before tearing a branch
       # down: a leftover beside an open pull request is a finished ticket's
       # orphaned worktree, not a stuck ticket's.
+      #
+      # Two callers reach this verb since the revision lane landed, and they
+      # are told apart by `--label`: the revise poll asks by label and the
+      # guard asks by head branch. The guard's answer carries the PR's
+      # labels since the revision loop's restore reads them, and
+      # GH_PR_CLAIMED says the pull request is carrying the claim - the
+      # shape a revision run that died mid-round leaves.
       "pr list")
-        if [ -n "''${GH_PR_OPEN:-}" ]; then
-          printf '[{"number":999}]\n'
-        else
-          printf '[]\n'
-        fi
+        case "$*" in
+          *--label*)
+            cat "$GH_PRS"
+            ;;
+          *)
+            if [ -n "''${GH_PR_OPEN:-}" ]; then
+              if [ -n "''${GH_PR_CLAIMED:-}" ]; then
+                printf '[{"number":999,"labels":[{"name":"agent-working"}]}]\n'
+              else
+                printf '[{"number":999,"labels":[]}]\n'
+              fi
+            else
+              printf '[]\n'
+            fi
+            ;;
+        esac
         ;;
+      # The revision poll's comment source (#196): review summaries
+      # and issue comments in one document, pointed at a per-case fixture.
       # The one verb item 7 adds, and the only one that produces something a
       # person has to act on. It prints a URL because the runner logs one, and
       # it can be made to fail, which is how the case below observes that a
@@ -266,7 +286,18 @@ pkgs.runCommand "check-afk-agent-runner"
       # per-case plan, one line per poll, repeating the last line once the plan
       # runs out so that "never settles" is a one-word plan rather than
       # forty-five of them. `pr edit` is the hand-off.
+      #
+      # Two callers reach this verb since the revision lane landed, told
+      # apart by the fields they ask for: the revise poll wants the review
+      # summaries and comments, and the watch wants the rollup. The poll's
+      # call is peeled off first and answered from `$GH_PR_COMMENTS`.
       "pr view")
+        case "$*" in
+          *reviews*)
+            cat "$GH_PR_COMMENTS"
+            exit 0
+            ;;
+        esac
         polls=$(( $(cat "$OC_STATE/ci-polls" 2>/dev/null || echo 0) + 1 ))
         echo "$polls" > "$OC_STATE/ci-polls"
         step="$(sed -n "''${polls}p" "$CI_PLAN" 2>/dev/null)"
@@ -314,10 +345,23 @@ pkgs.runCommand "check-afk-agent-runner"
         ;;
       # The stuck path's second half on a run that failed past the push: the
       # pull request gets the same story the issue does, and is left open.
+      # The revision lane's round comment and hand-back reach the same verb,
+      # and the round comment is asserted on, so its body is kept too.
       "pr comment")
         if [ -n "''${GH_PRCOMMENT_FAIL:-}" ]; then
           echo "mock gh: refusing to comment on the pull request" >&2
           exit 1
+        fi
+        keep_arg "$OC_STATE/pr-comment-body" --body-file "$@"
+        ;;
+      # The inline review comments the revision poll reads beside the
+      # pull request's summaries and comments. Pointed at a per-case
+      # fixture, defaulting to none.
+      api*)
+        if [ -n "''${GH_INLINE:-}" ]; then
+          cat "$GH_INLINE"
+        else
+          printf '[]\n'
         fi
         ;;
       *)
@@ -357,9 +401,19 @@ pkgs.runCommand "check-afk-agent-runner"
     cat > "$work/bin/opencode" <<'MOCK'
     #!/bin/sh
     is_review=no
+    is_revise=no
     for a in "$@"; do
       case "$a" in
         "Review the work on this branch."*) is_review=yes ;;
+        # The revision lane's opening message and its two continuation
+        # messages: the gate retry and the red-CI fix. Told apart from the
+        # ticket lane's by the payload, exactly as the review session is -
+        # a runner that stopped addressing the model as a revision would
+        # then fail the cases below rather than quietly fall through to
+        # the implement path and pass.
+        "Address the human review comments"*) is_revise=yes ;;
+        "Revision attempt"*) is_revise=yes ;;
+        "The revision on this branch"*) is_revise=yes ;;
       esac
     done
 
@@ -397,6 +451,36 @@ pkgs.runCommand "check-afk-agent-runner"
             *) sed -n '/^--title$/{n;p;q}' "$OC_STATE/review-args" \
                  > "$OC_STATE/review-title" ;;
           esac
+          exit 0
+        fi
+        if [ "$is_revise" = yes ]; then
+          # The revision lane's sessions: counted and recorded separately
+          # from the ticket lane's, so a case that runs both flows in one
+          # state directory can assert on each lane's sessions without one
+          # count eating the other.
+          n=$(( $(cat "$OC_STATE/revise-attempts" 2>/dev/null || echo 0) + 1 ))
+          echo "$n" > "$OC_STATE/revise-attempts"
+          printf '%s\n' "$@" > "$OC_STATE/revise-args-$n"
+          printf '%s\n' "''${OPENCODE_CONFIG_CONTENT:-}" > "$OC_STATE/revise-overlay-$n"
+          pwd > "$OC_STATE/revise-cwd"
+          git rev-parse --abbrev-ref HEAD > "$OC_STATE/revise-branch" 2>/dev/null || true
+          opened=yes
+          case "$(sed -n "''${n}p" "$OC_PLAN")" in
+            good)   echo fix > "fix-$n.txt"; git add -A; git commit -qm "afk: revise" ;;
+            broken) echo x > BROKEN;    git add -A; git commit -qm "afk: broken revision" ;;
+            repair) git rm -q BROKEN;               git commit -qm "afk: repair" ;;
+            none)   : ;;
+            dirty)  echo a > a.txt; git add -A; git commit -qm "afk: partial"; echo b > stray.txt ;;
+            tidy)   git add -A; git commit -qm "afk: tidy" ;;
+            lost)   echo x > BROKEN; git add -A; git commit -qm "afk: broken revision"; opened=no ;;
+            error)  exit 3 ;;
+            secret) mkdir -p secrets; printf 'nothing\n' > secrets/new.yaml
+                    git add -A; git commit -qm "afk: revise into a denied path" ;;
+            *)      echo "mock opencode: no revise plan step $n" >&2; exit 64 ;;
+          esac
+          if [ "$opened" = yes ] && [ ! -s "$OC_STATE/revise-title" ]; then
+            sed -n '/^--title$/{n;p;q}' "$OC_STATE/revise-args-1" > "$OC_STATE/revise-title"
+          fi
           exit 0
         fi
         n=$(( $(cat "$OC_STATE/attempts" 2>/dev/null || echo 0) + 1 ))
@@ -467,12 +551,17 @@ pkgs.runCommand "check-afk-agent-runner"
         # An empty list until some attempt has actually opened one, so the
         # runner's two no-session paths - start a fresh one, or refuse - are
         # both reachable from here. The review session joins it once opened,
-        # under whatever title the runner asked for.
+        # under whatever title the runner asked for. The revision lane's
+        # fresh session joins it the same way; a round that continues the
+        # ticket's implement session instead finds that one, under its
+        # original title.
         jq -n \
           --arg it "$(cat "$OC_STATE/title" 2>/dev/null)" \
           --arg rt "$(cat "$OC_STATE/review-title" 2>/dev/null)" \
+          --arg vt "$(cat "$OC_STATE/revise-title" 2>/dev/null)" \
           '[ (if $it != "" then { id: "ses_fixture", title: $it } else empty end),
-             (if $rt != "" then { id: "ses_review",  title: $rt } else empty end) ]'
+             (if $rt != "" then { id: "ses_review",  title: $rt } else empty end),
+             (if $vt != "" then { id: "ses_revise",  title: $vt } else empty end) ]'
         ;;
       export)
         # The review transcript, in the shape the real `opencode export`
@@ -480,7 +569,18 @@ pkgs.runCommand "check-afk-agent-runner"
         # the closing report as the last assistant text part. Everything the
         # runner decides about a review is read from here. Any other session's
         # export is never read: the runner only exports the review session.
+        # The revision lane exports its own session for the round report, and
+        # a round that continued the implement session exports that one - the
+        # report text is the same stand-in for both.
         if [ "$2" != ses_review ]; then
+          if [ "$2" = ses_revise ] || [ "$2" = ses_fixture ]; then
+            if [ "$(cat "$OC_STATE/revise-report" 2>/dev/null)" = empty ]; then
+              printf '{"messages":[]}\n'
+            else
+              printf '{"messages":[{"info":{"role":"assistant"},"parts":[{"type":"text","text":"Addressed the review comment: bumped the pin.\\n\\nNot addressed: nothing."}]}]}\n'
+            fi
+            exit 0
+          fi
           printf '{"messages":[]}\n'
           exit 0
         fi
@@ -757,6 +857,113 @@ pkgs.runCommand "check-afk-agent-runner"
     ]
     JSON
 
+    # --- the revision lane's fixtures -------------------------------------
+    #
+    # The queue the revise poll reads (`gh pr list --label`), and the
+    # comment documents `pr view --json reviews,comments` answers with.
+    # The pull request is the one the ticket lane's own run would have
+    # opened: #999, from `afk/302-unblocked-at-last` - so a revise case and
+    # a ticket case can share one fixture origin, and the assertions about
+    # what the flow resumed are read out of git rather than out of the
+    # tracker.
+    cat > "$work/fixtures/revise-pr.json" <<'JSON'
+    [
+      { "number": 999, "title": "Unblocked at last",
+        "headRefName": "afk/302-unblocked-at-last" }
+    ]
+    JSON
+
+    cat > "$work/fixtures/none-prs.json" <<'JSON'
+    []
+    JSON
+
+    # One review summary and one issue comment, both by the reviewer, both
+    # at the watermark's floor: with no bot comments on the pull request,
+    # every human comment is in.
+    cat > "$work/fixtures/revise-comments.json" <<'JSON'
+    {
+      "reviews": [
+        { "author": { "login": "corygyarmathy" },
+          "state": "CHANGES_REQUESTED",
+          "submittedAt": "2026-09-10T11:00:00Z",
+          "body": "The check name does not match what the check builds." }
+      ],
+      "comments": [
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-10T12:00:00Z",
+          "body": "Please also bump the flake lock file." }
+      ]
+    }
+    JSON
+
+    # And the inline half, which `pr view` does not carry: read from the
+    # REST endpoint the poll asks beside it.
+    cat > "$work/fixtures/revise-inline.json" <<'JSON'
+    [
+      { "user": { "login": "corygyarmathy" },
+        "created_at": "2026-09-10T12:30:00Z",
+        "path": "checks/alpha.nix",
+        "line": 12,
+        "body": "This assertion is backwards." }
+    ]
+    JSON
+
+    # The acceptance criterion that must start no session: comments, but
+    # only the agent's own.
+    cat > "$work/fixtures/revise-bot-only.json" <<'JSON'
+    {
+      "reviews": [],
+      "comments": [
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-10T12:00:00Z",
+          "body": "AFK agent: revision round 1 of 3." }
+      ]
+    }
+    JSON
+
+    # The budget: three round comments the runner left, one human comment
+    # still outstanding. A fourth round does not run.
+    cat > "$work/fixtures/revise-exhausted.json" <<'JSON'
+    {
+      "reviews": [],
+      "comments": [
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-10T09:00:00Z",
+          "body": "Still not right." },
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-10T10:00:00Z",
+          "body": "AFK agent: revision round 1 of 3." },
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-11T10:00:00Z",
+          "body": "AFK agent: revision round 2 of 3." },
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-12T10:00:00Z",
+          "body": "AFK agent: revision round 3 of 3." }
+      ]
+    }
+    JSON
+
+    # The watermark: one human comment from before the last round comment
+    # and one from after. A round is fed only the newer one - the author
+    # filter is what keeps the agent's own words out, and the watermark is
+    # what keeps last round's work from being re-fed as an instruction.
+    cat > "$work/fixtures/revise-round2.json" <<'JSON'
+    {
+      "reviews": [],
+      "comments": [
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-10T08:00:00Z",
+          "body": "OLD: addressed in the round this comment predates." },
+        { "author": { "login": "corygyarmathy-afk-agent[bot]" },
+          "createdAt": "2026-09-10T10:00:00Z",
+          "body": "AFK agent: revision round 1 of 3." },
+        { "author": { "login": "corygyarmathy" },
+          "createdAt": "2026-09-11T08:00:00Z",
+          "body": "NEW: left after the last round comment." }
+      ]
+    }
+    JSON
+
     # --- the harness ------------------------------------------------------
     #
     # Each case gets its own state directory unless it deliberately inherits
@@ -797,7 +1004,7 @@ pkgs.runCommand "check-afk-agent-runner"
       : > "$NTFY_LOG"
       rm -f "$state"/args-* "$state"/overlay-* "$state/attempts" "$state/title" \
         "$state"/review-* "$state/ci-polls" "$state"/pr-*-body "$state/pr-branch" \
-        "$state"/implement-saw-pr-*
+        "$state"/implement-saw-pr-* "$state"/revise-*
       # Unquoted on purpose: a plan is a whitespace-separated list of steps and
       # this is what turns it into one line each.
       # shellcheck disable=SC2086
@@ -807,6 +1014,34 @@ pkgs.runCommand "check-afk-agent-runner"
       # "never settles" is `pending` rather than forty-five of them.
       # shellcheck disable=SC2086
       printf '%s\n' $ci > "$CI_PLAN"
+
+      # The revision lane's cases need the pull request to already exist on
+      # the fixture origin: the flow resumes a branch the original run
+      # pushed. Built here, per fresh origin, in the same shape a real run
+      # leaves behind - one commit on top of master. Skipped when the reuse
+      # path already pushed it, which is what the continuation case below
+      # depends on.
+      if [ -n "''${REVISE_SETUP:-}" ]; then
+        printf '%s\n' "afk/$ticket" > "$state/pr-branch"
+        if ! git -C "$work/origin.git" show-ref --verify --quiet "refs/heads/afk/$ticket"; then
+          rm -rf "$work/prwork"
+          git clone -q "$work/origin.git" "$work/prwork"
+          (
+            cd "$work/prwork"
+            git checkout -q -b "afk/$ticket" origin/master
+            echo fix > fix-0.txt
+            git add -A
+            git commit -qm "afk: implement"
+            git push -q origin "HEAD:refs/heads/afk/$ticket"
+          )
+        fi
+      fi
+      # A session titled like the ticket's work: what a run that built this
+      # branch left in the session store, and what the continuation case
+      # needs the runner to find.
+      if [ -n "''${REVISE_SESSION:-}" ]; then
+        printf '%s\n' "$ticket" > "$state/title"
+      fi
 
       set +e
       HOME="$work/home-run" PATH="$unit_path" "$script" \
@@ -822,6 +1057,12 @@ pkgs.runCommand "check-afk-agent-runner"
     # to be overridden too, and then the number under test would be this file's
     # rather than production's.
     export AFK_CI_POLL_INTERVAL=0
+
+    # The revision poll's fixtures, defaulted to an empty queue so that every
+    # case written before the lane existed falls through it quietly - the
+    # revise cases below point these at their own fixtures.
+    export GH_PRS="$work/fixtures/none-prs.json"
+    export GH_PR_COMMENTS="$work/fixtures/none-prs.json"
 
     ghlog() { cat "$state/gh.log"; }
     # The notifications the runner asked for (item 9, #176), recorded by the
@@ -852,6 +1093,7 @@ pkgs.runCommand "check-afk-agent-runner"
     # which is the only place a refusal can be observed as an absence.
     pushed() { git -C "$work/origin.git" for-each-ref --format='%(refname:short)' refs/heads/afk 2>/dev/null | sort; }
     attempts() { cat "$state/attempts" 2>/dev/null || echo 0; }
+    revise_attempts() { cat "$state/revise-attempts" 2>/dev/null || echo 0; }
     # Every case below that reaches the implement stage runs `mixed.json`, which
     # claims #302; this is the worktree that ticket lands in.
     ticket=302-unblocked-at-last
@@ -2179,6 +2421,239 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the ticket was not relabelled: $(ghlog)"
     [ "$(branches)" = "afk/$ticket" ] \
       || fail "the pre-existing branch was disturbed: $(branches)"
+
+    echo "case: the revision loop claims the pull request, resumes its head, and hands it back green"
+    # Plan item 12's whole job, end to end, and every acceptance criterion
+    # it can be pinned with in one run: the claim swaps the labels on the
+    # pull request itself, the session is fed the reviewer's comments and
+    # nothing else, the commit lands on the pull request's branch, the
+    # round comment says what was addressed, and the hand-off label comes
+    # back in one edit once CI is green.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export GH_INLINE="$work/fixtures/revise-inline.json"
+    export REVISE_SETUP=1
+    run revise-clean none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS GH_INLINE REVISE_SETUP
+    [ "$rc" -eq 0 ] || fail "a revisable pull request did not finish: $(cat "$state/err.log")"
+    # The claim, one edit on the pull request, never on the issue.
+    grep -q "gh pr edit 999 .* --remove-label agent-revise --add-label agent-working" "$state/gh.log" \
+      || fail "the pull request was not claimed with the documented convention: $(ghlog)"
+    if grep -q "gh issue edit 302 " "$state/gh.log"; then fail "the revision lane touched the issue: $(ghlog)"; fi
+    [ "$(revise_attempts)" -eq 1 ] || fail "expected one revision session, got $(revise_attempts)"
+    # The reviewer's words reached the model: the review summary, the issue
+    # comment, and the inline comment from the REST endpoint.
+    grep -q "Please also bump the flake lock file" "$state/revise-args-1" \
+      || fail "the reviewer's comment never reached the session: $(cat "$state/revise-args-1")"
+    grep -q "The check name does not match" "$state/revise-args-1" \
+      || fail "the reviewer's review summary never reached the session"
+    grep -q "This assertion is backwards" "$state/revise-args-1" \
+      || fail "the inline review comment never reached the session"
+    grep -q "corygyarmathy" "$state/revise-args-1" \
+      || fail "the comments were not attributed to their author"
+    # And the advisory findings did not: the body is never requested.
+    if grep -q "duplicated derivation" "$state/revise-args-1"; then
+      fail "the advisory findings were fed back, which is the thing item 6 rejected"
+    fi
+    # Fresh session, titled so the round report can be found again, with
+    # the permission overlay scoped to the one command.
+    grep -qx -- --title "$state/revise-args-1" || fail "the revision session is untitled"
+    [ "$(flag_value "$state/revise-args-1" --title)" = "$ticket-revise" ] \
+      || fail "the revision session is titled $(flag_value "$state/revise-args-1" --title)"
+    if grep -qx -- --session "$state/revise-args-1"; then
+      fail "a round with nothing to continue opened with --session"
+    fi
+    jq -e --arg v "git push*" '.permission.bash[$v] == "deny"' "$state/revise-overlay-1" >/dev/null \
+      || fail "the revision session was not denied the tracker verbs"
+    # It ran in the worktree named after the branch, on the branch itself.
+    [ "$(cat "$state/revise-cwd")" = "$state/worktrees/$ticket" ] \
+      || fail "the revision did not run in the resumed worktree: $(cat "$state/revise-cwd")"
+    [ "$(cat "$state/revise-branch")" = "afk/$ticket" ] \
+      || fail "the revision did not run on the pull request's branch: $(cat "$state/revise-branch")"
+    # The revised commit reached the same branch on origin, on top of what
+    # the reviewer read, and origin carries the same tip the local branch
+    # was reset to and pushed from.
+    [ "$(pushed_commits)" -eq 2 ] \
+      || fail "the revision did not reach origin as a further commit: $(pushed_commits) commit(s) there"
+    [ "$(git -C "$work/origin.git" rev-parse "refs/heads/afk/$ticket")" \
+      = "$(git -C "$state/checkout" rev-parse "refs/heads/afk/$ticket")" ] \
+      || fail "origin and the local branch disagree after the revision"
+    # The round comment: the durable record, and what the next poll counts
+    # the rounds from.
+    grep -q "gh pr comment 999 " "$state/gh.log" || fail "no round comment was posted: $(ghlog)"
+    grep -q "revision round 1 of 3" "$state/pr-comment-body" \
+      || fail "the round comment does not name itself, so the next poll cannot count it: $(cat "$state/pr-comment-body")"
+    grep -q "Addressed the review comment" "$state/pr-comment-body" \
+      || fail "the session's own report did not travel to the pull request"
+    grep -q "Not addressed: nothing." "$state/pr-comment-body" \
+      || fail "the report's other half - what the round did not address - did not travel: $(cat "$state/pr-comment-body")"
+    # Handed back to the reviewer in one edit, with the notification.
+    grep -q "gh pr edit 999 .* --remove-label agent-working --add-label agent-ready-for-review" "$state/gh.log" \
+      || fail "the hand-off label did not go back on: $(ghlog)"
+    [ "$(ntfy_posts)" -eq 1 ] || fail "a revised pull request published $(ntfy_posts) notification(s): $(ntfylog)"
+    grep -qF -- "-H Title: AFK agent: PR revised (#999)" "$state/ntfy.log" \
+      || fail "the revision notification was not named: $(ntfylog)"
+    [ -z "$(worktrees)" ] || fail "a revised pull request left its worktree: $(worktrees)"
+    [ "$(branches)" = "afk/$ticket" ] || fail "the branch was disturbed: $(branches)"
+
+    echo "case: the revision continues the session that built the branch"
+    # ADR 0004 §6, applied to the reviewer's comments: the failure is in
+    # the work the session wrote, and the session that wrote it can still
+    # be found - the revise worktree is the same path the original ran in,
+    # so the project-scoped session list can see it. Continued rather than
+    # re-opened, and never both.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export REVISE_SETUP=1 REVISE_SESSION=1
+    run revise-continues none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP REVISE_SESSION
+    [ "$rc" -eq 0 ] || fail "a revisable pull request did not finish: $(cat "$state/err.log")"
+    grep -q "continuing the session that built this branch" "$state/out.log" \
+      || fail "did not say the round continued the earlier session"
+    [ "$(flag_value "$state/revise-args-1" --session)" = ses_fixture ] \
+      || fail "the round opened a fresh session beside one it could have continued: $(flag_value "$state/revise-args-1" --session)"
+    if grep -qx -- --title "$state/revise-args-1"; then fail "a continued session was titled a second time"; fi
+
+    echo "case: a pull request whose only comments are the agent's own starts no session"
+    # The acceptance criterion that keeps the loop from teaching itself:
+    # without the author filter, the agent's own round comments - and the
+    # advisory findings quoted in the body it never reads - would be an
+    # instruction to the model that wrote them.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-bot-only.json"
+    run revise-bot-only none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS
+    [ "$rc" -eq 0 ] || fail "an agent-only comment thread stopped the poll: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 0 ] || fail "a session started for the agent's own comments"
+    if grep -q "gh pr edit 999 " "$state/gh.log"; then fail "claimed a pull request it will not revise: $(ghlog)"; fi
+    grep -q "starting no session" "$state/out.log" \
+      || fail "did not say why it skipped: $(cat "$state/out.log")"
+
+    echo "case: a fourth revision round does not run; the pull request goes to the stuck path"
+    # Three round comments on the pull request and a reviewer still
+    # waiting: the budget is read from the tracker - the runner has no
+    # memory between runs - and the stuck path reaches the pull request
+    # itself, since that is where the reviewer is.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-exhausted.json"
+    run revise-exhausted none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS
+    [ "$rc" -ne 0 ] || fail "a spent budget was reported as a quiet poll"
+    [ "$(revise_attempts)" -eq 0 ] || fail "a fourth revision session ran"
+    grep -q "gh pr edit 999 .* --remove-label agent-revise --add-label agent-stuck" "$state/gh.log" \
+      || fail "the pull request was not relabelled to the stuck label: $(ghlog)"
+    grep -q "gh pr comment 999 " "$state/gh.log" || fail "the hand-back never reached the pull request: $(ghlog)"
+    grep -q "will not start another round" "$state/pr-comment-body" \
+      || fail "the comment does not say what re-applying the label would do: $(cat "$state/pr-comment-body")"
+    [ "$(ntfy_posts)" -eq 1 ] || fail "a stuck pull request published $(ntfy_posts) notification(s): $(ntfylog)"
+    grep -qF "Pull request: https://github.com/corygyarmathy/dotfiles/pull/999" "$state/ntfy.log" \
+      || fail "the stuck notification did not point at the pull request: $(ntfylog)"
+
+    echo "case: a round is fed only the comments its watermark has not seen"
+    # Round 2 of a review: the comment the first round already addressed is
+    # not an instruction any more, and re-feeding it would spend the round
+    # re-answering it. Only what the reviewer wrote after the last round
+    # comment crosses.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-round2.json"
+    export REVISE_SETUP=1
+    run revise-watermark none.json fresh good pass green
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP
+    [ "$rc" -eq 0 ] || fail "the second round did not finish: $(cat "$state/err.log")"
+    grep -q "NEW: left after the last round comment" "$state/revise-args-1" \
+      || fail "the newer comment did not reach the session: $(cat "$state/revise-args-1")"
+    if grep -q "OLD: addressed in the round" "$state/revise-args-1"; then
+      fail "a comment the last round predates was fed back as new"
+    fi
+    # And the round this poll runs is counted from the tracker, not from
+    # local memory: the comment says round 2 because round 1's comment is
+    # on the pull request.
+    grep -q "revision round 2 of 3" "$state/pr-comment-body" \
+      || fail "the round was not counted from the tracker: $(cat "$state/pr-comment-body")"
+
+    echo "case: a revision that fails its gate consumes a retry, not a round"
+    # The acceptance criterion the round budget turns on: a gate failure
+    # inside the round is the implement stage's retry shape - same session,
+    # gate tail handed across - and the round only counts once its commit
+    # is pushed.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export REVISE_SETUP=1
+    run revise-retry none.json fresh "broken repair" pass green
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP
+    [ "$rc" -eq 0 ] || fail "a repaired revision did not finish: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 2 ] || fail "expected two attempts, got $(revise_attempts)"
+    grep -qx -- --session "$state/revise-args-2" || fail "the retry opened a fresh session (ADR 0004 §6)"
+    [ "$(flag_value "$state/revise-args-2" --session)" = ses_revise ] \
+      || fail "the retry continued a session other than the one that failed"
+    grep -q "the gate failed" "$state/revise-args-2" || fail "the retry was not told what the gate said"
+    [ "$(pushed_commits)" -eq 3 ] || fail "the retry did not reach origin"
+    grep -q "revision round 1 of 3" "$state/pr-comment-body" \
+      || fail "a failed gate consumed a round: $(cat "$state/pr-comment-body")"
+
+    echo "case: red CI on the revised commit is fixed inside the revision session"
+    # The same asymmetry the ticket lane's fix rounds run on: one session,
+    # judged once, pushed to the same branch, then handed back green.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export REVISE_SETUP=1
+    run revise-ci-fix none.json fresh "good good" pass "red green"
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP
+    [ "$rc" -eq 0 ] || fail "a revisable, fixable branch did not finish: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 2 ] || fail "expected one revision and one CI fix, got $(revise_attempts) session(s)"
+    [ "$(flag_value "$state/revise-args-2" --session)" = ses_revise ] \
+      || fail "the CI fix opened a fresh session (ADR 0004 §6)"
+    grep -q "These checks are not green" "$state/revise-args-2" \
+      || fail "the fix was not told what CI said: $(cat "$state/revise-args-2")"
+    [ "$(pushed_commits)" -eq 3 ] || fail "the fix did not reach origin"
+    grep -q "gh pr edit 999 .* --add-label agent-ready-for-review" "$state/gh.log" \
+      || fail "the branch did not come back to the reviewer: $(ghlog)"
+
+    echo "case: the revision's push is gated against the revised diff"
+    # The denylist is re-derived, not inherited: this diff touches
+    # secrets/, the local gate passes on it, and the pre-push gate must
+    # refuse it exactly as it would a first push. Nothing reaches origin,
+    # the round comment never posts, and the stuck path reaches the pull
+    # request - the revision lane's own hand-back shape.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export REVISE_SETUP=1
+    run revise-push-denied none.json fresh secret pass green
+    unset GH_PRS GH_PR_COMMENTS REVISE_SETUP
+    [ "$rc" -ne 0 ] || fail "a revision touching a denied path was pushed"
+    grep -qF "secrets/new.yaml" "$state/err.log" \
+      || fail "the refusal did not name the path: $(cat "$state/err.log")"
+    [ "$(pushed_commits)" -eq 1 ] || fail "the denied revision reached origin: $(pushed_commits) commit(s) there"
+    # Exactly one pull request comment: the hand-back's, not a round
+    # comment for a push that never happened.
+    [ "$(grep -c "gh pr comment" "$state/gh.log")" -eq 1 ] \
+      || fail "a round comment was posted for a push that never happened: $(ghlog)"
+    grep -q "gh pr edit 999 .* --remove-label agent-working --add-label agent-stuck" "$state/gh.log" \
+      || fail "the pull request was not relabelled on the stuck path: $(ghlog)"
+    grep -q "Nothing was pushed" "$state/pr-comment-body" \
+      || fail "the hand-back does not say what state it left: $(cat "$state/pr-comment-body")"
+
+    echo "case: a revision run that died mid-round has its claim undone by the guard"
+    # The revision lane's claim lives on the pull request - the ticket
+    # lane's lives on the issue - so a dead revision run leaves exactly one
+    # fingerprint: an open pull request carrying `agent-working` beside a
+    # leftover worktree. The guard swaps the labels back, so the reviewer's
+    # trigger label survives a run that did not, and the next ticket is
+    # never blocked by it.
+    run revise-guard mixed.json fresh good pass green
+    git -C "$state/checkout" worktree add "$state/worktrees/$ticket" "afk/$ticket"
+    export GH_PR_OPEN=1 GH_PR_CLAIMED=1
+    run revise-guard second-ticket.json reuse
+    unset GH_PR_OPEN GH_PR_CLAIMED
+    [ "$rc" -eq 0 ] || fail "the poll after a dead revision run refused to start: $(cat "$state/err.log")"
+    grep -q "gh pr edit 999 .* --remove-label agent-working --add-label agent-revise" "$state/gh.log" \
+      || fail "the dead run's claim was not undone: $(ghlog)"
+    if grep -q "gh issue comment 302 " "$state/gh.log"; then
+      fail "a mid-revision pull request was handed back as a stuck ticket: $(ghlog)"
+    fi
+    [ -z "$(worktrees)" ] || fail "the dead run's worktree survived: $(worktrees)"
+    grep -q "gh issue edit 330 " "$state/gh.log" \
+      || fail "the next ticket was never claimed: $(ghlog)"
 
     echo "case: merge is never in the runner's command surface"
     # ADR 0004 §9 - merge stays a human act - is enforced by nothing else.

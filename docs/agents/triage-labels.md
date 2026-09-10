@@ -14,11 +14,17 @@ roles to the actual label strings used in this repo's issue tracker.
 Three further labels are written by the AFK runner rather than applied at
 triage, and are here because they share the tracker with the ones above:
 
-| Label                    | Applied to       | Meaning                                                        |
-| ------------------------ | ---------------- | -------------------------------------------------------------- |
-| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now   |
-| `agent-stuck`            | the issue        | The AFK runner stopped without finishing; its comments say why |
-| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run      |
+| Label                    | Applied to       | Meaning                                                          |
+| ------------------------ | ---------------- | ---------------------------------------------------------------- |
+| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now     |
+| `agent-stuck`            | the issue        | The AFK runner stopped without finishing; its comments say why   |
+| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run        |
+| `agent-revise`           | the pull request | A person's review comments go back to the agent for another pass |
+
+`agent-working` and `agent-stuck` sit on the issue on the ticket lane, and on
+the pull request on the revision lane (#196): only a revision run ever puts
+`agent-working` on a pull request, which is what makes a dead revision run
+recognisable from outside.
 
 The runner claims by swapping `ready-for-agent` for `agent-working` in a single
 edit, rather than by assigning itself, because GitHub will not let a GitHub App
@@ -45,8 +51,12 @@ writes the review's findings into the body, so a pull request carrying the label
 carries the findings too (ADR 0007). Deliberately **not** `ready-for-human`: that
 is an issue triage role meaning "requires human implementation", and on an
 agent's own pull request it would read as "an agent could not do this" - the
-opposite of what happened. It joins `agent-working` and `agent-stuck` in an
-`agent-*` lifecycle family that `agent-revise` (#196) will extend.
+opposite of what happened. It joins `agent-working` and `agent-stuck` in the
+`agent-*` lifecycle family, which `agent-revise` extends: applying it to one
+of the runner's own pull requests has the runner read the review comments
+from accounts other than its own back to a revision session that pushes to
+the same branch, three rounds per pull request before the stuck path, and
+the hand-off label goes back on once CI is green.
 
 **It is a signal, not a control.** It says CI is green and a review has run; it
 does not say "you may merge", and nothing stops a merge before it is applied.

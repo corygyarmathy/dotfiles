@@ -15,6 +15,7 @@
   ntfyTopic,
   deniedPaths,
   sessionListDepth,
+  botLogin,
   handoffLabel,
   credentialNames,
   toolNames,
@@ -40,6 +41,9 @@
   reviewOverlay,
   reviewTimeout,
   reviewAxes,
+  revisePrompt,
+  reviseLabel,
+  maxRevisionRounds,
   label,
   baseBranch,
   branchPrefix,
@@ -52,7 +56,9 @@ let
 
   # Pipeline order: claim -> isolate -> implement -> push gate -> push ->
   # pull request -> watch CI -> review -> hand off, with the stuck path
-  # available throughout (see ADR 0007).
+  # available throughout (see ADR 0007). 150-revise.sh is the second entry
+  # point (#196): the issue poll hands the run over to it when its
+  # queue is empty, and the stages in between read `$flow` and step aside.
   stageFiles = [
     "00-env.sh"
     "10-util.sh"
@@ -69,6 +75,7 @@ let
     "120-review.sh"
     "130-verify-review.sh"
     "140-handoff.sh"
+    "150-revise.sh"
   ];
 
   # Fragments carry a `# shellcheck shell=bash` directive so they lint
@@ -126,6 +133,10 @@ let
     "@REVIEW_OVERLAY@" = lib.escapeShellArg reviewOverlay;
     "@REVIEW_TIMEOUT@" = toString reviewTimeout;
     "@REVIEW_AXES@" = toString reviewAxes;
+    "@REVISE_PROMPT@" = toString revisePrompt;
+    "@REVISE_LABEL@" = reviseLabel;
+    "@MAX_REVISION_ROUNDS@" = toString maxRevisionRounds;
+    "@BOT_LOGIN@" = botLogin;
     "@LABEL@" = label;
     "@BASE_BRANCH@" = baseBranch;
     "@BRANCH_PREFIX@" = branchPrefix;
