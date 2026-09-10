@@ -19,8 +19,8 @@
         "month": "<span color='#E6C384'><b>{}</b></span>",
         "weekdays": "<span color='#FFA066'><b>{}</b></span>",
         "days": "<span color='#DCD7BA'><b>{}</b></span>",
-        "today": "<span color='#E46876'><b>{}</b></span>",
-      },
-    },
-  },
+        "today": "<span color='#E46876'><b>{}</b></span>"
+      }
+    }
+  }
 }
