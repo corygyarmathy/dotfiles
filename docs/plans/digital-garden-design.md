@@ -1,30 +1,32 @@
 # Plan: theme and navigation for the digital garden
 
-Everything in this plan is scoped against `modules/services/digital-garden/lib/hugo/` — the layouts, partials, render hooks and stylesheet that are the whole design. There is no theme underneath to fight, so every item here is an edit to files this repository owns. The summary table below carries what shipped when; an item's own body adds a dated section only where there is a finding or reversal worth keeping.
+Everything in this plan is scoped against `modules/services/digital-garden/lib/hugo/` — the layouts, partials, render hooks and stylesheet that are the whole design. There is no theme underneath to fight, so every item here is an edit to files this repository owns. The summary table below carries what shipped when; an item's own body adds a dated section only where there is a finding or reversal worth keeping. A note inside an item handing part of its record to a later item is a cross-reference, not history, and reads in the present tense wherever it sits.
 
-| #   | Item                                 | Size   | Depends on | Status                                                                                                                              |
-| --- | ------------------------------------ | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Rendering fixture + screenshot loop  | small  | -          | **done** 2026-08-27                                                                                                                 |
-| 2   | Kanagawa palette                     | medium | 1          | **done** 2026-08-27; light ground un-lightened 2026-09-02                                                                           |
-| 3   | An index of everything published     | small  | -          | **done** 2026-08-30                                                                                                                 |
-| 4   | Right-hand rail: contents, backlinks | medium | 1          | **done** 2026-08-27                                                                                                                 |
-| 5   | Link and image treatment             | small  | 2          | **done** 2026-08-27; the image mat reverted the same day                                                                            |
-| 6   | Typography                           | small  | 2          | built and **reverted** 2026-08-27                                                                                                   |
-| 7   | Wikilink hover previews              | medium | -          | optional, and less urgent after 15                                                                                                  |
-| 8   | Footnotes as sidenotes               | large  | 4          | **done** 2026-08-28 (#79)                                                                                                           |
-| 9   | Reading time in the dateline         | small  | -          | **absorbed into 17**                                                                                                                |
-| 10  | Polish: print, selection, motion     | small  | 2          | **done** 2026-08-27                                                                                                                 |
-| 11  | Rendering gaps found by review       | small  | 1          | **done** 2026-08-28                                                                                                                 |
-| 12  | The dateline in the empty margin     | small  | 4          | **superseded by 17**                                                                                                                |
-| 13  | Rename-stable ledger (defect)        | small  | -          | **done** 2026-08-31 (#118)                                                                                                          |
-| 14  | Maturity: model, counter, override   | medium | 13         | **done** 2026-08-31 (#121)                                                                                                          |
-| 15  | Growth marks, topic hue, link marks  | small  | 14         | **done** 2026-08-31; hue ring 2026-09-01                                                                                            |
-| 16  | Callout icons on Obsidian's mapping  | small  | -          | **done** 2026-08-31                                                                                                                 |
-| 17  | A margin on every note               | medium | 14, 15     | **done** 2026-09-01                                                                                                                 |
-| 18  | The bonsai                           | large  | 14         | **done** 2026-08-31; rebuilt 2026-09-01; grows and reseeds 2026-09-03; snaps rather than fades, and grows from the tips, 2026-09-04 |
-| 19  | The home page, composed once         | small  | 18         | **done** 2026-08-31; anchored 2026-09-01                                                                                            |
-| 20  | Ambient Life on the 404              | small  | -          | **done** 2026-08-31                                                                                                                 |
-| -   | Graph view                           | -      | -          | **rejected**, see below; the bonsai is not a revisit                                                                                |
+| #   | Item                                              | Size   | Depends on | Status                                                                                                                              |
+| --- | ------------------------------------------------- | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Rendering fixture + screenshot loop               | small  | -          | **done** 2026-08-27                                                                                                                 |
+| 2   | Kanagawa palette                                  | medium | 1          | **done** 2026-08-27; light ground un-lightened 2026-09-02                                                                           |
+| 3   | An index of everything published                  | small  | -          | **done** 2026-08-30                                                                                                                 |
+| 4   | Right-hand rail: contents, backlinks              | medium | 1          | **done** 2026-08-27                                                                                                                 |
+| 5   | Link and image treatment                          | small  | 2          | **done** 2026-08-27; the image mat reverted the same day                                                                            |
+| 6   | Typography                                        | small  | 2          | built and **reverted** 2026-08-27                                                                                                   |
+| 7   | Wikilink hover previews                           | medium | -          | optional, and less urgent after 15                                                                                                  |
+| 8   | Footnotes as sidenotes                            | large  | 4          | **done** 2026-08-28 (#79)                                                                                                           |
+| 9   | Reading time in the dateline                      | small  | -          | **absorbed into 17**                                                                                                                |
+| 10  | Polish: print, selection, motion                  | small  | 2          | **done** 2026-08-27                                                                                                                 |
+| 11  | Rendering gaps found by review                    | small  | 1          | **done** 2026-08-28                                                                                                                 |
+| 12  | The dateline in the empty margin                  | small  | 4          | **superseded by 17**                                                                                                                |
+| 13  | Rename-stable ledger (defect)                     | small  | -          | **done** 2026-08-31 (#118)                                                                                                          |
+| 14  | Maturity: model, counter, override                | medium | 13         | **done** 2026-08-31 (#121)                                                                                                          |
+| 15  | Growth marks, topic hue, link marks               | small  | 14         | **done** 2026-08-31; hue ring 2026-09-01                                                                                            |
+| 16  | Callout icons on Obsidian's mapping               | small  | -          | **done** 2026-08-31                                                                                                                 |
+| 17  | A margin on every note                            | medium | 14, 15     | **done** 2026-09-01                                                                                                                 |
+| 18  | The bonsai                                        | large  | 14         | **done** 2026-08-31; rebuilt 2026-09-01; grows and reseeds 2026-09-03; snaps rather than fades, and grows from the tips, 2026-09-04 |
+| 19  | The home page, composed once                      | small  | 18         | **done** 2026-08-31; anchored 2026-09-01                                                                                            |
+| 20  | Ambient Life on the 404                           | small  | -          | **done** 2026-08-31                                                                                                                 |
+| 21  | One masthead, eight things found by reading       | medium | 19         | **done** 2026-09-03                                                                                                                 |
+| 22  | The home and note pages, and a settled type scale | large  | 21         | **open** (spec: #155)                                                                                                               |
+| -   | Graph view                                        | -      | -          | **rejected**, see below; the bonsai is not a revisit                                                                                |
 
 ## Decisions, 2026-08-31
 
@@ -606,6 +608,8 @@ Half a day. The risk that item 12 recorded — two grey blocks reading as a side
 
 The left column is now the note's margin, on every note; the whole `<aside>` renders unconditionally and its contents are conditional, exactly as the plan says. The facts run cheapest-first with a small uppercase label each — **Published**, **Updated** when the ledger has moved on, **Reading time**, **Maturity** — then the section map when a note has three or more `##`s, then the backlinks the rail already carried. The dateline is the one fact that exists twice: the article keeps it at the narrow width (a date belongs above prose on a phone) and the margin's own dates show at the wide width, the two swapping in CSS so the same fact is never on the page twice.
 
+**Reversed by item 22.** The margin becomes the note's identity card there — shelf, maturity chip, thesis ahead of the dates — and the cheapest-first reasoning above is why the old order was the right one for what the margin then held.
+
 **The word counts are computed in the filter, and the plan's guess was right.** `publish-filter.py` emits `sections` — id, title and words per `##` section, ids under the same `anchorize` rule the wikilink rewriter already used — plus `word_count` and a `reading_time` (one minute per 200 words, floored to 1). The margin renders the map straight from that frontmatter, so Hugo's `.Fragments` is not consulted at all; the old contents list's entire logic (the synthetic-root descent and the three-section threshold) moved out of the template with it.
 
 **The first cut of the map was built, looked at, and rejected — and the reason is the item's one real design decision.** It drew the map as a vertical strip of blocks whose HEIGHTS were proportional to their word counts, with the section names revealed on hover. That put two variables on one axis: vertical extent had to carry both _how big is this section_ and _how much room does its name need_, and the vault settles that fight in favour of neither. The Riverview writeup has fourteen `##`s running from 790 words down to 66, a 12:1 ratio. Give the 66-word section the line its name needs and the strip is eleven hundred pixels tall; size the strip to fit and that section gets four pixels and its name has to go behind the pointer. It shipped sized-to-fit, and what it cost was the thing the rail existed for: **a contents list you have to hover to read is not a contents list.** Three of the six faults found on looking at it came from that one choice — unreadable segments, a stack of grey slabs that read as a loading skeleton rather than as apparatus, and the loss of the table of contents.
@@ -923,6 +927,8 @@ Reported as four faults in one composition: the header hangs off the right of th
 
 **Two faults the measurements caught that reading the stylesheet would not.** The gap above the tree was 10px and the gap below it 63px, because the pot's feet are overlines and sit at the top of their line box — so the last row of the picture is about one and a quarter lines of empty space, and the tree read as stuck to the header and adrift from its own label. `.bonsai` takes `margin-block-end: -1.15em`, in `em` so it stays proportional as the tree is sized from its column, and the two gaps are now 41px and 34px. And the tools rode half a line above the words beside them: `.nameplate-tools` still carried the `margin-bottom: 1rem` from when it had a band of its own, and in a bar that margin is part of what is being centred. Both were found by measuring ink in a screenshot, which is the only way either of them was ever going to be found.
 
+**Superseded in part by item 22.** The colophon and the home page's margin are that item's work; the composition above is what it starts from.
+
 ### Cost and risk
 
 Two hours, and it is the largest change in how the site feels for the least code on this list.
@@ -1008,6 +1014,40 @@ The name can still shrink, as the last thing that happens rather than the first.
 ### Cost and risk
 
 One session, plus the correction above. The risk is the three container steps, which are measured against one site title and three link names and will be wrong for a fourth link or a much longer name — wrong in the direction of an ellipsis on the name rather than of a broken bar, which is why the shrink is there. `@container` needs Chrome 105, Safari 16 or Firefox 110; the tree's plate has depended on container queries since item 19, so this adds no floor the site did not already have.
+
+## 22. The home and note pages, and a settled type scale
+
+The settled design is `docs/plans/garden-redesign-handoff.md`, with the two `v2` files in `docs/plans/garden-redesign/` as the visual reference; neither is in the repository yet, and until the handoff lands #155 is the record of what it settles. The bundle's stylesheet is a frozen snapshot and the repository's copy is authoritative. The full spec is #155, and the grilling session on it produced three kinds of correction to the handoff, which are what this item records: three of its stated changes already ship and would be "implemented" a second time, four decisions nearby are recorded elsewhere and would be reverted by following it literally, and one recorded ordering is deliberately reversed. Vocabulary: _shelf_ to a reader and `topic` in code, _maturity_ spoken as seedling, sapling and evergreen with no translation layer, the _margin_ a named side.
+
+### The scope
+
+Four changes, each its own PR after this record:
+
+- **The type scale, alone and first.** Five sizes replace the nine the stylesheet has drifted to, because hierarchy is carried today by differences too small to read as deliberate. Facts, counts and dates are set in mono with tabular figures, so a date reads as data rather than as prose. It ships alone because it is the only site-wide change in the set, and a regression anywhere should bisect to a single stylesheet commit.
+- **The note page's margin becomes an identity card.** Its shelf, named in the shelf's own colour; its maturity as a chip; its thesis; then the dates and reading time; then the section map; then what cites it. The thesis is the change that matters — it already exists in frontmatter and today surfaces everywhere except on the note itself.
+- **A two-pixel progress hairline under the masthead**, on every width. It shares the existing reading-line computation with the section map — the position is written by the same function, before its early return for unsectioned notes — so the bar and the map cannot disagree, and it works on a note with too few headings to map. It is what gives the narrow layout back its sense of place, lost when the section map became wide-only.
+- **The home page's margin**, beside the tree rather than below it. The garden's counts and a shelf tally in which each shelf's swatch is the hue its notes take on the bonsai — the adjacency that turns the tree's colouring into a legend. The colophon is superseded and its counting logic moves into this partial rather than being deleted and rewritten. Authored prose with the links inside sentences replaces the generated list and ships last, so it is written against the rendered margin.
+
+### Already shipped; not work to do
+
+The handoff presents three things as changes to make. They are the site as it stands, recorded here so no later session builds them a second time.
+
+- **The three-column armature.** The layout wrapper already builds the capped, centred grid with equal outer tracks at the wide breakpoint; the rail has occupied the left track and the sidenotes the right since item 8 moved the rail across; the margin has filled the left column unconditionally since item 17; and the home page already uses the same wrapper. Presenting the armature as new is a misreading of the stylesheet.
+- **The dateline's wide-screen hiding.** The margin has carried the dates at the wide width since item 17, with the article's dateline carrying them at the narrow width and the two swapping in CSS. Under this item only the dateline's size and its mono treatment change.
+- **The masthead's bottom padding.** Item 21 settled the masthead's geometry, and its bottom padding is already correct. The hairline removes only the masthead's bottom _margin_, and that removal is scoped to the note page: applied globally it would move the home page's content up and reintroduce the between-page flinch item 21 exists to have fixed. The masthead's own geometry — name, links, tools, rule — stays byte-identical on every page.
+
+### Recorded elsewhere, and not to be reverted
+
+Four decisions sit near this work, each with its reason already on record, named here with where that record lives. Following the handoff literally reverts all four; an agent working nearby leaves them alone.
+
+- **Grid items align on their first baseline, not their box tops.** Box-top alignment strands the margin's small label in the leading above the title's letterforms. The full reasoning is the comment on `align-items` in the stylesheet's `.layout` rule, where the choice is made.
+- **The margin's sticky offset, and its viewport-height cap with internal scroll, stay as they are.** The cap matters more after this change, not less, because the identity card is taller than the fact list it replaces. Both live on `.rail` in the stylesheet, whose comment is the record.
+- **The margin column's width stays a shared custom property**, read by the rail and the sidenote alike, rather than a hard-coded value. `--margin-col`'s comment in the stylesheet is the record: one value for both, because they are the same margin seen from two sides.
+- **The shelf is the leaf folder, never its ancestry.** The published tree is flat and the filter deliberately discards the ancestry; the note page's shelf label reads `Lighting`, not `Reference · Lighting`. `note_topic`'s docstring in `publish-filter.py` is the record, and item 15 carries the same decision from this plan's side.
+
+### The reversal: identity before the dates
+
+The margin's facts run cheapest-fact-first — dates, reading time, maturity, then the section map, then backlinks — and item 12's answer and item 17's shipped note both record the reason: labelled and ordered cheapest-first, a stack of small grey blocks reads as apparatus belonging to the essay rather than as a sidebar. That reasoning stands above, unchanged. This item reverses the order deliberately: the margin becomes the note's identity card, and identity — shelf, maturity chip, thesis — comes ahead of the dates. The old order was chosen for a block whose contents were all cheap facts; this one gains the thesis, which is the strongest thing in it, and a date stops being the first thing a reader learns about a note. The margin partial and the comments beside it still argue for the old order, which is exactly why the reversal is written here: read against the partial, this section is what makes the new order legible as a decision rather than as a bug.
 
 ## Rejected: a graph view
 
