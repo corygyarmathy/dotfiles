@@ -4,11 +4,9 @@ Status: running unattended on homelab01 since 2026-09-10. Follows [ADR 0004](../
 
 ## Active
 
-| #   | Item        | Issue                                                        | Status      |
-| --- | ----------- | ------------------------------------------------------------ | ----------- |
-| 16  | Quiet hours | [#211](https://github.com/corygyarmathy/dotfiles/issues/211) | not started |
+Nothing is currently in flight.
 
-Item 12 (the revision loop) shipped: it is the second entry point in `modules/services/afk-agent/lib/stages/150-revise.sh` and its behaviour is pinned by the revise cases in `checks/afk-agent-runner.nix`. Item 15 (the review's findings as a pull request comment) shipped: it is the hand-off in `modules/services/afk-agent/lib/stages/140-handoff.sh`, and the hand-off cases in `checks/afk-agent-runner.nix` pin it. Both have moved to "Where past items went" below. Item 16 has not yet been scoped against this plan; see #211 for its spec.
+Item 12 (the revision loop) shipped: it is the second entry point in `modules/services/afk-agent/lib/stages/150-revise.sh` and its behaviour is pinned by the revise cases in `checks/afk-agent-runner.nix`. Item 15 (the review's findings as a pull request comment) shipped: it is the hand-off in `modules/services/afk-agent/lib/stages/140-handoff.sh`, and the hand-off cases in `checks/afk-agent-runner.nix` pin it. Item 16 (quiet hours) shipped: it is the `busyTimes` option and the gate at the front of the poll in `modules/services/afk-agent/lib/stages/45-quiet-hours.sh`, and the quiet-hours cases in `checks/afk-agent-runner.nix` pin it. All have moved to "Where past items went" below.
 
 Each issue carries its own problem statement, approach and acceptance criteria - that is the spec of record and is not duplicated here. This table exists to say what is currently being worked and what each item is waiting on.
 
@@ -34,3 +32,4 @@ Every item above the last row shipped and is no longer tracked here. Their specs
 | 15  | The review's findings become a pull request comment  | [#202](https://github.com/corygyarmathy/dotfiles/issues/202)                                                               | `modules/services/afk-agent/lib/stages/140-handoff.sh` (the findings comment, caveat attached); the hand-off cases in `checks/afk-agent-runner.nix`                                                                             |
 | 17  | Rebase onto the base branch before the pull request  | [#242](https://github.com/corygyarmathy/dotfiles/issues/242)                                                               | `modules/services/afk-agent/lib/stages/85-rebase.sh`; the rebase cases in `checks/afk-agent-runner.nix`                                                                                                                         |
 | 12  | Revision loop: the human's review, back to the agent | [#196](https://github.com/corygyarmathy/dotfiles/issues/196)                                                               | `modules/services/afk-agent.nix` (the revision frontier in `50-poll-claim.sh` and the revision flow in `150-revise.sh`, the `revisingLabel` and `maxRevisionRounds` options); the revise cases in `checks/afk-agent-runner.nix` |
+| 16  | Quiet hours                                          | [#211](https://github.com/corygyarmathy/dotfiles/issues/211)                                                               | `modules/services/afk-agent.nix` (the `busyTimes` option); the gate at the front of the poll in `modules/services/afk-agent/lib/stages/45-quiet-hours.sh`; the quiet-hours cases in `checks/afk-agent-runner.nix`               |

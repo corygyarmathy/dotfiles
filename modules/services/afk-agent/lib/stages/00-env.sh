@@ -82,3 +82,10 @@ ntfy_topic="@NTFY_TOPIC@"
 denied=(
 	@DENIED_LINES@
 )
+
+# The busy windows (#211), in the shape `HH:MM-HH:MM`. Empty by default,
+# which is what production evaluates to - the gate in 45-quiet-hours.sh
+# does nothing at all on an empty array.
+busy=(
+	@BUSY_LINES@
+)

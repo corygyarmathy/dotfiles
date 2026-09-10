@@ -56,6 +56,14 @@
 # gate, the push and the CI watch with the ticket lane, and it has its own
 # bounded round budget: three rounds per pull request, then the stuck
 # path reaches the pull request instead of the ticket.
+#
+# Quiet hours (#211): `busyTimes` holds the windows - start-end, possibly
+# spanning midnight - during which a poll starts nothing, because usage
+# billing (OpenCode Zen, the fallback after Go's capacity) is priced by
+# the hour. The gate sits at the front of the poll, ahead of the revision
+# frontier and the ticket queue: a run that has already started when a
+# window opens is not killed mid-flight, because a stranded ticket is a
+# worse price than the API spend it saves.
 {
   config,
   lib,
@@ -172,6 +180,33 @@ let
   # Watching CI is bounded in POLLS, not seconds (ADR 0007): the harness
   # drives this script with the interval at zero, so second-denominated
   # bounds would test the fixture's numbers instead of production's.
+
+  # The type of one `busyTimes` entry (#211): `HH:MM-HH:MM`, both ends in
+  # the host's local time. The regex carries the format; the check beside
+  # it carries the one thing a format cannot say - that the two ends
+  # differ, because a window whose ends are equal is either a zero-length
+  # block or an all-day one, and neither is what anybody writing one
+  # meant. A window spanning midnight is the ordinary shape here
+  # (`23:30-06:30`), so start-before-end is not assumed anywhere.
+  busyWindowType =
+    let
+      time = "([01][0-9]|2[0-3]):[0-5][0-9]";
+    in
+    lib.types.addCheck
+      (
+        lib.types.strMatching "${time}-${time}"
+        // {
+          description = "busy time window (HH:MM-HH:MM)";
+        }
+      )
+      (
+        window:
+        let
+          ends = lib.splitString "-" window;
+        in
+        lib.head ends != lib.last ends
+        || throw "the busy time window '${window}' has equal ends; write a window with a start and a different end"
+      );
 
   # The implement session's instructions: the pilot prompt plus the `ci.yml`
   # matrix exception and the failure modes real runs kept reproducing.
@@ -367,6 +402,7 @@ let
         model
         variant
         reviewModel
+        busyTimes
         maxAttempts
         attemptTimeout
         gateTimeout
@@ -433,6 +469,39 @@ in
         how often the GitHub API is asked a question whose answer is almost
         always "nothing to do". A quarter hour is well inside that tolerance
         and well inside any rate limit.
+      '';
+    };
+
+    busyTimes = lib.mkOption {
+      type = lib.types.listOf busyWindowType;
+      default = [ ];
+      example = [
+        "08:00-18:00"
+        "23:30-06:30"
+      ];
+      description = ''
+        Windows during which the runner starts no work (#211). Each entry
+        is `HH:MM-HH:MM` in the host's local time, and a window may span
+        midnight (`23:30-06:30`). The default is the empty list: no
+        restrictions.
+
+        The reason the option exists at all is price, not load: OpenCode
+        Zen - the usage-based fallback behind this fleet's fixed Go
+        capacity - bills differently by the hour, and so does the Deepseek
+        model the review stage runs. A window is therefore a spend
+        boundary, not an availability one, and it is enforced at the front
+        of the poll: the timer keeps firing, and a run whose poll starts
+        inside a window logs that it is doing nothing and exits 0 - ahead
+        of the revision frontier and the ticket queue alike, so a revision
+        round does not slip through either.
+
+        What the gate does not do is stop a run that already started. A
+        window that opens mid-flight is not worth killing a claimed ticket
+        for - concurrency here is one (ADR 0004 §8), so a run in flight
+        would have blocked every later poll anyway, and the stranded
+        ticket, the open worktree and the hand-back it would need are a
+        worse price than the API spend it saves. A window is a scheduling
+        restriction, and scheduling is what the poll is.
       '';
     };
 
