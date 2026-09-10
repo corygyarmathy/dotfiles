@@ -41,6 +41,14 @@ revising_label="@REVISING_LABEL@"
 # human: a disagreement between a reviewer and the model is otherwise
 # unbounded spend.
 max_revision_rounds="@MAX_REVISION_ROUNDS@"
+# The quiet window (#249), in minutes since midnight, read from this
+# host's own `system.autoUpgrade` configuration in the module: the
+# nightly upgrade may reboot inside its reboot window when the kernel
+# changed, and a run in flight when that happens dies with the tokens
+# already spent on it. Empty when the host defines no reboot window,
+# which is the same as "no quiet window".
+quiet_start="@QUIET_START@"
+quiet_end="@QUIET_END@"
 # The runner's own login (ADR 0006). The revision loop's author filter
 # reads it, so that the agent's own words on a pull request - the round
 # comments, and the advisory findings quoted in the body - never become

@@ -14,6 +14,8 @@
   ntfyUrl,
   ntfyTopic,
   deniedPaths,
+  quietStart,
+  quietEnd,
   sessionListDepth,
   botLogin,
   handoffLabel,
@@ -109,6 +111,10 @@ let
     # the inline script produced, not anything the substitution mechanism
     # supplies. checks/afk-agent-runner.nix pins this behaviour.
     "@DENIED_LINES@" = "  " + lib.concatMapStringsSep "\n        " (p: "\"${p}\"") deniedPaths;
+    # The quiet window (#249), in minutes since midnight, empty when this
+    # host defines no reboot window to be quiet around.
+    "@QUIET_START@" = quietStart;
+    "@QUIET_END@" = quietEnd;
     "@SESSION_LIST_DEPTH@" = toString sessionListDepth;
     "@HANDOFF_LABEL@" = handoffLabel;
     "@REQUIRE_CREDENTIAL_LINES@" = lib.concatMapStringsSep "\n      " (

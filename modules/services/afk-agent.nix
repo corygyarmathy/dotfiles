@@ -42,6 +42,11 @@
 # ADR 0004 §8). The runner adds a guard against a *dead* run's leftovers,
 # which systemd would otherwise start the next poll on top of.
 #
+# The poll itself is bounded by a quiet window (#249): around the nightly
+# upgrade's reboot window - read from this host's own `system.autoUpgrade`
+# configuration - it starts nothing new, so a run does not begin only to be
+# killed by the reboot that may land inside that window.
+#
 # The revision loop (#196, as re-triggered by #247) is a second entry point on the
 # same runner, not a second runner: the same poll checks the revision
 # frontier before it claims ticket work - a human waiting on a revision is
@@ -159,6 +164,64 @@ let
   # so notifications must not depend on the tunnel standing up.
   ntfyUrl = "http://127.0.0.1:${toString config.cg.service.ntfy.port}";
   ntfyTopic = config.cg.service.monitoring.alertmanager.ntfy.topic;
+
+  # The quiet window (#249): the poll declines to start new work while the
+  # nightly upgrade's reboot window is near, so a run does not begin only
+  # to be killed moments later by the reboot that follows a kernel change.
+  # An eligible ticket is left carrying `$label` and is claimed by a later
+  # poll, once the window has passed.
+  #
+  # The window is read from the host's own `system.autoUpgrade` - the same
+  # configuration that decides when the reboot may happen - rather than
+  # restated here, which is what keeps the quiet window and the reboot
+  # from drifting apart. It exists when this host actually reboots
+  # unattended: auto-upgrade on, `allowReboot` on, and a reboot window
+  # defined; anything else and there is no window to be quiet around.
+  #
+  # The one new constant is a lead, not a time of day: the quiet window
+  # opens `quietLeadMinutes` before the reboot window's lower bound and
+  # closes at its upper bound. Polls are a quarter hour apart and runs
+  # last tens of minutes to hours, so the last poll before the window
+  # would otherwise claim a run still in flight when the reboot comes; an
+  # hour clears four polls. The reboot itself only ever lands inside the
+  # reboot window (the upgrade script checks the same clock the runner
+  # reads below), so `rebootWindow.upper` is the honest end.
+  quietLeadMinutes = 60;
+
+  # Minutes since midnight, from the reboot window's own "HH:MM" form.
+  hhmmToMinutes =
+    t:
+    let
+      m = builtins.match "([[:digit:]]{2}):([[:digit:]]{2})" t;
+    in
+    if m == null then
+      throw "afk-agent: '${t}' is not a HH:MM time of day"
+    else
+      lib.strings.toIntBase10 (builtins.elemAt m 0) * 60 + lib.strings.toIntBase10 (builtins.elemAt m 1);
+
+  quietWindow =
+    let
+      upgrade = config.system.autoUpgrade;
+    in
+    if !(upgrade.enable && upgrade.allowReboot && upgrade.rebootWindow != null) then
+      null
+    else
+      {
+        # The window may cross midnight, which is why the runner compares
+        # minutes arithmetically rather than "HH:MM" lexically. The lead is
+        # well under a day, so one subtraction of 1440 is the whole wrap.
+        start =
+          let
+            raw = hhmmToMinutes upgrade.rebootWindow.lower - quietLeadMinutes;
+          in
+          if raw < 0 then raw + 1440 else raw;
+        end = hhmmToMinutes upgrade.rebootWindow.upper;
+      };
+
+  # Empty when there is no quiet window: the runner reads an empty
+  # `$quiet_start` and the gate never fires.
+  quietStart = if quietWindow == null then "" else toString quietWindow.start;
+  quietEnd = if quietWindow == null then "" else toString quietWindow.end;
 
   # Who the commits are by: the agent's, not the operator's (ADR 0006).
   # Explicit because git cannot infer it here - HOME is the StateDirectory
@@ -314,6 +377,8 @@ let
         ntfyUrl
         ntfyTopic
         deniedPaths
+        quietStart
+        quietEnd
         appId
         botLogin
         commitName
