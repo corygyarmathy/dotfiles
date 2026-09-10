@@ -14,17 +14,17 @@ roles to the actual label strings used in this repo's issue tracker.
 Three further labels are written by the AFK runner rather than applied at
 triage, and are here because they share the tracker with the ones above:
 
-| Label                    | Applied to       | Meaning                                                          |
-| ------------------------ | ---------------- | ---------------------------------------------------------------- |
-| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now     |
-| `agent-stuck`            | the issue        | The AFK runner stopped without finishing; its comments say why   |
-| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run        |
-| `agent-revise`           | the pull request | A person's review comments go back to the agent for another pass |
+| Label                    | Applied to       | Meaning                                                        |
+| ------------------------ | ---------------- | -------------------------------------------------------------- |
+| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now   |
+| `agent-stuck`            | the issue        | The AFK runner stopped without finishing; its comments say why |
+| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run      |
+| `agent-revising`         | the pull request | The AFK runner claimed this pull request for a revision round  |
 
-`agent-working` and `agent-stuck` sit on the issue on the ticket lane, and on
-the pull request on the revision lane (#196): only a revision run ever puts
-`agent-working` on a pull request, which is what makes a dead revision run
-recognisable from outside.
+`agent-working` and `agent-stuck` sit on the issue on the ticket lane, and
+`agent-stuck` and `agent-revising` sit on the pull request on the revision lane
+(#196): only a revision run ever puts `agent-revising` on a pull request, which
+is what makes a dead revision run recognisable from outside.
 
 The runner claims by swapping `ready-for-agent` for `agent-working` in a single
 edit, rather than by assigning itself, because GitHub will not let a GitHub App
@@ -53,11 +53,22 @@ the findings too (ADR 0007). Deliberately **not** `ready-for-human`: that
 is an issue triage role meaning "requires human implementation", and on an
 agent's own pull request it would read as "an agent could not do this" - the
 opposite of what happened. It joins `agent-working` and `agent-stuck` in the
-`agent-*` lifecycle family, which `agent-revise` extends: applying it to one
-of the runner's own pull requests has the runner read the review comments
-from accounts other than its own back to a revision session that pushes to
-the same branch, three rounds per pull request before the stuck path, and
-the hand-off label goes back on once CI is green.
+`agent-*` lifecycle family, which `agent-revising` extends: while a revision
+round runs, the claim is the only label the pull request carries, and the
+hand-off label goes back on once CI is green.
+
+The revision trigger itself (#196, as re-triggered by #247) is not a label but
+a `/revise` comment, written by an account other than the agent's on one of the
+runner's own pull requests: the runner reads that request - or, when the
+comment carries no text, the review comments written since its last word on
+the pull request - back into a revision session that pushes to the same
+branch, three rounds per pull request before the stuck path. A review comment
+without `/revise` starts nothing, and a half-written review is exactly that.
+The trigger is only visible on a pull request carrying `agent-ready-for-review`:
+once the stuck path relabels it `agent-stuck`, re-entering the loop takes both
+the hand-off label re-applied and a fresh `/revise` written after the hand-back
+comment - the request that started the last round was consumed by the round
+that acknowledged it.
 
 **It is a signal, not a control.** It says CI is green and a review has run; it
 does not say "you may merge", and nothing stops a merge before it is applied.

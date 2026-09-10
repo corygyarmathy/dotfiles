@@ -49,7 +49,7 @@
 # surface the reviewer is actually looking at.
 stuck_closing() {
 	if [ "$tracker_kind" = pr ]; then
-		printf '%s\n' "The pull request is relabelled \`$stuck_label\`. It needs a human decision: address the review comments by hand, or re-apply \`$revise_label\` to spend another revision round (docs/agents/triage-labels.md)."
+		printf '%s\n' "The pull request is relabelled \`$stuck_label\`, so the runner can no longer see it. It needs a human decision: address the review comments by hand, or re-apply \`$handoff_label\` and write a fresh \`/revise\` comment to spend another revision round (docs/agents/triage-labels.md)."
 	else
 		printf '%s\n' "The ticket is relabelled \`$stuck_label\`. It needs a human decision: reshape it and re-apply \`$label\`, or take it by hand (docs/agents/triage-labels.md)."
 	fi
@@ -70,7 +70,7 @@ post_tracker_comment() {
 relabel_stuck() {
 	if [ "$tracker_kind" = pr ]; then
 		gh pr edit "$number" --repo "$repo" \
-			--remove-label "$working_label" --add-label "$stuck_label"
+			--remove-label "$revising_label" --add-label "$stuck_label"
 	else
 		gh issue edit "$number" --repo "$repo" \
 			--remove-label "$working_label" --add-label "$stuck_label"
@@ -97,7 +97,15 @@ hand_back() {
 
 	{
 		if [ "$tracker_kind" = pr ]; then
-			printf '%s\n' "The AFK agent stopped work on this revision round and is handing it back."
+			# First line anchored on `AFK agent: revision`, like the round
+			# comments and the budget comment: the hand-back is the last
+			# word the runner left on this pull request, so it is what the
+			# revision frontier reads the request's acknowledgement from.
+			# Without it, a human who returned the pull request to the
+			# hand-off label would re-run a round the runner already
+			# handed back, instead of being asked to write a fresh
+			# `/revise` when they want one.
+			printf '%s\n' "AFK agent: revision handed back. The AFK agent stopped work on this revision round."
 		else
 			printf '%s\n' "The AFK agent stopped work on this ticket and is handing it back, without opening a pull request."
 		fi
@@ -294,13 +302,15 @@ hand_back_dead_run() {
 	# worktree is cleared, the branch stays (it is what the pull request
 	# is from), and the ticket is not touched.
 	#
-	# One exception, and it is the revision lane's (#196): only a revision
-	# run ever puts `$working_label` on a pull request - the ticket lane's
-	# claim lives on the issue - so a pull request carrying it is a
-	# revision run that died mid-round, with the human's trigger label
-	# consumed by a run that never finished. The claim is undone the same
-	# way `unclaim` does it on the issue lane: swap the labels back in one
-	# edit, so the next poll can take the round again. The PR number comes
+	# One exception, and it is the revision lane's (#196, as re-triggered
+	# by #247): only a revision run ever puts `$revising_label` on a pull
+	# request - the ticket lane's claim lives on the issue - so a pull
+	# request carrying it is a revision run that died mid-round, with the
+	# hand-off label consumed by a run that never finished. The claim is
+	# undone the same way `unclaim` does it on the issue lane: swap the
+	# labels back in one edit, so the pull request returns to the revision
+	# frontier - the unacknowledged `/revise` comment is still there - and
+	# the next poll can take the round again. The PR number comes
 	# from the lookup, not from the worktree's name: the worktree is named
 	# after the branch, which carries the original ticket's number, not
 	# the pull request's.
@@ -308,10 +318,10 @@ hand_back_dead_run() {
 		die "#$number: could not ask the tracker whether a pull request is open for $branch"
 
 	if [ "$(jq 'length' <<<"$open_prs")" -gt 0 ]; then
-		if jq -e --arg l "$working_label" 'any(.[].labels[]?; .name == $l)' \
+		if jq -e --arg l "$revising_label" 'any(.[].labels[]?; .name == $l)' \
 			<<<"$open_prs" >/dev/null; then
 			if ! gh pr edit "$(jq -r '.[0].number' <<<"$open_prs")" --repo "$repo" \
-				--remove-label "$working_label" --add-label "$revise_label"; then
+				--remove-label "$revising_label" --add-label "$handoff_label"; then
 				die "#$number: a revision run died on the open pull request for $branch and its claim could not be undone; refusing to start a new ticket beside it"
 			fi
 			log "#$number: a revision run died on the open pull request for $branch; its claim was undone and the round will be retried"

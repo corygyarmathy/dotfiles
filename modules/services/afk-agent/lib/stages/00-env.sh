@@ -29,12 +29,14 @@ stuck_label="@STUCK_LABEL@"
 # the revision lane and the hand-off both read it.
 handoff_label="@HANDOFF_LABEL@"
 
-# The revision loop's trigger (#196): a pull request this
-# runner opened, carrying this label, has its human review comments read
-# back into a revision session. Applied by a person, like `$label` - the
-# label is the whole of the trigger, not the presence of unresolved
-# threads, because a half-written review must not start a run.
-revise_label="@REVISE_LABEL@"
+# The revision loop's trigger (#196, as re-triggered by #247): a pull
+# request this runner opened, carrying `$handoff_label`, with a `/revise`
+# comment on it from an account other than the agent's own, has that
+# request - or, when the comment carries no text, the review comments
+# behind it - read back into a revision session. The comment is the whole
+# of the trigger, not the presence of unresolved threads, because a
+# half-written review must not start a run.
+revising_label="@REVISING_LABEL@"
 # Revision rounds per pull request before the stuck path. Three, then a
 # human: a disagreement between a reviewer and the model is otherwise
 # unbounded spend.
@@ -45,10 +47,12 @@ max_revision_rounds="@MAX_REVISION_ROUNDS@"
 # never become instructions to the model that wrote them.
 bot_login="@BOT_LOGIN@"
 
-# Which lane this run is on. The issue poll sets `revise` when its queue
-# is empty; every issue-stage between here and the hand-off reads this
-# and steps aside, and the revision flow at the end of the script runs
-# only when it is set.
+# Which lane this run is on. The revision frontier sets `revise` before
+# the ticket poll runs, when an unacknowledged `/revise` comment is
+# waiting: a human waiting on a revision is ahead of a backlog ticket.
+# Every issue-stage between here and the hand-off reads this and steps
+# aside, and the revision flow at the end of the script runs only when it
+# is set.
 flow="issue"
 # Which tracker surface the stuck path writes to: the issue for the
 # ticket lane, the pull request itself for the revision lane.

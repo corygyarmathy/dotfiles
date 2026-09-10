@@ -1,13 +1,16 @@
 # shellcheck shell=bash
-# --- the revision loop (#196) ----------------------------
+# --- the revision loop (#196, as re-triggered by #247) --------------------
 #
 # A second entry point on this runner. The first is the ticket queue
-# above; this one starts from a pull request this pipeline opened, which
-# a person has reviewed and labelled `$revise_label`. The label is the
+# above; this one starts from a pull request this pipeline opened, on
+# which a person has written a `/revise` comment. The comment is the
 # whole of the trigger: not the presence of unresolved threads, which
 # would start a run on a half-written review, and not anything the
-# runner infers. A person applies it when their review is done, and the
-# runner takes it from there.
+# runner infers. The poll in 50 checked this frontier before it claimed
+# any ticket work - a human waiting on a revision is ahead of a backlog
+# ticket - and it did so with the same queries this stage would have
+# run, so the pick is already made: the pull request, its branch, and
+# the round's input, collected below the claim.
 #
 # What this stage is NOT is the fix-and-recheck item 6 rejected. That
 # handed the *reviewer's* findings - the advisory stage's own output -
@@ -17,20 +20,21 @@
 # pipeline and the only one that had no path to the code. The
 # distinction is structural, not prose, and it is held at three places:
 #
-# - The poll asks the tracker for the pull request's comments and review
-#   summaries, and for the inline review comments beside them. It never
-#   requests the pull request's body, and the author filter below is what
-#   keeps the advisory review's findings out of what is fed back: since
-#   #202 they arrive as a comment posted by the agent's own account, so
-#   the same filter that drops the round comments drops them too. Not
-#   reading the body remains a property of the query, not of the code's
-#   discipline.
+# - The frontier query asks the tracker for the pull request's comments
+#   and review summaries, and for the inline review comments beside
+#   them. It never requests the pull request's body. The author filter
+#   below is what keeps the advisory review's findings out of what is
+#   fed back: since #202 they arrive as a comment posted by the agent's
+#   own account, so the same filter that drops the round comments drops
+#   them too. Not reading the body remains a property of the query, not
+#   of the code's discipline.
 # - The author filter (`$bot_login`, ADR 0006) drops everything the
 #   agent itself wrote, which includes every round comment this loop
 #   has posted - so a round is fed only the comments written since the
 #   last one, and never its own output from a previous round.
-# - The revision prompt repeats the boundary: the comments below it are
-#   the only review input, and the agent's own comments are off limits.
+# - The revision prompt repeats the boundary: what follows it is the
+#   only review input, and the body and the agent's own comments are off
+#   limits.
 #
 # The pull request is resumed at its head rather than claimed fresh: the
 # worktree is cut at `origin/$branch`, which is what the reviewer read.
@@ -69,191 +73,23 @@
 # label goes back on in one edit once CI is green, which is the same
 # condition it was first applied under.
 if [ "$flow" = revise ]; then
-	# --- poll ------------------------------------------------------------
-	#
-	# Only pull requests on this runner's own branches are considered: the
-	# branch prefix is what the original run cut and what no other
-	# workflow here creates, and the slug is validated against the same
-	# regex the ticket lane builds it with. Open only, oldest first, and
-	# the body is deliberately not in the field list.
-	log "polling $repo for open '$revise_label' pull requests"
-
-	revise_candidates="$(
-		gh pr list \
-			--repo "$repo" \
-			--label "$revise_label" \
-			--state open \
-			--search "sort:created-asc" \
-			--limit 100 \
-			--json number,title,headRefName |
-			jq -c --arg prefix "$branch_prefix" '
-        [ .[] | select(.headRefName | startswith($prefix)) ]
-        | sort_by(.number)
-      '
-	)"
-
-	revise_total="$(jq 'length' <<<"$revise_candidates")"
-	log "$revise_total labelled pull request(s)"
-
-	# The per-candidate state the stuck path reads. The revision lane's
-	# hand-back reaches the pull request itself, not the ticket behind it.
-	tracker_kind="pr"
-	number=""
-	title=""
-	branch=""
-	pr_url=""
-	attempt=1
-	branch_created=0
-	pushed=0
-
-	# The budget's stuck path, reached before anything is claimed: a
-	# labelled pull request whose rounds are already spent gets the same
-	# three writes every hand-back makes - comment, relabel, notification -
-	# and the run ends red, because a human owes it a decision. Relabel
-	# before comment, like the dead-run guard: a relabel that fails dies
-	# before anything is written, so the next poll retries both together
-	# rather than posting the comment a second time.
-	#
-	# The run-ends-red part is the run's whole shape, not just this pull
-	# request's: one poll handles one pull request, so a spent budget
-	# blocks revisable ones behind it for one poll. Fine at concurrency
-	# 1, which is all this runner has; revisit if that ever changes.
-	revise_stuck_budget() {
-		local body="$run_dir/stuck-revise.md"
-
-		{
-			printf '%s\n' "The AFK agent is handing this pull request back without running another revision round."
-			printf '%s\n' ""
-			printf '%s\n' \
-				"This pull request has had $max_revision_rounds revision round(s), and further rounds do not run. Each round is a session, a gate, a push and a CI watch; a disagreement between a reviewer and the model is otherwise unbounded spend."
-			printf '%s\n' ""
-			printf '%s\n' "The pull request is relabelled \`$stuck_label\`. Address the review comments by hand, or close the pull request: re-applying \`$revise_label\` will not start another round."
-		} >"$body"
-
-		if ! gh pr edit "$number" --repo "$repo" \
-			--remove-label "$revise_label" --add-label "$stuck_label"; then
-			die "#$number: could not relabel to $stuck_label; refusing to leave it in the revision queue"
-		fi
-
-		post_tracker_comment "$body"
-
-		notify_stuck \
-			"the revision budget is spent on this pull request; further rounds do not run" \
-			"$pr_url is open and unfinished"
-		exit 1
-	}
-
-	# The comments, collected per candidate BEFORE the claim, for the same
-	# reason the ticket lane filters before it claims: a pull request whose
-	# only comments are the agent's own must start no session, and a pull
-	# request whose rounds are spent must not be claimed to be stuck. Two
-	# calls: `pr view` for the review summaries and the issue comments,
-	# and the REST endpoint for the inline review comments, which
-	# `pr view` does not carry. The body is not asked for.
-	collect_comments() {
-		local n=$1 pr_json inline
-
-		pr_json="$(gh pr view "$n" --repo "$repo" --json reviews,comments)"
-
-		inline="$(
-			gh api "repos/$repo/pulls/$n/comments" 2>/dev/null || printf '[]'
-		)"
-		[ -n "$inline" ] || inline='[]'
-
-		# `-r` with the pull request document as the program's input - the
-		# inline comments ride in beside it as `--argjson`. `-n` here would
-		# be exactly the bug it is in any other filter: the program would
-		# read `null` instead of the document and answer with only the
-		# inline comments, and the review summaries would vanish silently.
-		jq -r --arg bot "$bot_login" --argjson inline "$inline" '
-        ( ([.reviews[]?
-             | { author: .author.login,
-                 body: (.body // ""),
-                 at: (.submittedAt // ""),
-                 where: "review summary" }]
-           + [.comments[]?
-               | { author: .author.login,
-                   body: (.body // ""),
-                   at: (.createdAt // ""),
-                   where: "comment" } ])
-         + [$inline[]?
-             | { author: (.user.login // ""),
-                 body: (.body // ""),
-                 at: (.created_at // ""),
-                 where: ("inline review comment on " + (.path // "an unnamed file")) } ]
-        ) as $all
-        | [$all[] | select(.author == $bot)] as $mine
-        | [$all[] | select(.author != $bot)] as $human
-        # Anchored: only the round comments this loop posts count, not the
-        # hand-back prose, which also says "revision round" somewhere in it
-        # but never as its own first line.
-        | ([ $mine[] | select(.body | test("^AFK agent: revision round")) | .at ] | max // "") as $since
-        | [$human[] | select(.at > $since)] | sort_by(.at)
-        | { rounds: [$mine[] | select(.body | test("^AFK agent: revision round"))] | length,
-            count: length,
-            prose: (map("### \(.author) - \(.where)\n\n\(.body)") | join("\n\n---\n\n")) }
-      ' <<<"$pr_json"
-	}
-
-	revise_pick=""
-	index=0
-	while [ "$index" -lt "$revise_total" ]; do
-		revise_candidate="$(jq -c ".[$index]" <<<"$revise_candidates")"
-		index=$((index + 1))
-
-		number="$(jq -r '.number' <<<"$revise_candidate")"
-		title="$(jq -r '.title' <<<"$revise_candidate")"
-		branch="$(jq -r '.headRefName' <<<"$revise_candidate")"
-		pr_url="https://github.com/$repo/pull/$number"
-		slug="${branch#"$branch_prefix"}"
-
-		# The branch name is a pull request's head ref, not this runner's
-		# own construction, so it is validated rather than trusted - and the
-		# worktree's name, which the in-flight guard parses, is built from
-		# it. Anything else is not a branch this pipeline opened.
-		if ! [[ "$slug" =~ ^[0-9]+(-[a-z0-9]+)*$ ]]; then
-			log "skipping #$number: '$branch' does not name a branch this runner cut, so it is not revised by this pipeline"
-			continue
-		fi
-
-		revise_comments="$(collect_comments "$number")"
-
-		if [ "$(jq -r '.rounds' <<<"$revise_comments")" -ge @MAX_REVISION_ROUNDS@ ]; then
-			log "#$number: $max_revision_rounds revision round(s) already recorded; the budget is spent"
-			revise_stuck_budget
-		fi
-
-		if [ "$(jq -r '.count' <<<"$revise_comments")" -eq 0 ]; then
-			log "#$number: no comments from accounts other than the agent's own; starting no session"
-			continue
-		fi
-
-		revise_pick="$revise_candidate"
-		jq -r '.prose' <<<"$revise_comments" >"$run_dir/revision-comments.md"
-		break
-	done
-
-	if [ -z "$revise_pick" ]; then
-		log "nothing to revise this poll"
-		exit 0
-	fi
-
 	# --- claim, isolate, revise -------------------------------------------
 	#
 	# The claim is one edit, like the ticket lane's, so a pull request that
-	# is being revised is never briefly in the queue and out of it. A
-	# failed edit leaves the pull request labelled and unclaimed - the next
-	# poll will try again - so nothing is undone and nothing is stranded.
+	# is being revised is never briefly in the frontier and out of it. A
+	# failed edit leaves the pull request labelled and unclaimed - the
+	# next poll will try again - so nothing is undone and nothing is
+	# stranded.
 	log "revising #$number: $title"
 	if ! gh pr edit "$number" --repo "$repo" \
-		--remove-label "$revise_label" --add-label "$working_label"; then
+		--remove-label "$handoff_label" --add-label "$revising_label"; then
 		die "#$number: could not claim the pull request; nothing was tried, so the next poll will try again"
 	fi
 
 	unclaim_pr_and_die() {
 		if ! gh pr edit "$number" --repo "$repo" \
-			--remove-label "$working_label" --add-label "$revise_label"; then
-			echo "afk-agent: #$number: could not undo the claim either; the pull request carries $working_label and is invisible to the revision queue" >&2
+			--remove-label "$revising_label" --add-label "$handoff_label"; then
+			echo "afk-agent: #$number: could not undo the claim either; the pull request carries $revising_label and is invisible to the revision frontier" >&2
 		fi
 		die "$1"
 	}
@@ -282,12 +118,30 @@ if [ "$flow" = revise ]; then
 
 	log "claimed #$number, resuming $branch at its head, in $worktree"
 
+	# The reply to the `/revise` comment: the human-facing half of the
+	# claim, so the request is answered where it was made. The claim edit
+	# above is the durable half - it is what keeps the same request from
+	# being picked again while this round runs - so a reply that fails is
+	# journal noise rather than a lost round: the round comment at the end
+	# is what the next poll counts. It is posted only once the worktree
+	# has actually resumed: everything before that point can still undo
+	# the claim and hand the request back to the next poll, and a reply
+	# that outlived its own undo would be posted twice.
+	claim_reply="$run_dir/claim-reply.md"
+	printf '%s\n' \
+		"Revision round $((revise_rounds + 1)) of @MAX_REVISION_ROUNDS@ has started on this pull request, in reply to @$revise_author's \`/revise\` comment." \
+		>"$claim_reply"
+
+	gh pr comment "$number" --repo "$repo" --body-file "$claim_reply" ||
+		echo "afk-agent: #$number: the claim reply could not be posted on $pr_url; the round runs regardless" >&2
+
 	# --- the revision session, on the implement stage's retry budget ------
 	#
 	# Same loop, same gate, same verdict, same retry shape (ADR 0004 §6):
 	# a round that fails its gate costs a retry, not a round. The opening
-	# message is the revision prompt plus the collected comments; the
-	# retries carry the gate's verdict, exactly as the implement stage's
+	# message is the revision prompt plus the round's input - the `/revise`
+	# request's own text, or the review comments behind it; the retries
+	# carry the gate's verdict, exactly as the implement stage's
 	# do. When the session that built this branch can still be found - the
 	# worktree path is the one it ran in, so the project-scoped session
 	# list can see it - the round continues it rather than starting fresh.
@@ -309,7 +163,7 @@ if [ "$flow" = revise ]; then
 		log "#$number: no session titled '$slug' to continue; the round opens a fresh one"
 	fi
 
-	round=$(($(jq -r '.rounds' <<<"$revise_comments") + 1))
+	round=$((revise_rounds + 1))
 
 	message="$(cat "$revise_dir/message")"
 
@@ -409,7 +263,7 @@ if [ "$flow" = revise ]; then
 		printf '%s\n' "AFK agent: revision round $round of @MAX_REVISION_ROUNDS@."
 		printf '%s\n' ""
 		printf '%s\n' \
-			"This round addressed the review comments on this pull request from accounts other than the agent's own. The change passed the local gate and was pushed to \`$branch\` on top of what the reviewer read. What follows is the revision session's own account of what it addressed and what it did not, unedited:"
+			"This round addressed the \`/revise\` request that started it, and the review comments behind it, from accounts other than the agent's own. The change passed the local gate and was pushed to \`$branch\` on top of what the reviewer read. What follows is the revision session's own account of what it addressed and what it did not, unedited:"
 		printf '%s\n' ""
 		printf '%s\n' "$revise_report"
 	} >"$revise_comment"
@@ -494,7 +348,7 @@ if [ "$flow" = revise ]; then
 	# reviewer's own comments are the review that superseded them - so
 	# nothing is re-reviewed and the body is not rewritten.
 	gh pr edit "$number" --repo "$repo" \
-		--remove-label "$working_label" --add-label "$handoff_label" ||
+		--remove-label "$revising_label" --add-label "$handoff_label" ||
 		hand_back "the revision is green, but $pr_url could not be relabelled for the reviewer"
 
 	notify low white_check_mark "AFK agent: PR revised (#$number)" \
