@@ -49,6 +49,10 @@ excludes = [
   # across action boundaries, which changes rendered whitespace. The garden
   # VM check (checks/digital-garden.nix) is what covers these files.
   "modules/services/digital-garden/lib/hugo/layouts/**",
+  # A symlink to the repo-root config (for the editor - see
+  # .markdownlint-cli2.yaml). Formatting it would write the same bytes as
+  # formatting the target, concurrently.
+  "configs/nvim/.markdownlint-cli2.yaml",
 ]
 priority = 1
 
