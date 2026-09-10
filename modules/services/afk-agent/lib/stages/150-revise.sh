@@ -429,17 +429,17 @@ if [ "$flow" = revise ]; then
 	if [ "$ci_state" != green ]; then
 		case "$ci_state" in
 		absent)
-			hand_back "nothing has reported on $pushed_head after @CI_FIRST_CHECK_POLLS@ polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open with the revision unverified"
+			hand_back "nothing has reported on $ci_watched after @CI_FIRST_CHECK_POLLS@ polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open with the revision unverified"
 			;;
 		unsettled)
-			hand_back "CI on $pushed_head has not settled after @CI_SETTLE_POLLS@ polls, and still has $ci_failed outstanding. $pr_url is open with the revision unverified"
+			hand_back "CI on $ci_watched has not settled after @CI_SETTLE_POLLS@ polls, and still has $ci_failed outstanding. $pr_url is open with the revision unverified"
 			;;
 		cancelled)
-			hand_back "CI on $pushed_head was cancelled ($ci_failed), so it reached no verdict. $pr_url is open with the revision unverified, and a re-run is a human's call"
+			hand_back "CI on $ci_watched was cancelled ($ci_failed), so it reached no verdict. $pr_url is open with the revision unverified, and a re-run is a human's call"
 			;;
 		esac
 
-		log "#$number: CI is red on $pushed_head where the local gate passed. Not green: $ci_failed"
+		log "#$number: CI is red on $ci_watched where the local gate passed. Not green: $ci_failed"
 
 		[ -n "$revise_session" ] ||
 			hand_back "CI is red on $pr_url, but no revision session can be found to fix it in; refusing to fix in a fresh context (ADR 0004 §6)"
@@ -470,7 +470,7 @@ if [ "$flow" = revise ]; then
 		watch_ci "$pushed_head"
 
 		[ "$ci_state" = green ] ||
-			hand_back "CI on $pushed_head is $ci_state after one fix ($ci_failed). $pr_url is open with the revision unverified"
+			hand_back "CI on $ci_watched is $ci_state after one fix ($ci_failed). $pr_url is open with the revision unverified"
 	fi
 
 	# --- hand back to the reviewer -----------------------------------------

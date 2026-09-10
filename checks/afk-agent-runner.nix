@@ -315,10 +315,16 @@ pkgs.runCommand "check-afk-agent-runner"
           # GitHub could not be asked at all, which from the runner's side has
           # to count as one poll that saw nothing rather than kill it.
           apifail) echo "mock gh: the API is unavailable" >&2; exit 1 ;;
-          # A green rollup on some *other* commit, which is what the API
-          # reports for the window after a fix is pushed and before its run
-          # exists. Trusting it would spend a round refusing the fix.
+          # A rollup on some *other* commit: the head GitHub answers with is
+          # not the commit that was pushed. For a poll or two after a fix is
+          # pushed that is the API's own staleness; held for a whole
+          # first-check window it is a head somebody else pushed (#248),
+          # and the watch follows it rather than calling the run absent.
           stale) sha=0000000000000000000000000000000000000000 ;;
+          # A head that is not a commit at all. Not a head anybody can be
+          # watching, so the watch has to read it as nothing rather than
+          # follow it into a value that matches nothing.
+          badsha) sha=not-a-sha ;;
         esac
 
         case "$step" in
@@ -2065,15 +2071,50 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "has not settled" "$state/err.log" \
       || fail "did not say the checks never settled: $(cat "$state/err.log")"
 
-    echo "case: a green rollup on some other commit is not this branch's CI"
+    echo "case: a green rollup on some other commit is waited out, not accepted"
     # The trap that would otherwise bite hardest right after a fix is pushed:
     # for a window, GitHub still reports the previous commit's checks. Reading
     # the rollup beside `headRefOid` in one snapshot is what makes the verdict
-    # arrive with the commit it belongs to.
-    run ci-stale mixed.json fresh good pass stale
-    [ "$rc" -ne 0 ] || fail "checks belonging to another commit were accepted as this branch's"
+    # arrive with the commit it belongs to, and a window's worth of answers
+    # about the wrong commit is waited through - never accepted, never fed
+    # back - before the real one arrives.
+    run ci-stale mixed.json fresh good pass "stale stale stale green"
+    [ "$rc" -eq 0 ] || fail "a transient stale window was not waited out: $(cat "$state/err.log")"
+    [ "$(attempts)" -eq 1 ] || fail "a stale window was fed to the model as a failure"
+    if grep -q "head has moved" "$state/out.log"; then
+      fail "a three-poll staleness window was treated as a moved head: $(cat "$state/out.log")"
+    fi
+
+    echo "case: a head somebody else pushed is followed, not abandoned"
+    # #248, measured: a rebase while the watch runs moves the pull request's
+    # head off the commit this runner pushed, every snapshot answers about a
+    # commit this runner has never heard of, and the run that used to end in
+    # "nothing has reported" and exit 1 while GitHub was still working. The
+    # mismatch persisting a whole first-check window is what tells a moved
+    # head from the staleness case above, and the watch follows the new run
+    # and hands the ticket over on its verdict - never a hand-back mid-work.
+    run ci-moved mixed.json fresh good pass stale
+    [ "$rc" -eq 0 ] || fail "a pull request whose head was rebased was abandoned: $(cat "$state/err.log")"
+    grep -q "head has moved to 0000000000000000000000000000000000000000" "$state/out.log" \
+      || fail "did not say it was following the moved head: $(cat "$state/out.log")"
+    [ "$(ci_polls)" -eq 11 ] \
+      || fail "expected the first-check bound waited out before following, got $(ci_polls) poll(s)"
+    [ "$(attempts)" -eq 1 ] \
+      || fail "the moved head's green run was fed back to the model as a failure"
+    grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
+      || fail "the run following a moved head never reached the hand-off: $(ghlog)"
+
+    echo "case: a head that is not a commit is not a move to follow"
+    # The fail-closed half of the same seam. A snapshot whose head is not a
+    # 40-hex sha is an answer nobody can watch: following it would compare
+    # every later snapshot against a value that matches nothing, so it reads
+    # as nothing, and the absent bound - not an adoption - is what stops the
+    # run.
+    run ci-badsha mixed.json fresh good pass badsha
+    [ "$rc" -ne 0 ] || fail "a garbage head was adopted as this branch's CI"
     grep -q "nothing has reported" "$state/err.log" \
-      || fail "a rollup on the wrong commit did not read as nothing reported: $(cat "$state/err.log")"
+      || fail "did not say the checks never arrived: $(cat "$state/err.log")"
+    [ "$(ci_polls)" -eq 10 ] || fail "expected ten polls before calling it absent, got $(ci_polls)"
 
     echo "case: a cancelled run reaches no verdict, and is not fed back"
     run ci-cancelled mixed.json fresh good pass cancelled

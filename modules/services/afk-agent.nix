@@ -596,7 +596,13 @@ in
     ciFirstCheckPolls = lib.mkOption {
       type = lib.types.int;
       default = 10;
-      description = "Polls to wait for CI's first check before calling it absent rather than slow (ADR 0007).";
+      description = ''
+        Polls to wait for CI's first check before calling it absent rather
+        than slow (ADR 0007). The same bound is what tells a moved pull
+        request head apart from the post-push reporting window: a head
+        mismatch lasting this many polls is a rebase or push by a human,
+        and the watch follows the run it triggered (#248).
+      '';
     };
 
     ciSettlePolls = lib.mkOption {

@@ -25,6 +25,20 @@
 # `headRefOid` in one snapshot, so the commit the verdict belongs to
 # arrives with the verdict and can be compared to the one that was
 # pushed.
+#
+# That comparison also sees a head somebody else moved (#248). A rebase
+# or a push by a human moves the pull request's head off the commit this
+# runner pushed, and every snapshot then answers about a commit this
+# runner has never heard of - which for a poll or two is exactly what a
+# run that was never triggered looks like. Persistence is what tells the
+# two apart, and the first bound above is the measure of it: a mismatch
+# that has lasted a whole first-check window is not the post-push
+# staleness, it is a new head, and the run GitHub triggered on it is the
+# CI run to look at. The watch follows it and starts its bounds over
+# rather than handing back a ticket GitHub is still working on. A
+# mismatch whose reported head is not a 40-hex sha is not a head anyone
+# can be watching, so it counts as nothing and the absent bound stops
+# the run, as before.
 ci_poll_interval="${AFK_CI_POLL_INTERVAL:-@CI_POLL_INTERVAL@}"
 
 # One snapshot, reduced to a word and - for everything but green - the
@@ -62,7 +76,7 @@ ci_snapshot() {
         end
       end;
     def named($b): map(select(.bucket == $b) | .name) | join(", ");
-    if (.headRefOid // "") != $head then "absent"
+    if (.headRefOid // "") != $head then "moved\n" + (.headRefOid // "")
     else
       [ (.statusCheckRollup // [])[]
         | { name: (.name // .context // "an unnamed check"), bucket: bucket } ]
@@ -78,10 +92,14 @@ ci_snapshot() {
 # Poll until the checks on `$1` have settled, or until one of the two
 # bounds runs out. Sets `ci_state` to one of green, red, cancelled,
 # absent or unsettled, and `ci_failed` to whichever checks are behind it.
+# `ci_watched` is the commit the verdict that comes back belongs to:
+# `$1` unless the watch followed a moved head, in which case that head.
 ci_state=""
 ci_failed=""
+ci_watched=""
 watch_ci() {
-	local head=$1 tick=0 unseen=0 answer state
+	local head=$1 tick=0 unseen=0 answer state moved_to
+	ci_watched="$head"
 	while :; do
 		answer="$(ci_snapshot "$head")"
 		state="$(printf '%s\n' "$answer" | head -n 1)"
@@ -97,6 +115,30 @@ watch_ci() {
 			if [ "$unseen" -ge @CI_FIRST_CHECK_POLLS@ ]; then
 				ci_state=absent
 				return 0
+			fi
+			;;
+		moved)
+			# The snapshot is about a commit this watch was not pointed
+			# at. Enforced here rather than trusted from the snapshot:
+			# only a 40-hex sha is a head anybody can be watching, and a
+			# watch that followed anything else would compare every later
+			# snapshot against a value that matches nothing. A mismatch
+			# that lasts a whole first-check window is a new head
+			# somebody pushed (#248), not the post-push staleness - so
+			# the watch follows it and starts its bounds over.
+			unseen=$((unseen + 1))
+			if [ "$unseen" -ge @CI_FIRST_CHECK_POLLS@ ]; then
+				moved_to="$(printf '%s\n' "$answer" | sed -n 2p)"
+				if [[ "$moved_to" =~ ^[0-9a-f]{40}$ ]]; then
+					log "#$number: the pull request's head has moved to $moved_to, so a new CI run is running there; watching it instead"
+					head="$moved_to"
+					ci_watched="$head"
+					unseen=0
+					tick=0
+				else
+					ci_state=absent
+					return 0
+				fi
 			fi
 			;;
 		*)
@@ -125,23 +167,25 @@ if [ "$flow" = issue ]; then
 	watch_ci "$pushed_head"
 
 	if [ "$ci_state" = green ]; then
-		log "#$number: CI is green on $pushed_head after $ci_round round(s)"
+		log "#$number: CI is green on $ci_watched after $ci_round round(s)"
 		break
 	fi
 
 	# Three ways the watch ends without a verdict about the diff. None of
 	# them is something a model can fix, so none is fed back to one; each
 	# leaves $pr_url open, without the hand-off label, which is what says
-	# from the outside that nobody has finished with it (ADR 0007 §2).
+	# from the outside that nobody has finished with it (ADR 0007 §2). The
+	# commit named is the one the watch ended on, which is the pushed
+	# commit unless the watch followed a moved head on the way.
 	case "$ci_state" in
 	absent)
-		hand_back "nothing has reported on $pushed_head after @CI_FIRST_CHECK_POLLS@ polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open and unfinished"
+		hand_back "nothing has reported on $ci_watched after @CI_FIRST_CHECK_POLLS@ polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open and unfinished"
 		;;
 	unsettled)
-		hand_back "CI on $pushed_head has not settled after @CI_SETTLE_POLLS@ polls, and still has $ci_failed outstanding. $pr_url is open and unfinished"
+		hand_back "CI on $ci_watched has not settled after @CI_SETTLE_POLLS@ polls, and still has $ci_failed outstanding. $pr_url is open and unfinished"
 		;;
 	cancelled)
-		hand_back "CI on $pushed_head was cancelled ($ci_failed), so it reached no verdict. $pr_url is open and unfinished, and a re-run is a human's call"
+		hand_back "CI on $ci_watched was cancelled ($ci_failed), so it reached no verdict. $pr_url is open and unfinished, and a re-run is a human's call"
 		;;
 	esac
 
@@ -150,7 +194,7 @@ if [ "$flow" = issue ]; then
 	# latency for its own sake and should be cut. If it happens, the
 	# difference between the two readings is what to go and fix - in the
 	# local gate, which is the reproduction, rather than in ci.yml.
-	log "#$number: CI is red on $pushed_head where the local gate passed. Not green: $ci_failed"
+	log "#$number: CI is red on $ci_watched where the local gate passed. Not green: $ci_failed"
 
 	if [ "$ci_round" -ge @MAX_CI_ROUNDS@ ]; then
 		hand_back "@MAX_CI_ROUNDS@ CI round(s) and $branch is still red ($ci_failed). $pr_url is open with the work on it and without the hand-off label; nothing merges it (ADR 0004 §9)"
