@@ -63,6 +63,18 @@ URL is therefore a hard error rather than a silent drop — and the check is on
 the URL, not the filename, because "Some Note" and "some-note" are two files
 and one page.
 
+A shelf is the leaf folder a note is filed in, slugified (`note_topic`), and
+distinct folders can slug to the same shelf: the vault holds three different
+`Meetings` folders, and were two of them to publish, their notes would merge
+into a single shelf. The merged shelf mis-colours the bonsai and mis-counts
+the home page's tally, and it does so while serving a page indistinguishable
+from a correct one — so nothing downstream can catch it. Two distinct folders
+that slug to the same shelf are therefore a hard error like the one above: the
+render fails and names both folders and the shelf they share, so the fix is
+renaming one folder. A stale site is preferred to a site that states something
+untrue, and a failed build is already surfaced by the existing sync-health
+alerting.
+
 Dates are derived, not written by hand. `<ledger>` records the first time each
 note appeared in the published set and the last time its text changed, and
 those are injected as `published:`/`modified:` frontmatter for the
@@ -722,6 +734,36 @@ def main(argv):
     # about to be discarded still reads as published and every wikilink to it
     # survives as a link to a page that will not exist.
     published = {key: v for key, v in published.items() if key in fronts}
+
+    # A shelf is the leaf folder a note is filed in, slugified, and two
+    # distinct folders can slug to the same shelf: the vault holds three
+    # different `Meetings` folders, and two of them publishing would silently
+    # merge into one shelf - mis-colouring the bonsai and mis-counting the
+    # home page's tally while serving a page indistinguishable from a correct
+    # one. Nothing downstream can catch that, so refuse here, naming the
+    # folders and the shelf they share; renaming one folder is the fix, and a
+    # stale site is preferred to an untrue one.
+    #
+    # Judged against the set after pass 2's filtering, not the raw published
+    # set: a note dropped as unparseable is not rendered, so it is not on any
+    # shelf. The root is skipped, because `note_topic` gives it no shelf at
+    # all - one pseudo-folder, and never a colliding pair.
+    shelves = {}  # shelf slug -> distinct folders publishing into it
+    for rel, _ in published.values():
+        if rel.parent == Path("."):
+            continue
+        shelves.setdefault(note_topic(rel), set()).add(rel.parent)
+    shelf_collisions = {slug: dirs for slug, dirs in shelves.items() if len(dirs) > 1}
+    if shelf_collisions:
+        print(
+            "published notes share a shelf; rename one folder of each set:",
+            file=sys.stderr,
+        )
+        for slug, dirs in sorted(shelf_collisions.items()):
+            print(f"  shelf '{slug}':", file=sys.stderr)
+            for folder in sorted(dirs, key=str):
+                print(f"    {folder}/", file=sys.stderr)
+        return 1
 
     # Every shelf the published set came from, and the hue ring slot each one
     # takes. Computed here because it needs the WHOLE set - a collision is
