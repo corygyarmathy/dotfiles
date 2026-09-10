@@ -208,10 +208,27 @@ let
   # the one bound (`permissionOverlay` and `reviewOverlay` together) that
   # stops the agent doing its own writeback. Change here must land here, in
   # review, where the denial pattern is read as a decision.
+  #
+  # What is held is the write verbs, not the read ones. The one allow is
+  # for reading the pull request - `gh pr view PRNUMBER`, which the
+  # prompts name - carved out of the `gh pr` deny. opencode evaluates
+  # the LAST matching rule, and the JSON this produces is sorted by
+  # attribute name, so the two patterns are chosen to make that safe:
+  # the deny carries the subcommand's separating space (`gh pr *`, which
+  # matches every real invocation - a `gh pr` command always names a
+  # subcommand) and the allow is the literal `gh pr view*`, so the allow
+  # sorts after the deny and wins. Two stumbles are worth the record:
+  # a deny written as `gh pr*` (no space) sorts AFTER any gh pr-subcommand
+  # allow - including this view one - and starves it; and a bare `gh pr`
+  # matches nothing real, so it carries no weight. The revise cases in
+  # checks/afk-agent-runner.nix pin both the allow and its document
+  # order; a deny that lexicographically follows it loses there, not in
+  # production.
   permissionOverlay = builtins.toJSON {
     permission.bash = {
       "git push*" = "deny";
-      "gh pr*" = "deny";
+      "gh pr *" = "deny";
+      "gh pr view*" = "allow";
       "gh issue edit*" = "deny";
       "gh issue close*" = "deny";
       "gh issue comment*" = "deny";
@@ -229,13 +246,17 @@ let
 
   # The revision session's instructions (#196). Same shape
   # as the other two prompts. The clause that matters most is the one that
-  # is a property of the pipeline rather than of the prose: the runner
-  # hands this session the human's review comments and nothing else, so
-  # the prompt has to say that the agent's own words - the round comments,
-  # and the advisory review's findings, which since #202 arrive as a
-  # comment posted by the agent's own account - are not review input. The
-  # author filter below drops them before the prompt is built; the prose
-  # says the same. `PRNUMBER` is substituted at run time; the comments
+  # is a property of the pipeline rather than of the prose: the input the
+  # round was started with - the `/revise` comment's own text, or the
+  # comments behind it collected by the author filter - is what the runner
+  # feeds it, and what the round is judged against by the human who wrote
+  # it. The agent's own words - the round comments, and the advisory
+  # review's findings, which since #202 arrive as a comment posted by the
+  # agent's own account - never drive a round: the author filter keeps
+  # them out of the payload, and the prose says they are background to
+  # read, not instructions to follow. Reading, since `gh pr view` is
+  # allowed in permissionOverlay, covers the whole pull request thread.
+  # `PRNUMBER` is substituted at run time; the comments
   # travel beside the prompt, not inside it.
   revisePrompt = pkgs.writeText "afk-agent-revise-prompt" (
     builtins.readFile ./afk-agent/lib/prompts/revise.md
