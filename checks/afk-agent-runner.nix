@@ -3014,10 +3014,14 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "a rewrite over a foreign push was pushed: $(cat "$state/err.log")"
     grep -q "did not push, so the CI fix never reached" "$state/err.log" \
       || fail "did not say why it stopped: $(cat "$state/err.log")"
-    # The only commit beyond master on origin is the foreign one - the
-    # session's rewrite never landed.
-    [ "$(pushed_commits)" -eq 1 ] \
-      || fail "the refused rewrite left more than the foreign commit on origin: $(pushed_commits) commit(s) there"
+    # The only commits beyond master on origin are the ticket's own and the
+    # foreign one - the session's rewrite never landed, and the foreign
+    # commit is what now sits at the tip.
+    [ "$(pushed_commits)" -eq 2 ] \
+      || fail "origin does not carry just the ticket's and the foreign commit: $(pushed_commits) commit(s) there"
+    [ "$(git -C "$work/origin.git" log --format=%s -1 "refs/heads/afk/$ticket")" \
+      = "afk: a foreign push while this round ran" ] \
+      || fail "the foreign commit was not left at the tip: $(git -C "$work/origin.git" log --format=%s -1 "refs/heads/afk/$ticket")"
     if git -C "$work/origin.git" cat-file -e "refs/heads/afk/$ticket:fix-amend.txt" 2>/dev/null; then
       fail "the rewritten tree overrode the foreign push"
     fi

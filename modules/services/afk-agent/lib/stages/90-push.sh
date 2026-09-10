@@ -39,6 +39,8 @@ push_branch() {
 	# resumed at will do. A plain push of a rewritten branch is always
 	# rejected, which is how a revise round died on #263; this is what makes
 	# the rewrite land while keeping every foreign push impossible to cover.
+	# An empty array expands to nothing, so without a lease this is a plain
+	# push of origin.
 	if [ -n "$push_lease" ]; then
 		lease_args=(--force-with-lease="refs/heads/$branch:$push_lease")
 	fi
@@ -46,7 +48,7 @@ push_branch() {
 	git -C "$worktree" \
 		-c credential.helper= \
 		-c credential.helper='!gh auth git-credential' \
-		push "${lease_args[@]}" origin "HEAD:refs/heads/$branch" ||
+		push origin "${lease_args[@]}" "HEAD:refs/heads/$branch" ||
 		if [ -n "$pr_url" ]; then
 			hand_back "$branch did not push, so the CI fix never reached $pr_url - which is open, red, and now a commit behind this worktree"
 		else
