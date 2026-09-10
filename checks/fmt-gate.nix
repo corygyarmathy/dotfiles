@@ -77,11 +77,18 @@ pkgs.runCommand "check-fmt-gate" { nativeBuildInputs = [ pkgs.git ]; } ''
     printf '{\n  a = 1;b = 2;\n}\n' > dirty.nix
     printf '#  Heading\n\n\nsome  text\n\n- a\n  - b\n' > dirty.md
     printf '#!/bin/sh\nif true; then\n  echo hi\nfi\n' > dirty.sh
+    # The AFK runner's stage fragments used to be excluded by path; #245
+    # closed that gap, and this dirty sample at the old exclude's own path is
+    # what proves the exclusion is really gone.
+    mkdir -p modules/services/afk-agent/lib/stages
+    printf '#!/bin/sh\nif true; then\necho hi\nfi\n' \
+      > modules/services/afk-agent/lib/stages/dirty-fragment.sh
     # secrets/*.yaml is excluded globally (sops payloads): the gate must ignore it.
     mkdir secrets
     printf '\tkey:  "value"\n\tlist:\n-\ta\n-\tb\n' > secrets/dirty.yaml
 
-    for f in dirty.py dirty.go dirty.nix dirty.md dirty.sh secrets/dirty.yaml; do
+    for f in dirty.py dirty.go dirty.nix dirty.md dirty.sh \
+      modules/services/afk-agent/lib/stages/dirty-fragment.sh secrets/dirty.yaml; do
       mkdir -p "$orig/$(dirname "$f")"
       cp "$f" "$orig/$f"
     done
@@ -93,7 +100,8 @@ pkgs.runCommand "check-fmt-gate" { nativeBuildInputs = [ pkgs.git ]; } ''
     assert_rc ne0 "gate on dirty tree" ${formatter}/bin/formatter --ci
 
     # Every dirty sample was changed, and the excluded file was not.
-    for f in dirty.py dirty.go dirty.nix dirty.md dirty.sh; do
+    for f in dirty.py dirty.go dirty.nix dirty.md dirty.sh \
+      modules/services/afk-agent/lib/stages/dirty-fragment.sh; do
       cmp -s "$f" "$orig/$f" && fail "$f was not reformatted under --ci"
     done
     cmp -s secrets/dirty.yaml "$orig/secrets/dirty.yaml" \
@@ -117,6 +125,7 @@ pkgs.runCommand "check-fmt-gate" { nativeBuildInputs = [ pkgs.git ]; } ''
   dirty.nix
   dirty.md
   dirty.sh
+  modules/services/afk-agent/lib/stages/dirty-fragment.sh
   EOF
 
     ############################################################

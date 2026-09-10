@@ -4,9 +4,8 @@
 # belongs (plain files, so shellcheck and editors see real shell instead of a
 # Nix string). This file substitutes the values and concatenates the stages
 # in pipeline order. The fragments are the inline script this replaced:
-# the logic is unchanged, whitespace and comment wording drifted in the
-# move, and the generated values below match the old inline expressions
-# byte for byte. Behaviour is pinned by checks/afk-agent-runner.nix.
+# the logic is unchanged, and whitespace and comment wording drifted in
+# the move. Behaviour is pinned by checks/afk-agent-runner.nix.
 {
   lib,
   stateDir,
@@ -102,21 +101,24 @@ let
     "@REPOSITORY@" = repository;
     "@NTFY_URL@" = ntfyUrl;
     "@NTFY_TOPIC@" = ntfyTopic;
-    # The three generated line groups reproduce the inline expressions
-    # exactly. builtins.readFile does no indentation handling, so the
-    # placeholder's own indent lives here in the separator values: the
-    # "  " prefix and the "\n        " separators below are the same bytes
-    # the inline script produced, not anything the substitution mechanism
-    # supplies. checks/afk-agent-runner.nix pins this behaviour.
-    "@DENIED_LINES@" = "  " + lib.concatMapStringsSep "\n        " (p: "\"${p}\"") deniedPaths;
+    # The three generated line groups. builtins.readFile does no
+    # indentation handling, so the indentation the substitution produces
+    # lives here in the separator values: the token's own indent opens the
+    # first line and the separator carries every further line. Each
+    # separator continues entries at the indent shfmt - the formatting
+    # pipeline since #245 - gives the token's line in its fragment: the
+    # @DENIED_LINES@ token sits inside `denied=( ... )` one tab deep, so
+    # its entries continue at a tab; the @REQUIRE_*_LINES@ tokens sit at
+    # top level, so theirs continue flush left. Every entry therefore
+    # reads at the indent shfmt itself would give the expanded script.
+    # Behaviour is pinned by checks/afk-agent-runner.nix.
+    "@DENIED_LINES@" = lib.concatMapStringsSep "\n\t" (p: "\"${p}\"") deniedPaths;
     "@SESSION_LIST_DEPTH@" = toString sessionListDepth;
     "@HANDOFF_LABEL@" = handoffLabel;
-    "@REQUIRE_CREDENTIAL_LINES@" = lib.concatMapStringsSep "\n      " (
+    "@REQUIRE_CREDENTIAL_LINES@" = lib.concatMapStringsSep "\n" (
       name: "require_credential ${name}"
     ) credentialNames;
-    "@REQUIRE_TOOL_LINES@" = lib.concatMapStringsSep "\n      " (
-      name: "require_tool ${name}"
-    ) toolNames;
+    "@REQUIRE_TOOL_LINES@" = lib.concatMapStringsSep "\n" (name: "require_tool ${name}") toolNames;
     "@APP_ID@" = appId;
     "@COMMIT_NAME@" = lib.escapeShellArg commitName;
     "@COMMIT_EMAIL@" = lib.escapeShellArg commitEmail;
