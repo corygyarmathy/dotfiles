@@ -57,7 +57,7 @@ let
   # Pipeline order: claim -> isolate -> implement -> push gate -> push ->
   # pull request -> watch CI -> review -> hand off, with the stuck path
   # available throughout (see ADR 0007). 150-revise.sh is the second entry
-  # point (plan item 12): the issue poll hands the run over to it when its
+  # point (#196): the issue poll hands the run over to it when its
   # queue is empty, and the stages in between read `$flow` and step aside.
   stageFiles = [
     "00-env.sh"

@@ -125,7 +125,7 @@ unclaim_and_die() {
 }
 
 if [ -z "$picked" ]; then
-	# The revision loop (plan item 12, #196) is this runner's second entry
+	# The revision loop (#196) is this runner's second entry
 	# point: when the ticket queue is empty, the run falls through to it.
 	# `flow` is what every stage between here and the hand-off reads, and
 	# the revision flow itself lives at the end of the script (150), after

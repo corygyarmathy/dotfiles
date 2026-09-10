@@ -258,6 +258,7 @@ jobs:
 
       - name: Build ${{ matrix.host }}
         run: |
+          set -euo pipefail
           nix build --print-build-logs --no-link --print-out-paths \
             ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel" \
             | tee "$RUNNER_TEMP/toplevel"

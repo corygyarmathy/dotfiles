@@ -29,7 +29,7 @@ stuck_label="@STUCK_LABEL@"
 # hand-off both read it.
 handoff_label="@HANDOFF_LABEL@"
 
-# The revision loop's trigger (plan item 12, #196): a pull request this
+# The revision loop's trigger (#196): a pull request this
 # runner opened, carrying this label, has its human review comments read
 # back into a revision session. Applied by a person, like `$label` - the
 # label is the whole of the trigger, not the presence of unresolved

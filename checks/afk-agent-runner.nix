@@ -258,7 +258,7 @@ pkgs.runCommand "check-afk-agent-runner"
             ;;
         esac
         ;;
-      # The revision poll's comment source (plan item 12): review summaries
+      # The revision poll's comment source (#196): review summaries
       # and issue comments in one document, pointed at a per-case fixture.
       # The one verb item 7 adds, and the only one that produces something a
       # person has to act on. It prints a URL because the runner logs one, and
@@ -2485,6 +2485,8 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the round comment does not name itself, so the next poll cannot count it: $(cat "$state/pr-comment-body")"
     grep -q "Addressed the review comment" "$state/pr-comment-body" \
       || fail "the session's own report did not travel to the pull request"
+    grep -q "Not addressed: nothing." "$state/pr-comment-body" \
+      || fail "the report's other half - what the round did not address - did not travel: $(cat "$state/pr-comment-body")"
     # Handed back to the reviewer in one edit, with the notification.
     grep -q "gh pr edit 999 .* --remove-label agent-working --add-label agent-ready-for-review" "$state/gh.log" \
       || fail "the hand-off label did not go back on: $(ghlog)"

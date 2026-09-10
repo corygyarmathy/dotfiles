@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# --- the revision loop (plan item 12, #196) ----------------------------
+# --- the revision loop (#196) ----------------------------
 #
 # A second entry point on this runner. The first is the ticket queue
 # above; this one starts from a pull request this pipeline opened, which
@@ -110,6 +110,11 @@ if [ "$flow" = revise ]; then
 	# before comment, like the dead-run guard: a relabel that fails dies
 	# before anything is written, so the next poll retries both together
 	# rather than posting the comment a second time.
+	#
+	# The run-ends-red part is the run's whole shape, not just this pull
+	# request's: one poll handles one pull request, so a spent budget
+	# blocks revisable ones behind it for one poll. Fine at concurrency
+	# 1, which is all this runner has; revisit if that ever changes.
 	revise_stuck_budget() {
 		local body="$run_dir/stuck-revise.md"
 
@@ -117,7 +122,7 @@ if [ "$flow" = revise ]; then
 			printf '%s\n' "The AFK agent is handing this pull request back without running another revision round."
 			printf '%s\n' ""
 			printf '%s\n' \
-				"This pull request has had $max_revision_rounds revision round(s), and a fourth does not run. Each round is a session, a gate, a push and a CI watch; a disagreement between a reviewer and the model is otherwise unbounded spend."
+				"This pull request has had $max_revision_rounds revision round(s), and further rounds do not run. Each round is a session, a gate, a push and a CI watch; a disagreement between a reviewer and the model is otherwise unbounded spend."
 			printf '%s\n' ""
 			printf '%s\n' "The pull request is relabelled \`$stuck_label\`. Address the review comments by hand, or close the pull request: re-applying \`$revise_label\` will not start another round."
 		} >"$body"
@@ -130,7 +135,7 @@ if [ "$flow" = revise ]; then
 		post_tracker_comment "$body"
 
 		notify_stuck \
-			"the revision budget is spent on this pull request; a fourth round does not run" \
+			"the revision budget is spent on this pull request; further rounds do not run" \
 			"$pr_url is open and unfinished"
 		exit 1
 	}
@@ -301,7 +306,7 @@ if [ "$flow" = revise ]; then
 		log "#$number: no session titled '$slug' to continue; the round opens a fresh one"
 	fi
 
-	round=$(( $(jq -r '.rounds' <<<"$revise_comments") + 1 ))
+	round=$(($(jq -r '.rounds' <<<"$revise_comments") + 1))
 
 	message="$(cat "$revise_dir/message")"
 

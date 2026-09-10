@@ -41,7 +41,7 @@
 # ADR 0004 §8). The runner adds a guard against a *dead* run's leftovers,
 # which systemd would otherwise start the next poll on top of.
 #
-# The revision loop (plan item 12, #196) is a second entry point on the
+# The revision loop (#196) is a second entry point on the
 # same runner, not a second runner: when the ticket queue is empty, the
 # same poll falls through to pull requests labelled `agent-revise`, and
 # the reviewer's comments - and only comments from accounts other than
@@ -210,7 +210,7 @@ let
     builtins.readFile ./afk-agent/lib/prompts/review.md
   );
 
-  # The revision session's instructions (plan item 12, #196). Same shape
+  # The revision session's instructions (#196). Same shape
   # as the other two prompts. The clause that matters most is the one that
   # is a property of the pipeline rather than of the prose: the runner
   # hands this session the human's review comments and nothing else, so
