@@ -66,9 +66,11 @@ if [ "$flow" = issue ]; then
 	# --- the findings, which are the whole output of this stage -----------
 	#
 	# They are worth more on the pull request, next to the diff, than they
-	# ever were as a gate. The body edit below appends this file verbatim to
-	# the pull request that is already open; nothing here is the last reader
-	# of it, and nothing here decides anything from it.
+	# ever were as a gate. The hand-off below posts this file verbatim as a
+	# comment on the pull request that is already open, over the runner's own
+	# account, with the caveat paragraph that keeps a reader from taking it
+	# for an approval; nothing here is the last reader of it, and nothing
+	# here decides anything from it.
 	#
 	# Deliberately NOT fed back to the implement session to be fixed: a
 	# finding handed back to the model that just wrote the code becomes a

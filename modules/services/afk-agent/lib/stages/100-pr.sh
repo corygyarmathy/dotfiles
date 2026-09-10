@@ -34,12 +34,13 @@ if [ "$flow" = issue ]; then
 	}
 
 	# The body, rendered from whatever is known at the moment it is called.
-	# Called twice: once now, with the hand-off section absent because CI has
-	# not run and the review has not happened, and once at the end of the run
-	# with both. Re-rendered rather than appended to, so the second body is
-	# built from the branch as it finally stands - a CI fix round's commits
-	# are in the "what the branch says it does" section, and `ATTEMPTS`
-	# counts every session that touched it.
+	# Called twice: once now, and once at the end of the run. Re-rendered
+	# rather than appended to, so the second body is built from the branch as
+	# it finally stands - a CI fix round's commits are in the "what the branch
+	# says it does" section, and `ATTEMPTS` counts every session that touched
+	# it. The review's findings are not part of it at either call (#202): they
+	# arrive as a comment on the pull request, headed by @PR_HANDOFF@ at
+	# hand-off.
 	pr_body() {
 		{
 			pr_prose @PR_INTRO@
@@ -50,22 +51,11 @@ if [ "$flow" = issue ]; then
 			# wall.
 			git -C "$worktree" log --reverse --format='### %s%n%n%b' \
 				"origin/$base_branch..HEAD"
-
-			if [ "$1" = with-handoff ]; then
-				pr_prose @PR_HANDOFF@
-
-				# The findings the review stage left, carried to the one place they
-				# are worth anything: in front of the person deciding whether to
-				# merge, next to the diff they are about. The prose above says what
-				# they are not. #202 moves them to a comment, which is why they are
-				# kept as their own file rather than assembled inline here.
-				cat "$review_dir/findings.md"
-			fi
 		} >"$run_dir/pr-body.md"
 	}
 
 	ci_round=0
-	pr_body without-handoff
+	pr_body
 
 	# `--label` rather than a second call, so a pull request that exists is a
 	# pull request that is already attributable at a glance - no ruleset can

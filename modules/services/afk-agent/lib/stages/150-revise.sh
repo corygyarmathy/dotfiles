@@ -22,15 +22,19 @@
 #
 # - The frontier query asks the tracker for the pull request's comments
 #   and review summaries, and for the inline review comments beside
-#   them. It never requests the pull request's body, where `findings.md`
-#   is quoted - not reading it is a property of the query, not of the
-#   code's discipline.
+#   them. It never requests the pull request's body. The author filter
+#   below is what keeps the advisory review's findings out of what is
+#   fed back: since #202 they arrive as a comment posted by the agent's
+#   own account, so the same filter that drops the round comments drops
+#   them too. Not reading the body remains a property of the query, not
+#   of the code's discipline.
 # - The author filter (`$bot_login`, ADR 0006) drops everything the
 #   agent itself wrote, which includes every round comment this loop
 #   has posted - so a round is fed only the comments written since the
 #   last one, and never its own output from a previous round.
-# - The revision prompt repeats the boundary: the request below it is
-#   the only review input, and the body is off limits.
+# - The revision prompt repeats the boundary: what follows it is the
+#   only review input, and the body and the agent's own comments are off
+#   limits.
 #
 # The pull request is resumed at its head rather than claimed fresh: the
 # worktree is cut at `origin/$branch`, which is what the reviewer read.
@@ -296,9 +300,9 @@ if [ "$flow" = revise ]; then
 	# One edit, the same shape as every claim and hand-off in this
 	# pipeline: the claim goes, the hand-off label comes back, and a pull
 	# request is never briefly carrying both or neither. The review whose
-	# findings sit in the body predates this round - the reviewer's own
-	# comments are the review that superseded them - so nothing is
-	# re-reviewed and the body is not rewritten.
+	# findings sit in the comment above predates this round - the
+	# reviewer's own comments are the review that superseded them - so
+	# nothing is re-reviewed and the body is not rewritten.
 	gh pr edit "$number" --repo "$repo" \
 		--remove-label "$revising_label" --add-label "$handoff_label" ||
 		hand_back "the revision is green, but $pr_url could not be relabelled for the reviewer"

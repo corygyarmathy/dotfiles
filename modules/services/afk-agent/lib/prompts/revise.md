@@ -7,9 +7,9 @@ comments written since its last word on the pull request from accounts
 other than the agent's own, and they follow instead, verbatim, oldest
 first. Either way they are the only review input for this round: do not
 read the pull request's body or description, and do not fetch anything
-else from the tracker - the body carries the advisory review's findings,
-which are not what a person asked you to change. A comment from the
-agent's own account is not review input either, and none appear below.
+else from the tracker - the advisory review's findings arrive as a
+comment posted by the agent's own account, and a comment from that
+account is not review input either, and none appear below.
 
 The work to revise is at the head of this branch; the comments refer to
 it. Work through them in order. Where you agree with a comment, make the

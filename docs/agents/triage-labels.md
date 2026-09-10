@@ -46,9 +46,10 @@ reshape the ticket and re-apply `ready-for-agent`, or take it by hand. An
 that died - the runner's next poll hands it back through the same path.
 
 `agent-ready-for-review` is the runner's hand-off, and it goes on the pull
-request rather than on the issue. It arrives last, in the same `gh pr edit` that
-writes the review's findings into the body, so a pull request carrying the label
-carries the findings too (ADR 0007). Deliberately **not** `ready-for-human`: that
+request rather than on the issue. It arrives last, after the review's
+findings have been posted as a comment on the pull request by the agent's
+own account (#202, ADR 0006), so a pull request carrying the label carries
+the findings too (ADR 0007). Deliberately **not** `ready-for-human`: that
 is an issue triage role meaning "requires human implementation", and on an
 agent's own pull request it would read as "an agent could not do this" - the
 opposite of what happened. It joins `agent-working` and `agent-stuck` in the

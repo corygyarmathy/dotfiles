@@ -22,11 +22,11 @@ working_label="@WORKING_LABEL@"
 # failure every poll. A human decides what happens to an
 # `$stuck_label` ticket (docs/agents/triage-labels.md).
 stuck_label="@STUCK_LABEL@"
-# The hand-off signal (ADR 0007 §7). The ticket lane applies it beside the
-# review findings in one edit; the revision lane re-applies it in one edit
-# once a revised commit's CI is green. A variable here rather than the
-# inline token the ticket lane uses, because the revision lane and the
-# hand-off both read it.
+# The hand-off signal (ADR 0007 §7). The ticket lane applies it once the
+# review's findings have been posted as a comment (#202), and the revision
+# lane re-applies it in one edit once a revised commit's CI is green. A
+# variable here rather than the inline token the ticket lane uses, because
+# the revision lane and the hand-off both read it.
 handoff_label="@HANDOFF_LABEL@"
 
 # The revision loop's trigger (#196, as re-triggered by #247): a pull
@@ -43,8 +43,8 @@ revising_label="@REVISING_LABEL@"
 max_revision_rounds="@MAX_REVISION_ROUNDS@"
 # The runner's own login (ADR 0006). The revision loop's author filter
 # reads it, so that the agent's own words on a pull request - the round
-# comments, and the advisory findings quoted in the body - never become
-# instructions to the model that wrote them.
+# comments, and the advisory findings comment the hand-off posts (#202) -
+# never become instructions to the model that wrote them.
 bot_login="@BOT_LOGIN@"
 
 # Which lane this run is on. The revision frontier sets `revise` before

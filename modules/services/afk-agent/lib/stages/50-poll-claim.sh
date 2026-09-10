@@ -130,9 +130,10 @@ revise_stuck_budget() {
 # calls the trigger has always needed: `pr view` for the review summaries
 # and the issue comments, and the REST endpoint for the inline review
 # comments, which `pr view` does not carry. The body is not asked for,
-# which is what keeps the advisory findings quoted in it from becoming
-# instructions - not reading it is a property of the query, not of the
-# code's discipline.
+# and since #202 the advisory findings do not need it: they arrive as a
+# comment posted by the agent's own account, so the author filter below
+# drops them exactly as it drops the round comments - not reading the
+# body remains a property of the query, not of the code's discipline.
 collect_comments() {
 	local n=$1 pr_json inline
 

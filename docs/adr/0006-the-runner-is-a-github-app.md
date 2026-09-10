@@ -6,7 +6,7 @@
     - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §4, on the credential only - its no-second-account clause is upheld here rather than reversed - and §3, which loses the assignee as its claim marker
     - Answers: #200, and unblocks #202
     - Shares its instrument with: [ADR 0005](0005-only-a-deploy-key-may-move-deploy.md), which restricts updates to `deploy` - this records why the same rule cannot be used on `master`
-    - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, still open), `modules/services/afk-agent.nix` (the shipped identity and claim mechanism), `docs/agents/issue-tracker.md` (the claim convention)
+    - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, since shipped), `modules/services/afk-agent.nix` (the shipped identity and claim mechanism), `docs/agents/issue-tracker.md` (the claim convention)
 
 ## Context
 
@@ -26,7 +26,7 @@ ADR 0004 §4 chose one GitHub identity. The runner would open pull requests with
 
 **3. ADR 0004 §9 stays a property of the runner's code. It is not enforced by a ruleset, and that is now a measured finding rather than a consequence of §4.** #200 expected a second identity to make a ruleset carry §9, on the reasonable theory that what blocked it was the absence of a second identity. The theory is wrong for a reason that has nothing to do with how many identities exist. See Verification.
 
-**4. Attribution is the reason to keep the identity, and it is sufficient on its own.** Item 12's author filter becomes implementable as written, item 15's findings can leave the body for a comment, and the permission ceiling drops. None of those depended on the ruleset question.
+**4. Attribution is the reason to keep the identity, and it is sufficient on its own.** Item 12's author filter becomes implementable as written, item 15's findings leave the body for a comment on the pull request, and the permission ceiling drops. None of those depended on the ruleset question. The filter matches on author and never on content, so no content marker is invented for the findings comment: the comment being authored by the agent's own account is, by itself, what makes it dropable - which is the settlement #196 and #202 share, recorded here rather than in either ticket's code.
 
 ## Verification
 
