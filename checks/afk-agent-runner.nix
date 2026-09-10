@@ -758,7 +758,13 @@ pkgs.runCommand "check-afk-agent-runner"
     #!/bin/sh
     printf '%s\n' "nix $*" >> "$NIX_LOG"
     if [ -e BROKEN ]; then
-      echo "mock nix: the tree still contains BROKEN" >&2
+      # The message carries an `&` and a `\` on purpose: this text is what a
+      # failing gate puts in gate.log, which is what the verdict splices into
+      # the exhaustion hand-back. In a ''${var/pat/repl} splice, both would be
+      # special in the replacement - `&` re-expands the match, `\` escapes -
+      # so the hand-back body carrying this line verbatim is the regression
+      # test for the split-and-concatenate splice in 65-attempt-loop.sh.
+      printf '%s\n' "mock nix: the tree still contains BROKEN & \\ (refused to build)" >&2
       exit 1
     fi
     if [ "$1" = "eval" ]; then
@@ -1589,6 +1595,13 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "no comment was left on the ticket: $(ghlog)"
     grep -q "the gate failed" "$state/stuck-body" \
       || fail "the comment does not say why the run stopped: $(cat "$state/stuck-body" 2>/dev/null)"
+    # The gate's own words, through the splice. The mock nix's failure line
+    # carries an `&` and a `\` (see the mock above); in a ''${var/pat/repl}
+    # splice the `&` would re-expand the matched text and drop them, so this
+    # fixed-string match is what pins the splice to plain concatenation.
+    gate_words="mock nix: the tree still contains BROKEN & \\ (refused to build)"
+    grep -qF -- "$gate_words" "$state/stuck-body" \
+      || fail "the hand-back body mangled the gate's words: $(cat "$state/stuck-body" 2>/dev/null)"
     grep -q "agent-stuck" "$state/stuck-body" \
       || fail "the comment does not say what the ticket was relabelled to: $(cat "$state/stuck-body")"
     grep -q "gh issue edit 302 .* --remove-label agent-working --add-label agent-stuck" "$state/gh.log" \
@@ -2310,6 +2323,15 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "check afk-agent-runner" "$state/args-2" \
       || fail "the fix was not told which check was not green: $(cat "$state/args-2")"
     grep -q "gh run view" "$state/args-2" || fail "the fix was not told how to read the failing log"
+    # The fix round's session shape, pinned for the same reason the loop
+    # above is: the revision lane and the ticket lane run the same fix
+    # round, and the shape has to move together or not at all (#243). The
+    # fix is aimed at the worktree explicitly, and carries the same
+    # permission overlay every other build session gets.
+    [ "$(flag_value "$state/args-2" --dir)" = "$state/worktrees/$ticket" ] \
+      || fail "the CI fix was not pinned to its worktree with --dir: $(flag_value "$state/args-2" --dir)"
+    jq -e --arg v "git push*" '.permission.bash[$v] == "deny"' "$state/overlay-2" >/dev/null \
+      || fail "the CI fix session was not denied the tracker verbs"
     # The fix reached the same branch on origin, as a second commit rather than
     # as a replacement: never a force-push (ADR 0007 §4).
     [ "$(pushed_commits)" -eq 2 ] \
@@ -3105,6 +3127,13 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the CI fix opened a fresh session (ADR 0004 §6)"
     grep -q "These checks are not green" "$state/revise-args-2" \
       || fail "the fix was not told what CI said: $(cat "$state/revise-args-2")"
+    # The fix round's session shape, pinned beside the ticket lane's: one
+    # copy of the shape is what the two lanes share (#243), so both are
+    # asserted rather than only the lane whose loop is being reshaped.
+    [ "$(flag_value "$state/revise-args-2" --dir)" = "$state/worktrees/$ticket" ] \
+      || fail "the revision's CI fix was not pinned to its worktree with --dir: $(flag_value "$state/revise-args-2" --dir)"
+    jq -e --arg v "git push*" '.permission.bash[$v] == "deny"' "$state/revise-overlay-2" >/dev/null \
+      || fail "the revision's CI fix session was not denied the tracker verbs"
     [ "$(pushed_commits)" -eq 3 ] || fail "the fix did not reach origin"
     grep -q "gh pr edit 999 .* --add-label agent-ready-for-review" "$state/gh.log" \
       || fail "the branch did not come back to the reviewer: $(ghlog)"
