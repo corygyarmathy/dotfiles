@@ -1,6 +1,6 @@
 # Domain Docs
 
-How the engineering skills should consume this repo's domain documentation when exploring the codebase.
+How the engineering skills should consume this repo's domain documentation when exploring the codebase. For the full map of which document owns which fact (issue, plan, PR, findings note, README, comment), see [`documentation.md`](documentation.md) - this file covers the ADR/plan boundary only.
 
 ## Before exploring, read these
 

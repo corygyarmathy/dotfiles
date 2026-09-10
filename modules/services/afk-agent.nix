@@ -1,7 +1,7 @@
 # The AFK agent: an unattended runner for `ready-for-agent` tickets.
 #
-# Items 4 and 5 of docs/plans/afk-agent-pipeline.md, implementing ADR 0004 §1,
-# §3, §5, §7 and §8: the pipeline runs on homelab01, it is triggered by a
+# Implements ADR 0004 §1, §3, §5, §7 and §8: the pipeline runs on homelab01,
+# it is triggered by a
 # polling systemd timer rather than a webhook, eligibility is re-checked
 # against the path denylist rather than trusted from the label, and the whole
 # thing is a real NixOS module so that turning it off in an emergency is one
@@ -741,7 +741,7 @@ let
     the session transcript rather than from the session's own account of
     itself, and would not have applied `HANDOFF` otherwise. It decided nothing,
     and nothing downstream read it as a decision
-    (`docs/plans/afk-agent-pipeline.md`, item 6).
+    (`docs/research/afk-agent-pilot-findings.md`).
 
     It also could not have changed what is in this pull request. It ran after
     the push, against a branch nothing pushes again, so its report is the

@@ -1,12 +1,12 @@
 # ADR 0006: The runner is a GitHub App, and merge stays a script's property
 
-- **Status:** Accepted
+- **Status:** Proposed
 - **Date:** 2026-09-09
 - **Related Artefacts:**
   - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §4, on the credential only - its no-second-account clause is upheld here rather than reversed - and §3, which loses the assignee as its claim marker
   - Answers: #200, and unblocks #202
   - Shares its instrument with: [ADR 0005](0005-only-a-deploy-key-may-move-deploy.md), which restricts updates to `deploy` - this records why the same rule cannot be used on `master`
-  - Constrains: `docs/plans/afk-agent-pipeline.md` (items 3, 12, 14, 15), `docs/agents/issue-tracker.md` (the claim convention)
+  - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, still open), `modules/services/afk-agent.nix` (the shipped identity and claim mechanism), `docs/agents/issue-tracker.md` (the claim convention)
 
 ## Context
 

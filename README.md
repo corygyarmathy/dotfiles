@@ -29,6 +29,7 @@ flowchart LR
 | [ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md) | why the staged rollout was retired, and what replaces it                |
 | [ADR 0003](docs/adr/0003-service-confinement-is-bounded-by-hardlinking.md) | _proposed_ - why confining services to their own data is mostly not available |
 | [Deployment hardening plan](docs/plans/deployment-hardening.md)    | the gaps that remain and how they are meant to close                       |
+| [Documentation conventions](docs/agents/documentation.md)          | which document owns a given fact, and when a plan entry gets deleted       |
 
 ## Working on it
 
