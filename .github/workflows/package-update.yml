@@ -21,6 +21,17 @@ name: package-update
 #     and any further lines are detail for the PR body
 #
 # One PR per package, so a single broken update cannot hold up the others.
+#
+# Those PRs do not auto-merge by default: unlike a lock bump, they cross an
+# upstream release boundary, where building successfully is weaker evidence
+# than it looks (ADR 0001). A package opts into auto-merge with
+# `passthru.autoMerge`, for the case where holding the PR for review buys
+# nothing: the diff is a version string plus a SHA no review can validate, and
+# keeping it open keeps CI red - which is exactly the caddy-with-plugins
+# position, where every host builds Caddy and a stale vendor hash fails them
+# all. --auto only sets the intent; the required `nixos ci` check still gates
+# the merge, and the `automerge-nudge` workflow rebases the stale `deps/*`
+# branch onto master like any other auto-merge PR.
 
 on:
   schedule:
@@ -157,6 +168,7 @@ jobs:
         run: nix build --print-build-logs --no-link ".#${{ matrix.package }}"
 
       - name: Open pull request
+        id: cpr
         if: steps.run.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
@@ -183,9 +195,29 @@ jobs:
             opened, so a version that cannot build never gets proposed. The
             `nixos ci` gate still has to pass before it can merge.
 
-            Not auto-merged: unlike a lock bump, these move a package across an
+            Not auto-merged by default: unlike a lock bump, these move a package across an
             upstream release boundary, where building successfully is weaker
-            evidence than it looks.
+            evidence than it looks. A package opts into auto-merge with
+            `passthru.autoMerge` (see the header comment) when its diff is a
+            version string plus a SHA no review can validate; the `nixos ci`
+            gate still has to pass before it can merge.
           labels: |
             dependencies
             nix
+
+      # Schedules the merge for packages that opted in with passthru.autoMerge;
+      # the rest stay open for a human. The ruleset's required check is the
+      # actual gate. Idempotent, so re-running against an existing PR is safe -
+      # the same shape flake-update.yml uses for the nightly lock bump.
+      - name: Enable auto-merge when the package opts in
+        if: steps.run.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          auto_merge="$(nix eval --json '.#packages.x86_64-linux' --apply "ps: (ps.${{ matrix.package }}.autoMerge or false)" | jq -r .)"
+          if [ "$auto_merge" != "true" ]; then
+            echo "::notice::${{ matrix.package }} does not opt into auto-merge; leaving for a human."
+            exit 0
+          fi
+          gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"

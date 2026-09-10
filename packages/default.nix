@@ -57,6 +57,11 @@ pkgs: {
   # Obsidian Sync headless CLI (`ob`)
   obsidian-headless = pkgs.callPackage ./obsidian-headless { };
 
+  # Caddy with the reverse proxy's plugins. The plugin pins and the vendor hash
+  # live in the package and are refreshed by its own updateScript (weekly PR via
+  # .github/workflows/package-update.yml), so a drifted hash never reds CI.
+  caddy-with-plugins = pkgs.callPackage ./caddy-with-plugins { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }

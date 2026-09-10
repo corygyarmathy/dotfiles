@@ -26,19 +26,15 @@
 # and add a single tls block with the dns challenge
 #
 # ════════════════════════════════════════════════════════════════════════════
-# IMPORTANT: Hash Management for Caddy Plugins
+# Caddy build: packages/caddy-with-plugins
 # ════════════════════════════════════════════════════════════════════════════
-# The `hash` value for withPlugins changes when:
-#   1. Caddy version updates in nixpkgs
-#   2. Plugin version changes
-#
-# To get the correct hash:
-#   1. Set hash = "" (empty string)
-#   2. Run: nixos-rebuild build
-#   3. Copy the hash from the error message
-#   4. Update the hash below
-#
-# This is a known limitation - see: https://github.com/nixos/nixpkgs/issues/450289
+# Caddy ships with the Cloudflare DNS and rate-limit plugins, built in
+# packages/caddy-with-plugins. The plugin pins and the vendor `hash` live
+# there - not here - and are refreshed by that package's own updateScript
+# (weekly PR via .github/workflows/package-update.yml). The hash covers the
+# vendored Go modules and drifts even under a pinned nixpkgs (transitive deps
+# resolve at build time), which used to red CI until someone hand-updated it -
+# see https://github.com/nixos/nixpkgs/issues/450289.
 # ════════════════════════════════════════════════════════════════════════════
 {
   config,
@@ -51,24 +47,9 @@ let
   fleet = config.cg.fleet;
   inherit (fleet) domain;
 
-  # Build Caddy with Cloudflare DNS plugin
-  # This is required for DNS-01 challenge
-  #
-  # To find the latest plugin version:
-  #   nix-shell -p go
-  #   go mod init temp
-  #   go get github.com/caddy-dns/cloudflare
-  #   grep 'caddy-dns/cloudflare' go.mod
-  #
-  caddyWithPlugins = pkgs.caddy.withPlugins {
-    plugins = [
-      "github.com/caddy-dns/cloudflare@v0.2.2"
-      "github.com/mholt/caddy-ratelimit@v0.1.0"
-    ];
-    # NOTE: If build fails with hash mismatch, update this value
-    # Leave empty ("") on first build to get the correct hash from error output
-    hash = "sha256-pOKH4KP0vbyhxlvMiWmkHoziKXu6O6PKRjPHjflPZuQ=";
-  };
+  # Caddy with the Cloudflare DNS and rate-limit plugins, built and refreshed
+  # in packages/caddy-with-plugins (see the header comment above).
+  caddyWithPlugins = pkgs.caddy-with-plugins;
 
   # Rate limiting profiles for different service types
   rateLimitProfiles = {
