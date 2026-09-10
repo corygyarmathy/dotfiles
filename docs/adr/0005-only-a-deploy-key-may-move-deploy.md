@@ -5,11 +5,11 @@
 - **Related Artefacts:**
   - Narrows: [ADR 0001](0001-gitops-deployment-with-a-promoted-ref.md), which makes `deploy` the fleet's only contract - this decides who may move it
   - Answers: #190
-  - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/afk-eligibility.md` (rule 1's reasoning), `docs/plans/afk-agent-pipeline.md` (item 3)
+  - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/afk-eligibility.md` (rule 1's reasoning), `modules/services/afk-agent.nix` (the AFK identity's permissions)
 
 ## Context
 
-`deploy` is the only ref the fleet follows and hosts pick it up on their nightly `system.autoUpgrade`, so a push there reaches all three machines without passing the review gate that protects `master`. The `protect-deploy` ruleset restricted deletion and non-fast-forward pushes but not *who* may push, so any credential with write access to this repository could fast-forward it: `FLAKE_UPDATE_TOKEN`, `AFK_AGENT_TOKEN` (#168), and the operator's own credential. Scoping the token could not fix this - a fine-grained PAT's `Contents: write` is repo-wide rather than per-branch - and `docs/plans/afk-agent-pipeline.md` item 4 is about to hand one of those credentials to an unattended coding agent.
+`deploy` is the only ref the fleet follows and hosts pick it up on their nightly `system.autoUpgrade`, so a push there reaches all three machines without passing the review gate that protects `master`. The `protect-deploy` ruleset restricted deletion and non-fast-forward pushes but not *who* may push, so any credential with write access to this repository could fast-forward it: `FLAKE_UPDATE_TOKEN`, `AFK_AGENT_TOKEN` (#168), and the operator's own credential. Scoping the token could not fix this - a fine-grained PAT's `Contents: write` is repo-wide rather than per-branch - and the AFK agent module is about to hand one of those credentials to an unattended coding agent.
 
 Nothing exploited it and it was not new. It is worth closing now rather than later because the failure it permits is the one the monitoring cannot see: `NixosDeployStale` and its neighbours describe deployments that fail, and a fleet moving overnight to a revision nobody reviewed is a deployment that *succeeds*.
 

@@ -70,7 +70,7 @@ three moments:
    than trusted from the label - ADR 0004 §5 asks for the check twice precisely
    so the label is not the gate.
 3. **Mid-run**, if denylisted scope surfaces that the ticket never described.
-   That is a stuck-path exit (`docs/plans/afk-agent-pipeline.md`, item 8):
+   That is a stuck-path exit (the runner's `hand_back`, `modules/services/afk-agent.nix`):
    comment, relabel, no PR.
 
 The list is **literal paths**. It does not stretch to cover things merely
@@ -91,14 +91,15 @@ runner's design and ADR 0004 §9, not something a ruleset enforces. `protect-mai
 requires a pull request and the `nixos ci` check, but its
 `required_approving_review_count` is `0`. Nothing structural stops a token with
 the right scope merging its own PR - a question for the AFK identity
-(`docs/plans/afk-agent-pipeline.md`, item 3) rather than for triage.
+(ADR 0006) rather than for triage.
 
-Item 3 has since answered it, and the answer is that no ruleset can carry §9
-here: ADR 0004 §4 rules out a second GitHub account, so an AFK PR is authored by
-the same person who would approve it, and GitHub does not let an author approve
-their own pull request. Requiring one approval would deadlock every PR in the
-repo. Human merge stays a property of the runner's code, so this file's reliance
-on it is reliance on something reviewed rather than something enforced.
+ADR 0006 answers it: no ruleset can carry §9 here, and not for the reason
+`docs/plans/afk-agent-pipeline.md` item 3 first gave - GitHub refuses to let a
+mergeability-blocking ruleset apply to any actor other than every actor,
+bypass list included, which defeats it for a human merge as much as for the
+runner's own. Human merge stays a property of the runner's code, so this
+file's reliance on it is reliance on something reviewed rather than something
+enforced.
 
 ### The one exception: the checks matrix
 
@@ -164,9 +165,9 @@ edit to `ci.yml` would pass. That is accepted - comments do not execute.
 
 Nothing at GitHub's end. A fine-grained PAT cannot push anything under
 `.github/workflows/` without the Workflows permission, whatever the runner
-believes, and `AFK_AGENT_TOKEN` carries that permission precisely so this
-exception can be exercised (`docs/plans/afk-agent-pipeline.md`, item 3). Without
-it the runner would produce a correct diff and fail at the push instead.
+believes, and the runner's credential carries that permission precisely so this
+exception can be exercised (its permission table, `modules/services/afk-agent.nix`).
+Without it the runner would produce a correct diff and fail at the push instead.
 
 That leaves all three enforcement moments above as the agent checking itself, so
 the diff check sketched here is the only control rather than an extra - and it

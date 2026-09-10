@@ -132,3 +132,10 @@ separate question with two rules: `docs/agents/afk-eligibility.md`.
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See
 `docs/agents/domain.md`.
+
+### Documentation
+
+Which document owns a given fact (issue, ADR, plan, findings note, PR, commit,
+README, code comment), and when a plan entry gets deleted rather than kept for
+reference. Read before writing a plan, an ADR, or anything that might restate
+a fact another document already owns. See `docs/agents/documentation.md`.

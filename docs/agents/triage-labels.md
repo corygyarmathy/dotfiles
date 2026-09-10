@@ -25,7 +25,7 @@ edit, rather than by assigning itself, because GitHub will not let a GitHub App
 hold an issue assignment (ADR 0006). Dropping `ready-for-agent` is what stops
 the ticket being claimed twice; `agent-working` is what makes that visible.
 
-The stuck path (#175, `docs/plans/afk-agent-pipeline.md` item 8) hands a ticket
+The stuck path (#175, the runner's `hand_back` in `modules/services/afk-agent.nix`) hands a ticket
 the runner cannot finish back in the same one-edit shape: `agent-working`
 becomes `agent-stuck`, next to a comment saying what was tried and why it
 stopped. Before the push, nothing else the run built survives - no pull
