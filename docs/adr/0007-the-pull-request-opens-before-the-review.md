@@ -6,7 +6,7 @@
     - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §6, whose closing "never a PR" was written when the review was a gate. Its retry-in-the-same-session rule is upheld here and extended to a new kind of failure; §9 is untouched
     - Answers: #201
     - Depends on: [ADR 0006](0006-the-runner-is-a-github-app.md), which gives the runner an identity that can edit a pull request body without being mistaken for the operator
-    - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, still open), `modules/services/afk-agent.nix` (items 8 and 13's shipped implementation), `docs/agents/triage-labels.md` (the hand-off label), `docs/agents/afk-eligibility.md` (the pre-push gate's placement)
+    - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, since shipped), `modules/services/afk-agent.nix` (items 8 and 13's shipped implementation), `docs/agents/triage-labels.md` (the hand-off label), `docs/agents/afk-eligibility.md` (the pre-push gate's placement)
 
 ## Context
 
@@ -24,7 +24,7 @@ There is a sentence in the way. ADR 0004 §6 ends: "A ticket that exhausts its r
 
 ## Decision
 
-**1. The pull request opens before the review.** The order is: implement to convergence against the local gate, check the diff against the path denylist, push, open the pull request, watch its checks, then review and write the findings onto the pull request that already exists. This amends the last sentence of ADR 0004 §6, and only that sentence.
+**1. The pull request opens before the review.** The order is: implement to convergence against the local gate, check the diff against the path denylist, push, open the pull request, watch its checks, then review and post the findings on that pull request as a comment - one comment, headed by the measured caveat, posted by the agent's own account so the author filter below keeps it out of the revision loop's inputs (#202). The body keeps the issue link, the provenance and what the branch says it does, and says there where the findings arrive instead of carrying them. This amends the last sentence of ADR 0004 §6, and only that sentence.
 
 **2. "Never a PR" is narrowed rather than dropped.** It still holds everywhere it was aimed: a ticket that cannot be implemented, that fails the denylist, or that cannot be pushed produces no pull request, because the push is what creates one and nothing before it has happened. What changes is what "can't proceed" means _after_ the push. Past that point the pull request exists, and the honest thing is to leave it open and withhold the signal that says it is finished - not to close or delete work a human may want. The comment, relabel and notification §6 asks for are unchanged; the stuck path now has to reach a pull request as well as an issue.
 
@@ -53,7 +53,7 @@ There is a sentence in the way. ADR 0004 §6 ends: "A ticket that exhausts its r
 
 - A failed run can now leave a pull request open. That is the point, and it is still a mess somebody has to clear - a larger mess than the claimed ticket and stray worktree it already leaves.
 - The runner's wall-clock ceiling grows substantially. CI on this repository is minutes-to-tens-of-minutes, and watching it twice with a fix in between has to fit under one `TimeoutStartSec`. Concurrency is one (ADR 0004 §8), so a run that reaches its ceiling blocks every later poll for that whole time.
-- Findings can no longer be written at creation time, so the pull request body is edited after the fact. A reader who arrives between the two sees a body with no review section in it - which is why the body says so in as many words.
+- The pull request body is re-rendered after the fact - at hand-off, so a CI fix round's commits and the final attempt count are in it - and a reader who arrives between the two sees an older body. It is a body that always says where the findings arrive, so the window shows no lies, only staleness. The findings are not in the body at either call: since #202 they travel as a comment posted by the agent's own account, which is also what lets ADR 0006's author filter keep them out of the agent's own instructions. A comment that fails to post hands the run back rather than applying the label that says the review ran.
 - The runner now depends on GitHub's check-run reporting being truthful and prompt. A required check that never arrives looks exactly like a slow one, and telling them apart is a timeout rather than a fact.
 
 ## Alternatives considered

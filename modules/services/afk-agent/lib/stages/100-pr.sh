@@ -22,66 +22,65 @@ if [ "$flow" = issue ]; then
 		pr_title="$title"
 	fi
 
-pr_prose() {
-	sed -e "s/ISSUE/$number/g" \
-		-e "s|BRANCH|$branch|g" \
-		-e "s|IMPLEMODEL|@MODEL@|g" \
-		-e "s|REVIEWMODEL|@REVIEW_MODEL@|g" \
-		-e "s/ATTEMPTS/$attempt/g" \
-		-e "s/CIROUNDS/$ci_round/g" \
-		-e "s|HANDOFF|@HANDOFF_LABEL@|g" \
-		"$1"
-}
+	pr_prose() {
+		sed -e "s/ISSUE/$number/g" \
+			-e "s|BRANCH|$branch|g" \
+			-e "s|IMPLEMODEL|@MODEL@|g" \
+			-e "s|REVIEWMODEL|@REVIEW_MODEL@|g" \
+			-e "s/ATTEMPTS/$attempt/g" \
+			-e "s/CIROUNDS/$ci_round/g" \
+			-e "s|HANDOFF|@HANDOFF_LABEL@|g" \
+			"$1"
+	}
 
-# The body, rendered from whatever is known at the moment it is called.
-# Called twice: once now, and once at the end of the run. Re-rendered
-# rather than appended to, so the second body is built from the branch as
-# it finally stands - a CI fix round's commits are in the "what the branch
-# says it does" section, and `ATTEMPTS` counts every session that touched
-# it. The review's findings are not part of it at either call (#202): they
-# arrive as a comment on the pull request, headed by @PR_HANDOFF@ at
-# hand-off, which is why they are kept as their own file rather than
-# assembled inline here.
-pr_body() {
-	{
-		pr_prose @PR_INTRO@
+	# The body, rendered from whatever is known at the moment it is called.
+	# Called twice: once now, and once at the end of the run. Re-rendered
+	# rather than appended to, so the second body is built from the branch as
+	# it finally stands - a CI fix round's commits are in the "what the branch
+	# says it does" section, and `ATTEMPTS` counts every session that touched
+	# it. The review's findings are not part of it at either call (#202): they
+	# arrive as a comment on the pull request, headed by @PR_HANDOFF@ at
+	# hand-off.
+	pr_body() {
+		{
+			pr_prose @PR_INTRO@
 
-		# What the branch claims to do, in the implementer's own words.
-		# Oldest first, subject as a heading and body under it, so a ticket
-		# that took three attempts reads as three steps rather than as one
-		# wall.
-		git -C "$worktree" log --reverse --format='### %s%n%n%b' \
-			"origin/$base_branch..HEAD"
-	} >"$run_dir/pr-body.md"
-}
+			# What the branch claims to do, in the implementer's own words.
+			# Oldest first, subject as a heading and body under it, so a ticket
+			# that took three attempts reads as three steps rather than as one
+			# wall.
+			git -C "$worktree" log --reverse --format='### %s%n%n%b' \
+				"origin/$base_branch..HEAD"
+		} >"$run_dir/pr-body.md"
+	}
 
-ci_round=0
-pr_body
+	ci_round=0
+	pr_body
 
-# `--label` rather than a second call, so a pull request that exists is a
-# pull request that is already attributable at a glance - no ruleset can
-# enforce ADR 0004 §9 here.
-#
-# Nothing arms auto-merge, here or anywhere: this opens the pull request
-# and stops. That is a property of this script rather than of a ruleset,
-# which is why the harness asserts it from both sides -
-# the merge verb appearing nowhere in this script at all, and no
-# auto-merge flag in what `gh` was actually called with. Both of its
-# greps are deliberately crude enough to match prose, so this comment
-# names neither command literally.
-log "#$number: opening the pull request"
-pr_url="$(
-	cd "$worktree" &&
-		gh pr create \
-			--repo "$repo" \
-			--base "$base_branch" \
-			--head "$branch" \
-			--title "$pr_title" \
-			--body-file "$run_dir/pr-body.md" \
-			--label "$pr_label"
-)" || hand_back "$branch is pushed but the pull request could not be opened"
+	# `--label` rather than a second call, so a pull request that exists is a
+	# pull request that is already attributable at a glance - no ruleset can
+	# enforce ADR 0004 §9 here.
+	#
+	# Nothing arms auto-merge, here or anywhere: this opens the pull request
+	# and stops. That is a property of this script rather than of a ruleset,
+	# which is why the harness asserts it from both sides -
+	# the merge verb appearing nowhere in this script at all, and no
+	# auto-merge flag in what `gh` was actually called with. Both of its
+	# greps are deliberately crude enough to match prose, so this comment
+	# names neither command literally.
+	log "#$number: opening the pull request"
+	pr_url="$(
+		cd "$worktree" &&
+			gh pr create \
+				--repo "$repo" \
+				--base "$base_branch" \
+				--head "$branch" \
+				--title "$pr_title" \
+				--body-file "$run_dir/pr-body.md" \
+				--label "$pr_label"
+	)" || hand_back "$branch is pushed but the pull request could not be opened"
 
-log "#$number: opened $pr_url"
+	log "#$number: opened $pr_url"
 fi
 
 # --- watch the branch's own CI ----------------------------------------

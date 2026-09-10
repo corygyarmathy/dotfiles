@@ -361,7 +361,13 @@ pkgs.runCommand "check-afk-agent-runner"
       # `pr-comment-body`, and every one in posting order at
       # `pr-comment-N-body`.
       "pr comment")
-        if [ -n "''${GH_PRCOMMENT_FAIL:-}" ]; then
+        # Refusals are countable: a value of N refuses the next N `pr
+        # comment` calls and lets the ones after through. A case that
+        # wants only the findings comment to fail says so with 1, so the
+        # hand-back's own comment is genuinely delivered and asserted on
+        # instead of silently sharing the refusal.
+        if [ "''${GH_PR_COMMENT_FAIL:-0}" -gt "$(cat "$OC_STATE/pr-comment-refused" 2>/dev/null || echo 0)" ]; then
+          echo $(( $(cat "$OC_STATE/pr-comment-refused" 2>/dev/null || echo 0) + 1 )) >"$OC_STATE/pr-comment-refused"
           echo "mock gh: refusing to comment on the pull request" >&2
           exit 1
         fi
@@ -1033,11 +1039,6 @@ pkgs.runCommand "check-afk-agent-runner"
       "reviews": [],
       "comments": [
         { "author": { "login": "corygyarmathy" },
-          "createdAt": "2026-09-10T12:00:00Z",
-          "body": "/revise" }
-      ]
-    }
-    JSON
           "createdAt": "2026-09-10T12:00:00Z",
           "body": "/revise" }
       ]
@@ -2084,10 +2085,13 @@ pkgs.runCommand "check-afk-agent-runner"
     grep -q "What the branch says it does" "$created" || fail "the body has no section for them"
 
     echo "case: the findings arrive as a comment, with the caveat above them"
-    # #202's whole point: the findings are resolvable, the body stays about
-    # the change, and the caveat travels with the findings rather than with
-    # the body. A reader who takes them for an approval is making exactly
-    # the mistake dropping the verdict was meant to prevent.
+    # #202's point: the findings sit in the comment channel the reviewer
+    # is already in, so a reader who has considered one can dismiss it -
+    # not resolve it, which GitHub only lets a review thread do - and the
+    # body stays about the change. The caveat travels with the findings
+    # rather than with the body. A reader who takes them for an approval
+    # is making exactly the mistake dropping the verdict was meant to
+    # prevent.
     [ -s "$state/pr-comment-body" ] || fail "no findings comment was posted: $(ghlog)"
     grep -q "duplicated derivation" "$state/pr-comment-body" \
       || fail "the review's findings did not travel to the comment: $(cat "$state/pr-comment-body")"
@@ -2462,34 +2466,50 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "two unavailable answers killed the run: $(cat "$state/err.log")"
     [ "$(ci_polls)" -eq 3 ] || fail "expected three polls, got $(ci_polls)"
 
+    # The skeleton the three past-the-push hand-backs share: the run ends
+    # in failure, the worktree goes, the branch survives locally and on
+    # origin, the ticket gets the story and the stuck label, and the pull
+    # request is left open - never closed or merged. Each case still
+    # asserts its own message and its own particulars around this.
+    assert_hand_back() {
+      [ -z "$(worktrees)" ] || fail "the hand-back left its worktree: $(worktrees)"
+      [ "$(branches)" = "afk/$ticket" ] \
+        || fail "the pushed branch did not survive the hand-back: $(branches)"
+      [ "$(pushed)" = "afk/$ticket" ] || fail "the branch left origin: $(pushed)"
+      grep -q "gh issue comment 302 " "$state/gh.log" \
+        || fail "no comment was left on the ticket: $(ghlog)"
+      grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+        || fail "the ticket was not relabelled: $(ghlog)"
+      if grep -qE "pr close|pr merge" "$state/gh.log"; then
+        fail "the hand-back closed or merged the pull request: $(ghlog)"
+      fi
+    }
+
     echo "case: a findings comment that cannot be posted hands the ticket back"
     # The findings are the output of the review stage, and a pull request
     # labelled ready without them would be saying something untrue. So a
     # failed comment is a failed run rather than a quiet one - and the
     # failure is past the push, so the hand-back reaches the pull request
     # too: the same story on both, the pull request left open without the
-    # hand-off label, the worktree gone and the branch untouched.
-    export GH_PRCOMMENT_FAIL=1
+    # hand-off label, the worktree gone and the branch untouched. The
+    # refusal here is countable, so the only `pr comment` the mock
+    # delivers is the hand-back's, and the assertion below reads a body
+    # that was actually posted - caught against a mock that refused the
+    # delivered comment, an earlier revision of this case passed on the
+    # failed findings attempt alone.
+    export GH_PR_COMMENT_FAIL=1
     run ci-commentfail mixed.json fresh good pass green
-    unset GH_PRCOMMENT_FAIL
+    unset GH_PR_COMMENT_FAIL
     [ "$rc" -ne 0 ] || fail "a hand-off that never landed was reported as success"
     grep -q "could not be posted on it" "$state/err.log" \
       || fail "did not say the hand-off failed: $(cat "$state/err.log")"
-    [ -z "$(worktrees)" ] || fail "the hand-back left its worktree: $(worktrees)"
-    [ "$(branches)" = "afk/$ticket" ] \
-      || fail "the pushed branch did not survive the hand-back: $(branches)"
-    [ "$(pushed)" = "afk/$ticket" ] || fail "the branch left origin: $(pushed)"
-    grep -q "gh issue comment 302 " "$state/gh.log" \
-      || fail "no comment was left on the ticket: $(ghlog)"
-    grep -q "gh pr comment" "$state/gh.log" \
-      || fail "the pull request was never told what stopped: $(ghlog)"
-    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
-      || fail "the ticket was not relabelled: $(ghlog)"
+    assert_hand_back "the post the findings could not reach"
+    [ "$(cat "$state/pr-comment-count")" = "1" ] \
+      || fail "expected only the hand-back's comment on the pull request, got $(cat "$state/pr-comment-count")"
+    grep -q "stopped work on this ticket" "$state/pr-comment-body" \
+      || fail "the delivered comment was not the hand-back's story: $(cat "$state/pr-comment-body")"
     if grep -q -- "--add-label agent-ready-for-review" "$state/gh.log"; then
       fail "the hand-off label was applied without the findings: $(ghlog)"
-    fi
-    if grep -qE "pr close|pr merge" "$state/gh.log"; then
-      fail "the hand-back closed or merged the pull request: $(ghlog)"
     fi
 
     echo "case: a hand-off edit that cannot land hands the ticket back"
@@ -2503,19 +2523,7 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "a hand-off that never landed was reported as success"
     grep -q "label could not be applied" "$state/err.log" \
       || fail "did not say the hand-off failed: $(cat "$state/err.log")"
-    [ -z "$(worktrees)" ] || fail "the hand-back left its worktree: $(worktrees)"
-    [ "$(branches)" = "afk/$ticket" ] \
-      || fail "the pushed branch did not survive the hand-back: $(branches)"
-    [ "$(pushed)" = "afk/$ticket" ] || fail "the branch left origin: $(pushed)"
-    grep -q "gh issue comment 302 " "$state/gh.log" \
-      || fail "no comment was left on the ticket: $(ghlog)"
-    grep -q "gh pr comment" "$state/gh.log" \
-      || fail "the pull request was never told what stopped: $(ghlog)"
-    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
-      || fail "the ticket was not relabelled: $(ghlog)"
-    if grep -qE "pr close|pr merge" "$state/gh.log"; then
-      fail "the hand-back closed or merged the pull request: $(ghlog)"
-    fi
+    assert_hand_back "the pull request the label could not reach"
 
     echo "case: a pull request that could not be opened hands the ticket back"
     # The branch is pushed by then, so there is no pull request for the
@@ -2529,17 +2537,10 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -ne 0 ] || fail "a pull request that was never opened was reported as success"
     grep -q "could not be opened" "$state/err.log" \
       || fail "did not say the pull request failed: $(cat "$state/err.log")"
-    grep -q "gh issue comment 302 " "$state/gh.log" \
-      || fail "no comment was left on the ticket: $(ghlog)"
-    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
-      || fail "the ticket was not relabelled: $(ghlog)"
+    assert_hand_back "the branch the pull request could not be made from"
     grep -q "reached origin and is kept there" "$state/stuck-body" \
       || fail "the comment does not say the pushed branch was kept: $(cat "$state/stuck-body")"
     if grep -q "pr comment" "$state/gh.log"; then fail "commented on a pull request that never opened: $(ghlog)"; fi
-    [ -z "$(worktrees)" ] || fail "the worktree survived the hand-back"
-    [ "$(branches)" = "afk/$ticket" ] \
-      || fail "the pushed branch did not survive the hand-back: $(branches)"
-    [ "$(pushed)" = "afk/$ticket" ] || fail "the pushed branch left origin: $(pushed)"
 
     echo "case: a review that committed anyway cannot reach the pull request"
     # Report-only is a pattern match on a command line, not a capability

@@ -273,8 +273,9 @@ let
   # round's commits and the final attempt count are in it. The review's
   # findings are not part of it at either call: #202 moves them to a
   # comment on the pull request, posted by the agent's own account
-  # (ADR 0006), where they are resolvable like any other comment and
-  # dropped by the revision loop's author filter like the agent's other
+  # (ADR 0006), where a reader who has considered a finding can dismiss it
+  # - not resolve it, which GitHub only lets a review thread do - and it
+  # is dropped by the revision loop's author filter like the agent's other
   # words. The commit messages are quoted rather than summarised: a
   # summary would be unchecked prose about its own work, the shape this
   # pipeline refuses everywhere else. `ISSUE`, `BRANCH`, `IMPLEMODEL`,
