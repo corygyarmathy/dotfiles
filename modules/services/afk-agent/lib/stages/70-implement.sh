@@ -1,19 +1,30 @@
 # shellcheck shell=bash
-# ADR 0004 §6: a retry happens *inside* the session that produced the
-# failure, because a retry that cannot see what it is retrying against is
-# close to useless. `opencode run --session` is what makes that literal.
-# The model keeps its own transcript, so the only thing this has to hand
-# back across the boundary is the verdict it could not see for itself:
-# this repository's gate, and what it said.
+# The build lane's own pieces of the attempt machinery: the gate, and
+# the four-way verdict the shared loop judges its attempts by. The loop
+# itself - the argument construction, the `--title`/`--session` switch,
+# the session read-back, the three-way retry branch - is the shared one
+# in 65-attempt-loop.sh, and it is one definition for the ticket lane and
+# the revision lane together, so a fix to the retry policy cannot land in
+# one lane and miss the other (#243).
+#
+# ADR 0004 §6 is what the retry shape is: a retry happens *inside* the
+# session that produced the failure, because a retry that cannot see
+# what it is retrying against is close to useless. `opencode run
+# --session` is what makes that literal. The model keeps its own
+# transcript, so the only thing this has to hand back across the
+# boundary is the verdict it could not see for itself: this repository's
+# gate, and what it said.
 #
 # Nothing here is written inside the worktree. A prompt or a log that
 # landed there would show up in the diff being gated, and then in the
 # pull request.
 #
 # `gate` and `attempt_verdict` are deliberately outside the `flow` guard
-# below: the revision lane (150-revise.sh) runs sessions and judges them
-# by exactly the same four checks and the same gate, and one definition
-# is what keeps that from drifting into a second, weaker copy.
+# below: the CI fix rounds (110-ci.sh, 150-revise.sh) judge their one
+# session by exactly the same four checks and the same gate, and the
+# revision lane's loop consumes the verdict through the shared loop - one
+# definition each is what keeps that from drifting into second, weaker
+# copies.
 #
 # The gate. Deliberately this repository's own CI gate rather than a
 # cheaper proxy: the entire value of an unattended runner is that it does
@@ -154,101 +165,29 @@ attempt_verdict() {
 	fi
 }
 
-# The loop is the ticket lane's; the revision lane has its own, with the
-# revision prompt as the opening message (150-revise.sh).
+# The loop is the shared one (65-attempt-loop.sh); what is this lane's is
+# the prompt and the wording its retries carry. The verdict is measured
+# against `origin/$base_branch`: what has to be true is that something
+# was committed to the branch this run cut, on top of the base it was cut
+# from. The loop's seed is the global `$session`, empty here: the first
+# attempt opens the session, and later ones - and 110-ci.sh's fix round -
+# continue it.
 if [ "$flow" = issue ]; then
 	sed "s/ISSUE/$number/g" @IMPLEMENT_PROMPT@ >"$run_dir/prompt"
 
 	session=""
-	message="$(cat "$run_dir/prompt")"
+	attempt_label="implement attempt"
+	attempt_loop \
+		"$attempt_label" \
+		"$(cat "$run_dir/prompt")" \
+		"$slug" \
+		"origin/$base_branch" \
+		@MAX_ATTEMPTS@ \
+		"Attempt" \
+		"this ticket is done" \
+		"@MAX_ATTEMPTS@ attempts and no passing implementation; the last one failed because %s"
 
-	while :; do
-		log "#$number: implement attempt $attempt of @MAX_ATTEMPTS@"
-
-		# `--title` on the first attempt is what makes the session findable
-		# again; `--session` on every attempt after it is ADR 0004 §6.
-		opencode_args=(--agent build --model @MODEL@ --variant @VARIANT@)
-		if [ -n "$session" ]; then
-			opencode_args+=(--session "$session")
-		else
-			opencode_args+=(--title "$slug")
-		fi
-
-		# `|| exit 1` on the `cd` for the same reason as in the gate: this
-		# subshell is the left side of a `||`, so errexit is off inside it, and
-		# a failed `cd` would otherwise run the session against whatever
-		# directory the runner happened to be in.
-		#
-		# `--dir` says the same thing a second way, and it is not redundant.
-		# opencode resolves its project - and with it which `.agents/skills/`
-		# it can see - from the directory it is launched in, so an ambient
-		# working directory is load-bearing state that looks like none. The
-		# review stage below pins the
-		# same flag; both stages say it explicitly so that neither depends on
-		# the `cd` above having done what it looks like it did.
-		# Overlay scoped to the command, not exported for the rest of the run,
-		# for the reason the review stage below gives: a deny-set that outlives
-		# its own session is ambient state that looks like none, and the verbs
-		# this one denies are ones a later stage needs.
-		attempt_rc=0
-		(
-			cd "$worktree" || exit 1
-			OPENCODE_CONFIG_CONTENT=@PERMISSION_OVERLAY@ \
-				timeout @ATTEMPT_TIMEOUT@ opencode run --auto \
-				--dir "$worktree" "${opencode_args[@]}" "$message"
-		) || attempt_rc=$?
-
-		attempt_verdict "$attempt_rc" "origin/$base_branch"
-
-		if [ -z "$reason" ]; then
-			log "#$number: implemented on $branch, in $attempt attempt(s)"
-			break
-		fi
-
-		log "#$number: attempt $attempt did not pass, because $reason"
-
-		if [ "$attempt" -ge @MAX_ATTEMPTS@ ]; then
-			hand_back "@MAX_ATTEMPTS@ attempts and no passing implementation; the last one failed because $reason"
-		fi
-
-		# Read back once and then reused: the id does not change, and
-		# `session list` is a question with a cost.
-		if [ -z "$session" ]; then
-			session="$(session_id_for "$worktree" "$slug")"
-		fi
-
-		# Whether there is a session to continue decides both what the next
-		# attempt is addressed to and what it is told, and the two have to move
-		# together: a fresh session handed a message about a failure it cannot
-		# see would be worse than either.
-		#
-		# The messages are built with printf rather than written as literals
-		# spanning lines. A continuation line would have to start in column 0
-		# to keep the script's own indentation out of the text, and a column-0
-		# line inside a Nix indented string collapses the dedent for the whole
-		# script - which is not theoretical, it happened while writing this.
-		if [ -n "$session" ]; then
-			log "#$number: retrying inside session $session"
-			message="$(printf '%s\n\n%s' \
-				"Attempt $attempt of @MAX_ATTEMPTS@ did not pass, because $reason" \
-				"Fix that here, in this worktree, and commit the fix. The gate is the only thing that decides whether this ticket is done.")"
-		elif [ "$attempt_rc" -eq 0 ] || [ "$committed" -gt 0 ]; then
-			# An attempt that exited cleanly, or committed, plainly had a session.
-			# Not being able to find it means the next attempt would re-read the
-			# ticket in a fresh context with no idea what just failed, which is
-			# the degrade ADR 0004 §6 rules out rather than a lesser form of it.
-			hand_back "attempt $attempt ran, but no session titled '$slug' can be found to continue; refusing to retry in a fresh context (ADR 0004 §6)"
-		else
-			# Nothing to continue, and nothing lost by not continuing: the attempt
-			# failed before it opened a session, so there is no transcript for a
-			# retry to carry. The next one is the first real attempt rather than a
-			# context-free retry, so it gets the original prompt back.
-			log "#$number: attempt $attempt opened no session; the next one starts one"
-			message="$(cat "$run_dir/prompt")"
-		fi
-
-		attempt=$((attempt + 1))
-	done
+	log "#$number: implemented on $branch, in $attempt attempt(s)"
 fi
 
 # --- the last denylist check, asked of the diff ------------------------

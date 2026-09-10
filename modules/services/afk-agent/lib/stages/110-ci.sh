@@ -243,30 +243,12 @@ if [ "$flow" = issue ]; then
 		attempt=$((attempt + 1))
 		log "#$number: feeding the red run back into session $session (implement session $attempt)"
 
-		ci_fix_rc=0
-		(
-			cd "$worktree" || exit 1
-			OPENCODE_CONFIG_CONTENT=@PERMISSION_OVERLAY@ \
-				timeout @ATTEMPT_TIMEOUT@ opencode run --auto \
-				--dir "$worktree" \
-				--agent build --model @MODEL@ --variant @VARIANT@ \
-				--session "$session" "$ci_message"
-		) || ci_fix_rc=$?
-
-		# Judged by the same four checks an implement attempt is, against the
-		# commit that was pushed rather than against the base branch: what has
-		# to be true here is that something NEW was committed on top of the red
-		# commit.
-		#
-		# And judged once. A CI fix round gets one session and no retry, which
-		# is a deliberate asymmetry with the implement stage rather than an
-		# oversight: the local gate has already passed on this branch, so a fix
-		# that fails it is the model going backwards rather than failing to
-		# converge - and unlike the implement stage there is now a pull request
-		# a human can pick up, which is most of what a retry budget was buying.
-		attempt_verdict "$ci_fix_rc" "$pushed_head"
-		[ -z "$reason" ] ||
-			hand_back "the CI fix did not pass, because $reason. $pr_url is open with a red CI run on it; a CI fix gets one session and no retry (ADR 0007)"
+		# The fix round is the shared one (65-attempt-loop.sh): one build
+		# session inside the session that wrote the failing commit, judged
+		# by the same four checks against the commit that was pushed, and
+		# handed back if it did not pass - both fix rounds, this lane's and
+		# the revision lane's, are one definition of that.
+		ci_fix_round "$session" "$ci_message"
 
 		push_branch
 		ci_round=$((ci_round + 1))

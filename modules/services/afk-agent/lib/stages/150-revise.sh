@@ -133,7 +133,8 @@ if [ "$flow" = revise ]; then
 
 	# --- the revision session, on the implement stage's retry budget ------
 	#
-	# Same loop, same gate, same verdict, same retry shape (ADR 0004 §6):
+	# The loop is the shared one (65-attempt-loop.sh), so the gate, the
+	# verdict and the retry shape are literally the same code (ADR 0004 §6):
 	# a round that fails its gate costs a retry, not a round. The opening
 	# message is the revision prompt plus the round's input - the `/revise`
 	# request's own text, or the review comments behind it; the retries
@@ -161,60 +162,23 @@ if [ "$flow" = revise ]; then
 
 	round=$((revise_rounds + 1))
 
-	message="$(cat "$revise_dir/message")"
+	# What is this lane's is the opening message and the wording its retries
+	# carry; the seed is the session that built the branch, and the fresh
+	# title is the round's own.
+	attempt_label="revision round $round of @MAX_REVISION_ROUNDS@, attempt"
+	session="$revise_session"
+	attempt_loop \
+		"$attempt_label" \
+		"$(cat "$revise_dir/message")" \
+		"$revise_title" \
+		"origin/$branch" \
+		@MAX_ATTEMPTS@ \
+		"Revision attempt" \
+		"this revision round is done" \
+		"@MAX_ATTEMPTS@ revision attempt(s) and no passing change; the last one failed because %s"
+	revise_session="$session"
 
-	while :; do
-		log "#$number: revision round $round of @MAX_REVISION_ROUNDS@, attempt $attempt of @MAX_ATTEMPTS@"
-
-		opencode_args=(--agent build --model @MODEL@ --variant @VARIANT@)
-		if [ -n "$revise_session" ]; then
-			opencode_args+=(--session "$revise_session")
-		else
-			opencode_args+=(--title "$revise_title")
-		fi
-
-		revise_rc=0
-		(
-			cd "$worktree" || exit 1
-			OPENCODE_CONFIG_CONTENT=@PERMISSION_OVERLAY@ \
-				timeout @ATTEMPT_TIMEOUT@ opencode run --auto \
-				--dir "$worktree" "${opencode_args[@]}" "$message"
-		) || revise_rc=$?
-
-		# Judged against the pull request's head, which is what the round
-		# resumed from: what has to be true here is that something NEW was
-		# committed on top of it.
-		attempt_verdict "$revise_rc" "origin/$branch"
-
-		if [ -z "$reason" ]; then
-			log "#$number: revision attempt $attempt passed the gate"
-			break
-		fi
-
-		log "#$number: revision attempt $attempt did not pass, because $reason"
-
-		if [ "$attempt" -ge @MAX_ATTEMPTS@ ]; then
-			hand_back "@MAX_ATTEMPTS@ revision attempt(s) and no passing change; the last one failed because $reason"
-		fi
-
-		if [ -z "$revise_session" ]; then
-			revise_session="$(session_id_for "$worktree" "$revise_title")"
-		fi
-
-		if [ -n "$revise_session" ]; then
-			log "#$number: retrying inside session $revise_session"
-			message="$(printf '%s\n\n%s' \
-				"Revision attempt $attempt of @MAX_ATTEMPTS@ did not pass, because $reason" \
-				"Fix that here, in this worktree, and commit the fix. The gate is the only thing that decides whether this revision round is done.")"
-		elif [ "$revise_rc" -eq 0 ] || [ "$committed" -gt 0 ]; then
-			hand_back "revision attempt $attempt ran, but no session titled '$revise_title' can be found to continue; refusing to retry in a fresh context (ADR 0004 §6)"
-		else
-			log "#$number: revision attempt $attempt opened no session; the next one starts one"
-			message="$(cat "$revise_dir/message")"
-		fi
-
-		attempt=$((attempt + 1))
-	done
+	log "#$number: revision attempt $attempt passed the gate"
 
 	# The round report: the session's own account of what it addressed and
 	# what it did not, read out of the transcript rather than the session's
@@ -311,19 +275,11 @@ if [ "$flow" = revise ]; then
 			"$(printf 'These checks are not green:\n%s' "$ci_failed")" \
 			"Fix it here, in this worktree, and commit the fix. Do not push and do not touch the pull request - this runner pushes your commit to the same branch afterwards. The local gate has to pass on your fix as well, and there is no retry: this round is judged once.")"
 
-		ci_fix_rc=0
-		(
-			cd "$worktree" || exit 1
-			OPENCODE_CONFIG_CONTENT=@PERMISSION_OVERLAY@ \
-				timeout @ATTEMPT_TIMEOUT@ opencode run --auto \
-				--dir "$worktree" \
-				--agent build --model @MODEL@ --variant @VARIANT@ \
-				--session "$revise_session" "$ci_message"
-		) || ci_fix_rc=$?
-
-		attempt_verdict "$ci_fix_rc" "$pushed_head"
-		[ -z "$reason" ] ||
-			hand_back "the CI fix did not pass, because $reason. $pr_url is open with a red CI run on it; a CI fix gets one session and no retry (ADR 0007)"
+		# The fix round is the shared one (65-attempt-loop.sh): one build
+		# session inside the revision session, judged against $pushed_head
+		# once, and handed back if it did not pass - the same definition
+		# the ticket lane's fix round runs on.
+		ci_fix_round "$revise_session" "$ci_message"
 
 		push_branch
 
