@@ -1,6 +1,9 @@
 # shellcheck shell=bash
 log() { echo "afk-agent: $*"; }
-die() { echo "afk-agent: $*" >&2; exit 1; }
+die() {
+	echo "afk-agent: $*" >&2
+	exit 1
+}
 
 # Turn a session title back into a session id, or print nothing.
 #
@@ -14,10 +17,9 @@ die() { echo "afk-agent: $*" >&2; exit 1; }
 # for and why that matters. An empty answer has to travel back as an
 # empty answer.
 session_id_for() {
-  (
-    cd "$1" \
-      && opencode session list -n @SESSION_LIST_DEPTH@ --format json \
-      | jq -r --arg t "$2" 'map(select(.title == $t)) | .[0].id // empty'
-  ) 2>/dev/null || true
+	(
+		cd "$1" &&
+			opencode session list -n @SESSION_LIST_DEPTH@ --format json |
+			jq -r --arg t "$2" 'map(select(.title == $t)) | .[0].id // empty'
+	) 2>/dev/null || true
 }
-
