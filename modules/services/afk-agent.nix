@@ -10,6 +10,7 @@
 # Pipeline order:
 #
 #   claim -> isolate -> implement until the local gate agrees
+#     -> rebase onto the base branch where it moved during the work (#242)
 #     -> denylist gate on the diff -> push -> open the pull request
 #     -> watch its CI -> feed a red run back into the implement session
 #        and push the fix to the same branch, up to a bounded number of rounds
@@ -179,6 +180,17 @@ let
     builtins.readFile ./afk-agent/lib/prompts/implement.md
   );
 
+  # The rebase-conflict session's instructions (#242). The runner replays
+  # the branch onto the base branch before the pull request opens, and a
+  # replay that stops on a conflict is finished by this session rather
+  # than handed back: the skill is named explicitly, the permission
+  # overlay is the implement stage's own, and there is no retry - the
+  # work behind the conflict already passed the gate, so what is owed on
+  # failure is a human, not a budget.
+  rebasePrompt = pkgs.writeText "afk-agent-rebase-prompt" (
+    builtins.readFile ./afk-agent/lib/prompts/rebase.md
+  );
+
   # What the implement session may not do, denied through OpenCode's own
   # permission layer rather than only asked for in the prompt. The pilot
   # verified that an inline `OPENCODE_CONFIG_CONTENT` merges after the
@@ -307,6 +319,7 @@ let
         commitName
         commitEmail
         implementPrompt
+        rebasePrompt
         prIntro
         prHandoff
         reviewPrompt
@@ -389,7 +402,7 @@ in
 
     maxRuntime = lib.mkOption {
       type = lib.types.str;
-      default = "9h";
+      default = "10h45m";
       example = "90min";
       description = ''
         Ceiling on a single run, as `TimeoutStartSec` (systemd.time(7)).
@@ -405,8 +418,10 @@ in
         makes it an honest bound rather than a guess. Three implement attempts
         at an hour each with a gate after each is 5h15m; watching CI twice at
         forty-five minutes a watch is 1h30m; the one CI fix round between those
-        watches is another attempt and another gate, 1h45m; and the review pass
-        is 30m. Nine hours.
+        watches is another attempt and another gate, 1h45m; the rebase stage's
+        conflict session (#242) is another attempt-shaped session and another
+        gate on the worst path, 1h45m; and the review pass is 30m. Ten hours
+        forty-five minutes.
 
         # It grew with the pipeline - the CI rounds in particular - so
         # re-derive it from the ceilings above rather than raising it
@@ -602,7 +617,13 @@ in
     ciFirstCheckPolls = lib.mkOption {
       type = lib.types.int;
       default = 10;
-      description = "Polls to wait for CI's first check before calling it absent rather than slow (ADR 0007).";
+      description = ''
+        Polls to wait for CI's first check before calling it absent rather
+        than slow (ADR 0007). The same bound is what tells a moved pull
+        request head apart from the post-push reporting window: a head
+        mismatch lasting this many polls is a rebase or push by a human,
+        and the watch follows the run it triggered (#248).
+      '';
     };
 
     ciSettlePolls = lib.mkOption {

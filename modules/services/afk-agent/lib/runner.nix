@@ -23,6 +23,7 @@
   commitName,
   commitEmail,
   implementPrompt,
+  rebasePrompt,
   gateTimeout,
   attemptTimeout,
   gateTailLines,
@@ -55,13 +56,14 @@ let
   stageDir = ./stages;
 
   # Pipeline order: claim -> isolate -> implement -> push gate -> push ->
-  # pull request -> watch CI -> review -> hand off, with the stuck path
-  # available throughout (see ADR 0007). 150-revise.sh is the second entry
-  # point (#196, as re-triggered by #247): the poll in 50-poll-claim.sh
-  # checks the revision frontier - an unacknowledged `/revise` comment on
-  # one of this runner's own open pull requests - before it claims ticket
-  # work, a human waiting on a revision being ahead of a backlog ticket,
-  # and the stages in between read `$flow` and step aside.
+  # rebase onto the base branch (#242) -> pull request -> watch CI -> review
+  # -> hand off, with the stuck path available throughout (see ADR 0007).
+  # 150-revise.sh is the second entry point (#196, as re-triggered by
+  # #247): the poll in 50-poll-claim.sh checks the revision frontier - an
+  # unacknowledged `/revise` comment on one of this runner's own open pull
+  # requests - before it claims ticket work, a human waiting on a revision
+  # being ahead of a backlog ticket, and the stages in between read `$flow`
+  # and step aside.
   stageFiles = [
     "00-env.sh"
     "10-util.sh"
@@ -72,6 +74,7 @@ let
     "60-isolate.sh"
     "70-implement.sh"
     "80-push-gate.sh"
+    "85-rebase.sh"
     "90-push.sh"
     "100-pr.sh"
     "110-ci.sh"
@@ -118,6 +121,7 @@ let
     "@COMMIT_NAME@" = lib.escapeShellArg commitName;
     "@COMMIT_EMAIL@" = lib.escapeShellArg commitEmail;
     "@IMPLEMENT_PROMPT@" = toString implementPrompt;
+    "@REBASE_PROMPT@" = toString rebasePrompt;
     "@GATE_TIMEOUT@" = toString gateTimeout;
     "@ATTEMPT_TIMEOUT@" = toString attemptTimeout;
     "@GATE_TAIL_LINES@" = toString gateTailLines;
