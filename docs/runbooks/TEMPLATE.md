@@ -10,13 +10,16 @@ read on a phone at 3am; link out for depth instead of inlining it.
 **Fires when:** one sentence restating the expression in plain language.
 
 ### Do now
+
 - Exact command(s) that answer "how bad is it".
 - The single most likely cause, if there is one.
 
 ### Dig deeper
+
 - Second looks, dashboards, related alerts to check.
 
 ### Fix
+
 - The usual resolutions, most common first.
 - When it is safe to silence and walk away.
 ```

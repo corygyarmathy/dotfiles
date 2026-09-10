@@ -10,8 +10,8 @@ layers - the alerts are ordered to tell you which. Context:
 **Severity:** critical (buzzes) · **Fires when:** cloudflared stops answering
 its metrics endpoint, or its systemd unit enters failed state. While this
 fires, every public hostname is dark and all ServiceDown probes are inhibited -
-this alert is deliberately the only *service* page you get. `HostUnreachableFromOutside`
-is *not* inhibited: the away-host beacon is what still pages when the tunnel
+this alert is deliberately the only _service_ page you get. `HostUnreachableFromOutside`
+is _not_ inhibited: the away-host beacon is what still pages when the tunnel
 owner itself is gone, since this alert's metric lives on that host and may
 never reach an operator.
 
@@ -67,7 +67,7 @@ exceed ~10% for 5 minutes.
 
 ### Do now
 
-- This is usually an *upstream service* misbehaving, not the tunnel. Which
+- This is usually an _upstream service_ misbehaving, not the tunnel. Which
   services? Cross-reference the probe table on Fleet Overview.
 - `journalctl -u caddy -n 100 | grep -i error` on homelab01 names the failing
   upstreams.
@@ -81,7 +81,7 @@ exceed ~10% for 5 minutes.
 
 **Severity:** warning · **Fires when:** a blackbox probe cannot get HTTP 200
 from a public service URL for 5 minutes. Suppressed entirely while the tunnel
-is down (you'd get the tunnel alert instead). Excludes *remote* probes -
+is down (you'd get the tunnel alert instead). Excludes _remote_ probes -
 those are the reachability alert below, so one away-host outage does not fire
 both.
 
@@ -89,14 +89,14 @@ both.
 
 - The probe URL in the notification identifies the service. Walk the chain
   from inside out:
-  1. Is the service up? `ssh <host> systemctl status <service>` (arr units
-     live on their documented hosts; podman-backed ones via
-     `podman ps -a | grep <name>`).
-  2. Is Caddy reaching it? `curl -s -o /dev/null -w '%{http_code}'
-     http://localhost:<port>` **on the service's host**.
-  3. Is Caddy serving? `curl -sk -o /dev/null -w '%{http_code}'
-     https://<subdomain>.gyarmathy.co` from homelab01 itself (LAN source, so
-     localOnly rules allow it).
+    1. Is the service up? `ssh <host> systemctl status <service>` (arr units
+       live on their documented hosts; podman-backed ones via
+       `podman ps -a | grep <name>`).
+    2. Is Caddy reaching it? `curl -s -o /dev/null -w '%{http_code}'
+http://localhost:<port>` **on the service's host**.
+    3. Is Caddy serving? `curl -sk -o /dev/null -w '%{http_code}'
+https://<subdomain>.gyarmathy.co` from homelab01 itself (LAN source, so
+       localOnly rules allow it).
 - One service down = that service. Several at once = Caddy or the tunnel
   (but then you'd have gotten the tunnel alert).
 
@@ -107,13 +107,13 @@ both.
 
 ## HostUnreachableFromOutside
 
-**Severity:** critical (buzzes) · **Fires when:** a *peer* server cannot get
+**Severity:** critical (buzzes) · **Fires when:** a _peer_ server cannot get
 HTTP 200 from this host's dedicated host-alive beacon
 (`alive-<host>.<domain>`, a dependency-free 200-responder — see
 `modules/services/host-alive.nix`) for 5 minutes. This is the reachability
 check (item 9): every other probe runs on the machine it watches, so a host
 cut off from its network still believes, locally, that everything is fine.
-These probes run on the *other* server, so they keep answering when this one
+These probes run on the _other_ server, so they keep answering when this one
 cannot. Because the target is the beacon and not one of its services, a plain
 service crash does not raise this — only the host itself genuinely being out
 of reach does.
@@ -129,16 +129,16 @@ The probe URL is public, but the path the probe takes is not fixed. The fleet
 resolver answers `alive-*` with the LAN address, so normally the probe crosses
 the LAN to the peer's beacon through Caddy; if the probing host resolves
 publicly instead, the same URL rides the tunnel to Cloudflare's edge. Either
-way the *observer* is a different machine. The path matters when reading the
+way the _observer_ is a different machine. The path matters when reading the
 alert, because each direction observes a different set of failure modes:
 
-- **LAN path** fires when the peer's host/Caddy/network is down; it does *not*
+- **LAN path** fires when the peer's host/Caddy/network is down; it does _not_
   see a pure tunnel/egress fault, because the peer still answers on the LAN.
 - **Tunnel path** also sees a pure tunnel/egress fault.
 
 Both paths share one hop: they transit **homelab01** — its Caddy on the LAN
 path, its tunnel on the public path. So a failure on homelab01 itself can fire
-this alert from *both* Prometheus instances at once, and the instance running
+this alert from _both_ Prometheus instances at once, and the instance running
 on homelab01 will misname homelab02 (which is healthy). When both fire
 together, the cause is almost always the shared hop — homelab01's Caddy, tunnel
 or network — not two dead hosts. The direction that stayed green names the
@@ -150,7 +150,7 @@ healthy peer.
   though its own probes and alerts still look healthy. Do **not** trust the
   local view.
 - Confirm from a second vantage point: `curl -sk -o /dev/null -w '%{http_code}'
-  <instance url>` from the *other* server, and `ping`/`ssh` the host. If the
+<instance url>` from the _other_ server, and `ping`/`ssh` the host. If the
   peer still reaches it over the LAN but not publicly, that is an egress/tunnel
   fault on homelab01, not a dead host.
 - If both beacons fire at once, suspect the shared hop — homelab01's Caddy,

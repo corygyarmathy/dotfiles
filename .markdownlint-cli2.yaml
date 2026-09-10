@@ -1,0 +1,36 @@
+# Canonical markdownlint config for this repository.
+#
+# Consumed by three callers that must agree with each other (see #219):
+# - `nix fmt` / CI, through treefmt's `markdownlint` formatter (auto-discovered
+#   up the tree from each file, so no --config flag is needed);
+# - the editor, through configs/nvim/lua/plugins/{conform.nvim,nvim-lint}.lua,
+#   which read it as ~/.config/nvim/.markdownlint-cli2.yaml - a symlink the
+#   nvim config carries to this file, placed by modules/home/development/
+#   nvim.nix's whole-dir config symlink;
+# - the opencode harness formatter, which auto-discovers it the same way.
+#
+# Rules are markdownlint defaults except where noted below. A rule is scoped
+# here (rather than hand-fixed across the tree) only when the established
+# format of a file structurally violates it: ADRs are append-only and skill
+# templates carry `<slot>` syntax, so neither can be retrofitted.
+config:
+  default: true
+  MD007: # indent size
+    indent: 4
+  MD013: false # line-length
+  MD024:
+    # Plan and skill docs repeat subsection names ("The problem", "Approach",
+    # ...) once per item under different parents. Duplicates under the same
+    # parent are still caught.
+    siblings_only: true
+  # ADR and skill templates carry `<slot>` syntax (`<title>`, `<Option>`,
+  # `<the ...>`), which is not inline HTML. No prose file uses real inline
+  # HTML, so nothing is lost by switching this off.
+  MD033: false
+  # `_Positive_` / `_Negative_` are the blind-ranking candidate labels by
+  # convention across the ADRs, and plans use emphasis annotations. Neither
+  # is a heading manqué.
+  MD036: false
+  # Terminal transcripts and file listings are intentionally untagged, and
+  # the ADR append-only rule forbids retrofitting language tags onto records.
+  MD040: false

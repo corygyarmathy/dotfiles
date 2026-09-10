@@ -71,10 +71,10 @@ jobs:
             extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
 
       # Formatting runs before the audit's checkout-modifying steps. `nix fmt`
-      # resolves to nixfmt-tree (flake.nix), which formats in place and then
-      # fails because it changed something - that is what makes it a gate, and
-      # also why it leaves the runner's checkout modified. Nothing below reads
-      # the formatting of the tree, only its content.
+      # resolves to the treefmt wrapper (flake.nix), which formats in place
+      # and then fails because it changed something - that is what makes it a
+      # gate, and also why it leaves the runner's checkout modified. Nothing
+      # below reads the formatting of the tree, only its content.
       - name: Check formatting
         run: nix fmt -- --ci
 
@@ -179,6 +179,7 @@ jobs:
           - download-root-canary
           - download-root-canary-script
           - download-root-safety
+          - fmt-gate
           - grafana
           - host-alive
           - monitoring

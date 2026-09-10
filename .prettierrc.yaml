@@ -1,0 +1,15 @@
+# Prettier config - deliberately minimal (see #219).
+#
+# There are no top-level options: every file type except Markdown below uses
+# prettier defaults, in the editor, in the harness and in CI alike.
+#
+# The Markdown override exists for exactly one conflict: markdownlint enforces
+# MD007 (4-space list indent, see .markdownlint-cli2.yaml) while prettier
+# defaults to tabWidth 2, and the two reformat each other's output forever.
+# tabWidth 4 for Markdown makes them converge; it changes nothing else, since
+# prose wrapping stays on `preserve` (the default) and code blocks are
+# formatted by their own parsers.
+overrides:
+  - files: "*.md"
+    options:
+      tabWidth: 4

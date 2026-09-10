@@ -40,18 +40,18 @@ Item 6's original design asked the review stage to gate - refuse a diff it judge
 
 **The review stage never once refused the flawed diff for the defect in it**, across every arm:
 
-| Arm | Model | Detected the defect | Gated on it |
-| --- | --- | --- | --- |
-| Base prompt | `glm-5.3-flash` | 0/3 | 0/3 |
-| Base prompt | `deepseek-v4-pro` | 2/3 | 0/3 |
-| "Precedent is not permission" rubric | `deepseek-v4-pro` | 2/3 | 0/3 |
-| "Verdict from the skill's own categories" rubric | `deepseek-v4-pro` | 0/3 | 0/3 (but 2/2 false positives on the *clean* subject) |
-| Same rubric, control | `glm-5.3-flash` | 1/3 | 0/3 |
+| Arm                                              | Model             | Detected the defect | Gated on it                                          |
+| ------------------------------------------------ | ----------------- | ------------------- | ---------------------------------------------------- |
+| Base prompt                                      | `glm-5.3-flash`   | 0/3                 | 0/3                                                  |
+| Base prompt                                      | `deepseek-v4-pro` | 2/3                 | 0/3                                                  |
+| "Precedent is not permission" rubric             | `deepseek-v4-pro` | 2/3                 | 0/3                                                  |
+| "Verdict from the skill's own categories" rubric | `deepseek-v4-pro` | 0/3                 | 0/3 (but 2/2 false positives on the _clean_ subject) |
+| Same rubric, control                             | `glm-5.3-flash`   | 1/3                 | 0/3                                                  |
 
 The rubric that gated most aggressively gated the correct implementation too - false positives, not catches. A rubric could not manufacture a catch from a model that was not looking, and could not make a model that saw the defect refuse on it either: both `deepseek-v4-pro` runs that spotted the bug reasoned their way to a `pass` anyway, citing something true (an existing precedent in the codebase, the ticket's own stated preference) to justify it.
 
 **Conclusion: this stage cannot be trusted to gate**, on any model or rubric tested. It was made advisory rather than a merge gate - a decision recorded in [ADR 0004 §6](../adr/0004-afk-agent-runs-self-hosted-with-a-harness-split.md) and [ADR 0007](../adr/0007-the-pull-request-opens-before-the-review.md), which made CI the correctness gate instead.
 
-**Re-graded on findings quality, since the stage's whole value is now the notes it leaves.** Accuracy itself was never the problem: nine recurring finding-themes were checked against source across both subjects, all nine true, on both models. What the re-grade found instead: on the flawed subject, 9 of 15 runs affirmatively certified that the very criterion the diff breaks was satisfied - and 4 of the 5 runs that *did* detect the defect also certified, elsewhere in the same report, that the criterion it breaks holds. A reader gets the bug and its own refutation with nothing to separate them, which is worse than a report that missed it entirely. This is what the runner's review prompt now explicitly forbids: writing that something is "met", "verified" or "unchanged" without having run something that shows it.
+**Re-graded on findings quality, since the stage's whole value is now the notes it leaves.** Accuracy itself was never the problem: nine recurring finding-themes were checked against source across both subjects, all nine true, on both models. What the re-grade found instead: on the flawed subject, 9 of 15 runs affirmatively certified that the very criterion the diff breaks was satisfied - and 4 of the 5 runs that _did_ detect the defect also certified, elsewhere in the same report, that the criterion it breaks holds. A reader gets the bug and its own refutation with nothing to separate them, which is worse than a report that missed it entirely. This is what the runner's review prompt now explicitly forbids: writing that something is "met", "verified" or "unchanged" without having run something that shows it.
 
 **Model choice for review, settled separately from implement.** Counting tool calls: `deepseek-v4-pro` ran `nix build`/`nix eval` to check its own claims in 8 of 15 runs; `glm-5.3-flash` did in 2 of 10, and 4 of those 10 wrote a full report having read, run, and searched nothing - relaying sub-agent output wholesale. One `deepseek-v4-pro` run also found a real bug nobody else caught, including the human grading the holdout: an empty-string slug producing a false collision on unrelated folders. Review is a single pass with no retry budget, so the 15-25x cost difference is affordable there in a way it isn't for implement - roughly 10 cents against implement's 4-9, still a rounding error against the spend cap. `deepseek-v4-pro` was chosen for review on this basis; `glm-5.3-flash` stays the implement model. This is not evidence that `deepseek-v4-pro` reviews better in general - the defect-detection numbers above point in both directions depending on rubric and are noise at this sample size (n=3 per cell). The verification-behavior counts are the only part of this comparison that isn't.

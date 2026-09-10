@@ -44,26 +44,26 @@
    * lotusWhite3 is Lotus's own `bg`, and White2/White1/White0 are its
    * bg_m1/bg_m2/bg_m3 — one, two and three steps away from the page, in the
    * order this stylesheet needs them. */
-  --bg: #f2ecbc;       /* lotusWhite3 — Lotus's bg    */
-  --surface: #e5ddb0;  /* lotusWhite2 — Lotus's bg_m1 */
-  --border: #d5cea3;   /* lotusWhite0 — Lotus's bg_m3 */
-  --code-bg: #dcd5ac;  /* lotusWhite1 — Lotus's bg_m2 */
-  --muted: #716e61;    /* lotusGray2 */
-  --text: #545464;     /* lotusInk1  */
-  --strong: #43436c;   /* lotusInk2  */
-  --accent: #4d699b;   /* lotusBlue4 */
+  --bg: #f2ecbc; /* lotusWhite3 — Lotus's bg    */
+  --surface: #e5ddb0; /* lotusWhite2 — Lotus's bg_m1 */
+  --border: #d5cea3; /* lotusWhite0 — Lotus's bg_m3 */
+  --code-bg: #dcd5ac; /* lotusWhite1 — Lotus's bg_m2 */
+  --muted: #716e61; /* lotusGray2 */
+  --text: #545464; /* lotusInk1  */
+  --strong: #43436c; /* lotusInk2  */
+  --accent: #4d699b; /* lotusBlue4 */
   /* "You are here": the section being read, in the margin's contents map
    * and in the fill of that section's bar. Its own role rather than a
    * borrowed one — see the note on .rail a.current below for why the two
    * themes disagree here, which is the one place in this stylesheet they
    * do. Lotus can keep the accent; Wave cannot. */
-  --reading: #4d699b;  /* lotusBlue4 */
+  --reading: #4d699b; /* lotusBlue4 */
   /* The site title. Kanagawa's statement/keyword hue — the role an
    * identifier-with-emphasis plays in the editor — and this repository's own
    * secondary accent (rofi's accent2, waybar's secondary). One brand title,
    * not a prose heading: the "headings stay neutral" decision was made for
    * notes with twenty-nine of them, not for a single masthead. */
-  --brand: #b35b79;    /* lotusPink */
+  --brand: #b35b79; /* lotusPink */
 
   --body-font:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
@@ -92,10 +92,10 @@
 
 :root[data-theme="dark"] {
   /* Wave, unmodified: the dark half needed no departures. */
-  --bg: #1f1f28;       /* sumiInk3  */
-  --surface: #2a2a37;  /* sumiInk4  */
-  --border: #363646;   /* sumiInk5  */
-  --code-bg: #16161d;  /* sumiInk0 — the code well goes DARKER than the page
+  --bg: #1f1f28; /* sumiInk3  */
+  --surface: #2a2a37; /* sumiInk4  */
+  --border: #363646; /* sumiInk5  */
+  --code-bg: #16161d; /* sumiInk0 — the code well goes DARKER than the page
                         * here and lighter than it in Lotus, because in both
                         * directions that is away from the reading surface. */
   /* springViolet1, not fujiGray. fujiGray #727169 is Kanagawa's COMMENT
@@ -118,17 +118,17 @@
    *
    * The one place fujiGray survives is the Chroma comment rule below, which
    * is genuinely a comment on genuinely lower-contrast-by-design code. */
-  --muted: #938aa9;    /* springViolet1 */
-  --text: #dcd7ba;     /* fujiWhite */
+  --muted: #938aa9; /* springViolet1 */
+  --text: #dcd7ba; /* fujiWhite */
   /* Deliberately the same as --text. fujiWhite is the brightest foreground
    * Wave has, so a heading cannot be brighter than the prose without leaving
    * the palette; size and weight carry the hierarchy instead. Lotus has the
    * headroom and uses it, which is why the two blocks disagree here. */
-  --strong: #dcd7ba;   /* fujiWhite */
-  --accent: #7e9cd8;   /* crystalBlue */
-  --reading: #e6c384;  /* carpYellow — NOT crystalBlue, which is 1.18:1 from
+  --strong: #dcd7ba; /* fujiWhite */
+  --accent: #7e9cd8; /* crystalBlue */
+  --reading: #e6c384; /* carpYellow — NOT crystalBlue, which is 1.18:1 from
                         * this theme's --muted and so stops reading as a state */
-  --brand: #d27e99;    /* sakuraPink — the statement/keyword role, see Lotus above */
+  --brand: #d27e99; /* sakuraPink — the statement/keyword role, see Lotus above */
   color-scheme: dark;
 }
 
@@ -672,7 +672,10 @@ blockquote {
 .callout-warning,
 .callout-caution,
 .callout-attention {
-  --callout-accent: light-dark(#cc6d00, #ff9e3b); /* lotusOrange / roninYellow */
+  --callout-accent: light-dark(
+    #cc6d00,
+    #ff9e3b
+  ); /* lotusOrange / roninYellow */
 }
 /* waveRed, not autumnRed: autumnRed is Wave's diff colour and is dark enough
  * on sumiInk3 that the label stops reading as a label. */
@@ -1000,10 +1003,10 @@ mark {
    * two paragraphs takes 1.5rem at each end rather than 1.5 plus their 1. */
   margin: 1.5rem 0;
   background:
-    linear-gradient(to right, var(--bg) 60%, transparent) left / 2rem 100% no-repeat
-      local,
-    linear-gradient(to left, var(--bg) 60%, transparent) right / 2rem 100% no-repeat
-      local,
+    linear-gradient(to right, var(--bg) 60%, transparent) left / 2rem 100%
+      no-repeat local,
+    linear-gradient(to left, var(--bg) 60%, transparent) right / 2rem 100%
+      no-repeat local,
     radial-gradient(
         farthest-side at 0 50%,
         color-mix(in srgb, var(--text) 30%, transparent),
@@ -2207,5 +2210,3 @@ pagefind-modal {
     break-inside: avoid;
   }
 }
-
-

@@ -38,8 +38,8 @@ Headings wrap. The line-height they wrap at is set separately from the body's, a
 
 - An unordered item
 - An item with a nested list under it
-  - The nested item
-  - A second nested item, long enough to wrap onto a second line so that the hanging indent is visible rather than assumed
+    - The nested item
+    - A second nested item, long enough to wrap onto a second line so that the hanging indent is visible rather than assumed
 - A third item
 
 1. An ordered item
@@ -128,26 +128,26 @@ rendered in 84ms
 
 ## Tables
 
-| Token       | Role                        | Light     | Dark      |
-| ----------- | --------------------------- | --------- | --------- |
-| `--bg`      | The page behind the text    | `#f2ecbc` | `#1F1F28` |
-| `--text`    | The text on it              | `#545464` | `#DCD7BA` |
-| `--muted`   | Datelines, theses, captions | `#716e61` | `#727169` |
-| `--accent`  | Links and the masthead      | `#4d699b` | `#7E9CD8` |
+| Token      | Role                        | Light     | Dark      |
+| ---------- | --------------------------- | --------- | --------- |
+| `--bg`     | The page behind the text    | `#f2ecbc` | `#1F1F28` |
+| `--text`   | The text on it              | `#545464` | `#DCD7BA` |
+| `--muted`  | Datelines, theses, captions | `#716e61` | `#727169` |
+| `--accent` | Links and the masthead      | `#4d699b` | `#7E9CD8` |
 
 A table wide enough to scroll inside its own container:
 
-| Note                        | Words | Headings | Backlinks | Published  | Modified   | Thesis                                                       |
-| --------------------------- | ----- | -------- | --------- | ---------- | ---------- | ------------------------------------------------------------ |
-| Riverview Lighting Upgrade  | 5871  | 29       | 0         | 2026-08-23 | 2026-08-27 | A year of volunteer work, written down while it is still true |
-| Relationship with Work      | 1604  | 0        | 0         | 2026-08-23 | 2026-08-23 | Work is a trade, and a trade has two sides                    |
+| Note                       | Words | Headings | Backlinks | Published  | Modified   | Thesis                                                        |
+| -------------------------- | ----- | -------- | --------- | ---------- | ---------- | ------------------------------------------------------------- |
+| Riverview Lighting Upgrade | 5871  | 29       | 0         | 2026-08-23 | 2026-08-27 | A year of volunteer work, written down while it is still true |
+| Relationship with Work     | 1604  | 0        | 0         | 2026-08-23 | 2026-08-23 | Work is a trade, and a trade has two sides                    |
 
 And a table holding a token no line break can shorten, which is the case that
 decides how a cell is allowed to wrap — it must widen the table and scroll
 rather than be cut into stacked fragments:
 
-| Endpoint                                                             | Note        |
-| -------------------------------------------------------------------- | ----------- |
+| Endpoint                                                              | Note        |
+| --------------------------------------------------------------------- | ----------- |
 | `https://example.invalid/a/very/long/path/that/never/breaks/anywhere` | It is long. |
 
 And a table with nothing between it and what follows, because the markdown
@@ -160,6 +160,7 @@ it and the two read as one object.
 | ----------- | ------ | ------- |
 | Direct      | $18.40 | 500     |
 | Distributor | $24.10 | 1       |
+
 > [!warning] Read the minimum before the price
 > The direct price is the better one only at a volume this project does not have.
 

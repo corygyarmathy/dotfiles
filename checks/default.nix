@@ -341,6 +341,10 @@ in
     inherit pkgs inputs self;
     lib = pkgs.lib;
   };
+  # Also not a VM: the formatter gate is exit behaviour of the wrapper the
+  # `nix fmt` hop execs, and the file says why the clean expectations are
+  # generated inside the check rather than checked in.
+  fmt-gate = import ./fmt-gate.nix { inherit pkgs self; };
   grafana = testLib.mkTest ./grafana.nix;
   host-alive = testLib.mkTest ./host-alive.nix;
   monitoring = testLib.mkTest ./monitoring.nix;

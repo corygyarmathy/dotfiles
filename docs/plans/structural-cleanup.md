@@ -6,17 +6,17 @@ This is a refactoring plan, not a feature plan. Almost none of it changes what t
 
 The pipeline, the checks harness and the documentation are in good shape and are not the subject here. What has not kept up is the boundary between a host and a module: hosts transcribe facts that modules already know, modules hardcode facts about specific hosts, and the same value is written down in three places with nothing to notice when the copies diverge. Every item below is an instance of that one problem.
 
-| #   | Item                              | Size   | Changes behaviour | Depends on | Status                |
-| --- | --------------------------------- | ------ | ----------------- | ---------- | --------------------- |
-| 0   | Gate hygiene and budget           | small  | no                | —          | **done** 2026-08-28   |
-| 1   | A fleet source of truth           | medium | minor             | —          | **done** 2026-08-28   |
-| 2   | Services publish themselves       | large  | minor             | 1          | **done** 2026-08-29   |
-| 3   | Hosts become profiles + toggles   | medium | no                | 2          | **done** 2026-08-29   |
-| 4   | Per-host secret scoping           | large  | **yes**           | 1          | **done** 2026-08-30   |
-| 5   | Caddy as the real boundary        | medium | **yes**           | 1, 2       | not started           |
-| 6   | Decouple modules from the fleet   | small  | no                | 1          | not started           |
-| 7   | Documentation follows the code    | small  | no                | 1–6        | not started           |
-| 8   | AdGuard rewrites follow cg.publish | medium | minor             | 2          | not started           |
+| #   | Item                               | Size   | Changes behaviour | Depends on | Status              |
+| --- | ---------------------------------- | ------ | ----------------- | ---------- | ------------------- |
+| 0   | Gate hygiene and budget            | small  | no                | —          | **done** 2026-08-28 |
+| 1   | A fleet source of truth            | medium | minor             | —          | **done** 2026-08-28 |
+| 2   | Services publish themselves        | large  | minor             | 1          | **done** 2026-08-29 |
+| 3   | Hosts become profiles + toggles    | medium | no                | 2          | **done** 2026-08-29 |
+| 4   | Per-host secret scoping            | large  | **yes**           | 1          | **done** 2026-08-30 |
+| 5   | Caddy as the real boundary         | medium | **yes**           | 1, 2       | not started         |
+| 6   | Decouple modules from the fleet    | small  | no                | 1          | not started         |
+| 7   | Documentation follows the code     | small  | no                | 1–6        | not started         |
+| 8   | AdGuard rewrites follow cg.publish | medium | minor             | 2          | not started         |
 
 Suggested order is the numbering. Item 0 first because the gate is currently over budget and every later PR pays that cost. Items 1–3 are one continuous piece of work and are only split because each has a natural landing point. Items 4 and 5 are the two that need a deliberate deploy and a rollback plan, and both are much easier once item 1 exists.
 
@@ -28,11 +28,11 @@ Suggested order is the numbering. Item 0 first because the gate is currently ove
 
 **The gate is over budget again.** [Item 4 of the hardening plan](deployment-hardening.md) recorded on 2026-08-26 that `flake check` had overtaken `build xps15` and was fixed back inside it. Two days later it is outside again. Measured on run `33151623433` (2026-08-28, the most recent `master` run):
 
-| Step                | Duration |
-| ------------------- | -------- |
-| `Check flake`       | 4m18s    |
-| `Build xps15`       | 3m12s    |
-| Gate wall clock     | **5m15s** |
+| Step            | Duration  |
+| --------------- | --------- |
+| `Check flake`   | 4m18s     |
+| `Build xps15`   | 3m12s     |
+| Gate wall clock | **5m15s** |
 
 So the ~4 minute target is already missed by a minute, and the thing missing it is the checks job rather than the host build the target was derived from. This matters now rather than later because several items below want to _add_ checks, and each one lands on the critical path as things stand.
 
@@ -79,14 +79,14 @@ The gate-timing history is recorded in [the hardening plan](deployment-hardening
 
 Run `33181496820` (PR #90, all green):
 
-| Job                      | Duration  |
-| ------------------------ | --------- |
-| `build xps15`            | **3m42s** |
-| `check grafana` (slowest shard) | 2m43s |
-| `check upgrade-verify`   | 2m32s     |
-| `lint`                   | 1m06s     |
-| `build homelab01`        | 1m51s     |
-| **gate wall clock**      | **3m51s** |
+| Job                             | Duration  |
+| ------------------------------- | --------- |
+| `build xps15`                   | **3m42s** |
+| `check grafana` (slowest shard) | 2m43s     |
+| `check upgrade-verify`          | 2m32s     |
+| `lint`                          | 1m06s     |
+| `build homelab01`               | 1m51s     |
+| **gate wall clock**             | **3m51s** |
 
 Inside the ~4 minute budget, and bounded by `build xps15` rather than by the checks - which is what the item was for. The checks axis went from `flake check`'s 4m18s to a slowest shard of 2m43s.
 
@@ -439,15 +439,15 @@ Give each service module an `openFirewall` option defaulting to **false**, and b
 
 **The complication is real and needs mapping first.** Several services talk to each other across hosts by address and port, and closing the ports naively breaks them. The known links, from the tree:
 
-| From                       | To                        | Path                          |
-| -------------------------- | ------------------------- | ----------------------------- |
-| `cross-seed` (homelab02)   | `prowlarr` (homelab01)    | `http://10.20.2.85:9696`      |
-| `shelfmark` (homelab02)    | `prowlarr` (homelab01)    | documented, set in-app        |
-| `autobrr` (homelab01)      | `qbittorrent` (homelab02) | documented, set in-app        |
-| Caddy (homelab01)          | `grimmory` (homelab02)    | `upstream = "10.20.2.130"`    |
-| Prometheus (both)          | node/smartctl exporters   | `homelab0N:9100`, `:9633`     |
-| restic (both)              | peer host                 | SFTP                          |
-| `homelab01`                | `homelab02`               | NFS                           |
+| From                     | To                        | Path                       |
+| ------------------------ | ------------------------- | -------------------------- |
+| `cross-seed` (homelab02) | `prowlarr` (homelab01)    | `http://10.20.2.85:9696`   |
+| `shelfmark` (homelab02)  | `prowlarr` (homelab01)    | documented, set in-app     |
+| `autobrr` (homelab01)    | `qbittorrent` (homelab02) | documented, set in-app     |
+| Caddy (homelab01)        | `grimmory` (homelab02)    | `upstream = "10.20.2.130"` |
+| Prometheus (both)        | node/smartctl exporters   | `homelab0N:9100`, `:9633`  |
+| restic (both)            | peer host                 | SFTP                       |
+| `homelab01`              | `homelab02`               | NFS                        |
 
 Some of these are configured inside a service's own database rather than in Nix, which means the config cannot see them and a build cannot catch them. Sonarr and Radarr pointing at qBittorrent are the likely cases.
 

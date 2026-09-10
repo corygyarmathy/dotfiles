@@ -3,10 +3,10 @@
 - **Status:** Proposed
 - **Date:** 2026-09-09
 - **Related Artefacts:**
-  - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §4, on the credential only - its no-second-account clause is upheld here rather than reversed - and §3, which loses the assignee as its claim marker
-  - Answers: #200, and unblocks #202
-  - Shares its instrument with: [ADR 0005](0005-only-a-deploy-key-may-move-deploy.md), which restricts updates to `deploy` - this records why the same rule cannot be used on `master`
-  - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, still open), `modules/services/afk-agent.nix` (the shipped identity and claim mechanism), `docs/agents/issue-tracker.md` (the claim convention)
+    - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §4, on the credential only - its no-second-account clause is upheld here rather than reversed - and §3, which loses the assignee as its claim marker
+    - Answers: #200, and unblocks #202
+    - Shares its instrument with: [ADR 0005](0005-only-a-deploy-key-may-move-deploy.md), which restricts updates to `deploy` - this records why the same rule cannot be used on `master`
+    - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, still open), `modules/services/afk-agent.nix` (the shipped identity and claim mechanism), `docs/agents/issue-tracker.md` (the claim convention)
 
 ## Context
 
@@ -16,9 +16,7 @@ ADR 0004 §4 chose one GitHub identity. The runner would open pull requests with
 
 **The token's ceiling is the issuing account's role.** A fine-grained PAT cannot exceed the permissions of the account that issued it, and that account is this repository's admin. Nothing about the permission table narrows that ceiling; it only declines to use it.
 
-**And ADR 0005 has just been written around the same clause.** Restricting who may move `deploy` had exactly one usable exception identity, and the repository admin role was not it: "ADR 0004 §4 rules out a second GitHub account, so `AFK_AGENT_TOKEN` acts as `corygyarmathy`, who is the repository admin. The exemption would cover the exact credential the rule exists to stop." One identity had begun to cost design options in a second place.
-
-#200 proposed to fix this with a machine account, and to spend the new identity on a ruleset that would server-enforce ADR 0004 §9. Both halves were tested rather than assumed. The ruleset premise is wrong, for a reason unrelated to how many identities exist. And the account turned out not to be the cheapest way to get an identity at all.
+**And ADR 0005 has just been written around the same clause.** Restricting who may move `deploy` had exactly one usable exception identity, and the repository admin role was not it: "ADR 0004 §4 rules out a second GitHub account, so `AFK_AGENT_TOKEN` acts as `corygyarmathy`, who is the repository admin. The exemption would cover the exact credential the rule exists to stop." One identity had begun to cost design options in a second place. #200 proposed to fix this with a machine account, and to spend the new identity on a ruleset that would server-enforce ADR 0004 §9. Both halves were tested rather than assumed. The ruleset premise is wrong, for a reason unrelated to how many identities exist. And the account turned out not to be the cheapest way to get an identity at all.
 
 ## Decision
 

@@ -3,10 +3,10 @@
 - **Status:** Accepted, except §1a - superseded by [ADR 0002](0002-protect-at-activation-not-in-the-rollout.md)
 - **Date:** 2026-08-15
 - **Related Artefacts:**
-  - Superseded in part by: ADR 0002 (§1a, the staged rollout)
-  - Implemented by: `.github/workflows/ci.yml` (build gate + promotion), `.github/workflows/flake-update.yml` (lock updates), `system.autoUpgrade` on each host
-  - Supersedes: the flake-update and apply logic in `packages/nixos-upgrade-scripts`
-  - Depends on: the `protect-main` repository ruleset, the `corygyarmathy-dotfiles` Cachix cache
+    - Superseded in part by: ADR 0002 (§1a, the staged rollout)
+    - Implemented by: `.github/workflows/ci.yml` (build gate + promotion), `.github/workflows/flake-update.yml` (lock updates), `system.autoUpgrade` on each host
+    - Supersedes: the flake-update and apply logic in `packages/nixos-upgrade-scripts`
+    - Depends on: the `protect-main` repository ruleset, the `corygyarmathy-dotfiles` Cachix cache
 
 ## Context
 

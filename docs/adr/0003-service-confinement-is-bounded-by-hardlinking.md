@@ -3,9 +3,9 @@
 - **Status:** Proposed
 - **Date:** 2026-08-16
 - **Related Artefacts:**
-  - Removes: item 5 from `docs/plans/deployment-hardening.md`
-  - Informs: the `data-safety` test, item 4 of that plan
-  - Evidence: `docs/recovery-2026-07-25-qbittorrent-reconciliation.md` §10
+    - Removes: item 5 from `docs/plans/deployment-hardening.md`
+    - Informs: the `data-safety` test, item 4 of that plan
+    - Evidence: `docs/recovery-2026-07-25-qbittorrent-reconciliation.md` §10
 
 ## Context
 
@@ -25,12 +25,12 @@ Two things shape what that can look like.
 
 That was tested rather than assumed, with the production images and uid:
 
-| Setup                                             | Result           |
-| ------------------------------------------------- | ---------------- |
-| same filesystem, no container, two subtrees       | ✅ `links=2`     |
-| two separate bind mounts, NFS (`homelab01`)        | ❌ `EXDEV`       |
-| two separate bind mounts, ZFS (`homelab02`)        | ❌ `EXDEV`       |
-| **single** parent bind mount, ZFS                  | ✅ `links=2`     |
+| Setup                                       | Result       |
+| ------------------------------------------- | ------------ |
+| same filesystem, no container, two subtrees | ✅ `links=2` |
+| two separate bind mounts, NFS (`homelab01`) | ❌ `EXDEV`   |
+| two separate bind mounts, ZFS (`homelab02`) | ❌ `EXDEV`   |
+| **single** parent bind mount, ZFS           | ✅ `links=2` |
 
 The assumption is wrong, and instructively so. Both mounts report an identical `st_dev` — 107 on the NFS host, 46 on the ZFS host — and `link()` still fails. The kernel refuses to link across a **mount boundary**, not merely across a filesystem, so `st_dev` is the wrong thing to reason from. Splitting `/data` into per-service mounts breaks hardlinked imports on both hosts and both filesystems.
 

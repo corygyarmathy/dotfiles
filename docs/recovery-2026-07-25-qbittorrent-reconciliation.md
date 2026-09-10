@@ -27,7 +27,7 @@ On **2026-07-25**, shortly after a reboot+update, roughly **466–777 completed
 torrent downloads (~1.1 TB)** were deleted from `/srv/media/downloads/complete`
 on **homelab02**.
 
-- **Root cause:** qBittorrent's WebUI accepts logins *before* it finishes loading
+- **Root cause:** qBittorrent's WebUI accepts logins _before_ it finishes loading
   torrents on startup, so `/api/v2/torrents/info` briefly returned an empty list.
   The hardlink-based cleanup logic (`orphan-cleanup` / `private-torrent-cleanup`)
   then treated every not-yet-loaded torrent's data as "orphaned" and deleted it.
@@ -69,13 +69,13 @@ on **homelab02**.
 Per-torrent reconciliation, **using qBittorrent's own recheck as the verifier** —
 never trust a filename or size guess:
 
-| Case | Action |
-| --- | --- |
-| Library holds a byte-identical copy | hardlink it → exact expected download path → force **recheck** → **resume** |
-| Recheck fails / no candidate | remove the stray hardlink(s) (library inode untouched), **delete** the torrent |
+| Case                                | Action                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| Library holds a byte-identical copy | hardlink it → exact expected download path → force **recheck** → **resume**    |
+| Recheck fails / no candidate        | remove the stray hardlink(s) (library inode untouched), **delete** the torrent |
 
-**Why not cross-seed:** cross-seed finds *new* cross-seed matches and would create
-*duplicate* torrents; it does not repair the existing errored ones. A small
+**Why not cross-seed:** cross-seed finds _new_ cross-seed matches and would create
+_duplicate_ torrents; it does not repair the existing errored ones. A small
 purpose-built pass is the right tool. Reuse the qBittorrent-readiness gate pattern
 already added in `modules/services/media-stack/orphan-cleanup.nix`.
 
@@ -122,11 +122,11 @@ the library's copy fully intact. No `cp`, so no extra disk use.
 For each errored torrent, list its files (name + size) and check whether a
 **same-size** candidate exists under the library roots. Produce a report:
 
-- count of torrents fully matchable (all files have a size candidate) → *likely re-linkable*
+- count of torrents fully matchable (all files have a size candidate) → _likely re-linkable_
 - count partially matchable
-- count with no candidates → *likely delete*
+- count with no candidates → _likely delete_
 - total bytes in each bucket
-This gives real recoverable-vs-not numbers before building anything.
+  This gives real recoverable-vs-not numbers before building anything.
 
 ### Phase 2 — reconciliation script (dry-run first)
 
@@ -138,7 +138,7 @@ throwaway script — does not need to be a Nix module). Logic per errored torren
    by comparing a hash of the first + last few MB (cheap) before choosing.
 3. `--dry-run`: log the planned hardlink (`src library file → dst expected path`),
    don't touch anything.
-Review the dry-run output.
+   Review the dry-run output.
 
 ### Phase 3 — execute re-link
 
@@ -148,7 +148,7 @@ path, then `POST /torrents/recheck`. Wait for recheck to settle, then:
 - if progress == 100% → `POST /torrents/resume` (seeding restored)
 - if not → remove the hardlink(s) we just made (library safe), mark torrent for
   deletion.
-Work in **small batches** and re-verify between batches.
+  Work in **small batches** and re-verify between batches.
 
 ### Phase 4 — delete the unrecoverable
 
@@ -164,7 +164,7 @@ Torrents with no matches (or that failed recheck): `POST /torrents/delete` with
 
 ## 7. Edge cases / cautions
 
-- **Season packs / multi-file torrents:** only re-link if *all* files match;
+- **Season packs / multi-file torrents:** only re-link if _all_ files match;
   a partial pack won't recheck to 100%.
 - **Renames:** library names differ from torrent names (Sonarr/Radarr rename on
   import) — match on **size + content hash**, never on name.
@@ -191,13 +191,13 @@ artefacts: `homelab02:~/qbt-recovery/`.
 
 ### 9.1 Outcome
 
-| | torrents | size |
-| --- | --- | --- |
-| broken at start | 595 | 4.55 TiB |
-| **recovered** (proven byte-identical, re-linked) | **524** | **3.65 TiB** |
-| deleted as unrecoverable | 66 | 0.89 TiB |
-| kept: in-progress downloads, not lost seeds | 5 | — |
-| held for manual review (need real downloads) | 8 | 134 GiB to fetch |
+|                                                  | torrents | size             |
+| ------------------------------------------------ | -------- | ---------------- |
+| broken at start                                  | 595      | 4.55 TiB         |
+| **recovered** (proven byte-identical, re-linked) | **524**  | **3.65 TiB**     |
+| deleted as unrecoverable                         | 66       | 0.89 TiB         |
+| kept: in-progress downloads, not lost seeds      | 5        | —                |
+| held for manual review (need real downloads)     | 8        | 134 GiB to fetch |
 
 Final qBittorrent state: **529 torrents, 512 seeding (3.23 TiB), 7 fetching a
 small remainder, 10 stopped (8 held + 2 pre-existing), 0 in
@@ -251,18 +251,18 @@ Five things in §4–§6 were wrong. Fix them before re-using this document.
    in `BT_backup`. That is definitive, takes milliseconds, and cannot download
    anything.
 
-   Two further traps in the progress numbers:
-   - `progress` is measured against `total_size`, which **includes deselected
-     (`priority=0`) files** — typically `.nfo` sidecars. A fully recovered
-     torrent therefore reports ~0.99996, not 1.0. Use `amount_left == 0`.
-   - During a check, `progress` reports **scan position**, not verified
-     fraction. It climbs to ~1.0 and then drops to the real value. Never
-     sample it mid-check.
+    Two further traps in the progress numbers:
+    - `progress` is measured against `total_size`, which **includes deselected
+      (`priority=0`) files** — typically `.nfo` sidecars. A fully recovered
+      torrent therefore reports ~0.99996, not 1.0. Use `amount_left == 0`.
+    - During a check, `progress` reports **scan position**, not verified
+      fraction. It climbs to ~1.0 and then drops to the real value. Never
+      sample it mid-check.
 
 ### 9.3 Corrected procedure
 
 1. Snapshot `tank`; stop the cleanup timers; archive `BT_backup` (it is on the
-   root NVMe, *not* on `tank`, so the ZFS snapshot does not cover it).
+   root NVMe, _not_ on `tank`, so the ZFS snapshot does not cover it).
 2. Index the library by file size (`size, inode, nlink, path`).
 3. Per torrent, assign a same-size library candidate to each file, preferring
    the library directory that already accounts for most of that torrent's files
@@ -323,7 +323,7 @@ wrong. Both mass deletions were **LazyLibrarian's PostProcessor**.
 download_dir = /data/downloads/complete
 ```
 
-— the *shared* qBittorrent completed-downloads root. LazyLibrarian's
+— the _shared_ qBittorrent completed-downloads root. LazyLibrarian's
 PostProcessor job runs **every 10 minutes**, enumerates every entry in
 `download_dir` as one of its own book downloads, and then removes and recreates
 the tree, logging `Created new Download folder: /data/downloads/complete`
@@ -367,7 +367,7 @@ on Jul 27 04:18 → `0` by Jul 28 00:44).
 ### 10.3 Diagnostic that generalises
 
 Free space does **not** move when hardlinks are deleted — the library still
-holds the inode. "Disk usage unchanged" is therefore *not* evidence that files
+holds the inode. "Disk usage unchanged" is therefore _not_ evidence that files
 survived. Use instead:
 
 ```sh
@@ -404,27 +404,27 @@ state** first — 16 torrents had moved `incomplete/` → `complete/` in the
 meantime, and linking by the stale `content_path` would have put their files
 where qBittorrent no longer looks (the §9.2(4) trap, second-order).
 
-| | torrents | note |
-| --- | --- | --- |
-| broken at start | 537 | 3.68 TiB, 529 in `missingFiles` |
-| verified byte-identical | 528 | vs 524 on 07-26 (library grew slightly) |
-| links created | 6542 | |
-| held (need real downloads) | 8 | same 134 GiB set as 07-26 |
-| unrecoverable | 9 | 8 no-candidate + 1 unverifiable |
+|                            | torrents | note                                    |
+| -------------------------- | -------- | --------------------------------------- |
+| broken at start            | 537      | 3.68 TiB, 529 in `missingFiles`         |
+| verified byte-identical    | 528      | vs 524 on 07-26 (library grew slightly) |
+| links created              | 6542     |                                         |
+| held (need real downloads) | 8        | same 134 GiB set as 07-26               |
+| unrecoverable              | 9        | 8 no-candidate + 1 unverifiable         |
 
 ### 11.1 Final state (from qBittorrent, not the scripts)
 
 Three passes were needed; the numbers below are `/torrents/info` at the end, not
 script counters — see 11.2 for why the counters cannot be trusted.
 
-| | torrents |
-| --- | --- |
-| total | 538 |
-| complete (`amount_left == 0`) | 511 |
-| actively seeding | 507 |
-| complete but stopped (pre-existing, left alone) | 4 |
-| incomplete — `missingFiles` (the 8 holds + 2 HotD) | 10 |
-| incomplete — small remainders, allowed to fetch | 17 |
+|                                                    | torrents |
+| -------------------------------------------------- | -------- |
+| total                                              | 538      |
+| complete (`amount_left == 0`)                      | 511      |
+| actively seeding                                   | 507      |
+| complete but stopped (pre-existing, left alone)    | 4        |
+| incomplete — `missingFiles` (the 8 holds + 2 HotD) | 10       |
+| incomplete — small remainders, allowed to fetch    | 17       |
 
 Total pulled from peers across the whole recovery: **5.7 GiB** (the one genuine
 runaway, §11.3) plus ~0.4 GiB of Casualty remainders. The 41 GiB of
@@ -433,22 +433,22 @@ Gachiakuta grab and similar — not recovery traffic.
 
 ### 11.2 The scripts' own counters are wrong
 
-`finalize.py`'s summary counts only the torrents whose batch *settled* inside the
+`finalize.py`'s summary counts only the torrents whose batch _settled_ inside the
 timeout. Pass 2 reported `seeding 47` when the live figure was ~484. Always
 audit from `/torrents/info`.
 
 Related traps hit this run:
 
 - **Session expiry.** The WebUI cookie dies after ~1h and `curl -sf` reports the
-  403 with a *non-zero exit and empty stderr*, so the traceback is bare.
+  403 with a _non-zero exit and empty stderr_, so the traceback is bare.
   `relink.api()` now re-logins once and retries.
 - **No resume.** Re-running `finalize.py` re-rechecked everything; rechecks
   serialise, so that costs hours. It now skips `amount_left == 0`.
 - **`wait_settled()` is unsound**: it marks a torrent "seen" if
-  `state in CHECKING` *or* `progress > 0`, so a torrent with stale resume data is
+  `state in CHECKING` _or_ `progress > 0`, so a torrent with stale resume data is
   judged without ever being rechecked.
 - **The log is appended across runs.** Monitoring from the top of the file
-  double-counts batches and resurfaces the *previous* run's traceback — this
+  double-counts batches and resurfaces the _previous_ run's traceback — this
   produced one false alarm. Slice from the last `=== finalize [EXECUTE] ===`.
 - `max_active_checking_torrents` was raised 1 → 3 to stop batches timing out.
   It is a live preference, not in Nix.
@@ -466,7 +466,7 @@ Sonarr/Radarr grab, so **remove it once the recovery is done**.
 
 ### 11.4 Links placed one directory too deep
 
-For a single-file-in-a-folder torrent, `content_path` *already* includes the
+For a single-file-in-a-folder torrent, `content_path` _already_ includes the
 folder; joining it with the torrent's relative path (which also includes the
 folder) duplicates the name:
 

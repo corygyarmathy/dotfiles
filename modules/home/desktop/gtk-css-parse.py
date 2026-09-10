@@ -68,13 +68,22 @@ def main(paths):
     if not failures:
         return 0
 
-    print("GTK cannot parse these stylesheets, so waybar would not start:", file=sys.stderr)
+    print(
+        "GTK cannot parse these stylesheets, so waybar would not start:",
+        file=sys.stderr,
+    )
     print(file=sys.stderr)
     for line in failures:
         print(f"    {line}", file=sys.stderr)
     print(file=sys.stderr)
-    print("GTK 3 CSS is narrower than CSS on the web. In particular it has no", file=sys.stderr)
-    print("eight-digit hex: write an opacity as alpha(#RRGGBB, 0.8) instead.", file=sys.stderr)
+    print(
+        "GTK 3 CSS is narrower than CSS on the web. In particular it has no",
+        file=sys.stderr,
+    )
+    print(
+        "eight-digit hex: write an opacity as alpha(#RRGGBB, 0.8) instead.",
+        file=sys.stderr,
+    )
     print(file=sys.stderr)
     return 1
 

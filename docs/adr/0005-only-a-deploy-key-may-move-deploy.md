@@ -3,15 +3,15 @@
 - **Status:** Accepted
 - **Date:** 2026-09-09
 - **Related Artefacts:**
-  - Narrows: [ADR 0001](0001-gitops-deployment-with-a-promoted-ref.md), which makes `deploy` the fleet's only contract - this decides who may move it
-  - Answers: #190
-  - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/afk-eligibility.md` (rule 1's reasoning), `modules/services/afk-agent.nix` (the AFK identity's permissions)
+    - Narrows: [ADR 0001](0001-gitops-deployment-with-a-promoted-ref.md), which makes `deploy` the fleet's only contract - this decides who may move it
+    - Answers: #190
+    - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/afk-eligibility.md` (rule 1's reasoning), `modules/services/afk-agent.nix` (the AFK identity's permissions)
 
 ## Context
 
-`deploy` is the only ref the fleet follows and hosts pick it up on their nightly `system.autoUpgrade`, so a push there reaches all three machines without passing the review gate that protects `master`. The `protect-deploy` ruleset restricted deletion and non-fast-forward pushes but not *who* may push, so any credential with write access to this repository could fast-forward it: `FLAKE_UPDATE_TOKEN`, `AFK_AGENT_TOKEN` (#168), and the operator's own credential. Scoping the token could not fix this - a fine-grained PAT's `Contents: write` is repo-wide rather than per-branch - and the AFK agent module is about to hand one of those credentials to an unattended coding agent.
+`deploy` is the only ref the fleet follows and hosts pick it up on their nightly `system.autoUpgrade`, so a push there reaches all three machines without passing the review gate that protects `master`. The `protect-deploy` ruleset restricted deletion and non-fast-forward pushes but not _who_ may push, so any credential with write access to this repository could fast-forward it: `FLAKE_UPDATE_TOKEN`, `AFK_AGENT_TOKEN` (#168), and the operator's own credential. Scoping the token could not fix this - a fine-grained PAT's `Contents: write` is repo-wide rather than per-branch - and the AFK agent module is about to hand one of those credentials to an unattended coding agent.
 
-Nothing exploited it and it was not new. It is worth closing now rather than later because the failure it permits is the one the monitoring cannot see: `NixosDeployStale` and its neighbours describe deployments that fail, and a fleet moving overnight to a revision nobody reviewed is a deployment that *succeeds*.
+Nothing exploited it and it was not new. It is worth closing now rather than later because the failure it permits is the one the monitoring cannot see: `NixosDeployStale` and its neighbours describe deployments that fail, and a fleet moving overnight to a revision nobody reviewed is a deployment that _succeeds_.
 
 The obvious design does not work here, and that was verified rather than assumed - this repository has been bitten once already by an organization-only ruleset feature (`422 invalid rule 'merge_queue'`, see `.github/workflows/README.md`). Adding an `update` rule and exempting the identity `promote` pushes with, `GITHUB_TOKEN` i.e. `github-actions[bot]`, is refused on a user-owned repository:
 
@@ -49,7 +49,7 @@ Three further probes, each a throwaway ruleset on a ref that does not exist, sep
 
 - A new standing credential, in the secret store that the one remaining path to `deploy` can already read. It buys nothing against that path; it is only paying for the short one.
 - `promote` - the single step whose silent failure stops fleet upgrades - grew an SSH setup and a secret it can be missing. The empty-secret case fails loudly and says which secret, because the alternative is an SSH authentication error against a ref nobody may push to, which is two layers away from the cause.
-- The `DeployKey` bypass is all-or-nothing: it names the actor *type*, not one key. A second write deploy key added later silently joins the bypass list. There are none today and the audit above is the control. This is the negative an `Integration` bypass would remove, since that names one specific App - see the 2026-09-09 annotation above.
+- The `DeployKey` bypass is all-or-nothing: it names the actor _type_, not one key. A second write deploy key added later silently joins the bypass list. There are none today and the audit above is the control. This is the negative an `Integration` bypass would remove, since that names one specific App - see the 2026-09-09 annotation above.
 - Recovery from a diverged `deploy` (`.github/workflows/README.md`) now means relaxing two rulesets rather than one.
 - Rotating the key is two coordinated steps - the repository's deploy key and the Actions secret - and getting one without the other means a red `promote` that night.
 
@@ -59,7 +59,8 @@ Three further probes, each a throwaway ruleset on a ref that does not exist, sep
 - **The repository admin role as the bypass actor.** Accepted by the API, and useless: ADR 0004 §4 rules out a second GitHub account, so `AFK_AGENT_TOKEN` acts as `corygyarmathy`, who is the repository admin. The exemption would cover the exact credential the rule exists to stop.
 - **A dedicated GitHub App**, installed on the repository, with `promote` minting an installation token. Works in principle and is the mechanism GitHub actually intends here. Rejected as strictly more machinery than a deploy key - an app to create and own, a private key with the same secret-store exposure, and a token-minting step in `promote` - for an identical residual risk.
 
-  **Revisited 2026-09-09:** "works in principle" is now "works", verified above, and most of the machinery this bullet priced is already built and owned, because ADR 0006 creates and installs such an App for the AFK runner. The residual risk is no longer identical either - an installation token expires in an hour where a deploy key stands until it is rotated by hand. What is left to weigh is whether `promote` should depend on the runner's App or hold one of its own, and that is a decision, so it belongs in its own ADR rather than in an annotation here.
+    **Revisited 2026-09-09:** "works in principle" is now "works", verified above, and most of the machinery this bullet priced is already built and owned, because ADR 0006 creates and installs such an App for the AFK runner. The residual risk is no longer identical either - an installation token expires in an hour where a deploy key stands until it is rotated by hand. What is left to weigh is whether `promote` should depend on the runner's App or hold one of its own, and that is a decision, so it belongs in its own ADR rather than in an annotation here.
+
 - **Accept the exposure and write down why.** Defensible while every write credential is one the operator issued, and it was the pre-committed fallback had no bypass identity existed. Rejected because one does: the cost of being wrong is the fleet moving overnight to an unreviewed revision, and the price of not being wrong turned out to be one key and one ruleset.
 
 ## Verification
@@ -71,7 +72,7 @@ The API refusal above is settled, and so is the negative half: `GET /rulesets/22
 The positive half is that a real merge to `master` still fast-forwards `deploy`, since a `promote` that fails is a silent stop to fleet upgrades. Proven in three parts:
 
 - **The key can push.** `ci-promote-deploy` authenticates as `corygyarmathy/dotfiles` rather than as the user, and pushed and deleted a scratch ref on `github.com` by hand, 2026-09-09.
-- **The `promote` step's own shape works on a runner.** The merge of #199 fast-forwarded `deploy` over SSH with the key (`7b317e7..ef1a4b4`, run 34315746687). That merge deliberately landed *before* the ruleset was created: creating it first would have left any merge already in flight running the old `GITHUB_TOKEN` promote straight into the new rule.
+- **The `promote` step's own shape works on a runner.** The merge of #199 fast-forwarded `deploy` over SSH with the key (`7b317e7..ef1a4b4`, run 34315746687). That merge deliberately landed _before_ the ruleset was created: creating it first would have left any merge already in flight running the old `GITHUB_TOKEN` promote straight into the new rule.
 - **The join** - `promote`, on a runner, past an active `update` rule - was the next merge after that, #198 (`ef1a4b4..2fdced5`, run 34318554853). The line worth knowing is in that job's log rather than in its exit status: `remote: Bypassed rule violations for refs/heads/deploy`. GitHub says there that the `update` rule fired and the key was the exemption, which is the whole claim - a green `promote` alone would look identical if the ruleset had silently failed to apply.
 
 Should that promotion ever be the thing that breaks, the ruleset is one call to remove (`gh api repos/{owner}/{repo}/rulesets/22613803 --method DELETE`) and the fleet simply stops moving in the meantime rather than moving somewhere wrong.

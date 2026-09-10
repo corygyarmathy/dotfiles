@@ -728,9 +728,7 @@ def main(argv):
     # resolved against the other shelves, so no per-note pass can decide it -
     # and because everything downstream of this line wants the answer: the
     # frontmatter, the link marks, and the tree.
-    hues = assign_topic_hues(
-        {note_topic(rel) for rel, _ in published.values()} - {""}
-    )
+    hues = assign_topic_hues({note_topic(rel) for rel, _ in published.values()} - {""})
 
     # ---- pass 3: rewrite links, gather the attachments actually used --------
     used_attachments = {}

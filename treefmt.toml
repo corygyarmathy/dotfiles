@@ -1,0 +1,99 @@
+# The single formatting entry point for this repository, and the canonical
+# definition of what runs on each file type and in what order (see ADR 0008):
+# the [formatter.*] blocks below are that definition, not a copy of it.
+#
+# `nix fmt` formats the tree; `nix fmt -- --ci` is what the `lint` CI job
+# runs, and fails on anything it would have changed.
+#
+# `priority` is load-bearing where two formatters share a file type:
+# prettier runs before markdownlint-cli2 on Markdown, goimports before
+# gofumpt on Go - the same order the editor applies them in.
+#
+# Run from the repo root. treefmt resolves its tree root from the enclosing
+# git worktree, so this also works for agent worktrees.
+
+excludes = [
+  # sops-encrypted: a rewrapped scalar is an undecryptable secret.
+  # secrets/README.md stays formatted; only the encrypted payloads are out.
+  "secrets/*.yaml",
+  # The sops rules file is secret-adjacent and hand-tuned; leave it alone.
+  ".sops.yaml",
+  # A promtool test template, not YAML: the @RULES@ placeholder is baked in
+  # by checks/default.nix, and no YAML parser accepts it.
+  "checks/alert-rules.test.yml",
+  # Machine-generated lockfiles whose producers are not prettier-clean. Every
+  # `npm install` / plugin update would re-dirty them and fail the gate until
+  # someone runs `nix fmt`; gating them buys nothing.
+  "**/package-lock.json",
+  "**/lazy-lock.json",
+]
+
+[formatter.nix]
+command = "nixfmt"
+includes = ["*.nix"]
+
+[formatter.prettier]
+command = "prettier"
+options = ["--write"]
+includes = ["*.css", "*.html", "*.json", "*.jsonc", "*.md", "*.yaml", "*.yml"]
+excludes = [
+  # Go templates, not HTML: actions inside tags (`<a href="{{ ... }}">`,
+  # `</h{{ .Level }}>`) are SyntaxErrors to prettier's HTML parser, so one
+  # layout fails the whole batch - and the layouts it can parse it reflows
+  # across action boundaries, which changes rendered whitespace. The garden
+  # VM check (checks/digital-garden.nix) is what covers these files.
+  "modules/services/digital-garden/lib/hugo/layouts/**",
+  # A symlink to the repo-root config (for the editor - see
+  # .markdownlint-cli2.yaml). Formatting it would write the same bytes as
+  # formatting the target, concurrently.
+  "configs/nvim/.markdownlint-cli2.yaml",
+]
+priority = 1
+
+[formatter.markdownlint]
+command = "markdownlint-cli2"
+options = ["--fix"]
+includes = ["*.md"]
+excludes = [
+  # SKILL.md is a frontmatter-plus-prose format that carries no h1 by spec
+  # (MD041) and reuses top-level headings per skill. Prettier still
+  # normalises whitespace in these files; markdownlint has nothing to add.
+  "**/SKILL.md",
+  # The garden's rendering fixture is test input, deliberately adversarial:
+  # adjacent single-paragraph callouts must stay separate blockquotes for
+  # the hue family to be judgeable (MD028). The VM check stages its own
+  # vault; this one is judged by looking at the preview.
+  "modules/services/digital-garden/lib/hugo/fixture/**",
+]
+priority = 2
+
+[formatter.python]
+command = "black"
+options = ["--quiet"]
+includes = ["*.py"]
+
+[formatter.shell]
+command = "shfmt"
+options = ["-w"]
+includes = ["*.sh"]
+
+[formatter.lua]
+command = "stylua"
+includes = ["*.lua"]
+
+[formatter.go-imports]
+command = "goimports"
+options = ["-w"]
+includes = ["*.go"]
+priority = 1
+
+[formatter.go-fumpt]
+command = "gofumpt"
+options = ["-w"]
+includes = ["*.go"]
+priority = 2
+
+[formatter.toml]
+command = "taplo"
+options = ["format"]
+includes = ["*.toml"]

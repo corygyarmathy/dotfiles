@@ -43,7 +43,7 @@ whatever the repository's read-only default says.
 
 And `deploy` is reachable from a workflow run rather than from a merge. That
 used to be true of any credential at all: `protect-deploy` forbade deletion and
-non-fast-forward pushes but not *who* may push, and any agent branch is `master`
+non-fast-forward pushes but not _who_ may push, and any agent branch is `master`
 plus commits - a fast-forward. #190 closed that short path (ADR 0005), and
 `restrict-deploy-updates` now refuses every PAT including this agent's. What it
 could not close is this one. The identity it exempts is a deploy key held as a
@@ -52,7 +52,7 @@ reads repository secrets, so the route described above is exactly as long as it
 was. `deploy` is the only ref the fleet follows (ADR 0001), and hosts pick it up
 on their nightly `system.autoUpgrade`.
 
-The ruleset therefore makes this rule matter *more*, not less. It used to be one
+The ruleset therefore makes this rule matter _more_, not less. It used to be one
 control among several against a fleet-wide push; it is now the only one left
 standing in the only path that remains.
 
@@ -195,7 +195,7 @@ the prose check is the weaker one - it is also blunt in the other direction,
 refusing any ticket that so much as names a denied path.
 
 This exception is the one place the denylist is not purely path-shaped, and the
-only one that *widens* it rather than narrowing it. Like rule 2 below, it is
+only one that _widens_ it rather than narrowing it. Like rule 2 below, it is
 recorded here as triage vocabulary rather than as an ADR 0004 §5 amendment; it
 is the first thing to revisit if the denylist's shape is ever reopened.
 
@@ -207,7 +207,7 @@ An unattended agent may only take a ticket whose success it can determine for
 itself. The rule is about the agent's own success signal, not about human
 involvement generally: merge stays a human act either way (ADR 0004 §9), and a
 criterion a human confirms at review time is fine. What disqualifies a ticket is
-a human being the *only* signal that the work is done.
+a human being the _only_ signal that the work is done.
 
 Ask the question of **each acceptance criterion**, not of the ticket as a whole.
 Criteria come in three shapes:
@@ -215,8 +215,8 @@ Criteria come in three shapes:
 | Shape            | What it is                                                                      | Eligible?                    |
 | ---------------- | ------------------------------------------------------------------------------- | ---------------------------- |
 | **Gate**         | Machine-decidable. The agent runs something and reads the result.               | Yes                          |
-| **Confirmation** | A human looks *after* the gates have passed. The work is complete without them. | Yes, if marked as not a gate |
-| **Judgement**    | A human decision that shapes the work *while it is being done*.                 | No                           |
+| **Confirmation** | A human looks _after_ the gates have passed. The work is complete without them. | Yes, if marked as not a gate |
+| **Judgement**    | A human decision that shapes the work _while it is being done_.                 | No                           |
 
 A ticket is `ready-for-agent` when every criterion is a gate or an explicitly
 marked confirmation, and none is a judgement.

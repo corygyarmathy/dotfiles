@@ -726,9 +726,7 @@ def grow(notes, seed=DEFAULT_SEED):
     filled = 0
     for i in sorted(reached_at, key=lambda k: (reached_at[k], k)):
         share = pad_cells.get(i, 0) / crown_cells
-        pad_ready[i] = max(
-            reached_at[i], CROWN_FROM + (CROWN_TO - CROWN_FROM) * filled
-        )
+        pad_ready[i] = max(reached_at[i], CROWN_FROM + (CROWN_TO - CROWN_FROM) * filled)
         # The overlap is what stops the crown reading as one plate at a time.
         pad_span[i] = (CROWN_TO - CROWN_FROM) * share * PAD_OVERLAP
         filled += share
@@ -1013,7 +1011,9 @@ def grow(notes, seed=DEFAULT_SEED):
     # The assertion the plan asks for. A tree that quietly drops a note is
     # worse than no tree: the whole claim of this feature is that it is a
     # picture of the garden.
-    carried = {c.note for row in grid for c in row if c is not None and c.note is not None}
+    carried = {
+        c.note for row in grid for c in row if c is not None and c.note is not None
+    }
     assert len(carried) == count, (
         f"bonsai lost {count - len(carried)} of {count} notes: "
         f"{sorted(set(range(count)) - carried)}"
@@ -1265,7 +1265,9 @@ def _synthetic(count, seed):
         # dates spread over a year so that the tie-break has something to do,
         # which the real vault's ledger cannot offer it yet.
         revisions = math.floor(rng() ** 2.6 * 10)
-        published = f"2026-{1 + math.floor(rng() * 12):02d}-{1 + math.floor(rng() * 28):02d}"
+        published = (
+            f"2026-{1 + math.floor(rng() * 12):02d}-{1 + math.floor(rng() * 28):02d}"
+        )
         notes.append(
             Note(
                 f"Note {i + 1}",
