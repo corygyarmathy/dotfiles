@@ -42,19 +42,39 @@
 # this unit's journal; a failed relabel is the caller's call, because
 # only the caller knows whether a ticket left carrying `$working_label`
 # is about to be retried by the guard or stranded by a teardown.
+#
+# The revision lane (#196) hands back over the pull request rather than
+# the issue, so the verbs read `$tracker_kind`: a pull request is not an
+# issue to `gh issue edit`'s relabel, and the hand-back must reach the
+# surface the reviewer is actually looking at.
 stuck_closing() {
-	printf '%s\n' "The ticket is relabelled \`$stuck_label\`. It needs a human decision: reshape it and re-apply \`$label\`, or take it by hand (docs/agents/triage-labels.md)."
+	if [ "$tracker_kind" = pr ]; then
+		printf '%s\n' "The pull request is relabelled \`$stuck_label\`. It needs a human decision: address the review comments by hand, or re-apply \`$revise_label\` to spend another revision round (docs/agents/triage-labels.md)."
+	else
+		printf '%s\n' "The ticket is relabelled \`$stuck_label\`. It needs a human decision: reshape it and re-apply \`$label\`, or take it by hand (docs/agents/triage-labels.md)."
+	fi
 }
 
-post_issue_comment() {
-	if ! gh issue comment "$number" --repo "$repo" --body-file "$1"; then
-		echo "afk-agent: #$number: the comment could not be posted; the reason above is in this unit's journal" >&2
+post_tracker_comment() {
+	if [ "$tracker_kind" = pr ]; then
+		if ! gh pr comment "$number" --repo "$repo" --body-file "$1"; then
+			echo "afk-agent: #$number: the comment could not be posted; the reason above is in this unit's journal" >&2
+		fi
+	else
+		if ! gh issue comment "$number" --repo "$repo" --body-file "$1"; then
+			echo "afk-agent: #$number: the comment could not be posted; the reason above is in this unit's journal" >&2
+		fi
 	fi
 }
 
 relabel_stuck() {
-	gh issue edit "$number" --repo "$repo" \
-		--remove-label "$working_label" --add-label "$stuck_label"
+	if [ "$tracker_kind" = pr ]; then
+		gh pr edit "$number" --repo "$repo" \
+			--remove-label "$working_label" --add-label "$stuck_label"
+	else
+		gh issue edit "$number" --repo "$repo" \
+			--remove-label "$working_label" --add-label "$stuck_label"
+	fi
 }
 
 hand_back() {
@@ -76,14 +96,32 @@ hand_back() {
 	fi
 
 	{
-		printf '%s\n' \
-			"The AFK agent stopped work on this ticket and is handing it back, without opening a pull request."
+		if [ "$tracker_kind" = pr ]; then
+			printf '%s\n' "The AFK agent stopped work on this revision round and is handing it back."
+		else
+			printf '%s\n' "The AFK agent stopped work on this ticket and is handing it back, without opening a pull request."
+		fi
 		printf '%s\n' ""
 		printf '%s\n' "Why it stopped:"
 		printf '%s\n' ""
 		printf '%s\n' "$reason"
 		printf '%s\n' ""
-		if [ "$pr_url" != "" ]; then
+		if [ "$tracker_kind" = pr ]; then
+			# The revision lane's pull request predates this run and holds
+			# work a reviewer has already read, so nothing here is torn down
+			# and nothing is closed. What this run added - or did not - is
+			# what the paragraph has to say.
+			if [ "$pushed" -eq 1 ]; then
+				printf '%s\n' \
+					"The revision was pushed to \`$branch\`, but it did not reach a green CI run: $pr_url is open with the revision on it and unverified."
+			elif [ "$rescued" -eq 1 ]; then
+				printf '%s\n' \
+					"The worktree is removed, but the work it held is committed onto \`$branch\` locally, **unpushed, in \`$checkout\` on the runner's host**: it has passed nothing - not the gate, not the path denylist, not CI - and it was never pushed, because the pre-push gate is the only thing that may authorise a push."
+			else
+				printf '%s\n' \
+					"Nothing was pushed: $pr_url is open exactly as the reviewer left it, with the comments still unaddressed. The worktree is removed."
+			fi
+		elif [ "$pr_url" != "" ]; then
 			printf '%s\n' \
 				"The pull request ($pr_url) is left open without the \`@HANDOFF_LABEL@\` label: it holds the branch's work, and the label's absence is what says from outside that nobody has finished with it (ADR 0007 §2). The worktree is removed and the branch is left untouched."
 		elif [ "$pushed" -eq 1 ]; then
@@ -101,7 +139,7 @@ hand_back() {
 		stuck_closing
 	} >"$body"
 
-	post_issue_comment "$body"
+	post_tracker_comment "$body"
 
 	# The other half of reaching a run that failed past the push:
 	# The pull request gets the same story the issue does, so a
@@ -109,7 +147,11 @@ hand_back() {
 	# not left guessing. A comment on a pull request is reportable and
 	# removable; the hand-off label's absence is still what says this
 	# pull request is not finished.
-	if [ "$pr_url" != "" ]; then
+	#
+	# The revision lane is already there: its hand-back comment above
+	# went to the pull request, and posting the same body a second time
+	# would be noise about a reviewer's only copy of the story.
+	if [ "$tracker_kind" != pr ] && [ "$pr_url" != "" ]; then
 		if ! gh pr comment "$pr_url" --repo "$repo" --body-file "$body"; then
 			echo "afk-agent: #$number: the pull request comment could not be posted" >&2
 		fi
@@ -251,12 +293,31 @@ hand_back_dead_run() {
 	# relabelling it under its own open pull request would be a lie. The
 	# worktree is cleared, the branch stays (it is what the pull request
 	# is from), and the ticket is not touched.
-	open_prs="$(gh pr list --repo "$repo" --head "$branch" --state open --json number |
-		jq 'length')" ||
+	#
+	# One exception, and it is the revision lane's (#196): only a revision
+	# run ever puts `$working_label` on a pull request - the ticket lane's
+	# claim lives on the issue - so a pull request carrying it is a
+	# revision run that died mid-round, with the human's trigger label
+	# consumed by a run that never finished. The claim is undone the same
+	# way `unclaim` does it on the issue lane: swap the labels back in one
+	# edit, so the next poll can take the round again. The PR number comes
+	# from the lookup, not from the worktree's name: the worktree is named
+	# after the branch, which carries the original ticket's number, not
+	# the pull request's.
+	open_prs="$(gh pr list --repo "$repo" --head "$branch" --state open --json number,labels)" ||
 		die "#$number: could not ask the tracker whether a pull request is open for $branch"
 
-	if [ "$open_prs" -gt 0 ]; then
-		log "#$number: a pull request is open for $branch, so the run finished and only its worktree survived; clearing it and moving on"
+	if [ "$(jq 'length' <<<"$open_prs")" -gt 0 ]; then
+		if jq -e --arg l "$working_label" 'any(.[].labels[]?; .name == $l)' \
+			<<<"$open_prs" >/dev/null; then
+			if ! gh pr edit "$(jq -r '.[0].number' <<<"$open_prs")" --repo "$repo" \
+				--remove-label "$working_label" --add-label "$revise_label"; then
+				die "#$number: a revision run died on the open pull request for $branch and its claim could not be undone; refusing to start a new ticket beside it"
+			fi
+			log "#$number: a revision run died on the open pull request for $branch; its claim was undone and the round will be retried"
+		else
+			log "#$number: a pull request is open for $branch, so the run finished and only its worktree survived; clearing it and moving on"
+		fi
 		remove_worktree_and_branch "$path" "$branch" 0
 		return 0
 	fi
@@ -320,7 +381,7 @@ hand_back_dead_run() {
 			stuck_closing
 		} >"$body"
 
-		post_issue_comment "$body"
+		post_tracker_comment "$body"
 
 		notify_stuck \
 			"An earlier run of the AFK agent died on this ticket with a worktree left behind; the ticket has been handed back for a human decision." \

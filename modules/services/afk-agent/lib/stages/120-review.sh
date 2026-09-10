@@ -26,9 +26,14 @@
 # directory explicitly rather than inheriting it from a `cd` is what
 # makes that unrepeatable. The `cd` stays as well: `session list` and
 # `export` below are project-scoped the same way.
-# What the review is about to look at, kept only so that the log below
-# can say if the branch moved under it.
-reviewed_head="$(git -C "$worktree" rev-parse HEAD)"
+#
+# The revision lane (150-revise.sh) never reaches here - the reviewer's
+# own comments are the review that stage responds to - so the whole of
+# this stage is behind the `flow` guard.
+if [ "$flow" = issue ]; then
+	# What the review is about to look at, kept only so that the log below
+	# can say if the branch moved under it.
+	reviewed_head="$(git -C "$worktree" rev-parse HEAD)"
 
 review_dir="$run_dir/review"
 mkdir -p "$review_dir"
@@ -87,3 +92,4 @@ jq -e 'has("messages") and (.messages | type == "array")' \
 
 # --- did a review actually happen -------------------------------------
 #
+fi

@@ -40,6 +40,16 @@
 # Concurrency is one, enforced by systemd (a single non-templated unit;
 # ADR 0004 §8). The runner adds a guard against a *dead* run's leftovers,
 # which systemd would otherwise start the next poll on top of.
+#
+# The revision loop (plan item 12, #196) is a second entry point on the
+# same runner, not a second runner: when the ticket queue is empty, the
+# same poll falls through to pull requests labelled `agent-revise`, and
+# the reviewer's comments - and only comments from accounts other than
+# the agent's own - are fed to a revision session that resumes the pull
+# request's branch. It shares the gate, the verdict, the pre-push denylist
+# gate, the push and the CI watch with the ticket lane, and it has its own
+# bounded round budget: three rounds per pull request, then the stuck
+# path reaches the pull request instead of the ticket.
 {
   config,
   lib,
@@ -200,6 +210,18 @@ let
     builtins.readFile ./afk-agent/lib/prompts/review.md
   );
 
+  # The revision session's instructions (plan item 12, #196). Same shape
+  # as the other two prompts. The clause that matters most is the one that
+  # is a property of the pipeline rather than of the prose: the runner
+  # hands this session the human's review comments and nothing else, so
+  # the prompt has to say that the pull request body - which carries the
+  # advisory review's findings - is not review input. `PRNUMBER` is
+  # substituted at run time; the comments travel beside the prompt, not
+  # inside it.
+  revisePrompt = pkgs.writeText "afk-agent-revise-prompt" (
+    builtins.readFile ./afk-agent/lib/prompts/revise.md
+  );
+
   # Report-only, enforced through the permission layer rather than only asked
   # for in the prose above. `edit` denied outright is what makes "change no
   # files" a property of the session instead of a request to it: a review pass
@@ -277,12 +299,14 @@ let
         ntfyTopic
         deniedPaths
         appId
+        botLogin
         commitName
         commitEmail
         implementPrompt
         prIntro
         prHandoff
         reviewPrompt
+        revisePrompt
         permissionOverlay
         reviewOverlay
         ;
@@ -299,6 +323,8 @@ let
         ciFirstCheckPolls
         ciSettlePolls
         maxCiRounds
+        maxRevisionRounds
+        reviseLabel
         sessionListDepth
         reviewAxes
         label
@@ -504,6 +530,30 @@ in
       description = ''
         Label applied to the pull request together with the review findings,
         once CI is green. A signal, not a merge control (ADR 0007 §7).
+      '';
+    };
+
+    reviseLabel = lib.mkOption {
+      type = lib.types.str;
+      default = "agent-revise";
+      description = ''
+        Label a person applies to one of this runner's pull requests to
+        have its review comments fed back to a revision session (plan
+        item 12, #196). The label is the whole of the trigger: a
+        half-written review starts nothing.
+      '';
+    };
+
+    maxRevisionRounds = lib.mkOption {
+      type = lib.types.int;
+      default = 3;
+      description = ''
+        Revision rounds per pull request before the stuck path. Counted
+        from the round comments the runner leaves on the pull request
+        rather than from any state on disk, so a count survives the run
+        that made it. A fourth round does not run; the pull request goes
+        to the stuck path, and re-applying the revise label will not
+        spend another round.
       '';
     };
 

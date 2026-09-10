@@ -114,8 +114,12 @@ watch_ci() {
 	done
 }
 
-ci_round=1
-while :; do
+# The round loop is the ticket lane's; the revision lane (150-revise.sh)
+# runs its own watch sequence against the revision session. The snapshot
+# and the watch are shared, like the gate.
+if [ "$flow" = issue ]; then
+	ci_round=1
+	while :; do
 	pushed_head="$(git -C "$worktree" rev-parse HEAD)"
 	log "#$number: watching CI on $pushed_head (round $ci_round of @MAX_CI_ROUNDS@)"
 	watch_ci "$pushed_head"
@@ -218,6 +222,7 @@ done
 # absence is what says so from the outside, and the hand-back (#175)
 # carries the fact onto the ticket and the pull request both.
 unfinished="$pr_url is open and green, without the @HANDOFF_LABEL@ label; nothing merges it (ADR 0004 §9)"
+fi
 
 # --- review, in a fresh context ---------------------------------------
 #

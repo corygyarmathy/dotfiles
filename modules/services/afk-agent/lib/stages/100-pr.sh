@@ -11,12 +11,16 @@
 # stage wrote it in this repository's house style and the gate passed on
 # it. Where the ticket took several attempts, no single subject describes
 # the branch, and the ticket's own title is the honest one.
-commits="$(git -C "$worktree" rev-list --count "origin/$base_branch..HEAD")"
-if [ "$commits" -eq 1 ]; then
-	pr_title="$(git -C "$worktree" log -1 --format=%s)"
-else
-	pr_title="$title"
-fi
+#
+# All of it is the ticket lane's: the revision lane (150-revise.sh) does
+# not open a pull request, it revises the one that exists.
+if [ "$flow" = issue ]; then
+	commits="$(git -C "$worktree" rev-list --count "origin/$base_branch..HEAD")"
+	if [ "$commits" -eq 1 ]; then
+		pr_title="$(git -C "$worktree" log -1 --format=%s)"
+	else
+		pr_title="$title"
+	fi
 
 pr_prose() {
 	sed -e "s/ISSUE/$number/g" \
@@ -87,6 +91,7 @@ pr_url="$(
 )" || hand_back "$branch is pushed but the pull request could not be opened"
 
 log "#$number: opened $pr_url"
+fi
 
 # --- watch the branch's own CI ----------------------------------------
 #

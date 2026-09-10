@@ -46,7 +46,13 @@ push_branch() {
 	pushed=1
 }
 
-push_branch
+# The ticket lane pushes here, first thing after the implement stage. The
+# revision lane calls the same function from 150-revise.sh, which is why
+# the gate-plus-push shape has to hold inside the function and not in the
+# call site.
+if [ "$flow" = issue ]; then
+	push_branch
+fi
 
 # --- raise the pull request, before anything reviews it ----------------
 #

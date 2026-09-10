@@ -6,7 +6,11 @@
 #
 # Both are fatal, and fatal in the fail-closed direction: a review that
 # cannot be shown to have happened is not a review that passed.
-skill_calls="$(
+#
+# Ticket lane only (see 120-review.sh): the whole of this stage sits
+# behind the `flow` guard.
+if [ "$flow" = issue ]; then
+	skill_calls="$(
 	jq '[ .messages[].parts[]?
         | select(.type == "tool" and .tool == "skill")
         | select(.state.status == "completed")
@@ -114,6 +118,7 @@ log "#$number: review ran and left $(wc -l <"$review_dir/findings.md") lines of 
 review_head="$(git -C "$worktree" rev-parse HEAD)"
 if [ "$review_head" != "$reviewed_head" ]; then
 	log "#$number: the review stage moved $branch from $reviewed_head to $review_head. It is report-only and was denied both file edits and commits, so it got past both; nothing pushes this branch again and $pr_url is unaffected, but the deny-set is not doing what it claims"
+fi
 fi
 
 # --- hand over --------------------------------------------------------

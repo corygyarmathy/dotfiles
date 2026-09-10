@@ -102,14 +102,6 @@ while [ "$index" -lt "$total" ]; do
 	break
 done
 
-if [ -z "$picked" ]; then
-	log "nothing to claim this poll"
-	exit 0
-fi
-
-number="$(jq -r '.number' <<<"$picked")"
-title="$(jq -r '.title' <<<"$picked")"
-
 # Everything past this point acts on a claimed ticket, and two things
 # can now happen to it. They have different exits, and the difference is
 # whether anything was tried:
@@ -132,17 +124,32 @@ unclaim_and_die() {
 	die "$1"
 }
 
-# State the hand-back reads, initialised where the claim lands so that
-# every exit past this point knows what this run created. `attempt`
-# belongs to the implement loop and is read by nothing before it.
-attempt=1
-branch_created=0
-pushed=0
-pr_url=""
+if [ -z "$picked" ]; then
+	# The revision loop (plan item 12, #196) is this runner's second entry
+	# point: when the ticket queue is empty, the run falls through to it.
+	# `flow` is what every stage between here and the hand-off reads, and
+	# the revision flow itself lives at the end of the script (150), after
+	# the functions it reuses - the gate, the verdict, the push, the CI
+	# watch - are defined. Nothing past the claim below runs with an
+	# empty `$picked`.
+	flow=revise
+	log "nothing to claim from '$label' this poll; the revision queue is next"
+else
+	number="$(jq -r '.number' <<<"$picked")"
+	title="$(jq -r '.title' <<<"$picked")"
 
-log "claiming #$number: $title"
-gh issue edit "$number" --repo "$repo" \
-	--remove-label "$label" --add-label "$working_label"
+	# State the hand-back reads, initialised where the claim lands so that
+	# every exit past this point knows what this run created. `attempt`
+	# belongs to the implement loop and is read by nothing before it.
+	attempt=1
+	branch_created=0
+	pushed=0
+	pr_url=""
+
+	log "claiming #$number: $title"
+	gh issue edit "$number" --repo "$repo" \
+		--remove-label "$label" --add-label "$working_label"
+fi
 
 # --- isolate ----------------------------------------------------------
 #
