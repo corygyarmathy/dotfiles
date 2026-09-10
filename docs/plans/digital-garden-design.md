@@ -1,6 +1,6 @@
 # Plan: theme and navigation for the digital garden
 
-Everything in this plan is scoped against `modules/services/digital-garden/lib/hugo/` — the layouts, partials, render hooks and stylesheet that are the whole design. There is no theme underneath to fight, so every item here is an edit to files this repository owns. The summary table below carries what shipped when; an item's own body adds a dated section only where there is a finding or reversal worth keeping.
+Everything in this plan is scoped against `modules/services/digital-garden/lib/hugo/` — the layouts, partials, render hooks and stylesheet that are the whole design. There is no theme underneath to fight, so every item here is an edit to files this repository owns. The summary table below carries what shipped when; an item's own body adds a dated section only where there is a finding or reversal worth keeping. A note inside an item handing part of its record to a later item is a cross-reference, not history, and reads in the present tense wherever it sits.
 
 | #   | Item                                              | Size   | Depends on | Status                                                                                                                              |
 | --- | ------------------------------------------------- | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,7 +25,7 @@ Everything in this plan is scoped against `modules/services/digital-garden/lib/h
 | 19  | The home page, composed once                      | small  | 18         | **done** 2026-08-31; anchored 2026-09-01                                                                                            |
 | 20  | Ambient Life on the 404                           | small  | -          | **done** 2026-08-31                                                                                                                 |
 | 21  | One masthead, eight things found by reading       | medium | 19         | **done** 2026-09-03                                                                                                                 |
-| 22  | The home and note pages, and a settled type scale | large  | 21         |                                                                                                                                     |
+| 22  | The home and note pages, and a settled type scale | large  | 21         | **open** (spec: #155)                                                                                                               |
 | -   | Graph view                                        | -      | -          | **rejected**, see below; the bonsai is not a revisit                                                                                |
 
 ## Decisions, 2026-08-31
@@ -608,7 +608,7 @@ Half a day. The risk that item 12 recorded — two grey blocks reading as a side
 
 The left column is now the note's margin, on every note; the whole `<aside>` renders unconditionally and its contents are conditional, exactly as the plan says. The facts run cheapest-first with a small uppercase label each — **Published**, **Updated** when the ledger has moved on, **Reading time**, **Maturity** — then the section map when a note has three or more `##`s, then the backlinks the rail already carried. The dateline is the one fact that exists twice: the article keeps it at the narrow width (a date belongs above prose on a phone) and the margin's own dates show at the wide width, the two swapping in CSS so the same fact is never on the page twice.
 
-**Item 22 reverses this order.** The margin becomes the note's identity card, and identity — shelf, maturity chip, thesis — precedes the dates. The cheapest-first reasoning above, and item 12's, is the reasoning it supersedes, kept: it was the right order for a block whose contents were all cheap facts.
+**Reversed by item 22.** The margin becomes the note's identity card there — shelf, maturity chip, thesis ahead of the dates — and the cheapest-first reasoning above is why the old order was the right one for what the margin then held.
 
 **The word counts are computed in the filter, and the plan's guess was right.** `publish-filter.py` emits `sections` — id, title and words per `##` section, ids under the same `anchorize` rule the wikilink rewriter already used — plus `word_count` and a `reading_time` (one minute per 200 words, floored to 1). The margin renders the map straight from that frontmatter, so Hugo's `.Fragments` is not consulted at all; the old contents list's entire logic (the synthetic-root descent and the three-section threshold) moved out of the template with it.
 
@@ -927,7 +927,7 @@ Reported as four faults in one composition: the header hangs off the right of th
 
 **Two faults the measurements caught that reading the stylesheet would not.** The gap above the tree was 10px and the gap below it 63px, because the pot's feet are overlines and sit at the top of their line box — so the last row of the picture is about one and a quarter lines of empty space, and the tree read as stuck to the header and adrift from its own label. `.bonsai` takes `margin-block-end: -1.15em`, in `em` so it stays proportional as the tree is sized from its column, and the two gaps are now 41px and 34px. And the tools rode half a line above the words beside them: `.nameplate-tools` still carried the `margin-bottom: 1rem` from when it had a band of its own, and in a bar that margin is part of what is being centred. Both were found by measuring ink in a screenshot, which is the only way either of them was ever going to be found.
 
-**Item 22 takes the count's job over.** The colophon's counting logic moves into the home page's margin partial, which also gains the shelf tally that turns the tree's hues into a legend rather than decoration. The composition here is what that pass starts from, and the masthead's geometry — name, links, tools, rule — is the part of it item 22 leaves byte-identical on every page.
+**Superseded in part by item 22.** The colophon and the home page's margin are that item's work; the composition above is what it starts from.
 
 ### Cost and risk
 
@@ -1017,7 +1017,7 @@ One session, plus the correction above. The risk is the three container steps, w
 
 ## 22. The home and note pages, and a settled type scale
 
-The settled design is `docs/plans/garden-redesign-handoff.md`, with the two `v2` files in `docs/plans/garden-redesign/` as the visual reference; the bundle's stylesheet is a frozen snapshot and the repository's copy is authoritative. The full spec is #155, and the grilling session on it produced three kinds of correction to the handoff, which are what this item records: three of its stated changes already ship and would be "implemented" a second time, four decisions nearby are recorded elsewhere and would be reverted by following it literally, and one recorded ordering is deliberately reversed. Vocabulary: _shelf_ to a reader and `topic` in code, _maturity_ spoken as seedling, sapling and evergreen with no translation layer, the _margin_ a named side.
+The settled design is `docs/plans/garden-redesign-handoff.md`, with the two `v2` files in `docs/plans/garden-redesign/` as the visual reference; neither is in the repository yet, and until the handoff lands #155 is the record of what it settles. The bundle's stylesheet is a frozen snapshot and the repository's copy is authoritative. The full spec is #155, and the grilling session on it produced three kinds of correction to the handoff, which are what this item records: three of its stated changes already ship and would be "implemented" a second time, four decisions nearby are recorded elsewhere and would be reverted by following it literally, and one recorded ordering is deliberately reversed. Vocabulary: _shelf_ to a reader and `topic` in code, _maturity_ spoken as seedling, sapling and evergreen with no translation layer, the _margin_ a named side.
 
 ### The scope
 
@@ -1032,18 +1032,18 @@ Four changes, each its own PR after this record:
 
 The handoff presents three things as changes to make. They are the site as it stands, recorded here so no later session builds them a second time.
 
-- **The three-column armature.** The layout wrapper already builds the capped, centred grid with equal outer tracks at the wide breakpoint; the rail has occupied the left track since item 4 and the sidenotes have mirrored it on the right since item 8; the margin has filled the left column unconditionally since item 17; and the home page already uses the same wrapper. Presenting the armature as new is a misreading of the stylesheet.
+- **The three-column armature.** The layout wrapper already builds the capped, centred grid with equal outer tracks at the wide breakpoint; the rail has occupied the left track and the sidenotes the right since item 8 moved the rail across; the margin has filled the left column unconditionally since item 17; and the home page already uses the same wrapper. Presenting the armature as new is a misreading of the stylesheet.
 - **The dateline's wide-screen hiding.** The margin has carried the dates at the wide width since item 17, with the article's dateline carrying them at the narrow width and the two swapping in CSS. Under this item only the dateline's size and its mono treatment change.
 - **The masthead's bottom padding.** Item 21 settled the masthead's geometry, and its bottom padding is already correct. The hairline removes only the masthead's bottom _margin_, and that removal is scoped to the note page: applied globally it would move the home page's content up and reintroduce the between-page flinch item 21 exists to have fixed. The masthead's own geometry — name, links, tools, rule — stays byte-identical on every page.
 
 ### Recorded elsewhere, and not to be reverted
 
-Four decisions sit near this work, each with its reason already on record. Following the handoff literally reverts all four; an agent working nearby leaves them alone.
+Four decisions sit near this work, each with its reason already on record, named here with where that record lives. Following the handoff literally reverts all four; an agent working nearby leaves them alone.
 
-- **Grid items align on their first baseline, not their box tops.** Box-top alignment strands the margin's small label in the leading above the title's letterforms.
-- **The margin's sticky offset, and its viewport-height cap with internal scroll, stay as they are.** The cap matters more after this change, not less, because the identity card is taller than the fact list it replaces.
-- **The margin column's width stays a shared custom property**, read by the rail and the sidenote alike, rather than a hard-coded value.
-- **The shelf is the leaf folder, never its ancestry.** The published tree is flat and the filter deliberately discards the ancestry; the note page's shelf label reads `Lighting`, not `Reference · Lighting`.
+- **Grid items align on their first baseline, not their box tops.** Box-top alignment strands the margin's small label in the leading above the title's letterforms. The full reasoning is the comment on `align-items` in the stylesheet's `.layout` rule, where the choice is made.
+- **The margin's sticky offset, and its viewport-height cap with internal scroll, stay as they are.** The cap matters more after this change, not less, because the identity card is taller than the fact list it replaces. Both live on `.rail` in the stylesheet, whose comment is the record.
+- **The margin column's width stays a shared custom property**, read by the rail and the sidenote alike, rather than a hard-coded value. `--margin-col`'s comment in the stylesheet is the record: one value for both, because they are the same margin seen from two sides.
+- **The shelf is the leaf folder, never its ancestry.** The published tree is flat and the filter deliberately discards the ancestry; the note page's shelf label reads `Lighting`, not `Reference · Lighting`. `note_topic`'s docstring in `publish-filter.py` is the record, and item 15 carries the same decision from this plan's side.
 
 ### The reversal: identity before the dates
 
