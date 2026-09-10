@@ -15,7 +15,7 @@ Each issue carries its own problem statement, approach and acceptance criteria -
 
 ## Where past items went
 
-Thirteen items shipped and are no longer tracked here; the fourteenth landed with this table's last row. Their specs were their issues, their outcomes are their merged PRs and commits, and their tests live in `checks/afk-agent-runner.nix` and `checks/afk-agent.nix`.
+Every item above the last row shipped and is no longer tracked here. Their specs were their issues, their outcomes are their merged PRs and commits, and their tests live in `checks/afk-agent-runner.nix` and `checks/afk-agent.nix`.
 
 | #   | Item                                                 | Issue                                                                                                                      | Where the record lives now                                                                                                                                               |
 | --- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -58,13 +58,21 @@ if [ "$flow" = issue ]; then
 		return 1
 	}
 
+	# The stage's one question, asked twice: is this branch sitting on the
+	# base branch's tip? Greasing the pipeline at line 67, and catching the
+	# abort dressed up as a resolution at line 96. The negation there reads
+	# naturally - a "no" is the failure shape - so one helper serves both.
+	off_new_base_tip() {
+		[ "$(git -C "$checkout" merge-base "refs/heads/$branch" "origin/$base_branch")" = "$(git -C "$checkout" rev-parse "origin/$base_branch")" ]
+	}
+
 	if ! git -C "$checkout" fetch --prune origin; then
 		# A failed fetch leaves `origin/$base_branch` where the claim left
 		# it, and the comparison below then answers with the base the
 		# branch was cut from - the pre-#242 behaviour, which is better
 		# than handing a passing branch back over a transient.
 		log "#$number: the fetch before the rebase failed; $branch stays on the $base_branch it was cut from"
-	elif [ "$(git -C "$checkout" merge-base "refs/heads/$branch" "origin/$base_branch")" = "$(git -C "$checkout" rev-parse "origin/$base_branch")" ]; then
+	elif off_new_base_tip; then
 		log "#$number: $base_branch has not moved since $branch was cut; nothing to replay"
 	elif git -C "$worktree" rebase "origin/$base_branch"; then
 		log "#$number: replayed onto the new $base_branch tip; the gate runs again on the result"
@@ -93,7 +101,17 @@ if [ "$flow" = issue ]; then
 		elif [ -n "$(git -C "$worktree" status --porcelain)" ]; then
 			rebase_failure="$(printf 'the conflict session left work uncommitted:\n%s' \
 				"$(git -C "$worktree" status --porcelain)")"
-		elif [ "$(git -C "$checkout" merge-base "refs/heads/$branch" "origin/$base_branch")" != "$(git -C "$checkout" rev-parse "origin/$base_branch")" ]; then
+		elif {
+			# The base can move a second time while the conflict session runs -
+			# up to @ATTEMPT_TIMEOUT@ after the fetch at the stage top - and the
+			# check below against that stale ref would bless a pull request
+			# born stale again. It answers against a fetch made here instead.
+			# A failed fetch leaves the ref where the stage top left it, and
+			# the comparison is then no worse than this check ever was.
+			git -C "$checkout" fetch --prune origin ||
+				log "#$number: the fetch before the merge-base check failed; it answers with the fetch above"
+			! off_new_base_tip
+		}; then
 			# The abort dressed up as a resolution: a clean tree, an exited
 			# session, and a branch exactly as stale as the pull request
 			# this stage exists to prevent. Nothing else can tell that
