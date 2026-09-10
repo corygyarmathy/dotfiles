@@ -23,6 +23,26 @@ for leftover in "$worktrees"/*; do
 	hand_back_dead_run "$leftover"
 done
 
+# --- the quiet window (#249) -------------------------------------------
+#
+# Decided once, before either lane is picked from, because it is a
+# property of the poll rather than of a lane: the nightly upgrade may
+# reboot the host inside its reboot window when the kernel changed, and a
+# run in flight when that happens dies with the tokens already spent on
+# it. While the window is open this poll starts nothing new - the
+# revision lane runs no round and the ticket lane claims no ticket - but
+# it still polls: the queries below run as usual, and what they find is
+# left for a later poll, once the window has passed.
+#
+# This is about *not starting*. A run already in flight when the reboot
+# happens is the guard's problem, handled above; the window does not
+# protect it and does not pretend to.
+quiet=0
+if in_quiet_window; then
+	quiet=1
+	log "inside the quiet window before the nightly upgrade's reboot window; starting no new work this poll"
+fi
+
 # --- the revision frontier (#247) --------------------------------------
 #
 # The revision loop (#196) is this runner's second entry point, and its
@@ -217,6 +237,16 @@ while [ "$index" -lt "$revise_total" ]; do
 		continue
 	fi
 
+	# The quiet window (#249) defers the round rather than spending it:
+	# a revision is a run of the same shape as a ticket run - a session,
+	# a gate, a push, a CI watch - and dies the same death. The request
+	# stays where it is, unacknowledged, so the frontier picks it again
+	# after the window; a budget already spent is read the same way then.
+	if [ "$quiet" = 1 ]; then
+		log "#$number: the quiet window is open; the /revise request waits for it to pass"
+		continue
+	fi
+
 	revise_comments="$(collect_comments "$number")"
 
 	if [ "$(jq -r '.revise == null' <<<"$revise_comments")" = true ]; then
@@ -304,6 +334,18 @@ if [ "$flow" = issue ]; then
 
 	total="$(jq 'length' <<<"$candidates")"
 	log "$total eligible candidate(s)"
+
+	# The quiet window (#249): the poll asked the tracker and found its
+	# candidates, but claims none of them. Nothing was claimed, so there
+	# is nothing to hand back or undo - the tickets keep `$label` and are
+	# picked up by the poll after the window, which is the difference
+	# between deferring a start and stranding a ticket. It is a quiet end
+	# to the run, like an empty queue: no comment, no relabel, no noise
+	# about a ticket nobody is working yet.
+	if [ "$quiet" = 1 ]; then
+		log "leaving $total eligible ticket(s) carrying '$label' until the window passes"
+		exit 0
+	fi
 
 	# --- re-check the denylist, then claim the first survivor -------------
 	#

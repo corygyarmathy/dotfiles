@@ -61,6 +61,19 @@ let
       ../modules/services/monitoring/monitoring.nix
       {
         cg.service.afk-agent.enable = true;
+        # The quiet window (#249) is read from this host's own
+        # `system.autoUpgrade`, so the check evaluates the window
+        # production derives: homelab01's reboot window, 04:00-05:00 -
+        # the only host this service runs on. Nothing else about the
+        # upgrade is needed; the derivation reads the reboot window.
+        system.autoUpgrade = {
+          enable = true;
+          allowReboot = true;
+          rebootWindow = {
+            lower = "04:00";
+            upper = "05:00";
+          };
+        };
         system.stateVersion = "24.11";
       }
     ];
@@ -1241,6 +1254,15 @@ pkgs.runCommand "check-afk-agent-runner"
     # rather than production's.
     export AFK_CI_POLL_INTERVAL=0
 
+    # The quiet window's seam (#249), for the same reason the watch's
+    # interval above is zero: the gate reads the wall clock, and a check
+    # that waited for 03:00 would never run. The default parks every poll
+    # outside the window the evaluation derives (03:00-05:00, from
+    # homelab01's reboot window), so the cases written before the window
+    # existed read as unchanged; the quiet cases below move it and put it
+    # back.
+    export AFK_NOW=12:00
+
     # The revision frontier's fixtures, defaulted to an empty queue so that
     # every case written before the lane existed falls through it quietly -
     # the revise cases below point these at their own fixtures.
@@ -1424,6 +1446,68 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "exited $rc on an all-assigned tracker"
     [ "$(claims)" -eq 0 ] || fail "claimed an assigned issue"
     grep -q "nothing to claim" "$state/out.log" || fail "said nothing about an idle poll"
+
+    echo "case: inside the quiet window the poll finds tickets and claims none"
+    # #249's whole shape: the poll runs and asks the tracker as usual -
+    # #302 and #303 are both eligible in the fixture - but nothing is
+    # claimed, so nothing is started near the nightly upgrade's reboot
+    # window. A ticket skipped here keeps `ready-for-agent` by construction:
+    # no edit of any kind reaches the tracker, which is what the absence
+    # assertions below pin.
+    export AFK_NOW=03:30
+    run quiet-claims-none mixed.json
+    export AFK_NOW=12:00
+    [ "$rc" -eq 0 ] || fail "a deferred poll exited $rc: $(cat "$state/err.log")"
+    # The poll really did find the tickets: the same count the `mixed`
+    # case above logs before it claims one of them.
+    grep -q "2 eligible candidate(s)" "$state/out.log" \
+      || fail "the deferred poll did not look at the queue: $(cat "$state/out.log")"
+    grep -q "leaving 2 eligible ticket(s) carrying 'ready-for-agent'" "$state/out.log" \
+      || fail "did not say why it claimed nothing: $(cat "$state/out.log")"
+    [ "$(claims)" -eq 0 ] || fail "a poll inside the quiet window claimed something: $(ghlog)"
+    if grep -q "gh pr edit" "$state/gh.log"; then fail "the revision lane claimed beside the quiet window: $(ghlog)"; fi
+    [ ! -d "$state/checkout" ] || fail "the deferred poll cloned a repository"
+    [ "$(ntfy_posts)" -eq 0 ] || fail "a deferred poll published a notification: $(ntfylog)"
+    # And the window itself is the one the evaluation derived, from this
+    # host's own reboot window (lower 04:00 minus the hour's lead, upper
+    # 05:00) - read out of the script rather than restated here, so the
+    # case fails if the derivation drifts rather than if only this
+    # constant does.
+    grep -q 'quiet_start="180"' "$script" \
+      || fail "the quiet window does not open an hour before the reboot window's lower bound"
+    grep -q 'quiet_end="300"' "$script" \
+      || fail "the quiet window does not close at the reboot window's upper bound"
+
+    echo "case: the window's edges - the minute before it opens, and the minute it opens"
+    # The lead is what makes the window longer than the reboot window
+    # itself, and the lower bound is inclusive: at 02:59 the ordinary
+    # claiming is unchanged, and at 03:00 it stops. The 02:59 run is a
+    # full one, because the strongest form of "unchanged" is the same
+    # claim the `mixed` case makes, in the same convention.
+    export AFK_NOW=02:59
+    run quiet-edge-before mixed.json fresh good pass green
+    export AFK_NOW=12:00
+    [ "$rc" -eq 0 ] || fail "a poll one minute before the window exited $rc: $(cat "$state/err.log")"
+    grep -q "gh issue edit 302 .* --remove-label ready-for-agent --add-label agent-working" "$state/gh.log" \
+      || fail "claiming was changed outside the window: $(ghlog)"
+
+    export AFK_NOW=03:00
+    run quiet-edge-start mixed.json
+    export AFK_NOW=12:00
+    [ "$rc" -eq 0 ] || fail "the window's first minute exited $rc: $(cat "$state/err.log")"
+    grep -q "leaving 2 eligible ticket(s)" "$state/out.log" \
+      || fail "the window's lower bound is not inclusive: $(cat "$state/out.log")"
+
+    echo "case: the window's end is exclusive - the poll that closes it claims again"
+    # The other edge, and #249's second half: a ticket deferred by the
+    # window is picked up by the first poll after it. The reboot window
+    # ends at 05:00, and a claim at 05:00 is the ordinary run again.
+    export AFK_NOW=05:00
+    run quiet-edge-end mixed.json fresh good pass green
+    export AFK_NOW=12:00
+    [ "$rc" -eq 0 ] || fail "a poll after the window exited $rc: $(cat "$state/err.log")"
+    grep -q "gh issue edit 302 .* --remove-label ready-for-agent --add-label agent-working" "$state/gh.log" \
+      || fail "the window's upper bound is not exclusive, or claiming broke after it: $(ghlog)"
 
     echo "case: the claim happens before anything local is touched"
     # The only way to observe ordering from outside: make the claim fail and
@@ -3091,6 +3175,58 @@ pkgs.runCommand "check-afk-agent-runner"
     fi
     grep -q "gh pr edit 999 .* --remove-label agent-revising --add-label agent-ready-for-review" "$state/gh.log" \
       || fail "the revision did not hand back: $(ghlog)"
+
+    echo "case: the quiet window defers a revision round instead of spending it"
+    # The same window, on the second lane (#249): a revision is a run of
+    # the same shape as a ticket run - a session, a gate, a push, a CI
+    # watch - so the poll that would start one inside the window starts
+    # nothing and touches nothing. The request stays unacknowledged,
+    # which is exactly what makes the second run below the ordinary
+    # revision again: picked up by the frontier, claimed, worked, handed
+    # back green.
+    export GH_PRS="$work/fixtures/revise-pr.json"
+    export GH_PR_COMMENTS="$work/fixtures/revise-comments.json"
+    export GH_INLINE="$work/fixtures/revise-inline.json"
+    export REVISE_SETUP=1
+    export AFK_NOW=04:00
+    run revise-quiet none.json fresh good pass green
+    export AFK_NOW=12:00
+    unset GH_INLINE
+    [ "$rc" -eq 0 ] || fail "a deferred revision stopped the poll: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 0 ] || fail "a revision round started inside the quiet window"
+    if grep -q "gh pr edit 999 " "$state/gh.log"; then
+      fail "the pull request was claimed inside the quiet window: $(ghlog)"
+    fi
+    grep -q "the /revise request waits for it to pass" "$state/out.log" \
+      || fail "did not say why the round did not run: $(cat "$state/out.log")"
+    grep -q "leaving 0 eligible ticket(s) carrying 'ready-for-agent'" "$state/out.log" \
+      || fail "the ticket lane did not defer beside the quiet window: $(cat "$state/out.log")"
+    [ "$(ntfy_posts)" -eq 0 ] || fail "a deferred poll published a notification: $(ntfylog)"
+
+    # And the window's other half: the deferred request is picked up by
+    # the poll after it, exactly as the revision lane has always worked -
+    # which is why the assertions are the `revise-clean` case's own.
+    # REVISE_SETUP stays exported for the same reason the reuse path
+    # needs it above: `run` strikes `$state/pr-branch` every time, and
+    # only this flag writes it back - the branch itself is already on
+    # origin, so the setup is a pointer restore, not a second push.
+    run revise-after-window none.json reuse good pass green
+    [ "$rc" -eq 0 ] || fail "the revision after the window did not finish: $(cat "$state/err.log")"
+    [ "$(revise_attempts)" -eq 1 ] || fail "the deferred round did not run: $(revise_attempts) session(s)"
+    grep -q "gh pr edit 999 .* --remove-label agent-ready-for-review --add-label agent-revising" "$state/gh.log" \
+      || fail "the deferred revision was not claimed: $(ghlog)"
+    grep -q "revision round 1 of 3" "$state/pr-comment-body" \
+      || fail "the deferred round left no round comment: $(cat "$state/pr-comment-body")"
+    grep -q "gh pr edit 999 .* --remove-label agent-revising --add-label agent-ready-for-review" "$state/gh.log" \
+      || fail "the deferred revision did not hand back: $(ghlog)"
+
+    # The frontier scan runs in every poll now, so the two fixtures it
+    # reads are restored to the defaults rather than left unset - a mock
+    # asked to cat an unset fixture would answer an empty queue with an
+    # error, and every case after this one polls it first.
+    export GH_PRS="$work/fixtures/none-prs.json"
+    export GH_PR_COMMENTS="$work/fixtures/none-prs.json"
+    unset REVISE_SETUP
 
     echo "case: a revision run that died mid-round has its claim undone by the guard"
     # The revision lane's claim lives on the pull request - the ticket

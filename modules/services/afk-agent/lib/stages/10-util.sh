@@ -21,3 +21,25 @@ session_id_for() {
   ) 2>/dev/null || true
 }
 
+# True when this poll runs inside the quiet window around the nightly
+# upgrade's reboot window (#249).
+#
+# The window arrives from the module as minutes since midnight, so the
+# comparison is arithmetic rather than lexical: "23:00" sorts before
+# "03:00" as a string, and the window is allowed to cross midnight - the
+# same comparison the upgrade script itself makes against its reboot
+# window (nixos/modules/tasks/auto-upgrade.nix). `AFK_NOW` is the one
+# seam the check needs to place a poll inside and outside the window
+# without waiting for the wall clock; production never sets it and
+# `date` answers, on the same local clock the upgrade script reads.
+in_quiet_window() {
+	[ -n "$quiet_start" ] || return 1
+	local now="${AFK_NOW:-$(date +%H:%M)}"
+	local minutes=$(( ${now%%:*} * 60 + ${now##*:} ))
+	if [ "$quiet_start" -le "$quiet_end" ]; then
+		[ "$minutes" -ge "$quiet_start" ] && [ "$minutes" -lt "$quiet_end" ]
+	else
+		[ "$minutes" -ge "$quiet_start" ] || [ "$minutes" -lt "$quiet_end" ]
+	fi
+}
+
