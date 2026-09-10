@@ -48,10 +48,7 @@ return {
 				"<leader>og",
 				function()
 					local vault = vim.fn.expand("~/git/personal-notes")
-					local res = vim.system(
-						{ "python3", vault .. "/.scripts/vault-review.py" },
-						{ text = true }
-					):wait()
+					local res = vim.system({ "python3", vault .. "/.scripts/vault-review.py" }, { text = true }):wait()
 					if res.code ~= 0 then
 						vim.notify("vault-review: " .. (res.stderr or "failed"), vim.log.levels.ERROR)
 						return

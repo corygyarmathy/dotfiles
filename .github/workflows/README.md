@@ -10,8 +10,8 @@ This document describes _behaviour_. The reasoning - what was rejected, and why 
 
 **`deploy` is the fleet's contract, and the only promoted ref.** CI fast-forwards it to `master` only after every host configuration builds, so a host can never fetch a revision that fails to build for it.
 
-| Ref      | Followed by                | Takes a revision         |
-| -------- | -------------------------- | ------------------------ |
+| Ref      | Followed by                 | Takes a revision         |
+| -------- | --------------------------- | ------------------------ |
 | `deploy` | homelab01, homelab02, xps15 | the night it is promoted |
 
 There used to be a second ref, `deploy-stable`, which trailed `deploy` by 24 hours and which homelab02 followed so that the storage node soaked each revision on homelab01 first. [ADR 0002](../../docs/adr/0002-protect-at-activation-not-in-the-rollout.md) retires it: the lag measured elapsed time rather than health, nothing read the result, and it made the host holding the data the host least able to receive a considered change. Protection now happens at activation on each host instead.
@@ -22,13 +22,13 @@ The laptop follows `deploy` too, but never switches on its own: it builds in the
 
 ## The workflows
 
-| Workflow             | When                        | Does                                                               |
-| -------------------- | --------------------------- | ------------------------------------------------------------------ |
-| `ci.yml`             | every PR and push to master | builds all three hosts, runs each check in `checks/` on its own runner, lints, fast-forwards `deploy` |
-| `flake-update.yml`   | daily, 15:00 UTC            | `nix flake update`, per-host closure diff, PR, auto-merge on green |
-| `package-update.yml` | Mondays, 03:00 UTC          | runs each package's own updater, one PR per package, auto-merged only when the package opts in via `passthru.autoMerge` |
-| `dependabot-auto-merge.yml` | every Dependabot PR  | schedules the merge; `nixos ci` is still the gate                  |
-| `automerge-nudge.yml`       | push to master + 15-min cron | rebases the first stale auto-merge PR on a `deps/*` branch onto `master` |
+| Workflow                    | When                         | Does                                                                                                                    |
+| --------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`                    | every PR and push to master  | builds all three hosts, runs each check in `checks/` on its own runner, lints, fast-forwards `deploy`                   |
+| `flake-update.yml`          | daily, 15:00 UTC             | `nix flake update`, per-host closure diff, PR, auto-merge on green                                                      |
+| `package-update.yml`        | Mondays, 03:00 UTC           | runs each package's own updater, one PR per package, auto-merged only when the package opts in via `passthru.autoMerge` |
+| `dependabot-auto-merge.yml` | every Dependabot PR          | schedules the merge; `nixos ci` is still the gate                                                                       |
+| `automerge-nudge.yml`       | push to master + 15-min cron | rebases the first stale auto-merge PR on a `deps/*` branch onto `master`                                                |
 
 CI builds are pushed to a [Cachix](https://cachix.org) cache that the hosts substitute from, so a closure is built once rather than once per machine.
 
@@ -121,12 +121,12 @@ Naming the shards rather than discovering them is what keeps that saving: discov
 
 Hosts export deployment state as node_exporter textfile metrics from `nixos-upgrade.service`'s `ExecStopPost` (see `modules/services/monitoring/deploy-metrics.nix`), alerted through the Prometheus and Alertmanager stack that already runs on both servers.
 
-| Alert                | Catches                                                  |
-| -------------------- | -------------------------------------------------------- |
-| `NixosDeployFailed`  | the upgrade ran and failed                               |
-| `NixosDeployStale`   | **no upgrade has run in 48 hours**                       |
-| `NixosRebootPending` | a generation is staged but never activated               |
-| `NixosVerifyFailed`  | the upgrade succeeded and the generation came up broken  |
+| Alert                | Catches                                                    |
+| -------------------- | ---------------------------------------------------------- |
+| `NixosDeployFailed`  | the upgrade ran and failed                                 |
+| `NixosDeployStale`   | **no upgrade has run in 48 hours**                         |
+| `NixosRebootPending` | a generation is staged but never activated                 |
+| `NixosVerifyFailed`  | the upgrade succeeded and the generation came up broken    |
 | `NixosRolledBack`    | a host reverted itself, and is no longer tracking `deploy` |
 
 The middle one is the point of the exercise. A host that stops upgrading raises nothing else - no unit fails, no probe drops, it simply falls behind in silence.

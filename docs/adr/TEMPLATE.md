@@ -3,7 +3,7 @@
 - **Status:** Proposed | Accepted | Superseded by ADR XXXX
 - **Date:** YYYY-MM-DD
 - **Related Artefacts:** (Optional)
-  - Verb: Artefact_Name
+    - Verb: Artefact_Name
 
 ## Context
 

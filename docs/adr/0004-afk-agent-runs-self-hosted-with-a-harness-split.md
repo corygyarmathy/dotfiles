@@ -3,8 +3,8 @@
 - **Status:** Proposed. The pipeline runs on homelab01 as a working prototype, not yet a settled design; three clauses are amended by later ADRs. [ADR 0006](0006-the-runner-is-a-github-app.md): §4's credential is an App installation token rather than a fine-grained PAT - its no-second-account clause is upheld rather than reversed, because a GitHub App is not a second account; and §3's claim marker is a label rather than an assignee, because an App cannot hold an assignment. [ADR 0007](0007-the-pull-request-opens-before-the-review.md): §6's closing "never a PR" is narrowed - the pull request now opens before the review, so a run that fails after the push leaves one open, and the same section's retry-in-the-same-session rule is extended to a red CI run. Every other decision here, §9 included, stands.
 - **Date:** 2026-09-07
 - **Related Artefacts:**
-  - Implemented by: `modules/services/afk-agent.nix`, which owns this design's parameters - counts, prefixes, paths and option names; this ADR states decisions only. The measured evidence behind them is in `docs/research/afk-agent-pilot-findings.md`.
-  - Depends on: `docs/agents/issue-tracker.md` (the `ready-for-agent` label and claim convention), `.github/workflows/README.md` (the `FLAKE_UPDATE_TOKEN` precedent this follows), `modules/services/cloudflare-tunnel.nix` (considered, not used)
+    - Implemented by: `modules/services/afk-agent.nix`, which owns this design's parameters - counts, prefixes, paths and option names; this ADR states decisions only. The measured evidence behind them is in `docs/research/afk-agent-pilot-findings.md`.
+    - Depends on: `docs/agents/issue-tracker.md` (the `ready-for-agent` label and claim convention), `.github/workflows/README.md` (the `FLAKE_UPDATE_TOKEN` precedent this follows), `modules/services/cloudflare-tunnel.nix` (considered, not used)
 
 ## Context
 
@@ -20,7 +20,7 @@ Each decision below is stated without its implementation parameters - counts, pr
 
 **1. The AFK executor runs on `homelab01`**, not GitHub Actions and not a Claude cloud routine. Chosen for control and customizability - a value in its own right, not a cost argument, since Actions minutes are free either way. `homelab01` over `homelab02` because it's the compute-role box; `homelab02` carries the storage/download pipeline (already the site of one prior incident) and shouldn't also carry an unproven agent runner.
 
-**2. Harness is split by phase.** Claude Code, on the existing Pro subscription, stays for every *interactive* stage - grilling, planning, spec, ticket generation - where subscription terms are unambiguous. The unattended executor runs OpenCode against DeepSeek V4 via OpenCode Go. This sidesteps the Claude subscription ambiguity entirely rather than resolving it, and costs less. Which DeepSeek variant (or another model) wins is deliberately left open, to be settled by a measured pilot, not decided here - see `docs/research/afk-agent-pilot-findings.md`.
+**2. Harness is split by phase.** Claude Code, on the existing Pro subscription, stays for every _interactive_ stage - grilling, planning, spec, ticket generation - where subscription terms are unambiguous. The unattended executor runs OpenCode against DeepSeek V4 via OpenCode Go. This sidesteps the Claude subscription ambiguity entirely rather than resolving it, and costs less. Which DeepSeek variant (or another model) wins is deliberately left open, to be settled by a measured pilot, not decided here - see `docs/research/afk-agent-pilot-findings.md`.
 
 **3. Trigger is a polling systemd timer**, not a GitHub webhook, even though the existing Cloudflare tunnel would make a webhook receiver feasible. The timer reuses the claim convention `docs/agents/issue-tracker.md` already defines (`gh issue edit <n> --add-assignee @me`) to avoid double-processing, with no new signature-verification code or inbound surface.
 
@@ -34,7 +34,7 @@ Each decision below is stated without its implementation parameters - counts, pr
 
 **8. Execution is serial while the pipeline is unproven.** Concurrent worktrees were considered and deferred - not enough AFK-eligible tickets exist yet to need the throughput, and serial execution keeps "what's running right now" trivial to reason about. The concurrency level is a parameter, owned by `modules/services/afk-agent.nix`; the reason to start at one is that an unproven runner should fail in one place at a time.
 
-**9. Merge stays a human act.** No auto-merge for ticket-driven AFK work, full stop, regardless of how much trust the pipeline earns. (Fleet-incident-triggered auto-remediation was raised as a plausible *future*, narrower case - explicitly not decided here.)
+**9. Merge stays a human act.** No auto-merge for ticket-driven AFK work, full stop, regardless of how much trust the pipeline earns. (Fleet-incident-triggered auto-remediation was raised as a plausible _future_, narrower case - explicitly not decided here.)
 
 ## Consequences
 

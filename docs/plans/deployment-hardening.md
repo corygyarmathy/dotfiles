@@ -6,21 +6,21 @@ Already in place, and assumed by everything below: the deployment metrics in `mo
 
 Six pieces originally; five now, since service confinement moved out to [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md), plus two added on 2026-08-24, one parked on 2026-08-30, and two added on 2026-08-31. The first two are small and independent; the rest can proceed in any order once they are in.
 
-| #   | Item                      | Size    | Status                                                   |
-| --- | ------------------------- | ------- | -------------------------------------------------------- |
-| 1   | Boot counting             | ~1 line | **done** 2026-08-16 - all three hosts                    |
-| 2   | Retire `deploy-stable`    | small   | **done** 2026-08-16                                      |
-| 3   | Health-gated activation   | medium  | **landed, not armed** - reports, does not yet roll back  |
-| 4   | Behaviour tests           | large   | **harness + 3 tests landed** - `media-stack` waits on the container move |
-| 5   | Service confinement       | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md) |
-| 6   | `deploy-rs` interactively | small   | **done** 2026-08-30 - `homelab01` deployed end to end with `magicRollback` confirmation; `homelab02` still needs its bootstrap switch + first deploy |
-| 8   | Download-root canary      | small   | **done** 2026-08-30 - sentinel, alert, guard and tests landed |
-| 9   | Reachability from outside | small   | done - cross-host probes via the peer's public endpoints |
-| 10  | Deploy-user sudo on SSH keys | small | **done** 2026-08-31 - wheel dropped, sudo scoped to the activation path, password retired, dedicated `deploy@xps15` key landed, `checks/deploy-sudo` in the gate; the live `deploy` runs on both hosts remain |
-| 11  | Split the backup transport account | small | not started - move `restic-backup` off `coryg` onto a dedicated unprivileged `backup` account |
-| 12  | Hardware-backed admin key | small | not started - optional; move the human admin key to a hardware token |
+| #   | Item                               | Size    | Status                                                                                                                                                                                                        |
+| --- | ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Boot counting                      | ~1 line | **done** 2026-08-16 - all three hosts                                                                                                                                                                         |
+| 2   | Retire `deploy-stable`             | small   | **done** 2026-08-16                                                                                                                                                                                           |
+| 3   | Health-gated activation            | medium  | **landed, not armed** - reports, does not yet roll back                                                                                                                                                       |
+| 4   | Behaviour tests                    | large   | **harness + 3 tests landed** - `media-stack` waits on the container move                                                                                                                                      |
+| 5   | Service confinement                | -       | **moved out** - [ADR 0003](../adr/0003-service-confinement-is-bounded-by-hardlinking.md)                                                                                                                      |
+| 6   | `deploy-rs` interactively          | small   | **done** 2026-08-30 - `homelab01` deployed end to end with `magicRollback` confirmation; `homelab02` still needs its bootstrap switch + first deploy                                                          |
+| 8   | Download-root canary               | small   | **done** 2026-08-30 - sentinel, alert, guard and tests landed                                                                                                                                                 |
+| 9   | Reachability from outside          | small   | done - cross-host probes via the peer's public endpoints                                                                                                                                                      |
+| 10  | Deploy-user sudo on SSH keys       | small   | **done** 2026-08-31 - wheel dropped, sudo scoped to the activation path, password retired, dedicated `deploy@xps15` key landed, `checks/deploy-sudo` in the gate; the live `deploy` runs on both hosts remain |
+| 11  | Split the backup transport account | small   | not started - move `restic-backup` off `coryg` onto a dedicated unprivileged `backup` account                                                                                                                 |
+| 12  | Hardware-backed admin key          | small   | not started - optional; move the human admin key to a hardware token                                                                                                                                          |
 
-### Where this stands, 2026-08-16
+## Where this stands, 2026-08-16
 
 Items 1-4 all moved today, across PRs #22-#32. What remains before the rest can be called finished:
 
@@ -305,13 +305,13 @@ The third is the most faithful and the most work. Start with the second and see 
 
 ### Candidates, in order of value
 
-| Test             | Asserts                                                             | Why it earns its place                                                           | Status |
-| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------ |
-| ~~`data-safety`~~ | ~~a canary file in the shared download root survives service startup~~ | **struck** - the assertion is vacuous; see below                              | struck |
-| `reverse-proxy`  | Caddy starts, routes to a stub backend, serves 200                  | every public service depends on it; a routing regression is invisible to a build | **done** |
-| `monitoring`     | Prometheus starts, loads rules, scrapes a target                    | rule and config errors only surface at activation                                | **done** |
-| `digital-garden` | the generator builds a vault and the result is served                | the failure mode is a _successful_ build and an empty site                       | **done** |
-| `media-stack`    | the arr services reach their ports                                  | the largest module, and the one with the most moving parts                       | waiting on the move off containers |
+| Test              | Asserts                                                                | Why it earns its place                                                           | Status                             |
+| ----------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
+| ~~`data-safety`~~ | ~~a canary file in the shared download root survives service startup~~ | **struck** - the assertion is vacuous; see below                                 | struck                             |
+| `reverse-proxy`   | Caddy starts, routes to a stub backend, serves 200                     | every public service depends on it; a routing regression is invisible to a build | **done**                           |
+| `monitoring`      | Prometheus starts, loads rules, scrapes a target                       | rule and config errors only surface at activation                                | **done**                           |
+| `digital-garden`  | the generator builds a vault and the result is served                  | the failure mode is a _successful_ build and an empty site                       | **done**                           |
+| `media-stack`     | the arr services reach their ports                                     | the largest module, and the one with the most moving parts                       | waiting on the move off containers |
 
 The original ordering put `data-safety` first, and ADR 0003 sharpened the case: the recent data loss was one root cause - LazyLibrarian's PostProcessor pointed at the shared download root - firing twice, two days apart, for 3.68 TiB, and ADR 0003 established that no arrangement of bind mounts can prevent a recurrence for the services that hardlink, because the kernel will not link across a mount boundary. The conclusion drawn from that - _therefore the test is the only thing that covers it_ - did not follow, and is corrected below. It is a good example of a real argument for needing something being mistaken for evidence that the proposed something works.
 
@@ -455,11 +455,11 @@ The assertions are written the other way round from the obvious ones. A test tha
 
 **Every assertion here was checked against a deliberate break**, because on this test more than the others a false pass is the expected failure mode:
 
-| Break | Host build | Test | Caught by |
-| -------------------------------------------------------- | ---------- | ----- | ---------------------------------------------- |
-| `-d ${stateDir}/content` → `-d ${vaultDir}` | exit 0 | fails | flattening/URL assertions |
-| fixture note flipped to `publish: true` | - | fails | staging tree, then the leak grep |
-| `cat … >> custom.scss` → `cat … > custom.scss` | exit 0 | fails | `.flex-component` missing from the served CSS |
+| Break                                          | Host build | Test  | Caught by                                     |
+| ---------------------------------------------- | ---------- | ----- | --------------------------------------------- |
+| `-d ${stateDir}/content` → `-d ${vaultDir}`    | exit 0     | fails | flattening/URL assertions                     |
+| fixture note flipped to `publish: true`        | -          | fails | staging tree, then the leak grep              |
+| `cat … >> custom.scss` → `cat … > custom.scss` | exit 0     | fails | `.flex-component` missing from the served CSS |
 
 Two of those three build perfectly and would have merged, deployed and served.
 

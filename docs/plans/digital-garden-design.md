@@ -2,29 +2,29 @@
 
 Status: proposed 2026-08-27; decisions taken the same day, see _Decisions, 2026-08-27_ below. Extended 2026-08-31 with items 13-20, which came out of a design session held against live prototypes rather than against this document; see _Decisions, 2026-08-31_. Items 1, 2 and 4 were the agreed first pass; 5, 6 and 10 followed on the same day. Item 11 came out of a review on 2026-08-28 and is done. Item 3, the only item that fixed something broken today, was taken and is done on 2026-08-30. Item 16, the callout icons, was taken and is done on 2026-08-31 — the first of the 2026-08-31 set, per the sequencing that lets a small dependency-free item fill a short session. Item 18, the bonsai, followed on the same day, in the two sessions it was scoped as: the generator is done and on the landing page, and the taste pass is done after it — it also took item 15's filter half, because the tree's foliage needs the topic before it can be coloured. Item 15, the growth marks, topic hue and link marks, was taken next and is done: the sprite, the link marks and the /notes/ entries, reading the topic the bonsai's note_topic already writes. Item 19, the home page, is done after that and is the last item that needed the tree. Item 17, the margin on every note, was taken next and is done on 2026-09-01, in two passes: a first cut that drew the section map as a proportional vertical strip, and a redesign after looking at it that put the map's size and its labels on separate axes — see the shipped note under item 17 for why the first shape could not be tuned into the second. Two ideas asked for — a Kanagawa palette and a right-hand navigation column — plus seven more that came out of looking at what the site actually serves today. Everything below is scoped against `modules/services/digital-garden/lib/hugo/`, which is the whole design: four layouts, six partials, three render hooks and a 488-line stylesheet. Item 18's three open ideas were taken on 2026-09-04, together with a fourth that was not on the list — the growth animation, which now snaps each character into place rather than fading it up; two of the three shipped and the fringe pruning is declined on measurements, see _The three taken, and a fourth_ under item 18. Item 2's light ground was reversed on 2026-09-02 — the lightening it shipped with is gone and the light theme is Lotus as Kanagawa specifies it; see the reversal note under item 2. There is no theme underneath to fight, so every item here is an edit to files this repository owns.
 
-| #   | Item                                | Size   | Depends on | Status      |
-| --- | ----------------------------------- | ------ | ---------- | ----------- |
-| 1   | Rendering fixture + screenshot loop | small  | -          | **done** 2026-08-27 |
-| 2   | Kanagawa palette                    | medium | 1          | **done** 2026-08-27; light ground un-lightened 2026-09-02 |
-| 3   | An index of everything published    | small  | -          | **done** 2026-08-30 |
-| 4   | Right-hand rail: contents, backlinks| medium | 1          | **done** 2026-08-27 |
-| 5   | Link and image treatment            | small  | 2          | **done** 2026-08-27; the image mat reverted the same day |
-| 6   | Typography                          | small  | 2          | built and **reverted** 2026-08-27 |
-| 7   | Wikilink hover previews             | medium | -          | optional, and less urgent after 15 |
-| 8   | Footnotes as sidenotes              | large  | 4          | **done** 2026-08-28 (#79) |
-| 9   | Reading time in the dateline        | small  | -          | **absorbed into 17** |
-| 10  | Polish: print, selection, motion    | small  | 2          | **done** 2026-08-27 |
-| 11  | Rendering gaps found by review      | small  | 1          | **done** 2026-08-28 |
-| 12  | The dateline in the empty margin    | small  | 4          | **superseded by 17** |
-| 13  | Rename-stable ledger (defect)       | small  | -          | **done** 2026-08-31 (#118) |
-| 14  | Maturity: model, counter, override  | medium | 13         | **done** 2026-08-31 (#121) |
-| 15  | Growth marks, topic hue, link marks | small  | 14         | **done** 2026-08-31; hue ring 2026-09-01 |
-| 16  | Callout icons on Obsidian's mapping | small  | -          | **done** 2026-08-31 |
-| 17  | A margin on every note              | medium | 14, 15     | **done** 2026-09-01 |
-| 18  | The bonsai                          | large  | 14         | **done** 2026-08-31; rebuilt 2026-09-01; grows and reseeds 2026-09-03; snaps rather than fades, and grows from the tips, 2026-09-04 |
-| 19  | The home page, composed once        | small  | 18         | **done** 2026-08-31; anchored 2026-09-01 |
-| 20  | Ambient Life on the 404             | small  | -          | **done** 2026-08-31 |
-| -   | Graph view                          | -      | -          | **rejected**, see below; the bonsai is not a revisit |
+| #   | Item                                 | Size   | Depends on | Status                                                                                                                              |
+| --- | ------------------------------------ | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Rendering fixture + screenshot loop  | small  | -          | **done** 2026-08-27                                                                                                                 |
+| 2   | Kanagawa palette                     | medium | 1          | **done** 2026-08-27; light ground un-lightened 2026-09-02                                                                           |
+| 3   | An index of everything published     | small  | -          | **done** 2026-08-30                                                                                                                 |
+| 4   | Right-hand rail: contents, backlinks | medium | 1          | **done** 2026-08-27                                                                                                                 |
+| 5   | Link and image treatment             | small  | 2          | **done** 2026-08-27; the image mat reverted the same day                                                                            |
+| 6   | Typography                           | small  | 2          | built and **reverted** 2026-08-27                                                                                                   |
+| 7   | Wikilink hover previews              | medium | -          | optional, and less urgent after 15                                                                                                  |
+| 8   | Footnotes as sidenotes               | large  | 4          | **done** 2026-08-28 (#79)                                                                                                           |
+| 9   | Reading time in the dateline         | small  | -          | **absorbed into 17**                                                                                                                |
+| 10  | Polish: print, selection, motion     | small  | 2          | **done** 2026-08-27                                                                                                                 |
+| 11  | Rendering gaps found by review       | small  | 1          | **done** 2026-08-28                                                                                                                 |
+| 12  | The dateline in the empty margin     | small  | 4          | **superseded by 17**                                                                                                                |
+| 13  | Rename-stable ledger (defect)        | small  | -          | **done** 2026-08-31 (#118)                                                                                                          |
+| 14  | Maturity: model, counter, override   | medium | 13         | **done** 2026-08-31 (#121)                                                                                                          |
+| 15  | Growth marks, topic hue, link marks  | small  | 14         | **done** 2026-08-31; hue ring 2026-09-01                                                                                            |
+| 16  | Callout icons on Obsidian's mapping  | small  | -          | **done** 2026-08-31                                                                                                                 |
+| 17  | A margin on every note               | medium | 14, 15     | **done** 2026-09-01                                                                                                                 |
+| 18  | The bonsai                           | large  | 14         | **done** 2026-08-31; rebuilt 2026-09-01; grows and reseeds 2026-09-03; snaps rather than fades, and grows from the tips, 2026-09-04 |
+| 19  | The home page, composed once         | small  | 18         | **done** 2026-08-31; anchored 2026-09-01                                                                                            |
+| 20  | Ambient Life on the 404              | small  | -          | **done** 2026-08-31                                                                                                                 |
+| -   | Graph view                           | -      | -          | **rejected**, see below; the bonsai is not a revisit                                                                                |
 
 ## Decisions, 2026-08-31
 
@@ -49,12 +49,13 @@ Taken against the rendered comparisons rather than the swatches, which is the po
 - **Headings stay neutral.** `fujiWhite` in dark, `lotusInk2` in light. No `carpYellow`.
 - **One hue per role, per the official scheme.** The first pass spent `--accent` (`crystalBlue`/`lotusBlue4`) everywhere that wanted emphasis, which read as a wall of blue across the masthead, every link, the default callout and the rail's "you are here". The official `themes.lua` never collapses roles like that — `fun`, `statement`, `diag.info` and visual selection each have their own hue, consistently in Wave and Lotus. So `--accent` was withdrawn to the roles the scheme gives it and the others were reassigned, keeping one hue per role in both themes (details below). This is the opposite of "fruit salad": fruit salad is arbitrary colouring, and this is systematic.**
 
-  - **Links stay `--accent` (crystalBlue / lotusBlue4).** Links are the site's `fun` — the official scheme's function colour — and the affordance must be consistent. Unchanged.
-  - **The masthead title becomes `--brand` (oniViolet / lotusViolet4).** The `statement`/`keyword` role, and this repository's own established secondary accent (rofi's `accent2`, waybar's `secondary`). A single site title reading as brand is not the "headings stay neutral" case — that decision was made for notes with twenty-nine headings, not a masthead, and the title is chrome rather than prose.
-  - **Note/info/todo callouts become `--callout-accent` teal (dragonBlue / lotusTeal3).** This is the official `diag.info` hue; the first pass had mapped note to crystalBlue, which was _less_ faithful than the scheme itself. The commonest callout now reads as its own colour rather than as "another link".
-  - **The rail's current section is text, not a tint, and has its own hue in Wave.** The first attempt made "you are here" a selection ground (`bg_visual` waveBlue2 / lotusViolet3) with `--strong` text, but the site's hover already turns the rail link to the text colour, so a tinted but colourless active row lost the active state on hover. Text is the better carrier than a ground here, with the two states ordered deliberately: `.rail a.current` is `light-dark(#4d699b, #e6c384)` (lotusBlue4 / carpYellow), and `.rail a:hover` is declared **after** it (equal specificity, so it wins the tie) — a section under the pointer goes to the text colour whether it is active or not, so hover is a momentary cue and never claims to be the section being read. The active section originally shared `--accent` (`crystalBlue` in Wave); when Wave's `--muted` moved to `springViolet1` it became only 1.18:1 from crystalBlue, which are the same family of pale cool pastel, so the active link stopped reading. carpYellow is the warm side of the wheel from both the purple rail text and the blue prose links (1.94:1 from muted, 9.73:1 on the dark ground, 1.64:1 from crystalBlue), giving the section-being-read its own role-group hue in Wave while Lotus keeps lotusBlue4. carpYellow is already the dark side of the question/help callout on pages that carry one — a role-group reuse in Kanagawa's own spirit, where one hue can name several meanings; it reads as emphasis in both places, never as a link.
+    - **Links stay `--accent` (crystalBlue / lotusBlue4).** Links are the site's `fun` — the official scheme's function colour — and the affordance must be consistent. Unchanged.
+    - **The masthead title becomes `--brand` (oniViolet / lotusViolet4).** The `statement`/`keyword` role, and this repository's own established secondary accent (rofi's `accent2`, waybar's `secondary`). A single site title reading as brand is not the "headings stay neutral" case — that decision was made for notes with twenty-nine headings, not a masthead, and the title is chrome rather than prose.
+    - **Note/info/todo callouts become `--callout-accent` teal (dragonBlue / lotusTeal3).** This is the official `diag.info` hue; the first pass had mapped note to crystalBlue, which was _less_ faithful than the scheme itself. The commonest callout now reads as its own colour rather than as "another link".
+    - **The rail's current section is text, not a tint, and has its own hue in Wave.** The first attempt made "you are here" a selection ground (`bg_visual` waveBlue2 / lotusViolet3) with `--strong` text, but the site's hover already turns the rail link to the text colour, so a tinted but colourless active row lost the active state on hover. Text is the better carrier than a ground here, with the two states ordered deliberately: `.rail a.current` is `light-dark(#4d699b, #e6c384)` (lotusBlue4 / carpYellow), and `.rail a:hover` is declared **after** it (equal specificity, so it wins the tie) — a section under the pointer goes to the text colour whether it is active or not, so hover is a momentary cue and never claims to be the section being read. The active section originally shared `--accent` (`crystalBlue` in Wave); when Wave's `--muted` moved to `springViolet1` it became only 1.18:1 from crystalBlue, which are the same family of pale cool pastel, so the active link stopped reading. carpYellow is the warm side of the wheel from both the purple rail text and the blue prose links (1.94:1 from muted, 9.73:1 on the dark ground, 1.64:1 from crystalBlue), giving the section-being-read its own role-group hue in Wave while Lotus keeps lotusBlue4. carpYellow is already the dark side of the question/help callout on pages that carry one — a role-group reuse in Kanagawa's own spirit, where one hue can name several meanings; it reads as emphasis in both places, never as a link.
 
-  The violet/teal choices sat next to each other fine on the rendered pages, and the `info` teal reads distinctly from the `abstract` aqua once both are on screen, so the collision flagged below did not materialise.
+    The violet/teal choices sat next to each other fine on the rendered pages, and the `info` teal reads distinctly from the `abstract` aqua once both are on screen, so the collision flagged below did not materialise.
+
 - **The first pass is items 1, 2 and 4.** The fixture, the palette, the rail. Item 3 is not dropped — it is still the only item that fixes something broken today — but it is not in this pass.
 - **Typography goes serif for headings and stays on the system sans for body.** One vendored face, and the body text keeps matching the editor. Item 6 is agreed in direction; it is sequenced after item 2 rather than scheduled now, because a face chosen against the old palette would be chosen twice. **Reversed the same day, on the rendered pages** — see item 6. The direction was agreed in the abstract and did not survive being looked at; the site is back on the system stack throughout.
 
@@ -111,16 +112,16 @@ Kanagawa is two palettes: Wave for dark, Lotus for light. The values are availab
 
 Proposed mapping:
 
-| Role        | Wave (dark)             | Lotus (light)                 |
-| ----------- | ----------------------- | ----------------------------- |
-| `--bg`      | `#1F1F28` sumiInk3      | `#f2ecbc` lotusWhite3         |
-| `--surface` | `#2A2A37` sumiInk4      | `#e5ddb0` lotusWhite2         |
-| `--border`  | `#363646` sumiInk5      | `#d5cea3` lotusWhite0         |
-| `--muted`   | `#727169` fujiGray      | `#716e61` lotusGray2          |
-| `--text`    | `#DCD7BA` fujiWhite     | `#545464` lotusInk1           |
-| `--strong`  | `#DCD7BA` fujiWhite     | `#43436c` lotusInk2           |
-| `--accent`  | `#7E9CD8` crystalBlue   | `#4d699b` lotusBlue4          |
-| `--code-bg` | `#16161D` sumiInk0      | `#dcd5ac` lotusWhite1         |
+| Role        | Wave (dark)           | Lotus (light)         |
+| ----------- | --------------------- | --------------------- |
+| `--bg`      | `#1F1F28` sumiInk3    | `#f2ecbc` lotusWhite3 |
+| `--surface` | `#2A2A37` sumiInk4    | `#e5ddb0` lotusWhite2 |
+| `--border`  | `#363646` sumiInk5    | `#d5cea3` lotusWhite0 |
+| `--muted`   | `#727169` fujiGray    | `#716e61` lotusGray2  |
+| `--text`    | `#DCD7BA` fujiWhite   | `#545464` lotusInk1   |
+| `--strong`  | `#DCD7BA` fujiWhite   | `#43436c` lotusInk2   |
+| `--accent`  | `#7E9CD8` crystalBlue | `#4d699b` lotusBlue4  |
+| `--code-bg` | `#16161D` sumiInk0    | `#dcd5ac` lotusWhite1 |
 
 Callouts map one-for-one onto Kanagawa's semantic hues — crystalBlue for note, waveAqua2 for abstract, springGreen for tip, oniViolet for important, carpYellow for question, roninYellow for warning, waveRed for failure, fujiGray for quote — with the Lotus counterpart in each `light-dark()` pair. `==highlight==` becomes winterYellow / lotusYellow4, and `::selection` becomes waveBlue2 / lotusBlue1, which the site does not currently style at all.
 
@@ -468,13 +469,13 @@ Nothing on the site says how developed a note is, and four separate items downst
 
 A score in `publish-filter.py`, emitted into frontmatter as `maturity` (the stage) and `maturity_score` (the number, for debugging and for the margin). Components, with the weights the prototypes were tuned to:
 
-| Signal | Weight | Note |
-| --- | --- | --- |
-| Length | `min(words / 800, 1) * 2` | Saturating, not linear |
-| Backlinks | `1.2` each | The only signal that comes from outside the note |
-| Forward links | `0.5` each | Resolved against the published set |
-| Sections | `+1` if `##` count >= 3 | Structured rather than dumped |
-| Rewrites | `min(n, 4) * 0.35` | Commits whose diff exceeded 15 lines |
+| Signal        | Weight                    | Note                                             |
+| ------------- | ------------------------- | ------------------------------------------------ |
+| Length        | `min(words / 800, 1) * 2` | Saturating, not linear                           |
+| Backlinks     | `1.2` each                | The only signal that comes from outside the note |
+| Forward links | `0.5` each                | Resolved against the published set               |
+| Sections      | `+1` if `##` count >= 3   | Structured rather than dumped                    |
+| Rewrites      | `min(n, 4) * 0.35`        | Commits whose diff exceeded 15 lines             |
 
 Stages: sapling at `1.5`, evergreen at `5.0`. On the vault as it stands that gives six seedlings, eleven saplings and one evergreen.
 
@@ -781,10 +782,10 @@ The crown now gets **a span of its own that the pads divide by cell count** — 
 
 Both halves of the placement carry it, because either alone is too coarse at three notes a plate: which pad a note lands on, and where in that pad. The pads are dealt in order of **how far their own foliage sits from the foot of the trunk**, and that measure was chosen by building the two obvious alternatives and measuring all three against the drawn grid over forty-eight gardens — eight vault sizes, six gardens each:
 
-| pads ordered by | axis strength |
-|---|---|
-| the branch's height on the trunk | rho +0.57 |
-| path distance along the wood | rho +0.33 |
+| pads ordered by                      | axis strength |
+| ------------------------------------ | ------------- |
+| the branch's height on the trunk     | rho +0.57     |
+| path distance along the wood         | rho +0.33     |
 | where the pad's own foliage ended up | **rho +0.74** |
 
 Height loses because a low branch that reaches right across the crown ends further out than a high one that barely leaves it. Path distance loses by more, and for a subtler reason: it orders the plates by their _anchors_, and a pad is not where its branch stops — it is a mass of cells spread around that point, which can sit mostly inboard of it. Inside a pad, the seed points are strung along the pad's own outward axis in rank order rather than at an angle off the centre, which meant nothing.
@@ -797,12 +798,12 @@ Shipped, the axis measures **rho +0.74** overall, from +0.57 at eight notes to +
 
 Measured over twenty-four seeds at nineteen notes, which is what separates two changes that look interchangeable and are not:
 
-| | bare trunk width | upright, not a slash |
-|---|---|---|
-| today | 2.75 cells | 43% |
-| anchoring the taper alone | 3.41 cells | **36%** |
-| solid core alone | 2.75 cells | 53% |
-| both | **3.41 cells** | **62%** |
+|                           | bare trunk width | upright, not a slash |
+| ------------------------- | ---------------- | -------------------- |
+| today                     | 2.75 cells       | 43%                  |
+| anchoring the taper alone | 3.41 cells       | **36%**              |
+| solid core alone          | 2.75 cells       | 53%                  |
+| both                      | **3.41 cells**   | **62%**              |
 
 Anchoring the taper alone makes the trunk _wider and more obviously a hatch_, which is exactly why the 2026-09-03 session found that it "barely moved". The two are complementary and neither alone does the job. Shipped together, and **for no change to the picture's proportions at any vault size** — which is the reason the longer `clear` was measured and declined. It buys one more row of bare trunk (2.9 to 3.9) and costs the on-screen aspect at nineteen notes 1.40:1 → 1.32:1 and at the three-note fixture 1.26:1 → **1.15:1**, which is most of the way back to the square that item 19's taste pass raised `CANOPY_ASPECT` to escape. Two numbers if it is ever wanted: `clear = 1.5 + min(crown_h, 9.0) * 0.50`.
 
