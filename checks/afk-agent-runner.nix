@@ -410,6 +410,7 @@ pkgs.runCommand "check-afk-agent-runner"
     #!/bin/sh
     is_review=no
     is_revise=no
+    is_rebase=no
     for a in "$@"; do
       case "$a" in
         "Review the work on this branch."*) is_review=yes ;;
@@ -422,6 +423,11 @@ pkgs.runCommand "check-afk-agent-runner"
         "Address the human review comments"*) is_revise=yes ;;
         "Revision attempt"*) is_revise=yes ;;
         "The revision on this branch"*) is_revise=yes ;;
+        # The rebase-conflict session (#242): detected on the payload like
+        # the two above, so a runner that stopped addressing the model as
+        # a conflict resolution would fail the cases below rather than
+        # quietly fall through to the implement path and pass.
+        "Finish the rebase"*) is_rebase=yes ;;
       esac
     done
 
@@ -491,6 +497,37 @@ pkgs.runCommand "check-afk-agent-runner"
           fi
           exit 0
         fi
+        if [ "$is_rebase" = yes ]; then
+          # The conflict session (#242): one run, no retry, so the plan is
+          # a single step rather than one per attempt. Recorded like the
+          # review's, one argument per line, with the overlay and the
+          # working directory beside it - every assertion below about this
+          # session is read back from here rather than from what it said.
+          printf '%s\n' "$@" > "$OC_STATE/rebase-args"
+          printf '%s\n' "''${OPENCODE_CONFIG_CONTENT:-}" > "$OC_STATE/rebase-overlay"
+          pwd > "$OC_STATE/rebase-cwd"
+          plan="$(cat "$OC_REBASE_PLAN" 2>/dev/null)"
+          [ -n "$plan" ] || plan=resolve
+          case "$plan" in
+            # What the skill's steps add up to here: see the state, resolve
+            # the hunk keeping both intents, and continue the rebase. The
+            # two content lines are the same two the `advance` and
+            # `touch-readme` implement steps write - one to master, one to
+            # the branch - so the resolution is the honest combine and the
+            # cases below can assert both survived.
+            resolve) printf 'fixture\nlanded on master meanwhile\ntouched by the ticket\n' > README.md
+                     git add -A
+                     git -c core.editor=true rebase --continue ;;
+            # An exited session that left the replay where it stopped: the
+            # runner must refuse this, not push past it.
+            none)   : ;;
+            # The abort dressed up as a resolution: a clean tree, a finished
+            # session, and a branch exactly as stale as before.
+            abort)  git rebase --abort ;;
+            *) echo "mock opencode: no rebase plan step $plan" >&2; exit 64 ;;
+          esac
+          exit 0
+        fi
         n=$(( $(cat "$OC_STATE/attempts" 2>/dev/null || echo 0) + 1 ))
         echo "$n" > "$OC_STATE/attempts"
         printf '%s\n' "$@" > "$OC_STATE/args-$n"
@@ -509,6 +546,21 @@ pkgs.runCommand "check-afk-agent-runner"
           broken) echo x > BROKEN;    git add -A; git commit -qm "afk: broken" ;;
           repair) git rm -q BROKEN;               git commit -qm "afk: repair" ;;
           none)   : ;;
+          # The world moving underneath the ticket (#242): another account
+          # lands a commit on master while this run works. The session this
+          # stands in for never pushes - the tracker verbs are denied to it
+          # - so this is the harness playing everybody else, not the model.
+          # It commits nothing in the worktree, which is what makes it the
+          # first step of a two-attempt plan rather than a whole attempt.
+          advance) rm -rf "$OC_STATE/advance"
+                   git clone -q "$CI_ORIGIN" "$OC_STATE/advance"
+                   printf 'landed on master meanwhile\n' >> "$OC_STATE/advance/README.md"
+                   git -C "$OC_STATE/advance" commit -qam "afk: land on master meanwhile"
+                   git -C "$OC_STATE/advance" push -q origin master ;;
+          # The branch-side half of a conflict: the ticket's own commit
+          # touches the same file the advance above did.
+          touch-readme) printf 'touched by the ticket\n' >> README.md
+                   git add -A; git commit -qm "afk: implement" ;;
           dirty)  echo a > a.txt; git add -A; git commit -qm "afk: partial"; echo b > stray.txt ;;
           tidy)   git add -A; git commit -qm "afk: tidy" ;;
           # Committed work whose session cannot be found afterwards - the one
@@ -982,9 +1034,12 @@ pkgs.runCommand "check-afk-agent-runner"
     # `plan` is one opencode step per attempt, defaulting to a single clean
     # one so that every case written before the implement stage existed still
     # reads as "the ticket got worked". `review` is the same idea for the stage
-    # after it, defaulting to a clean pass for the same reason.
+    # after it, defaulting to a clean pass for the same reason. `rebase` is
+    # the conflict session's plan (#242): a single step, defaulting to the
+    # resolution, so a case that forgets to set it still exercises the path
+    # the session is for.
     run() {
-      local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good} review=''${5:-pass} ci=''${6:-green}
+      local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good} review=''${5:-pass} ci=''${6:-green} rebase=''${7:-}
       state="$work/state/$name"
       if [ "$reuse" = "fresh" ]; then
         rm -rf "$state"
@@ -1002,6 +1057,7 @@ pkgs.runCommand "check-afk-agent-runner"
       export GH_LOG="$state/gh.log"
       export OC_STATE="$state"
       export OC_PLAN="$state/opencode.plan"
+      export OC_REBASE_PLAN="$state/rebase.plan"
       export OC_REVIEW="$review"
       export NIX_LOG="$state/nix.log"
       export CI_PLAN="$state/ci.plan"
@@ -1012,11 +1068,17 @@ pkgs.runCommand "check-afk-agent-runner"
       : > "$NTFY_LOG"
       rm -f "$state"/args-* "$state"/overlay-* "$state/attempts" "$state/title" \
         "$state"/review-* "$state/ci-polls" "$state"/pr-*-body "$state/pr-branch" \
-        "$state"/implement-saw-pr-* "$state"/revise-*
+        "$state"/implement-saw-pr-* "$state"/revise-* "$state"/rebase-* \
+        "$state"/pushed-readme
       # Unquoted on purpose: a plan is a whitespace-separated list of steps and
       # this is what turns it into one line each.
       # shellcheck disable=SC2086
       printf '%s\n' $plan > "$OC_PLAN"
+      # The conflict session's answer, one step. An empty file reads as the
+      # resolution inside the mock, the same default the review plan's
+      # `pass` is.
+      # shellcheck disable=SC2086
+      printf '%s\n' $rebase > "$OC_REBASE_PLAN"
       # The CI watch's answers, one per poll, in the same shape and for the
       # same reason. The mock repeats the last line once this runs out, so
       # "never settles" is `pending` rather than forty-five of them.
@@ -1972,6 +2034,106 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$rc" -eq 0 ] || fail "a ticket that converged on its last attempt did not reach a pull request: $(cat "$state/err.log")"
     grep -q -- "--title Unblocked at last" "$state/gh.log" \
       || fail "a multi-commit branch was not titled after its ticket: $(ghlog)"
+
+    echo "case: a base branch that moved under a clean ticket is replayed before the pull request"
+    # #242. Attempt 1 is the world moving - another account lands a commit on
+    # master while the run works - and attempt 2 is the ticket. What comes out
+    # the other end is a branch replayed onto the new tip before anything was
+    # pushed: no conflict session paid for, the gate run a second time on the
+    # tree the replay produced (attempt 2's gate and the replay's gate are the
+    # two `nix fmt` lines), and the pull request opened from a branch that is
+    # not stale.
+    run rebase-clean mixed.json fresh "advance good" pass green
+    [ "$rc" -eq 0 ] || fail "a clean replay did not finish: $(cat "$state/err.log")"
+    [ ! -s "$state/rebase-args" ] || fail "a clean replay started a conflict session: $(cat "$state/rebase-args")"
+    [ "$(grep -c "nix fmt -- --ci" "$state/nix.log")" -eq 2 ] \
+      || fail "the gate did not re-run on the replayed tree: $(grep -c "nix fmt" "$state/nix.log") gate run(s)"
+    [ "$(pushed_commits)" -eq 1 ] || fail "the replayed branch did not reach origin"
+    git -C "$work/origin.git" merge-base --is-ancestor master "refs/heads/afk/$ticket" \
+      || fail "the pushed branch is not on the new master tip - the stale pull request #242 exists to prevent"
+    grep -q "replayed onto the new master tip" "$state/out.log" \
+      || fail "a replaying run did not say what it did: $(cat "$state/out.log")"
+
+    echo "case: the base-branch comparison can see a base that did not move"
+    # The other half of the same fetch: the ordinary case, where the stage
+    # fetches, answers "nothing to replay", and no second gate is paid for.
+    run rebase-idle mixed.json fresh good pass green
+    [ "$rc" -eq 0 ] || fail "the idle case exited $rc: $(cat "$state/err.log")"
+    grep -q "nothing to replay" "$state/out.log" \
+      || fail "the comparison did not say the base had not moved: $(cat "$state/out.log")"
+    [ "$(grep -c "nix fmt -- --ci" "$state/nix.log")" -eq 1 ] \
+      || fail "a base that did not move paid for a second gate: $(grep -c "nix fmt" "$state/nix.log") gate run(s)"
+
+    echo "case: a conflict is finished by a fresh session that calls the skill, not by a hand-back"
+    # #242's whole point. Attempt 1 is the world moving; attempt 2 commits the
+    # ticket's half of a conflict; the replay stops; and what happens next is
+    # a new session - not the implement session continued, not the stuck path.
+    # Asserted from outside: the session ran in the worktree, titled and
+    # overlay-denied like every other session, the replay landed on the new
+    # master tip with both intents preserved, and no hand-back was written.
+    run rebase-conflict mixed.json fresh "advance touch-readme" pass green resolve
+    [ "$rc" -eq 0 ] || fail "a resolvable conflict stopped the ticket: $(cat "$state/err.log")"
+    [ -s "$state/rebase-args" ] || fail "no conflict session was started at all"
+    [ "$(flag_value "$state/rebase-args" --title)" = "$ticket-rebase" ] \
+      || fail "the conflict session is titled $(flag_value "$state/rebase-args" --title)"
+    [ "$(flag_value "$state/rebase-args" --dir)" = "$state/worktrees/$ticket" ] \
+      || fail "the conflict session was not pinned to its worktree with --dir: $(flag_value "$state/rebase-args" --dir)"
+    [ "$(cat "$state/rebase-cwd")" = "$state/worktrees/$ticket" ] \
+      || fail "the conflict session did not run in the worktree: $(cat "$state/rebase-cwd")"
+    jq -e --arg v "git push*" '.permission.bash[$v] == "deny"' "$state/rebase-overlay" >/dev/null \
+      || fail "the conflict session was not denied the tracker verbs"
+    # The gate ran on the resolved replay: attempt 2's and the rebase's.
+    [ "$(grep -c "nix fmt -- --ci" "$state/nix.log")" -eq 2 ] \
+      || fail "the gate did not re-run on the resolved replay: $(grep -c "nix fmt" "$state/nix.log") gate run(s)"
+    [ "$(pushed_commits)" -eq 1 ] || fail "the resolved branch did not reach origin"
+    git -C "$work/origin.git" merge-base --is-ancestor master "refs/heads/afk/$ticket" \
+      || fail "the resolved branch is not on the new master tip"
+    # Both intents survived the resolution, which is the whole of what the
+    # skill asks a resolution to be.
+    git -C "$work/origin.git" show "refs/heads/afk/$ticket:README.md" > "$state/pushed-readme"
+    grep -q "landed on master meanwhile" "$state/pushed-readme" \
+      || fail "the resolution dropped the side that landed on master: $(cat "$state/pushed-readme")"
+    grep -q "touched by the ticket" "$state/pushed-readme" \
+      || fail "the resolution dropped the ticket's side: $(cat "$state/pushed-readme")"
+    if grep -q "gh issue comment 302 " "$state/gh.log"; then
+      fail "a resolved conflict was handed back anyway: $(ghlog)"
+    fi
+
+    echo "case: a conflict session that does not finish hands the ticket back"
+    # One session, no retry: the work behind the conflict already passed the
+    # gate, so the failure is going backwards, and what is owed is a human.
+    # The replay is aborted before the hand-back - mid-replay the branch ref
+    # still points at the gated tip while HEAD is detached, and the rescue
+    # inside hand_back must not meet the conflicted tree.
+    run rebase-unfinished mixed.json fresh "advance touch-readme" pass green none
+    [ "$rc" -ne 0 ] || fail "an unfinished replay was reported as done"
+    grep -q "still in progress" "$state/err.log" \
+      || fail "did not say the replay was unfinished: $(cat "$state/err.log")"
+    grep -q "gh issue comment 302 " "$state/gh.log" \
+      || fail "no comment was left on the ticket: $(ghlog)"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not relabelled: $(ghlog)"
+    [ "$(pushed_commits)" -eq 0 ] || fail "an unresolved replay was pushed: $(pushed_commits) commit(s) there"
+    if grep -q "pr create" "$state/gh.log"; then
+      fail "a pull request was opened for an unresolved replay: $(ghlog)"
+    fi
+    [ -z "$(worktrees)" ] || fail "the worktree survived the hand-back: $(worktrees)"
+    [ -z "$(branches)" ] || fail "the branch survived a hand-back whose replay never finished: $(branches)"
+
+    echo "case: a session that aborts the replay cannot push a stale branch"
+    # The trap: `git rebase --abort` leaves a clean tree, an exited session
+    # and a branch exactly as stale as the pull request #242 exists to
+    # prevent - which a tree- and exit-code-only verdict would call success.
+    # The merge base is what says the replay happened, and it is checked
+    # rather than assumed.
+    run rebase-aborted mixed.json fresh "advance touch-readme" pass green abort
+    [ "$rc" -ne 0 ] || fail "an aborted replay was reported as done"
+    grep -q "without landing" "$state/err.log" \
+      || fail "did not say the replay never happened: $(cat "$state/err.log")"
+    [ "$(pushed_commits)" -eq 0 ] || fail "a stale branch was pushed: $(pushed_commits) commit(s)"
+    if grep -q "pr create" "$state/gh.log"; then
+      fail "a pull request was opened from a stale branch: $(ghlog)"
+    fi
 
     echo "case: a red CI run is fixed inside the implement session and pushed to the same branch"
     # Item 13's third acceptance criterion, and ADR 0004 §6 applied to a
