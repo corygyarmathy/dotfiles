@@ -410,6 +410,10 @@ in
   # logic is reachable at.
   afk-agent-runner = import ./afk-agent-runner.nix { inherit pkgs self inputs; };
   digital-garden = testLib.mkTest ./digital-garden.nix;
+  # Also not a VM: the filter is invoked directly against a deliberately
+  # colliding fixture vault, and its refusal is the assertion - see the file
+  # for why the served site cannot carry this property.
+  digital-garden-filter = import ./digital-garden-filter.nix { inherit pkgs; };
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;
     lib = pkgs.lib;

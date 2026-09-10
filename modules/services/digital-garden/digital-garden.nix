@@ -103,17 +103,11 @@ let
       ;
   };
 
-  # The publish filter, which is one program in two files: publish-filter.py
-  # imports bonsai.py. `${./publish-filter.py}` puts each file in a store path
-  # of its own, so the import would not resolve at run time - the two have to
-  # be assembled into one directory. Named file by file rather than copying
-  # `${./.}`, so that nothing else in this directory (the whole of lib/, a
-  # stray __pycache__) is dragged into the store and into the build stamp.
-  filter = pkgs.runCommand "digital-garden-filter" { } ''
-    mkdir -p "$out"
-    cp ${./publish-filter.py} "$out/publish-filter.py"
-    cp ${./bonsai.py} "$out/bonsai.py"
-  '';
+  # The publish filter: publish-filter.py and the bonsai.py it imports,
+  # assembled into one directory. The assembly lives under ./lib so the check
+  # in checks/ runs the very same two files the service does; see the header
+  # of lib/filter.nix.
+  filter = import ./lib/filter.nix { inherit pkgs; };
 
   stateDir = "/var/lib/digital-garden";
   vaultDir = "${stateDir}/vault";
