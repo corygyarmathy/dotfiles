@@ -316,11 +316,13 @@ pkgs.runCommand "check-afk-agent-runner"
           # to count as one poll that saw nothing rather than kill it.
           apifail) echo "mock gh: the API is unavailable" >&2; exit 1 ;;
           # A rollup on some *other* commit: the head GitHub answers with is
-          # not the commit that was pushed. For a poll or two after a fix is
-          # pushed that is the API's own staleness; held for a whole
-          # first-check window it is a head somebody else pushed (#248),
-          # and the watch follows it rather than calling the run absent.
+          # not the commit that was pushed. `moved`-versus-staleness is the
+          # watch's own fact - see the header in 110-ci.sh.
           stale) sha=0000000000000000000000000000000000000000 ;;
+          # The moved-head word, with a red rollup instead of green: the
+          # verdict the watch hands back on is fed back to the model only
+          # when it is about the commit the runner pushed.
+          movedred) sha=0000000000000000000000000000000000000000 ;;
           # A head that is not a commit at all. Not a head anybody can be
           # watching, so the watch has to read it as nothing rather than
           # follow it into a value that matches nothing.
@@ -329,7 +331,7 @@ pkgs.runCommand "check-afk-agent-runner"
 
         case "$step" in
           none)      rollup='[]' ;;
-          red)       rollup='[{"__typename":"CheckRun","name":"check afk-agent-runner","status":"COMPLETED","conclusion":"FAILURE"},{"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"SUCCESS"}]' ;;
+          red | movedred) rollup='[{"__typename":"CheckRun","name":"check afk-agent-runner","status":"COMPLETED","conclusion":"FAILURE"},{"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"SUCCESS"}]' ;;
           pending)   rollup='[{"__typename":"CheckRun","name":"nixos ci","status":"IN_PROGRESS","conclusion":null}]' ;;
           cancelled) rollup='[{"__typename":"CheckRun","name":"nixos ci","status":"COMPLETED","conclusion":"CANCELLED"}]' ;;
           # Green, and deliberately both kinds of entry GitHub reports through
@@ -2086,13 +2088,9 @@ pkgs.runCommand "check-afk-agent-runner"
     fi
 
     echo "case: a head somebody else pushed is followed, not abandoned"
-    # #248, measured: a rebase while the watch runs moves the pull request's
-    # head off the commit this runner pushed, every snapshot answers about a
-    # commit this runner has never heard of, and the run that used to end in
-    # "nothing has reported" and exit 1 while GitHub was still working. The
-    # mismatch persisting a whole first-check window is what tells a moved
-    # head from the staleness case above, and the watch follows the new run
-    # and hands the ticket over on its verdict - never a hand-back mid-work.
+    # #248. The word `stale` answers about a stranger head on every poll -
+    # a whole window's worth - so the watch follows it; from then on the
+    # same word is this branch's own rollup, and it is green.
     run ci-moved mixed.json fresh good pass stale
     [ "$rc" -eq 0 ] || fail "a pull request whose head was rebased was abandoned: $(cat "$state/err.log")"
     grep -q "head has moved to 0000000000000000000000000000000000000000" "$state/out.log" \
@@ -2103,6 +2101,25 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the moved head's green run was fed back to the model as a failure"
     grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
       || fail "the run following a moved head never reached the hand-off: $(ghlog)"
+
+    echo "case: a moved head whose run is red is handed back, not fixed against the old commit"
+    # The half the green follow above cannot show: a red verdict is fed
+    # back to the session only on the commit the local gate passed, and a
+    # followed head is not that. The run ends in a hand-back before any
+    # fix round is paid for or judged against the stale pushed head.
+    run ci-moved-red mixed.json fresh good pass movedred
+    [ "$rc" -ne 0 ] || fail "a red run on a followed head was treated as done: $(cat "$state/err.log")"
+    grep -q "head has moved to 0000000000000000000000000000000000000000" "$state/out.log" \
+      || fail "did not say it was following the moved head: $(cat "$state/out.log")"
+    grep -q "somebody else pushed while this run was watching" "$state/err.log" \
+      || fail "did not hand back on the followed head's red run: $(cat "$state/err.log")"
+    [ "$(ci_polls)" -eq 11 ] \
+      || fail "expected the first-check bound waited out before following, got $(ci_polls) poll(s)"
+    [ "$(attempts)" -eq 1 ] \
+      || fail "a fix round was paid for against the old commit: $(cat "$state/out.log")"
+    if grep -q -- "--add-label agent-ready-for-review" "$state/gh.log"; then
+      fail "a red run on a followed head was handed over: $(ghlog)"
+    fi
 
     echo "case: a head that is not a commit is not a move to follow"
     # The fail-closed half of the same seam. A snapshot whose head is not a

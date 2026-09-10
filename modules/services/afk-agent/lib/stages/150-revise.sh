@@ -428,6 +428,15 @@ if [ "$flow" = revise ]; then
 
 	if [ "$ci_state" != green ]; then
 		case "$ci_state" in
+		red)
+			# As in the ticket lane: the fix below is judged and pushed
+			# against $pushed_head, which the worktree and the gate are on
+			# and a followed head is not - so a red verdict there is
+			# handed back rather than fed to the revision session.
+			if [ "$ci_watched" != "$pushed_head" ]; then
+				hand_back "CI on $ci_watched is red ($ci_failed). $ci_watched is a head somebody else pushed while this revision was watched, and this worktree is not on it, so it is not this revision's to fix. $pr_url is open with the revision unverified"
+			fi
+			;;
 		absent)
 			hand_back "nothing has reported on $ci_watched after @CI_FIRST_CHECK_POLLS@ polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open with the revision unverified"
 			;;

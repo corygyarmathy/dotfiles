@@ -94,11 +94,16 @@ ci_snapshot() {
 # absent or unsettled, and `ci_failed` to whichever checks are behind it.
 # `ci_watched` is the commit the verdict that comes back belongs to:
 # `$1` unless the watch followed a moved head, in which case that head.
+#
+# The two bounds that share the first-check threshold are counted
+# separately on purpose: a poll that saw no check and a poll that saw a
+# moved head are different facts, and a cumulative sum of the two would
+# follow on a mix that contained a run of neither.
 ci_state=""
 ci_failed=""
 ci_watched=""
 watch_ci() {
-	local head=$1 tick=0 unseen=0 answer state moved_to
+	local head=$1 tick=0 unseen=0 moved_unseen=0 answer state moved_to
 	ci_watched="$head"
 	while :; do
 		answer="$(ci_snapshot "$head")"
@@ -118,22 +123,20 @@ watch_ci() {
 			fi
 			;;
 		moved)
-			# The snapshot is about a commit this watch was not pointed
-			# at. Enforced here rather than trusted from the snapshot:
-			# only a 40-hex sha is a head anybody can be watching, and a
-			# watch that followed anything else would compare every later
-			# snapshot against a value that matches nothing. A mismatch
-			# that lasts a whole first-check window is a new head
-			# somebody pushed (#248), not the post-push staleness - so
-			# the watch follows it and starts its bounds over.
-			unseen=$((unseen + 1))
-			if [ "$unseen" -ge @CI_FIRST_CHECK_POLLS@ ]; then
+			# The head the snapshot answers about is carried as its second
+			# line; that it is only followable as a real commit is enforced
+			# here rather than trusted from the snapshot. The header at the
+			# top of this file owns the moved-head rationale.
+			ci_failed=""
+			moved_unseen=$((moved_unseen + 1))
+			if [ "$moved_unseen" -ge @CI_FIRST_CHECK_POLLS@ ]; then
 				moved_to="$(printf '%s\n' "$answer" | sed -n 2p)"
 				if [[ "$moved_to" =~ ^[0-9a-f]{40}$ ]]; then
 					log "#$number: the pull request's head has moved to $moved_to, so a new CI run is running there; watching it instead"
 					head="$moved_to"
 					ci_watched="$head"
 					unseen=0
+					moved_unseen=0
 					tick=0
 				else
 					ci_state=absent
@@ -162,110 +165,120 @@ watch_ci() {
 if [ "$flow" = issue ]; then
 	ci_round=1
 	while :; do
-	pushed_head="$(git -C "$worktree" rev-parse HEAD)"
-	log "#$number: watching CI on $pushed_head (round $ci_round of @MAX_CI_ROUNDS@)"
-	watch_ci "$pushed_head"
+		pushed_head="$(git -C "$worktree" rev-parse HEAD)"
+		log "#$number: watching CI on $pushed_head (round $ci_round of @MAX_CI_ROUNDS@)"
+		watch_ci "$pushed_head"
 
-	if [ "$ci_state" = green ]; then
-		log "#$number: CI is green on $ci_watched after $ci_round round(s)"
-		break
-	fi
+		if [ "$ci_state" = green ]; then
+			log "#$number: CI is green on $ci_watched after $ci_round round(s)"
+			break
+		fi
 
-	# Three ways the watch ends without a verdict about the diff. None of
-	# them is something a model can fix, so none is fed back to one; each
-	# leaves $pr_url open, without the hand-off label, which is what says
-	# from the outside that nobody has finished with it (ADR 0007 §2). The
-	# commit named is the one the watch ended on, which is the pushed
-	# commit unless the watch followed a moved head on the way.
-	case "$ci_state" in
-	absent)
-		hand_back "nothing has reported on $ci_watched after @CI_FIRST_CHECK_POLLS@ polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open and unfinished"
-		;;
-	unsettled)
-		hand_back "CI on $ci_watched has not settled after @CI_SETTLE_POLLS@ polls, and still has $ci_failed outstanding. $pr_url is open and unfinished"
-		;;
-	cancelled)
-		hand_back "CI on $ci_watched was cancelled ($ci_failed), so it reached no verdict. $pr_url is open and unfinished, and a re-run is a human's call"
-		;;
-	esac
+		# Three ways the watch ends without a verdict about the diff. None of
+		# them is something a model can fix, so none is fed back to one; each
+		# leaves $pr_url open, without the hand-off label, which is what says
+		# from the outside that nobody has finished with it (ADR 0007 §2). The
+		# commit named is the one the watch ended on, which is the pushed
+		# commit unless the watch followed a moved head on the way.
+		case "$ci_state" in
+		red)
+			# A red verdict is fed back into this ticket's session only on the
+			# commit the local gate passed: `pushed_head` is what the worktree
+			# and the judgement and the push below are pointed at, and none of
+			# that follows a moved head. Followed only to its verdict, then -
+			# the red run on a head somebody else pushed is theirs to settle.
+			if [ "$ci_watched" != "$pushed_head" ]; then
+				hand_back "CI on $ci_watched is red ($ci_failed). $ci_watched is a head somebody else pushed while this run was watching, and this worktree is not on it, so it is not this run's to fix. $pr_url is open and unfinished"
+			fi
+			;;
+		absent)
+			hand_back "nothing has reported on $ci_watched after @CI_FIRST_CHECK_POLLS@ polls - either CI was never triggered for it, or GitHub could not be asked. Neither is something the diff can fix. $pr_url is open and unfinished"
+			;;
+		unsettled)
+			hand_back "CI on $ci_watched has not settled after @CI_SETTLE_POLLS@ polls, and still has $ci_failed outstanding. $pr_url is open and unfinished"
+			;;
+		cancelled)
+			hand_back "CI on $ci_watched was cancelled ($ci_failed), so it reached no verdict. $pr_url is open and unfinished, and a re-run is a human's call"
+			;;
+		esac
 
-	# The reason this line names both gates: the local gate passed on this
-	# exact commit; CI did not. If that never happens, this whole stage is
-	# latency for its own sake and should be cut. If it happens, the
-	# difference between the two readings is what to go and fix - in the
-	# local gate, which is the reproduction, rather than in ci.yml.
-	log "#$number: CI is red on $ci_watched where the local gate passed. Not green: $ci_failed"
+		# The reason this line names both gates: the local gate passed on this
+		# exact commit; CI did not. If that never happens, this whole stage is
+		# latency for its own sake and should be cut. If it happens, the
+		# difference between the two readings is what to go and fix - in the
+		# local gate, which is the reproduction, rather than in ci.yml.
+		log "#$number: CI is red on $ci_watched where the local gate passed. Not green: $ci_failed"
 
-	if [ "$ci_round" -ge @MAX_CI_ROUNDS@ ]; then
-		hand_back "@MAX_CI_ROUNDS@ CI round(s) and $branch is still red ($ci_failed). $pr_url is open with the work on it and without the hand-off label; nothing merges it (ADR 0004 §9)"
-	fi
+		if [ "$ci_round" -ge @MAX_CI_ROUNDS@ ]; then
+			hand_back "@MAX_CI_ROUNDS@ CI round(s) and $branch is still red ($ci_failed). $pr_url is open with the work on it and without the hand-off label; nothing merges it (ADR 0004 §9)"
+		fi
 
-	# ADR 0004 §6, applied to a failure it did not anticipate: the fix
-	# happens inside the session that produced the failing commit, because
-	# a fix that cannot see what it is fixing is close to useless. The
-	# session id may never have been looked up - a ticket that converged on
-	# its first attempt never needed it - so this is the same read-back the
-	# retry path does, with the same refusal behind it.
-	if [ -z "$session" ]; then
-		session="$(session_id_for "$worktree" "$slug")"
-	fi
-	[ -n "$session" ] ||
-		hand_back "CI is red on $pr_url, but no session titled '$slug' can be found to fix it in; refusing to fix in a fresh context (ADR 0004 §6)"
+		# ADR 0004 §6, applied to a failure it did not anticipate: the fix
+		# happens inside the session that produced the failing commit, because
+		# a fix that cannot see what it is fixing is close to useless. The
+		# session id may never have been looked up - a ticket that converged on
+		# its first attempt never needed it - so this is the same read-back the
+		# retry path does, with the same refusal behind it.
+		if [ -z "$session" ]; then
+			session="$(session_id_for "$worktree" "$slug")"
+		fi
+		[ -n "$session" ] ||
+			hand_back "CI is red on $pr_url, but no session titled '$slug' can be found to fix it in; refusing to fix in a fresh context (ADR 0004 §6)"
 
-	# What crosses the boundary is what the model could not see for itself.
-	# It is told which checks are not green and where to read them, and
-	# told plainly that it is not the one who pushes - `gh pr*` is denied
-	# to this session anyway, but a model that spends its round trying is a
-	# round spent.
-	#
-	# `gh run view` is deliberately not denied. It is the only way to turn
-	# a check's name into the log that explains it, and it can write
-	# nothing.
-	ci_message="$(printf '%s\n\n%s\n\n%s\n\n%s' \
-		"The pull request for this branch is $pr_url, and CI on it is red on the commit at the head of this branch. This repository's local gate - the same one you have already passed - agreed with that commit, so this is something only CI sees: a cold runner, the sharded check matrix, and every host built from an empty store." \
-		"$(printf 'These checks are not green:\n%s' "$ci_failed")" \
-		"Read the failing job's log before changing anything: \`gh run view --log-failed --job <id>\`, where <id> is the last path segment of that check's link on the pull request. \`gh run list --branch $branch\` will find the run." \
-		"Fix it here, in this worktree, and commit the fix. Do not push and do not touch the pull request - this runner pushes your commit to the same branch afterwards. The local gate has to pass on your fix as well, and there is no retry: this round is judged once.")"
+		# What crosses the boundary is what the model could not see for itself.
+		# It is told which checks are not green and where to read them, and
+		# told plainly that it is not the one who pushes - `gh pr*` is denied
+		# to this session anyway, but a model that spends its round trying is a
+		# round spent.
+		#
+		# `gh run view` is deliberately not denied. It is the only way to turn
+		# a check's name into the log that explains it, and it can write
+		# nothing.
+		ci_message="$(printf '%s\n\n%s\n\n%s\n\n%s' \
+			"The pull request for this branch is $pr_url, and CI on it is red on the commit at the head of this branch. This repository's local gate - the same one you have already passed - agreed with that commit, so this is something only CI sees: a cold runner, the sharded check matrix, and every host built from an empty store." \
+			"$(printf 'These checks are not green:\n%s' "$ci_failed")" \
+			"Read the failing job's log before changing anything: \`gh run view --log-failed --job <id>\`, where <id> is the last path segment of that check's link on the pull request. \`gh run list --branch $branch\` will find the run." \
+			"Fix it here, in this worktree, and commit the fix. Do not push and do not touch the pull request - this runner pushes your commit to the same branch afterwards. The local gate has to pass on your fix as well, and there is no retry: this round is judged once.")"
 
-	attempt=$((attempt + 1))
-	log "#$number: feeding the red run back into session $session (implement session $attempt)"
+		attempt=$((attempt + 1))
+		log "#$number: feeding the red run back into session $session (implement session $attempt)"
 
-	ci_fix_rc=0
-	(
-		cd "$worktree" || exit 1
-		OPENCODE_CONFIG_CONTENT=@PERMISSION_OVERLAY@ \
-			timeout @ATTEMPT_TIMEOUT@ opencode run --auto \
-			--dir "$worktree" \
-			--agent build --model @MODEL@ --variant @VARIANT@ \
-			--session "$session" "$ci_message"
-	) || ci_fix_rc=$?
+		ci_fix_rc=0
+		(
+			cd "$worktree" || exit 1
+			OPENCODE_CONFIG_CONTENT=@PERMISSION_OVERLAY@ \
+				timeout @ATTEMPT_TIMEOUT@ opencode run --auto \
+				--dir "$worktree" \
+				--agent build --model @MODEL@ --variant @VARIANT@ \
+				--session "$session" "$ci_message"
+		) || ci_fix_rc=$?
 
-	# Judged by the same four checks an implement attempt is, against the
-	# commit that was pushed rather than against the base branch: what has
-	# to be true here is that something NEW was committed on top of the red
-	# commit.
-	#
-	# And judged once. A CI fix round gets one session and no retry, which
-	# is a deliberate asymmetry with the implement stage rather than an
-	# oversight: the local gate has already passed on this branch, so a fix
-	# that fails it is the model going backwards rather than failing to
-	# converge - and unlike the implement stage there is now a pull request
-	# a human can pick up, which is most of what a retry budget was buying.
-	attempt_verdict "$ci_fix_rc" "$pushed_head"
-	[ -z "$reason" ] ||
-		hand_back "the CI fix did not pass, because $reason. $pr_url is open with a red CI run on it; a CI fix gets one session and no retry (ADR 0007)"
+		# Judged by the same four checks an implement attempt is, against the
+		# commit that was pushed rather than against the base branch: what has
+		# to be true here is that something NEW was committed on top of the red
+		# commit.
+		#
+		# And judged once. A CI fix round gets one session and no retry, which
+		# is a deliberate asymmetry with the implement stage rather than an
+		# oversight: the local gate has already passed on this branch, so a fix
+		# that fails it is the model going backwards rather than failing to
+		# converge - and unlike the implement stage there is now a pull request
+		# a human can pick up, which is most of what a retry budget was buying.
+		attempt_verdict "$ci_fix_rc" "$pushed_head"
+		[ -z "$reason" ] ||
+			hand_back "the CI fix did not pass, because $reason. $pr_url is open with a red CI run on it; a CI fix gets one session and no retry (ADR 0007)"
 
-	push_branch
-	ci_round=$((ci_round + 1))
-done
+		push_branch
+		ci_round=$((ci_round + 1))
+	done
 
-# Said once and appended to every hand-back below, because from here on
-# it is the same fact each time and it is the fact ADR 0007 changed: a
-# review that cannot be shown to have run no longer means no pull
-# request, it means a pull request nobody has handed over. The label's
-# absence is what says so from the outside, and the hand-back (#175)
-# carries the fact onto the ticket and the pull request both.
-unfinished="$pr_url is open and green, without the @HANDOFF_LABEL@ label; nothing merges it (ADR 0004 §9)"
+	# Said once and appended to every hand-back below, because from here on
+	# it is the same fact each time and it is the fact ADR 0007 changed: a
+	# review that cannot be shown to have run no longer means no pull
+	# request, it means a pull request nobody has handed over. The label's
+	# absence is what says so from the outside, and the hand-back (#175)
+	# carries the fact onto the ticket and the pull request both.
+	unfinished="$pr_url is open and green, without the @HANDOFF_LABEL@ label; nothing merges it (ADR 0004 §9)"
 fi
 
 # --- review, in a fresh context ---------------------------------------
