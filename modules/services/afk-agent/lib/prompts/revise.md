@@ -1,11 +1,15 @@
 Address the human review comments on pull request #PRNUMBER in this
-repository. The runner collected them from accounts other than the
-agent's own, and they follow this instruction, verbatim, oldest first.
-They are the only review input for this round: do not read the pull
-request's body or description, and do not fetch anything else from the
-tracker - the body carries the advisory review's findings, which are not
-what a person asked you to change. A comment from the agent's own
-account is not review input either, and none appear below.
+repository. This round was started by a `/revise` comment on that pull
+request from an account other than the agent's own. When that comment
+carried text of its own, that text is this round's instruction and it
+follows, verbatim. When it did not, the runner collected the review
+comments written since its last word on the pull request from accounts
+other than the agent's own, and they follow instead, verbatim, oldest
+first. Either way they are the only review input for this round: do not
+read the pull request's body or description, and do not fetch anything
+else from the tracker - the body carries the advisory review's findings,
+which are not what a person asked you to change. A comment from the
+agent's own account is not review input either, and none appear below.
 
 The work to revise is at the head of this branch; the comments refer to
 it. Work through them in order. Where you agree with a comment, make the

@@ -43,7 +43,7 @@
   reviewTimeout,
   reviewAxes,
   revisePrompt,
-  reviseLabel,
+  revisingLabel,
   maxRevisionRounds,
   label,
   baseBranch,
@@ -55,12 +55,15 @@
 let
   stageDir = ./stages;
 
-  # Pipeline order: claim -> isolate -> implement -> rebase onto the base
-  # branch (#242) -> pull request -> watch CI -> review -> hand off, with
-  # the stuck path available throughout (see ADR 0007). 150-revise.sh is
-  # the second entry point (#196): the issue poll hands the run over to it
-  # when its queue is empty, and the stages in between read `$flow` and
-  # step aside.
+  # Pipeline order: claim -> isolate -> implement -> push gate -> push ->
+  # rebase onto the base branch (#242) -> pull request -> watch CI -> review
+  # -> hand off, with the stuck path available throughout (see ADR 0007).
+  # 150-revise.sh is the second entry point (#196, as re-triggered by
+  # #247): the poll in 50-poll-claim.sh checks the revision frontier - an
+  # unacknowledged `/revise` comment on one of this runner's own open pull
+  # requests - before it claims ticket work, a human waiting on a revision
+  # being ahead of a backlog ticket, and the stages in between read `$flow`
+  # and step aside.
   stageFiles = [
     "00-env.sh"
     "10-util.sh"
@@ -138,7 +141,7 @@ let
     "@REVIEW_TIMEOUT@" = toString reviewTimeout;
     "@REVIEW_AXES@" = toString reviewAxes;
     "@REVISE_PROMPT@" = toString revisePrompt;
-    "@REVISE_LABEL@" = reviseLabel;
+    "@REVISING_LABEL@" = revisingLabel;
     "@MAX_REVISION_ROUNDS@" = toString maxRevisionRounds;
     "@BOT_LOGIN@" = botLogin;
     "@LABEL@" = label;

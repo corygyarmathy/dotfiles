@@ -42,12 +42,16 @@
 # ADR 0004 §8). The runner adds a guard against a *dead* run's leftovers,
 # which systemd would otherwise start the next poll on top of.
 #
-# The revision loop (#196) is a second entry point on the
-# same runner, not a second runner: when the ticket queue is empty, the
-# same poll falls through to pull requests labelled `agent-revise`, and
-# the reviewer's comments - and only comments from accounts other than
-# the agent's own - are fed to a revision session that resumes the pull
-# request's branch. It shares the gate, the verdict, the pre-push denylist
+# The revision loop (#196, as re-triggered by #247) is a second entry point on the
+# same runner, not a second runner: the same poll checks the revision
+# frontier before it claims ticket work - a human waiting on a revision is
+# ahead of a backlog ticket - and the frontier is the open pull requests
+# this runner opened, carrying `agent-ready-for-review`, with an
+# unacknowledged `/revise` comment from an account other than the agent's.
+# That request - or, when the comment carries no text, the reviewer's
+# comments, and only comments from accounts other than the agent's own -
+# are fed to a revision session that resumes the pull request's branch.
+# It shares the gate, the verdict, the pre-push denylist
 # gate, the push and the CI watch with the ticket lane, and it has its own
 # bounded round budget: three rounds per pull request, then the stuck
 # path reaches the pull request instead of the ticket.
@@ -337,7 +341,7 @@ let
         ciSettlePolls
         maxCiRounds
         maxRevisionRounds
-        reviseLabel
+        revisingLabel
         sessionListDepth
         reviewAxes
         label
@@ -548,14 +552,16 @@ in
       '';
     };
 
-    reviseLabel = lib.mkOption {
+    revisingLabel = lib.mkOption {
       type = lib.types.str;
-      default = "agent-revise";
+      default = "agent-revising";
       description = ''
-        Label a person applies to one of this runner's pull requests to
-        have its review comments fed back to a revision session (plan
-        item 12, #196). The label is the whole of the trigger: a
-        half-written review starts nothing.
+        Label this runner applies to one of its own pull requests while a
+        revision round runs on it, and removes when the round finishes,
+        returning the pull request to `handoffLabel`. The revision trigger
+        is a `/revise` comment from an account other than the agent's
+        (plan item 12, #196, as re-triggered by #247), not this label or
+        any other: a half-written review starts nothing.
       '';
     };
 
@@ -567,7 +573,7 @@ in
         from the round comments the runner leaves on the pull request
         rather than from any state on disk, so a count survives the run
         that made it. A fourth round does not run; the pull request goes
-        to the stuck path, and re-applying the revise label will not
+        to the stuck path, and writing another `/revise` comment will not
         spend another round.
       '';
     };
