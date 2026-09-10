@@ -964,8 +964,20 @@ let
       hand_back() {
         local reason=$1
         local body="$run_dir/stuck.md"
+        local rescued=0
 
         echo "afk-agent: #$number: $reason" >&2
+
+        # The same rescue the dead-run guard does, for the same reason. A run
+        # that exhausts its attempts can be holding real work: `attempt_verdict`
+        # fails an attempt whose changes are still in the working tree, so
+        # "three attempts and none passed" and "there is nothing here worth
+        # keeping" are different statements and this used to conflate them.
+        # Only where nothing was pushed - past the push the branch is kept
+        # anyway and the pull request is what holds the work.
+        if [ "$pushed" -eq 0 ] && rescue_uncommitted "$worktree" "$number"; then
+          rescued=1
+        fi
 
         {
           printf '%s\n' \
@@ -981,8 +993,11 @@ let
           elif [ "$pushed" -eq 1 ]; then
             printf '%s\n' \
               "The worktree is removed. The branch \`$branch\` reached origin and is kept there - it holds the work the gate passed on, and a pull request can be opened from it by hand."
+          elif [ "$rescued" -eq 1 ]; then
+            printf '%s\n' \
+              "The worktree is removed, but the branch \`$branch\` is kept **unpushed, in \`$checkout\` on the runner's host**: there was work left in the worktree, and it is committed onto that branch as a single \`WIP\` commit rather than deleted with the directory. That commit has passed nothing - not the gate, not the path denylist, not CI, and no review - and it was never pushed, because the pre-push gate is the only thing that may authorise a push. Read it as a starting point or delete the branch."
           elif [ "$branch_created" -eq 1 ]; then
-            printf '%s\n' "The worktree and the branch \`$branch\` are removed."
+            printf '%s\n' "The worktree and the branch \`$branch\` are removed. There was no work left in the worktree to keep."
           else
             printf '%s\n' "Nothing of this run was left behind."
           fi
@@ -1022,13 +1037,74 @@ let
           "$(if [ "$pr_url" != "" ]; then printf '%s is open and unfinished' "$pr_url"; fi)"
 
         if [ "$pushed" -eq 0 ]; then
-          remove_worktree_and_branch "$worktree" "$branch" "$branch_created"
+          # `$branch_created` says the branch is this run's to delete; the
+          # rescue says there is now something on it that should outlive the
+          # run. Both have to agree before it goes.
+          if [ "$rescued" -eq 1 ]; then
+            remove_worktree_and_branch "$worktree" "$branch" 0
+          else
+            remove_worktree_and_branch "$worktree" "$branch" "$branch_created"
+          fi
         else
           # Pushed work stays: it is what the pull request is made of, and
           # the success path keeps its local branch for the same reason.
           remove_worktree_and_branch "$worktree" "$branch" 0
         fi
         exit 1
+      }
+
+      # What a dying run leaves in its worktree, committed onto its branch
+      # before anything is torn down.
+      #
+      # Added 2026-09-10, after a run was killed by the kernel's OOM killer
+      # having implemented its ticket, written six new harness cases for it and
+      # got all six passing. The next poll's guard found the worktree, saw no
+      # pull request and an unpushed branch, and deleted both - 1462 insertions
+      # of tested work, gone, because the model had not reached its commit yet.
+      #
+      # This does not reopen item 8's decision, which is tear-down rather than
+      # resume, and that stands: the dead run's prompt, logs and attempt count
+      # did not survive it, and resuming unattended work nobody can vouch for
+      # is what ADR 0004 §6 exists to prevent. *Keeping* is not *resuming*.
+      # The ticket is still handed to a human; this only means what the run had
+      # written is still there when they go looking.
+      #
+      # It is committed and never pushed. `push_gate` is the only thing in this
+      # script allowed to authorise a push, and this work has not passed it -
+      # it has not passed anything, which is why the commit message says so in
+      # the first line rather than in a trailer somebody has to look for. The
+      # branch stays local, on the host, and the ticket comment says where.
+      #
+      # Guarded rather than fatal throughout, like every other step of a
+      # teardown: a rescue that fails must not stop the ticket being handed
+      # back. It answers 0 when a commit landed and 1 otherwise, and the
+      # callers use that for both what they say and whether they may delete
+      # the branch afterwards.
+      rescue_uncommitted() {
+        local wt=$1 num=$2
+
+        [ -d "$wt" ] || return 1
+
+        # `--porcelain` covers modified, added, deleted and untracked alike,
+        # which is what `git add -A` is about to stage. An empty answer means
+        # there is nothing here worth a commit - the ordinary case, and not a
+        # failure.
+        if [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
+          return 1
+        fi
+
+        if ! git -C "$wt" add -A 2>/dev/null; then
+          echo "afk-agent: #$num: there is uncommitted work in $wt but it could not be staged; it is left in the worktree" >&2
+          return 1
+        fi
+
+        if ! git -C "$wt" commit --no-verify -m           "WIP: rescued from a run that died - this has passed no gate"           -m "The AFK agent was working ticket #$num when its run ended without handing the ticket back - killed by the runtime ceiling, the memory ceiling, or the kill switch. This commit is whatever was in the worktree at that moment, committed so that it is not lost with the worktree."           -m "It has passed nothing: not the local gate, not the path denylist, not CI, and no review. It was never pushed, because the pre-push gate is the only thing that may authorise a push and this did not go through it. Read it as a starting point or delete the branch." 2>/dev/null; then
+          echo "afk-agent: #$num: there is uncommitted work in $wt but it could not be committed; it is left in the worktree" >&2
+          return 1
+        fi
+
+        echo "afk-agent: #$num: committed what the dead run left in its worktree onto $branch_prefix$(basename "$wt"), unpushed"
+        return 0
       }
 
       # The teardown both stuck paths share. Worktree first - a branch checked
@@ -1068,7 +1144,7 @@ let
       # to prevent. The comment says what is known, which is not much, and
       # says it rather than guessing.
       hand_back_dead_run() {
-        local path=$1 name number branch pushed_branch open_prs ls_rc body
+        local path=$1 name number branch pushed_branch open_prs ls_rc body rescued
 
         name="$(basename "$path")"
         number="''${name%%-*}"
@@ -1111,6 +1187,16 @@ let
           fi
         fi
 
+        # Whatever the dead run had written, committed onto its branch before
+        # anything is removed. Ordered here rather than beside the teardown so
+        # that the comment below can say what actually happened to it, and so
+        # that a rescue is never skipped by the `$stuck_label` early-out - a
+        # hand-back whose teardown failed last poll still has the work on disk.
+        rescued=0
+        if rescue_uncommitted "$path" "$number"; then
+          rescued=1
+        fi
+
         # The tracker writes first, for the reason hand_back gives - and are
         # skipped when the ticket already carries `$stuck_label`, which is
         # the shape a hand-back whose teardown failed last poll leaves.
@@ -1132,11 +1218,17 @@ let
             printf '%s\n' ""
             if [ "$pushed_branch" -eq 1 ]; then
               printf '%s\n' \
-                "The worktree is removed. The branch reached origin and is kept there - it holds the work the gate passed on, and a pull request can be opened from it by hand. Nothing of the dead run's state was kept: it did not survive the run, and resuming unattended work nobody can vouch for is the shape ADR 0004 §6 exists to prevent."
+                "The worktree is removed. The branch reached origin and is kept there - it holds the work the gate passed on, and a pull request can be opened from it by hand."
+            elif [ "$rescued" -eq 1 ]; then
+              printf '%s\n' \
+                "The worktree is removed, but the branch \`$branch\` is kept **unpushed, in \`$checkout\` on the runner's host**: the run had uncommitted work in its worktree, and it is committed onto that branch as a single \`WIP\` commit rather than deleted with the directory. That commit has passed nothing - not the gate, not the path denylist, not CI, and no review - and it was never pushed, because the pre-push gate is the only thing that may authorise a push. Read it as a starting point or delete the branch."
             else
               printf '%s\n' \
-                "The worktree and the branch are removed. Nothing of the dead run was kept: its state did not survive it, and resuming unattended work nobody can vouch for is the shape ADR 0004 §6 exists to prevent."
+                "The worktree and the branch are removed. There was no uncommitted work in the worktree to keep."
             fi
+            printf '%s\n' ""
+            printf '%s\n' \
+              "The run's own state - its prompt, its logs, its attempt count - did not survive it, and is not recovered: resuming unattended work nobody can vouch for is the shape ADR 0004 §6 exists to prevent."
             printf '%s\n' ""
             stuck_closing
           } > "$body"
@@ -1148,7 +1240,14 @@ let
             "$(if [ "$pushed_branch" -eq 1 ]; then printf '%s reached origin and is kept' "$branch"; else printf 'Nothing of the dead run was kept.'; fi)"
         fi
 
-        remove_worktree_and_branch "$path" "$branch" "$(( 1 - pushed_branch ))"
+        # Delete the local branch only when there is nothing on it worth
+        # keeping: not when it reached origin, and not when the rescue above
+        # just put the dead run's work on it.
+        if [ "$pushed_branch" -eq 1 ] || [ "$rescued" -eq 1 ]; then
+          remove_worktree_and_branch "$path" "$branch" 0
+        else
+          remove_worktree_and_branch "$path" "$branch" 1
+        fi
       }
 
       # --- what item 4 hands over ------------------------------------------

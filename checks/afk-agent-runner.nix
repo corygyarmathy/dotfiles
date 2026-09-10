@@ -1201,6 +1201,29 @@ pkgs.runCommand "check-afk-agent-runner"
     [ "$(attempts)" -eq 2 ] || fail "uncommitted work was accepted as finished"
     grep -q "left uncommitted" "$state/out.log" || fail "did not say why the attempt failed"
 
+    echo "case: work still in the tree when the budget runs out is rescued, not deleted"
+    # The pre-push half of the same rescue. `attempt_verdict` fails an attempt
+    # whose changes are still in the working tree, so a ticket can exhaust all
+    # three attempts while holding real work - "none of the three passed" and
+    # "there is nothing here worth keeping" are different statements, and the
+    # hand-back used to conflate them and delete the branch.
+    #
+    # `dirty none none` rather than `dirty dirty dirty`: a second `dirty`
+    # commits the stray file the first one left and then rewrites it with the
+    # same bytes, so the tree comes back clean and the ticket converges on
+    # attempt 2. This plan leaves the stray file untouched across all three.
+    run implement-dirty-out mixed.json fresh "dirty none none"
+    [ "$rc" -ne 0 ] || fail "a ticket that never passed the gate was not handed back"
+    [ "$(attempts)" -eq 3 ] || fail "expected the budget to run out, got $(attempts) attempt(s)"
+    grep -q "gh issue edit 302 .* --add-label agent-stuck" "$state/gh.log" \
+      || fail "the ticket was not handed back: $(ghlog)"
+    [ -z "$(worktrees)" ] || fail "the worktree survived the hand-back: $(worktrees)"
+    [ "$(branches)" = "afk/302-unblocked-at-last" ] \
+      || fail "the branch holding the rescued work was deleted: $(branches)"
+    [ -z "$(pushed)" ] || fail "rescued work was pushed without passing the gate: $(pushed)"
+    grep -q "unpushed" "$state/stuck-body" \
+      || fail "the hand-back comment does not say where the work was kept: $(cat "$state/stuck-body")"
+
     echo "case: a non-zero exit is a failure, and opens a session rather than continuing one"
     # The one place ADR 0004 §6 does not apply, because there is nothing for it
     # to apply to: an attempt that failed before opening a session left no
@@ -2000,6 +2023,49 @@ pkgs.runCommand "check-afk-agent-runner"
     if git -C "$work/origin.git" show-ref --verify --quiet "refs/heads/afk/$ticket"; then
       fail "the dead run's branch survived on origin"
     fi
+
+    echo "case: a dead run's uncommitted work is rescued onto its branch, not deleted"
+    # The case this pipeline paid for. On 2026-09-10 a run implemented its
+    # ticket, wrote six new harness cases, got all six passing, and was killed
+    # by the kernel's OOM killer while proving it. The guard found the worktree,
+    # saw no pull request and an unpushed branch, and deleted both - 1462
+    # insertions, gone, because the model had not reached its commit yet.
+    #
+    # Same shape as the case above, with the one difference that mattered:
+    # there is work in the worktree when the guard arrives.
+    run stuck-rescue mixed.json fresh good pass
+    git -C "$work/origin.git" update-ref -d "refs/heads/afk/$ticket"
+    git -C "$state/checkout" worktree add "$state/worktrees/$ticket" "afk/$ticket"
+    printf 'work a run died holding\n' > "$state/worktrees/$ticket/rescued.txt"
+    printf 'and an edit to a tracked file\n' >> "$state/worktrees/$ticket/README.md"
+    run stuck-rescue second-ticket.json reuse
+    [ "$rc" -eq 0 ] || fail "the poll after a dead run refused to start: $(cat "$state/err.log")"
+
+    # The branch survives, because it is now the only copy of that work.
+    [ "$(branches)" = "$(printf 'afk/302-unblocked-at-last\nafk/330-a-different-ticket')" ] \
+      || fail "the rescued branch was deleted with the worktree: $(branches)"
+    [ -z "$(worktrees)" ] || fail "the worktree survived the rescue: $(worktrees)"
+
+    # Both the untracked file and the edit to the tracked one are on it.
+    rescued_files="$(git -C "$state/checkout" show --name-only --format= "afk/$ticket" | LC_ALL=C sort)"
+    [ "$rescued_files" = "$(printf 'README.md\nrescued.txt')" ] \
+      || fail "the rescue commit does not carry the worktree's work: $rescued_files"
+    git -C "$state/checkout" log -1 --format=%s "afk/$ticket" | grep -q "passed no gate" \
+      || fail "the rescue commit does not say it passed nothing: $(git -C "$state/checkout" log -1 --format=%s "afk/$ticket")"
+
+    # And it is never pushed. The pre-push gate is the only thing that may
+    # authorise a push, and this work did not go through it - so a rescue that
+    # reached origin would be the one outcome worse than deleting it.
+    [ "$(pushed)" = "afk/330-a-different-ticket" ] \
+      || fail "rescued work was pushed without passing the gate: $(pushed)"
+
+    # The ticket still ends stuck, and its comment says where the work is.
+    grep -q "gh issue edit 302 .* --remove-label agent-working --add-label agent-stuck" "$state/gh.log" \
+      || fail "the rescued ticket was not handed back: $(ghlog)"
+    grep -q "unpushed" "$state/stuck-body" \
+      || fail "the hand-back comment does not say the work was kept unpushed: $(cat "$state/stuck-body")"
+    grep -q "passed nothing" "$state/stuck-body" \
+      || fail "the hand-back comment does not warn that the rescued commit passed no gate"
 
     echo "case: a hand-back that already happened is not commented twice"
     # The relabel lands before the teardown, so a hand-back whose teardown
