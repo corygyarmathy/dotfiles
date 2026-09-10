@@ -12,7 +12,7 @@ before the claim.
 **No person has read this diff.** Nothing in this pipeline merges and no
 auto-merge is armed on this path: merging is a human act (ADR 0004 §9).
 
-This pull request was opened *before* its review ran, which is the order
+This pull request was opened _before_ its review ran, which is the order
 ADR 0007 settled: CI on this branch is what decides correctness, and the
 review is a quality pass whose findings are appended to this body once it
 has run. **If there is no "Handed over" section below this one, the run has
@@ -24,4 +24,3 @@ section.
 ## What the branch says it does
 
 Quoted from its own commit messages, unedited.
-

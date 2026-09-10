@@ -26,6 +26,12 @@ excludes = [
   # someone runs `nix fmt`; gating them buys nothing.
   "**/package-lock.json",
   "**/lazy-lock.json",
+  # The AFK runner's stage fragments: shfmt's own indentation would move the
+  # tokens' columns, and the fragments' bytes up to each token are load-bearing
+  # - the values map in runner.nix supplies the inline script's exact
+  # indentation, and the @DENIED_LINES@ token must sit flush left for it to.
+  # prompts/.markdownlint-cli2.yaml scopes the Markdown half the same way.
+  "modules/services/afk-agent/lib/**/*.sh",
 ]
 
 [formatter.nix]

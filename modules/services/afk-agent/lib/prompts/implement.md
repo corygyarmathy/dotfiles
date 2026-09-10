@@ -12,7 +12,7 @@ Scope:
   file under `checks/`, add that check's name to
   `jobs.checks.strategy.matrix.check` in `.github/workflows/ci.yml` and
   change nothing else in that file: no other key, no existing entry
-  altered or removed. The name must match ^[a-z][a-z0-9-]*$ and must be a
+  altered or removed. The name must match `^[a-z][a-z0-9-]*$` and must be a
   check the flake actually exposes. A new check that is not in that matrix
   never runs, and CI fails the build for saying so.
 - Do not push, do not open a pull request, and do not edit, close or

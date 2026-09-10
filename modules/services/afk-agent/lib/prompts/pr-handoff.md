@@ -27,4 +27,3 @@ here is worth nothing. It was asked, among other things, to report any
 claim in a commit message above that is not true of the diff.
 
 ---
-
