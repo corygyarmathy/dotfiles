@@ -56,7 +56,10 @@
 # the local branch to the pull request's head before checking it out,
 # which is what "resume at the PR head" means when the local branch and
 # origin can disagree: origin is what the pull request is from, and the
-# push after the revision must land on top of it.
+# push after the revision is leased to it (`--force-with-lease`, in
+# `push_branch`): it refuses a head nobody else pushed, and permits the
+# rewriting of this branch's own agent-authored commits - amend, rebase -
+# that a review round is otherwise forced to awkward extra commits for.
 #
 # The denylist is re-derived rather than inherited. The prose checks that
 # guard a ticket's body deliberately do NOT run here - the pull request's
@@ -124,6 +127,11 @@ if [ "$flow" = revise ]; then
 	# Origin is never rewritten by this; only the local ref moves, and only
 	# onto origin.
 	worktree="$worktrees/$slug"
+	# The lease the pushes carry: the origin head the round resumed at,
+	# whatever the session does to the local branch - plain commit, amend,
+	# rebase - on top of it. `push_branch` advances it on every landing, so a
+	# CI fix round's second push leases to the revision's own pushed head.
+	push_lease="$(git -C "$checkout" rev-parse "refs/remotes/origin/$branch")"
 	git -C "$checkout" worktree add -B "$branch" "$worktree" "origin/$branch" ||
 		unclaim_pr_and_die "resuming $branch at $worktree failed; the claim is undone and the next poll will try again"
 
@@ -238,7 +246,7 @@ if [ "$flow" = revise ]; then
 		printf '%s\n' "AFK agent: revision round $round of @MAX_REVISION_ROUNDS@."
 		printf '%s\n' ""
 		printf '%s\n' \
-			"This round addressed the \`/revise\` request that started it, and the review comments behind it, from accounts other than the agent's own. The change passed the local gate and was pushed to \`$branch\` on top of what the reviewer read. What follows is the revision session's own account of what it addressed and what it did not, unedited:"
+			"This round addressed the \`/revise\` request that started it, and the review comments behind it, from accounts other than the agent's own. The change passed the local gate and was pushed to \`$branch\`, behind a lease: it landed only because nobody has pushed to the branch since this round resumed at the commit the reviewer read, and the round's commit may therefore amend or replay the work the reviewer saw rather than only adding to it. What follows is the revision session's own account of what it addressed and what it did not, unedited:"
 		printf '%s\n' ""
 		printf '%s\n' "$revise_report"
 	} >"$revise_comment"

@@ -43,6 +43,12 @@ Scope:
   push cannot carry. Then commit your work to this branch before you
   finish. Uncommitted work does not exist: the runner pushes commits, and
   nothing else.
+- Committing on top of the branch's head is the usual shape, and amending
+  or replaying the branch's own commits is equally allowed when that is
+  the cleaner response to the review. Either way is safe: the runner's
+  push is leased to the head this round started from, so a rewrite lands
+  unless somebody has pushed since, and a push by somebody else holds
+  everything back.
 
 The gate is the same one the original work passed: `nix fmt -- --ci`, a
 `nix build` of each check the flake exposes, a build of every host, and

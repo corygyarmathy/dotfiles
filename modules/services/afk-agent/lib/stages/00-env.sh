@@ -61,6 +61,18 @@ tracker_kind="issue"
 checkout="$state_dir/checkout"
 worktrees="$state_dir/worktrees"
 
+# 90-push.sh reads this: the remote head every revision lane's push is
+# leased to. Empty for the whole ticket lane, whose first push is a branch
+# nothing can be objecting to - it has never been pushed - and whose CI fix
+# rounds push a head only this run has written. The revision lane (150)
+# sets it to the origin head the round resumed at, where make-of-a-rewrite -
+# amend, rebase, anything - is permitted work, and `push_branch` advances it
+# to the pushed head on every landing: the lease then holds against both the
+# foreign head a plain push would have refused and the head a human's push
+# would have undercut. A lease that misses is the same hand-back shape as a
+# rejected push has always been.
+push_lease=""
+
 # The ntfy server and topic the two notifications publish to. Deliberately not an environment seam: the URL and topic are the
 # behaviour under test, and the check asserts the exact POST the runner
 # would make against the values the module evaluated.
