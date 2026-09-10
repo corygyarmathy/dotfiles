@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# --- notifications (item 9, #176) --------------------------------------
+# --- notifications (#176) ----------------------------------------------
 #
 # Two conditions have to reach a person who is not watching GitHub: a
 # pull request is ready for review, and the pipeline is stuck on a

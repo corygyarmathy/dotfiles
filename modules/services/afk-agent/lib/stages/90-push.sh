@@ -8,8 +8,8 @@
 # workflow file is refused exactly as the original diff would have been.
 #
 # An explicit refspec rather than a bare `git push`: what gets pushed
-# should not depend on push.default, nor on an upstream item 5 went out
-# of its way not to set. Never `--force`, and never a refspec that could
+# should not depend on push.default, nor on an upstream this script sets,
+# nor on a local push.default configuration gone wrong. Never `--force`, and never a refspec that could
 # become one: a branch a human may already be reading is not rewritten
 # underneath them (ADR 0007 §4).
 #

@@ -41,7 +41,7 @@ log "#$number: reviewing $branch in a fresh session"
 
 # The overlay is set on the one command it governs rather than exported
 # for the rest of the run. An `export` here would outlive the stage, and
-# what it would hand item 7 (#174) is a deny-set containing `gh pr*` and
+# what it would hand the pre-push stage (#174) is a deny-set containing `gh pr*` and
 # `git commit*` - the two verbs that stage exists to use. Scoping it is
 # also the honest shape: it describes this session, not this process.
 review_rc=0
@@ -83,7 +83,7 @@ review_session="$(session_id_for "$worktree" "$review_title")"
 # runner with none of the diagnosis this stage exists to print.
 jq -e 'has("messages") and (.messages | type == "array")' \
 	"$review_dir/session.json" >/dev/null 2>&1 ||
-	hand_back "the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (plan item 1). $unfinished"
+	hand_back "the review transcript at $review_dir/session.json is not a readable session, so nothing can be verified from it; opencode export truncates on large sessions (checked/run by checks/afk-agent-runner.nix). $unfinished"
 
 # --- did a review actually happen -------------------------------------
 #

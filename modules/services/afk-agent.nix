@@ -174,6 +174,13 @@ let
   # boundary - and this process holds a PAT that can push. What does not depend
   # on the model behaving is `push_gate` below, which reads the diff itself
   # immediately before the push.
+  #
+  # Deliberately not an option (#210), and not only because there is one fleet:
+  # a per-host override of what the agent may not do is exactly what the soft
+  # control above makes it look like it can be, and widening it would weaken
+  # the one bound (`permissionOverlay` and `reviewOverlay` together) that
+  # stops the agent doing its own writeback. Change here must land here, in
+  # review, where the denial pattern is read as a decision.
   permissionOverlay = builtins.toJSON {
     permission.bash = {
       "git push*" = "deny";
@@ -203,7 +210,9 @@ let
   # which the implement session needs and this one must not have.
   #
   # Same soft-control caveat as `permissionOverlay`: this is a pattern match
-  # on a command line, not a capability boundary.
+  # on a command line, not a capability boundary. Deliberately not an option,
+  # for the same reason `permissionOverlay` is not one (see its comment
+  # above).
   reviewOverlay = builtins.toJSON {
     permission = {
       edit = "deny";
@@ -249,7 +258,7 @@ let
     # cannot be shadowed: the JWT it signs is the credential-critical path, so
     # the check asserting the real binary by name is a property worth keeping.
     # `curl` used to sit beside it, and moved out when the ntfy notifications
-    # (item 9, #176) became the one thing the check has to be able to
+    # #176 became the one thing the check has to be able to
     # intercept - with the App token mint stubbed through `AFK_GH_TOKEN`,
     # curl's only reachable use in a check run is the notification POST, and
     # the harness records those calls exactly like it records `gh`'s. In
@@ -310,14 +319,14 @@ in
     enable = lib.mkEnableOption ''
       the unattended AFK ticket runner.
 
-      The pre-push denylist gate this switch used to wait on has landed (item
-      7, #174), and so has the stuck path (item 8, #175): a ticket the runner
+      The pre-push denylist gate this switch used to wait on has landed (#174),
+      and so has the stuck path (#175): a ticket the runner
       cannot carry to a hand-off is commented on, relabelled `agent-stuck`,
       and torn down - so a failure neither wedges the next poll nor strands a
       claimed ticket. Past the push the hand-back reaches the pull request
       too: it is commented on and left open without the hand-off label, since
       it holds real work (ADR 0007 §2). Notifications through the self-hosted
-      ntfy server (item 9, #176) - a handed-over pull request and a handed-back
+      ntfy server (#176) - a handed-over pull request and a handed-back
       ticket, both at the lane's silent, informational level - are wired to
       the same switch and go off with it. OpenCode Go usage approaching a cap
       is tracked separately against OpenCode's own usage API (see #221),
@@ -378,7 +387,7 @@ in
         Concurrency here is one (ADR 0004 §8), so a run that hangs blocks every
         later poll until this ceiling stops it, and a run that reaches it is
         killed mid-ticket; the next poll's guard finds the worktree it left
-        and hands that ticket back (item 8, #175) - leaving an open pull
+        and hands that ticket back (#175) - leaving an open pull
         request untouched too, past the push (ADR 0007).
       '';
     };
@@ -410,7 +419,7 @@ in
         The default leaves roughly 9 GB for everything else on homelab01,
         whose other services sit at about 6 GB. Reaching it kills inside this
         cgroup: the run dies, its worktree is left, and the next poll's guard
-        hands the ticket back (item 8) - the same ending as the runtime
+        hands the ticket back (#175) - the same ending as the runtime
         ceiling, and a far better one than taking the host with it.
 
         `MemoryHigh` is deliberately not set alongside it. `MemoryHigh`
@@ -566,7 +575,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # The three credentials this service needs (item 11), read from the file
+    # The three credentials this service needs, read from the file
     # homelab01 itself decrypts. No `owner`: they are handed to the unit with
     # `LoadCredential`, which systemd reads as root and copies into the unit's
     # private credentials directory before it drops to the account below - so

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# --- what item 4 hands over ------------------------------------------
+# --- the pre-flight assertions ----------------------------------------
 #
 # Asserted before anything is polled or claimed, so that a missing
 # credential or a tool that fell off the unit's PATH fails on an empty

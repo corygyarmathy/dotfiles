@@ -95,7 +95,7 @@ grep -q '[^[:space:]]' "$review_dir/findings.md" ||
 # outcome is decided entirely by the provenance checks: a review that can
 # be shown to have run gets its findings carried, and one that cannot has
 # already died above.
-log "#$number: review ran and left $(wc -l <"$review_dir/findings.md") lines of findings in $review_dir/findings.md for the pull request; this stage is advisory and does not gate (plan item 6)"
+log "#$number: review ran and left $(wc -l <"$review_dir/findings.md") lines of findings in $review_dir/findings.md for the pull request; this stage is advisory and does not gate (ADR 0007 §3)"
 
 # --- did the review write anything anyway -----------------------------
 #

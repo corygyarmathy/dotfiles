@@ -3,8 +3,10 @@
 # Each fragment is plain shell with @TOKEN@ placeholders where a Nix value
 # belongs (plain files, so shellcheck and editors see real shell instead of a
 # Nix string). This file substitutes the values and concatenates the stages
-# in pipeline order. The assembled text is byte-identical to the inline
-# script this replaced; checks/afk-agent-runner.nix pins the behaviour.
+# in pipeline order. The fragments are the inline script this replaced:
+# the logic is unchanged, whitespace and comment wording drifted in the
+# move, and the generated values below match the old inline expressions
+# byte for byte. Behaviour is pinned by checks/afk-agent-runner.nix.
 {
   lib,
   stateDir,
@@ -88,9 +90,11 @@ let
     "@NTFY_URL@" = ntfyUrl;
     "@NTFY_TOPIC@" = ntfyTopic;
     # The three generated line groups reproduce the inline expressions
-    # exactly: Nix strips the block's 6-space indent from the token's own
-    # line but leaves each value's embedded newlines verbatim, so the first
-    # entry carries its indent here while the rest carry the separator's.
+    # exactly. builtins.readFile does no indentation handling, so the
+    # placeholder's own indent lives here in the separator values: the
+    # "  " prefix and the "\n        " separators below are the same bytes
+    # the inline script produced, not anything the substitution mechanism
+    # supplies. checks/afk-agent-runner.nix pins this behaviour.
     "@DENIED_LINES@" = "  " + lib.concatMapStringsSep "\n        " (p: "\"${p}\"") deniedPaths;
     "@SESSION_LIST_DEPTH@" = toString sessionListDepth;
     "@HANDOFF_LABEL@" = handoffLabel;
