@@ -68,5 +68,5 @@ ntfy_url="@NTFY_URL@"
 ntfy_topic="@NTFY_TOPIC@"
 
 denied=(
-@DENIED_LINES@
+	@DENIED_LINES@
 )

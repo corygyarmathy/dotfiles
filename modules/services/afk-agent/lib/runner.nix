@@ -104,11 +104,15 @@ let
     "@NTFY_TOPIC@" = ntfyTopic;
     # The three generated line groups reproduce the inline expressions
     # exactly. builtins.readFile does no indentation handling, so the
-    # placeholder's own indent lives here in the separator values: the
-    # "  " prefix and the "\n        " separators below are the same bytes
-    # the inline script produced, not anything the substitution mechanism
-    # supplies. checks/afk-agent-runner.nix pins this behaviour.
-    "@DENIED_LINES@" = "  " + lib.concatMapStringsSep "\n        " (p: "\"${p}\"") deniedPaths;
+    # indentation the substitution produces lives here in the separator values:
+    # the token's own indent opens the first line and the separator carries
+    # every further line. The @DENIED_LINES@ token sits inside
+    # `denied=( ... )` and shfmt - the formatting pipeline, since #245 -
+    # indents the token line one tab, so the separator continues each further
+    # entry at that same tab and every entry reads as one array at the indent
+    # shfmt itself would give it. checks/afk-agent-runner.nix pins this
+    # behaviour.
+    "@DENIED_LINES@" = lib.concatMapStringsSep "\n\t" (p: "\"${p}\"") deniedPaths;
     "@SESSION_LIST_DEPTH@" = toString sessionListDepth;
     "@HANDOFF_LABEL@" = handoffLabel;
     "@REQUIRE_CREDENTIAL_LINES@" = lib.concatMapStringsSep "\n      " (
