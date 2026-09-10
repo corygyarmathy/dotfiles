@@ -1,0 +1,10 @@
+# Scoped out of the repository's canonical config (.markdownlint-cli2.yaml at
+# the root, which this file sits below and is discovered from by every caller
+# of markdownlint - treefmt/nix fmt, the editor, and the harness formatter).
+#
+# The prompts in this directory are prose handed to a session, not documents:
+# they open mid-thought by design, and the review prompt must start with the
+# exact sentence checks/afk-agent-runner.nix detects it by, so no heading can
+# be added (MD041).
+config:
+  MD041: false
