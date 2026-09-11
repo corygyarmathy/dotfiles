@@ -1,6 +1,19 @@
 # ADR 0004: AFK agent runs self-hosted, with a harness split from planning
 
 - **Status:** Proposed. The pipeline runs on homelab01 as a working prototype, not yet a settled design; three clauses are amended by later ADRs. [ADR 0006](0006-the-runner-is-a-github-app.md): §4's credential is an App installation token rather than a fine-grained PAT - its no-second-account clause is upheld rather than reversed, because a GitHub App is not a second account; and §3's claim marker is a label rather than an assignee, because an App cannot hold an assignment. [ADR 0007](0007-the-pull-request-opens-before-the-review.md): §6's closing "never a PR" is narrowed - the pull request now opens before the review, so a run that fails after the push leaves one open, and the same section's retry-in-the-same-session rule is extended to a red CI run. Every other decision here, §9 included, stands.
+
+    **Amended 2026-09-11 (the prototype is being replaced, not extended).** The runner this ADR describes is a bash prototype, and its successor is a Go program in its own repository - [`corygyarmathy/afk-agent`](https://github.com/corygyarmathy/afk-agent), ADR 0001 - whose founding decisions are recorded there rather than here. Four clauses of this ADR are changed by that, and the rest continue to describe the prototype accurately for as long as it runs.
+
+    §2's harness split holds - Claude Code interactive, OpenCode unattended - but the clause leaves model choice to a pilot, and the pilot's answer has been superseded by a structure rather than a name: a job kind declares the capabilities and quality tier it requires, and a resolver picks among models a human has enrolled in that tier. A single settled model name is no longer the shape of the answer.
+
+    §6's retry semantics are relocated rather than reversed. "Retry inside the session that produced the failure" and "review is always a fresh context" both stand, but the unit that retries becomes a transition rather than a session, and a transient provider failure retries at the next enrolled model in the same tier instead of consuming the ticket's budget.
+
+    §8 is superseded. Serial execution was chosen because an unproven runner should fail in one place at a time; the successor replaces it with two independent limits - worker parallelism, and named capacity-limited resource tokens a transition must hold to run - so that one nix build at a time and many concurrent API calls can both be true. See `afk-agent` ADR 0001 §8.
+
+    §3's claim convention is refined. A tracker-visible claim cannot express "held by a process that may have died", which is the root of the duplicate-reply defects observed against this prototype. The successor keeps the claim and adds a local expiring lease alongside it, as two distinct concepts.
+
+    Not changed by any of this: §1 (self-hosted on homelab01), §4 (the runner's own GitHub identity, as already amended by ADR 0006), §5 (eligibility bounded by a path denylist, enforced twice), §7 (a real NixOS module with a one-boolean kill switch - which now packages the Go agent as a flake input), and §9 (merge stays a human act), which the successor restates for its own repository.
+
 - **Date:** 2026-09-07
 - **Related Artefacts:**
     - Implemented by: `modules/services/afk-agent.nix`, which owns this design's parameters - counts, prefixes, paths and option names; this ADR states decisions only. The measured evidence behind them is in `docs/research/afk-agent-pilot-findings.md`.
