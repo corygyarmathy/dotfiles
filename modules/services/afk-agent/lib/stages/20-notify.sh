@@ -45,15 +45,20 @@ notify() {
 
 # The stuck notification the two stuck paths share: one title,
 # tag and priority, differing only in the prose that names the ticket.
-# The ticket URL is the one line both must carry - a stuck notification
-# that does not point at its ticket is a phone alert pointing at nothing.
+# The tracker link is the one line both must carry - a stuck notification
+# that does not point at where the story lives is a phone alert pointing
+# at nothing. An optional third argument overrides the link for a
+# hand-back whose surface is the pull request rather than the ticket
+# (#271); the default follows `$tracker_kind`.
 notify_stuck() {
-	local reason=$1 status=$2
+	local reason=$1 status=$2 tail=${3:-}
 	notify low octagonal_sign "AFK agent stuck on #$number" \
 		"$(printf '%s\n%s\n%s' \
 			"$reason" \
 			"$status" \
-			"$(if [ "$tracker_kind" = pr ]; then
+			"$(if [ -n "$tail" ]; then
+				printf '%s' "$tail"
+			elif [ "$tracker_kind" = pr ]; then
 				printf 'Pull request: https://github.com/%s/pull/%s' "$repo" "$number"
 			else
 				printf 'Ticket: https://github.com/%s/issues/%s' "$repo" "$number"
