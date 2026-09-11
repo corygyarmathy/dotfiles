@@ -27,11 +27,21 @@ if [ "$flow" = issue ]; then
 			-e "s|BRANCH|$branch|g" \
 			-e "s|IMPLEMODEL|@MODEL@|g" \
 			-e "s|REVIEWMODEL|@REVIEW_MODEL@|g" \
+			-e "s|REVIEWAXESNOTE|$review_axes_note|g" \
 			-e "s/ATTEMPTS/$attempt/g" \
 			-e "s/CIROUNDS/$ci_round/g" \
 			-e "s|HANDOFF|@HANDOFF_LABEL@|g" \
 			"$1"
 	}
+
+	# The hand-off comment's shape certification (#269): what the runner can
+	# say about the review's fan-out, read at hand-off (140-handoff.sh,
+	# review stage 130). The default is the verified two-axis sentence; the
+	# degraded cases overwrite it before the comment is built. Empty here,
+	# at pull-request creation time, because @PR_INTRO@ does not carry the
+	# token and the review has not run yet.
+	review_axes_note="It ran across the skill's two axes - standards and spec, in separate sub-agent contexts - and the runner verified that fan-out from the session transcript rather than from the session's own account of itself, and would not have applied the hand-off label otherwise."
+	review_degraded=0
 
 	# The body, rendered from whatever is known at the moment it is called.
 	# Called twice: once now, and once at the end of the run. Re-rendered

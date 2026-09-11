@@ -7,11 +7,8 @@ what only CI runs: a cold runner, the sharded check matrix, and every host
 built from an empty store.
 
 `code-review` then ran against this branch on `REVIEWMODEL`, in a fresh
-context, across its standards and spec axes. The runner verified that from
-the session transcript rather than from the session's own account of
-itself, and would not have applied `HANDOFF` otherwise. It decided nothing,
-and nothing downstream read it as a decision
-(`docs/research/afk-agent-pilot-findings.md`).
+context. REVIEWAXESNOTE It decided nothing, and nothing downstream read
+it as a decision (`docs/research/afk-agent-pilot-findings.md`).
 
 It also could not have changed what is in this pull request. It ran after
 the push, against a branch nothing pushes again, so its report is the

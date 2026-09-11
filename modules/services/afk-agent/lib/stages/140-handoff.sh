@@ -57,9 +57,17 @@ if [ "$flow" = issue ]; then
 	# label, delivered to somebody who is not watching GitHub. Priority low
 	# - informational, silent, the lane's warning level - because nothing
 	# here is wrong and nothing is waiting on this beyond a person finding
-	# a quiet moment to read the diff.
-	notify low white_check_mark "AFK agent: PR ready for review (#$number)" \
-		"$(printf '%s\n%s' "$pr_url" "$title")"
+	# a quiet moment to read the diff. A degraded review (#269) is exactly
+	# the same kind of news, plus one sentence: the finding's provenance
+	# caveat repeats here, so the rate this happens at is observable
+	# without opening the pull request.
+	notify_title="AFK agent: PR ready for review (#$number)"
+	notify_body="$(printf '%s\n%s' "$pr_url" "$title")"
+	if [ "$review_degraded" -eq 1 ]; then
+		notify_title="AFK agent: PR ready for review, degraded (#$number)"
+		notify_body="$(printf '%s\n%s\n\n%s' "$pr_url" "$title" "$review_axes_note")"
+	fi
+	notify low white_check_mark "$notify_title" "$notify_body"
 
 	# --- and nothing is left in flight ------------------------------------
 	#

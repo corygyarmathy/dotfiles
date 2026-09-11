@@ -684,7 +684,12 @@ in
     reviewAxes = lib.mkOption {
       type = lib.types.int;
       default = 2;
-      description = "Sub-agent contexts a genuine `code-review` pass fans out into: standards and spec.";
+      description = ''
+        Sub-agent contexts a genuine `code-review` pass fans out into: standards and spec.
+        The count is provenance rather than a pass condition: a transcript that cannot
+        show this many identifiable-axes calls degrades the hand-off's certification
+        instead of failing the run (#269).
+      '';
     };
   };
 

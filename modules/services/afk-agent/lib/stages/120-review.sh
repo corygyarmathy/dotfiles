@@ -16,8 +16,11 @@
 # What it still is: the one stage whose output is prose, and the one
 # nothing downstream can check. So nothing here believes the session's
 # own account of what it did - every claim below is read out of the
-# transcript instead, and each of those checks is fatal, because a review
-# that cannot be shown to have happened is not a review that passed.
+# transcript instead. The skill call and the closing report remain fatal,
+# because output that may not be the skill's, or no output at all, is
+# nothing to hand a person (ADR 0007 §3); the fan-out's shape, checked in
+# 130-verify-review.sh, degrades the certification rather than the run
+# (#269).
 #
 # `--dir` is the load-bearing flag: opencode resolves its project, and
 # with it skill discovery, from the directory it is launched in, and a
