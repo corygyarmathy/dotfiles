@@ -1930,8 +1930,22 @@ pkgs.runCommand "check-afk-agent-runner"
       if grep -q "degraded_what" "$state/run/findings-comment.md"; then
         fail "$collapsed: an unrendered variable reached the comment: $(cat "$state/run/findings-comment.md")"
       fi
+      # The caveat names the subject actually missing rather than claiming
+      # both are absent: a one-axis transcript still shows a standards
+      # subject, and "neither ... nor ..." would lie about that (#269).
+      if [ "$collapsed" = oneaxis ]; then
+        grep -q "no spec subject is identifiable" "$state/run/findings-comment.md" \
+          || fail "$collapsed: the caveat did not name the missing subject: $(cat "$state/run/findings-comment.md")"
+        if grep -qE "neither a standards nor a spec subject" "$state/run/findings-comment.md"; then
+          fail "$collapsed: the caveat claims both subjects are absent when a standards subject is shown: $(cat "$state/run/findings-comment.md")"
+        fi
+      fi
       grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
         || fail "$collapsed: the degraded run was not handed over: $(ghlog)"
+      grep -q "ready for review, degraded" "$state/ntfy.log" \
+        || fail "$collapsed: the degradation did not reach the notification: $(ntfylog)"
+      grep -q "performed inline in the parent context" "$state/ntfy.log" \
+        || fail "$collapsed: the notification did not repeat the caveat: $(ntfylog)"
     done
 
     echo "case: two sub-agents sent elsewhere degrade the certification, not the run"
@@ -1947,6 +1961,10 @@ pkgs.runCommand "check-afk-agent-runner"
       || fail "the caveat is not on the findings' face: $(cat "$state/run/findings-comment.md")"
     grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
       || fail "a degraded review was not handed over: $(ghlog)"
+    grep -q "ready for review, degraded" "$state/ntfy.log" \
+      || fail "the degradation did not reach the notification: $(ntfylog)"
+    grep -q "not shown to be independently derived" "$state/ntfy.log" \
+      || fail "the notification did not repeat the caveat: $(ntfylog)"
 
     echo "case: a review that produced no report has produced nothing, and stops the ticket"
     # The one thing about the closing report that survived dropping the verdict.

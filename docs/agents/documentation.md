@@ -8,7 +8,7 @@ Problem statement and acceptance criteria. Doesn't move once implementation star
 
 ## ADR - a decision, one per file, append-only
 
-See [`domain.md`](domain.md) for the full discipline: what counts as a decision versus a parameter, and why an ADR is never amended in place - a changed decision gets a new ADR, and the old one is marked superseded rather than rewritten.
+See [`domain.md`](domain.md) for the full discipline: what counts as a decision versus a parameter, and why an accepted ADR is never amended in place - a changed decision gets a new ADR, and the old one is marked superseded rather than rewritten. A Proposed ADR may still be amended in place.
 
 ## Plan - the work, disposable
 

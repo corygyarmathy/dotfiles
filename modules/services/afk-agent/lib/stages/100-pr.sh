@@ -34,14 +34,16 @@ if [ "$flow" = issue ]; then
 			"$1"
 	}
 
-	# The hand-off comment's shape certification (#269): what the runner can
-	# say about the review's fan-out, read at hand-off (140-handoff.sh,
-	# review stage 130). The default is the verified two-axis sentence; the
-	# degraded cases overwrite it before the comment is built. Empty here,
-	# at pull-request creation time, because @PR_INTRO@ does not carry the
-	# token and the review has not run yet.
-	review_axes_note="It ran across the skill's two axes - standards and spec, in separate sub-agent contexts - and the runner verified that fan-out from the session transcript rather than from the session's own account of itself, and would not have applied the hand-off label otherwise."
-	review_degraded=0
+	# The hand-off comment's shape certification (#269): the default note
+	# pr_prose puts behind the REVIEWAXESNOTE token is the verified two-axis
+	# sentence, set here so the substitution always has prose to render. It
+	# is only read at hand-off (140-handoff.sh): @PR_INTRO@, rendered at
+	# creation time, does not carry the token, and the review has not run
+	# yet. A transcript the verify stage (130) cannot certify overwrites the
+	# note and leaves its description in degraded_what, which the hand-off
+	# reads as the degradation flag.
+	review_axes_note="It ran across the skill's two axes - standards and spec, in separate sub-agent contexts - and the runner verified that fan-out from the session transcript rather than from the session's own account of itself."
+	degraded_what=""
 
 	# The body, rendered from whatever is known at the moment it is called.
 	# Called twice: once now, and once at the end of the run. Re-rendered
