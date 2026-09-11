@@ -29,6 +29,7 @@
   maxAttempts,
   model,
   variant,
+  quietHours,
   permissionOverlay,
   reviewModel,
   prIntro,
@@ -69,6 +70,10 @@ let
     "20-notify.sh"
     "30-stuck.sh"
     "40-preflight.sh"
+    # The quiet-hours gate (#211), ahead of the poll. The full why lives in
+    # the `quietHours` option's description; this is only its place in the
+    # order.
+    "45-quiet-hours.sh"
     "50-poll-claim.sh"
     "60-isolate.sh"
     # The shared attempt loop (#243) rather than a stage: it defines the
@@ -117,6 +122,9 @@ let
     # reads at the indent shfmt itself would give the expanded script.
     # Behaviour is pinned by checks/afk-agent-runner.nix.
     "@DENIED_LINES@" = lib.concatMapStringsSep "\n\t" (p: "\"${p}\"") deniedPaths;
+    # The quiet-hours windows (#211), rendered the same way as
+    # @DENIED_LINES@ - quoted entries at the array's continuation indent.
+    "@QUIET_HOURS_LINES@" = lib.concatMapStringsSep "\n\t" (p: "\"${p}\"") quietHours;
     "@SESSION_LIST_DEPTH@" = toString sessionListDepth;
     "@HANDOFF_LABEL@" = handoffLabel;
     "@REQUIRE_CREDENTIAL_LINES@" = lib.concatMapStringsSep "\n" (
