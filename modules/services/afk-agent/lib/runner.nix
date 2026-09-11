@@ -29,7 +29,7 @@
   maxAttempts,
   model,
   variant,
-  busyTimes,
+  quietHours,
   permissionOverlay,
   reviewModel,
   prIntro,
@@ -70,9 +70,9 @@ let
     "20-notify.sh"
     "30-stuck.sh"
     "40-preflight.sh"
-    # The quiet-hours gate (#211) sits ahead of the poll: a run starting
-    # inside a busy window starts nothing at all - no frontier query, no
-    # claim, no session.
+    # The quiet-hours gate (#211), ahead of the poll. The full why lives in
+    # the `quietHours` option's description; this is only its place in the
+    # order.
     "45-quiet-hours.sh"
     "50-poll-claim.sh"
     "60-isolate.sh"
@@ -122,10 +122,9 @@ let
     # reads at the indent shfmt itself would give the expanded script.
     # Behaviour is pinned by checks/afk-agent-runner.nix.
     "@DENIED_LINES@" = lib.concatMapStringsSep "\n\t" (p: "\"${p}\"") deniedPaths;
-    # Same generated shape as @DENIED_LINES@, for the busy windows
-    # (#211): each entry rendered as a quoted string at the array's
-    # continuation indent.
-    "@BUSY_LINES@" = lib.concatMapStringsSep "\n\t" (p: "\"${p}\"") busyTimes;
+    # The quiet-hours windows (#211), rendered the same way as
+    # @DENIED_LINES@ - quoted entries at the array's continuation indent.
+    "@QUIET_HOURS_LINES@" = lib.concatMapStringsSep "\n\t" (p: "\"${p}\"") quietHours;
     "@SESSION_LIST_DEPTH@" = toString sessionListDepth;
     "@HANDOFF_LABEL@" = handoffLabel;
     "@REQUIRE_CREDENTIAL_LINES@" = lib.concatMapStringsSep "\n" (

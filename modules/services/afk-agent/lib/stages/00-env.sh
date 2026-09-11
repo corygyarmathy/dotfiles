@@ -83,9 +83,9 @@ denied=(
 	@DENIED_LINES@
 )
 
-# The busy windows (#211), in the shape `HH:MM-HH:MM`. Empty by default,
-# which is what production evaluates to - the gate in 45-quiet-hours.sh
-# does nothing at all on an empty array.
-busy=(
-	@BUSY_LINES@
+# The quiet hours (#211), each entry a `HH:MM-HH:MM` window. Empty by
+# default, which is what production evaluates to - the gate in
+# 45-quiet-hours.sh does nothing at all on an empty array.
+quiet_hours=(
+	@QUIET_HOURS_LINES@
 )

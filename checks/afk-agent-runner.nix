@@ -42,11 +42,11 @@
   self,
 }:
 let
-  # Two evaluations of the same module: the production default - no busy
+  # Two evaluations of the same module: the production default - no quiet-hours
   # windows, what homelab01 evaluates to - and one with the quiet-hours
   # fixture windows set (#211). Every case written before the gate existed
   # runs against the default and proves the empty list gates nothing; the
-  # quiet-hours cases below run against the busy eval's script, because a
+  # quiet-hours cases below run against the quiet eval's script, because a
   # gate whose list is empty has nothing to gate with and the harness must
   # not be free to reach for a value the module did not supply.
   mkEval =
@@ -83,9 +83,9 @@ let
   # Deliberately disjoint - 04:00-05:00 must sit outside the overnight
   # span, or the boundary cases below could not tell which window they
   # were on the edge of.
-  busyEval = mkEval [
+  quietEval = mkEval [
     {
-      cg.service.afk-agent.busyTimes = [
+      cg.service.afk-agent.quietHours = [
         "04:00-05:00"
         "23:30-03:30"
       ];
@@ -93,7 +93,7 @@ let
   ];
 
   runnerScript = eval.config.systemd.services.afk-agent.serviceConfig.ExecStart;
-  busyRunnerScript = busyEval.config.systemd.services.afk-agent.serviceConfig.ExecStart;
+  quietRunnerScript = quietEval.config.systemd.services.afk-agent.serviceConfig.ExecStart;
 
   # The unit's own PATH, taken from the same evaluation the script comes from
   # rather than restated here. `systemd.services.<name>.path` is already the
@@ -109,7 +109,7 @@ pkgs.runCommand "check-afk-agent-runner"
       pkgs.jq
     ];
     script = builtins.toString runnerScript;
-    busyScript = builtins.toString busyRunnerScript;
+    quietScript = builtins.toString quietRunnerScript;
     eligibilityDoc = ../docs/agents/afk-eligibility.md;
   }
   ''
@@ -1223,13 +1223,13 @@ pkgs.runCommand "check-afk-agent-runner"
     # the session is for.
     run() {
       local name=$1 fixture=$2 reuse=''${3:-fresh} plan=''${4:-good} review=''${5:-pass} ci=''${6:-green} rebase=''${7:-} which=''${8:-default}
-      # The quiet-hours cases (the 8th argument) drive the busy eval's
+      # The quiet-hours cases (the 8th argument) drive the quiet eval's
       # script, whose module carries the fixture windows; everything else
-      # drives the production default, proving the empty busyTimes list
+      # drives the production default, proving the empty quietHours list
       # gates nothing by every case here reaching its poll.
       local under_test="$script"
-      if [ "$which" = busy ]; then
-        under_test="$busyScript"
+      if [ "$which" = quiet ]; then
+        under_test="$quietScript"
       fi
       state="$work/state/$name"
       if [ "$reuse" = "fresh" ]; then
@@ -1374,28 +1374,28 @@ pkgs.runCommand "check-afk-agent-runner"
     # all downstream of a claim, and an empty poll has none of them.
     [ "$(ntfy_posts)" -eq 0 ] || fail "an empty poll published a notification: $(ntfylog)"
 
-    echo "case: a poll inside a busy window starts nothing (quiet hours, #211)"
+    echo "case: a poll inside a quiet-hours window starts nothing (quiet hours, #211)"
     # The gate sits at the front of the poll, so a run inside a window
     # does nothing at all: no frontier query, no dead-run guard, no claim,
     # no session, no notification - and exits 0, because nothing being
     # scheduled is the window working, not a failure. The windows are the
-    # busy eval's fixture (04:00-05:00 and the midnight-spanning
+    # quiet eval's fixture (04:00-05:00 and the midnight-spanning
     # 23:30-03:30), read through AFK_NOW rather than the wall clock, which
     # would be testing the time of day this check happened to run at.
     #
-    # Driven against the busy eval's script (the 8th argument): the
-    # production default carries an empty busyTimes list, and that nothing
+    # Driven against the quiet eval's script (the 8th argument): the
+    # production default carries an empty quietHours list, and that nothing
     # gates there is what every other case here already proves by
     # reaching its poll.
     export AFK_NOW="04:30"
-    run quiet-window none.json fresh "" "" "" "" busy
+    run quiet-window none.json fresh "" "" "" "" quiet
     unset AFK_NOW
     [ "$rc" -eq 0 ] || fail "a blocked poll should be a quiet success, got $rc: $(cat "$state/err.log")"
-    grep -qF "quiet hours: inside a busy window; starting nothing this poll" "$state/out.log" \
+    grep -qF "quiet hours: inside a quiet-hours window; starting nothing this poll" "$state/out.log" \
       || fail "the poll did not say why it started nothing: $(cat "$state/out.log")"
-    [ ! -s "$state/gh.log" ] || fail "a poll inside a busy window asked the tracker something: $(ghlog)"
-    [ "$(ntfy_posts)" -eq 0 ] || fail "a poll inside a busy window published a notification: $(ntfylog)"
-    [ "$(attempts)" -eq 0 ] || fail "a session was opened inside a busy window"
+    [ ! -s "$state/gh.log" ] || fail "a poll inside a quiet-hours window asked the tracker something: $(ghlog)"
+    [ "$(ntfy_posts)" -eq 0 ] || fail "a poll inside a quiet-hours window published a notification: $(ntfylog)"
+    [ "$(attempts)" -eq 0 ] || fail "a session was opened inside a quiet-hours window"
 
     echo "case: a window's start minute is inside it, and its end minute is not"
     # Both ends of the boundary, pinned: the gate reads the window as
@@ -1403,12 +1403,12 @@ pkgs.runCommand "check-afk-agent-runner"
     # round would either block longer than the window says or start a
     # session on the exact minute the window opens.
     export AFK_NOW="04:00"
-    run quiet-at-start none.json fresh "" "" "" "" busy
+    run quiet-at-start none.json fresh "" "" "" "" quiet
     unset AFK_NOW
     [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
     [ ! -s "$state/gh.log" ] || fail "the window's start minute was not inside it: $(ghlog)"
     export AFK_NOW="05:00"
-    run quiet-at-end mixed.json fresh good "" "" "" busy
+    run quiet-at-end mixed.json fresh good "" "" "" quiet
     unset AFK_NOW
     [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
     grep -q "gh issue edit 302 " "$state/gh.log" \
@@ -1419,28 +1419,28 @@ pkgs.runCommand "check-afk-agent-runner"
     # the comparison a start-before-end assumption would get wrong in
     # both directions.
     export AFK_NOW="23:45"
-    run quiet-late-night none.json fresh "" "" "" "" busy
+    run quiet-late-night none.json fresh "" "" "" "" quiet
     unset AFK_NOW
     [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
     [ ! -s "$state/gh.log" ] || fail "the late side of the span was not inside it: $(ghlog)"
     export AFK_NOW="01:15"
-    run quiet-early-hours none.json fresh "" "" "" "" busy
+    run quiet-early-hours none.json fresh "" "" "" "" quiet
     unset AFK_NOW
     [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
     [ ! -s "$state/gh.log" ] || fail "the early side of the span was not inside it: $(ghlog)"
     export AFK_NOW="12:00"
-    run quiet-midday mixed.json fresh good "" "" "" busy
+    run quiet-midday mixed.json fresh good "" "" "" quiet
     unset AFK_NOW
     [ "$rc" -eq 0 ] || fail "exited $rc: $(cat "$state/err.log")"
     grep -q "gh issue edit 302 " "$state/gh.log" \
       || fail "midday was read as inside the overnight window: $(ghlog)"
 
-    echo "case: the option's windows reached the script the busy eval runs"
+    echo "case: the option's windows reached the script the quiet eval runs"
     # The blocked cases above prove a window fired; this proves the one
     # the option supplied is the one the script carries, verbatim - and
     # not that the gate would block on some value the harness invented.
-    grep -qF '"04:00-05:00"' "$busyScript" && grep -qF '"23:30-03:30"' "$busyScript" \
-      || fail "the busy eval's script does not carry the option's windows verbatim"
+    grep -qF '"04:00-05:00"' "$quietScript" && grep -qF '"23:30-03:30"' "$quietScript" \
+      || fail "the quiet eval's script does not carry the option's windows verbatim"
 
     echo "case: the query asks the tracker for the right issues in the first place"
     # The mock answers `issue list` from a fixture whatever it is asked, which

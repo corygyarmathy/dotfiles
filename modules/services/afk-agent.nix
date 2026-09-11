@@ -57,13 +57,10 @@
 # bounded round budget: three rounds per pull request, then the stuck
 # path reaches the pull request instead of the ticket.
 #
-# Quiet hours (#211): `busyTimes` holds the windows - start-end, possibly
-# spanning midnight - during which a poll starts nothing, because usage
-# billing (OpenCode Zen, the fallback after Go's capacity) is priced by
-# the hour. The gate sits at the front of the poll, ahead of the revision
-# frontier and the ticket queue: a run that has already started when a
-# window opens is not killed mid-flight, because a stranded ticket is a
-# worse price than the API spend it saves.
+# Quiet hours (#211): the `quietHours` option holds the windows during
+# which a poll starts nothing, ahead of the revision frontier and the
+# ticket queue. The full why - price, and why a run already in flight is
+# not killed - is that option's description, and is not restated here.
 {
   config,
   lib,
@@ -181,14 +178,14 @@ let
   # drives this script with the interval at zero, so second-denominated
   # bounds would test the fixture's numbers instead of production's.
 
-  # The type of one `busyTimes` entry (#211): `HH:MM-HH:MM`, both ends in
+  # The type of one `quietHours` entry (#211): `HH:MM-HH:MM`, both ends in
   # the host's local time. The regex carries the format; the check beside
   # it carries the one thing a format cannot say - that the two ends
   # differ, because a window whose ends are equal is either a zero-length
   # block or an all-day one, and neither is what anybody writing one
   # meant. A window spanning midnight is the ordinary shape here
   # (`23:30-06:30`), so start-before-end is not assumed anywhere.
-  busyWindowType =
+  quietHoursWindowType =
     let
       time = "([01][0-9]|2[0-3]):[0-5][0-9]";
     in
@@ -196,7 +193,7 @@ let
       (
         lib.types.strMatching "${time}-${time}"
         // {
-          description = "busy time window (HH:MM-HH:MM)";
+          description = "quiet hours window (HH:MM-HH:MM)";
         }
       )
       (
@@ -205,7 +202,7 @@ let
           ends = lib.splitString "-" window;
         in
         lib.head ends != lib.last ends
-        || throw "the busy time window '${window}' has equal ends; write a window with a start and a different end"
+        || throw "the quiet hours window '${window}' has equal ends; write a window with a start and a different end"
       );
 
   # The implement session's instructions: the pilot prompt plus the `ci.yml`
@@ -402,7 +399,7 @@ let
         model
         variant
         reviewModel
-        busyTimes
+        quietHours
         maxAttempts
         attemptTimeout
         gateTimeout
@@ -472,18 +469,20 @@ in
       '';
     };
 
-    busyTimes = lib.mkOption {
-      type = lib.types.listOf busyWindowType;
+    quietHours = lib.mkOption {
+      type = lib.types.listOf quietHoursWindowType;
       default = [ ];
       example = [
         "08:00-18:00"
         "23:30-06:30"
       ];
       description = ''
-        Windows during which the runner starts no work (#211). Each entry
-        is `HH:MM-HH:MM` in the host's local time, and a window may span
-        midnight (`23:30-06:30`). The default is the empty list: no
-        restrictions.
+        The quiet hours: windows during which the runner starts no work
+        (#211). Each entry is `HH:MM-HH:MM` in the host's local time, and a
+        window may span midnight (`23:30-06:30`). The default is the empty
+        list: no restrictions. This description is the full explanation of
+        the gate; the other places that mention it point here rather than
+        re-arguing it.
 
         The reason the option exists at all is price, not load: OpenCode
         Zen - the usage-based fallback behind this fleet's fixed Go
