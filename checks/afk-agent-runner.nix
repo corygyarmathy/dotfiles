@@ -1862,8 +1862,11 @@ pkgs.runCommand "check-afk-agent-runner"
     # Every way item 1 saw this stage fail was silent - the skill error went to
     # the model and to nobody else, the collapsed axes left a number in an
     # export nobody read, and the substituted review looked exactly like a real
-    # one. So each is asserted from outside, out of the transcript, and each is
-    # fatal in the fail-closed direction.
+    # one. Two of those stayed fatal: the skill call may not be the skill's
+    # output at all, and an empty report is nothing to post. The collapsed
+    # shapes are the exception now (#269): they degrade the certification
+    # rather than the run, and are pinned below with the caveats on their
+    # face.
     #
     # `noskill` is the measured one: the `skill` tool was called with
     # `code-review` and errored, and the session wrote its own review instead.
@@ -1891,24 +1894,60 @@ pkgs.runCommand "check-afk-agent-runner"
     run review-wrongskill mixed.json fresh good wrongskill
     [ "$rc" -ne 0 ] || fail "a session that ran some other skill passed as a code review"
 
-    echo "case: the two axes have to be two contexts, not one"
-    # `subagents=0` in item 1's terms: standards and spec collapsing into the
-    # parent context is the premise of this stage failing rather than erroring.
+    echo "case: a collapsed fan-out degrades the hand-off, it does not stop the run"
+    # #269: `subagents=0` in item 1's terms - standards and spec collapsing
+    # into the parent context used to fail the run fail-closed. The stage is
+    # advisory (ADR 0007 §3), so now the findings carry the degradation on
+    # their face and the ticket hands over normally: the label asserts a
+    # review ran, and the caveat keeps that sentence true whatever shape it
+    # ran in.
     for collapsed in oneaxis noaxes; do
       run "review-$collapsed" mixed.json fresh good "$collapsed"
-      [ "$rc" -ne 0 ] || fail "$collapsed: collapsed axes were accepted as a two-axis review"
-      grep -q "collapsed into one context" "$state/err.log" \
-        || fail "$collapsed: did not say the axes collapsed: $(cat "$state/err.log")"
+      [ "$rc" -eq 0 ] || fail "$collapsed: a degraded review stopped the hand-off: $(cat "$state/err.log")"
+      grep -q "degrades rather than stops" "$state/out.log" \
+        || fail "$collapsed: did not report the degradation: $(cat "$state/out.log")"
+      grep -q "performed inline in the parent context" "$state/run/findings-comment.md" \
+        || fail "$collapsed: the caveat is not on the findings' face: $(cat "$state/run/findings-comment.md")"
+      # The collapse sentence must not leak into the caveat the pull request
+      # carries: that prose describes the certification, not the failure.
+      if grep -q "degraded_what" "$state/run/findings-comment.md"; then
+        fail "$collapsed: an unrendered variable reached the comment: $(cat "$state/run/findings-comment.md")"
+      fi
+      # The caveat names the subject actually missing rather than claiming
+      # both are absent: a one-axis transcript still shows a standards
+      # subject, and "neither ... nor ..." would lie about that (#269).
+      if [ "$collapsed" = oneaxis ]; then
+        grep -q "no spec subject is identifiable" "$state/run/findings-comment.md" \
+          || fail "$collapsed: the caveat did not name the missing subject: $(cat "$state/run/findings-comment.md")"
+        if grep -qE "neither a standards nor a spec subject" "$state/run/findings-comment.md"; then
+          fail "$collapsed: the caveat claims both subjects are absent when a standards subject is shown: $(cat "$state/run/findings-comment.md")"
+        fi
+      fi
+      grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
+        || fail "$collapsed: the degraded run was not handed over: $(ghlog)"
+      grep -q "ready for review, degraded" "$state/ntfy.log" \
+        || fail "$collapsed: the degradation did not reach the notification: $(ntfylog)"
+      grep -q "performed inline in the parent context" "$state/ntfy.log" \
+        || fail "$collapsed: the notification did not repeat the caveat: $(ntfylog)"
     done
 
-    echo "case: two sub-agents sent elsewhere are not the two axes"
+    echo "case: two sub-agents sent elsewhere degrade the certification, not the run"
     # The count on its own would be satisfied by a session that fanned out
-    # twice for its own reasons. What ADR 0004 §6 asks for is the separation of
-    # standards from spec, so that is what is checked.
+    # twice for its own reasons, and the separation - not the fan-out - is
+    # what the certification asserts. Same trade as the collapsed cases
+    # (#269): what can be shown is reported, what cannot is not claimed.
     run review-wrongaxes mixed.json fresh good wrongaxes
-    [ "$rc" -ne 0 ] || fail "two unrelated sub-agents were accepted as a two-axis review"
-    grep -q "is identifiable across them" "$state/err.log" \
-      || fail "did not say the axes were unidentifiable: $(cat "$state/err.log")"
+    [ "$rc" -eq 0 ] || fail "two unrelated sub-agents stopped the hand-off: $(cat "$state/err.log")"
+    grep -q "degrades rather than stops" "$state/out.log" \
+      || fail "did not report the degradation: $(cat "$state/out.log")"
+    grep -q "not shown to be independently derived" "$state/run/findings-comment.md" \
+      || fail "the caveat is not on the findings' face: $(cat "$state/run/findings-comment.md")"
+    grep -q -- "--add-label agent-ready-for-review" "$state/gh.log" \
+      || fail "a degraded review was not handed over: $(ghlog)"
+    grep -q "ready for review, degraded" "$state/ntfy.log" \
+      || fail "the degradation did not reach the notification: $(ntfylog)"
+    grep -q "not shown to be independently derived" "$state/ntfy.log" \
+      || fail "the notification did not repeat the caveat: $(ntfylog)"
 
     echo "case: a review that produced no report has produced nothing, and stops the ticket"
     # The one thing about the closing report that survived dropping the verdict.

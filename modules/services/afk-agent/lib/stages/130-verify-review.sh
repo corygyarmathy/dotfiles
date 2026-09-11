@@ -1,11 +1,18 @@
 # shellcheck shell=bash
 # Asked of the transcript rather than of the session's own summary. A
 # stage whose failures all look like passes has to be checked from
-# outside, so these two counts are read out of the tool calls the session
+# outside, so the counts are read out of the tool calls the session
 # actually made.
 #
-# Both are fatal, and fatal in the fail-closed direction: a review that
-# cannot be shown to have happened is not a review that passed.
+# Two things are fatal, and fatal in the fail-closed direction: a review
+# that cannot be shown to have invoked the skill may be carrying output
+# that was never the skill's, and a review that produced no findings has
+# produced nothing to post. Everything between - the shape of the fan-out
+# - is provenance rather than permission: the stage decides nothing
+# (ADR 0007 §3), so when the transcript cannot show the two-axis
+# separation, the run degrades rather than stops, and the certificate
+# below is what keeps the findings from reading as what they are not.
+# (#269, the degraded review.)
 #
 # Ticket lane only (see 120-review.sh): the whole of this stage sits
 # behind the `flow` guard.
@@ -23,22 +30,37 @@ if [ "$flow" = issue ]; then
 
 	# The two axes are the point of the skill: standards and spec, in
 	# genuinely separate contexts so that neither pollutes the other. They
-	# arrive as `task` calls. Fewer means they collapsed into the parent
-	# context, which is the premise of this stage failing rather than
-	# erroring - so it is checked rather than assumed.
+	# arrive as `task` calls, and the two checks below read the shape of
+	# that fan-out off the transcript.
+	#
+	# What a bad shape costs changed with #269. It used to fail the run:
+	# ADR 0004 §6's fail-closed stance, written while the review could gate
+	# a push. The stage now decides nothing (ADR 0007 §3), its output is
+	# prose a person reads next to the diff, and the honest fix for output
+	# of the wrong shape is on its face rather than in its absence - so the
+	# run degrades: it hands over with the findings, and the note below is
+	# what a reader meets instead of the verified two-axis sentence. The
+	# degradation is also logged and carried on the notification
+	# (140-handoff.sh), so a degradation rate worth acting on stays
+	# observable without opening the pull request.
 	axes="$(
 		jq '[ .messages[].parts[]? | select(.type == "tool" and .tool == "task") ] | length' \
 			"$review_dir/session.json"
 	)"
 
-	[ "$axes" -ge @REVIEW_AXES@ ] ||
-		hand_back "the review spawned $axes sub-agent(s), not @REVIEW_AXES@; the standards and spec axes collapsed into one context (ADR 0004 §6). $unfinished"
+	if [ "$axes" -lt @REVIEW_AXES@ ]; then
+		degraded_what="the review made $axes sub-agent call(s) where the skill's @REVIEW_AXES@ are expected, so both axes appear to have been performed inline in the parent context - the two axes below are one reviewer's view, not two independently derived ones"
+		log "#$number: the review spawned $axes sub-agent(s), not @REVIEW_AXES@; the axes collapsed into one context, and the run degrades rather than stops (ADR 0007, amended - #269)"
+	fi
 
 	# And that they are the two axes rather than two sub-agents of any kind.
 	# A count alone is satisfied by a session that fanned out twice for its
 	# own reasons, which is not the same thing as standards and spec running
 	# in separate contexts - and it is the separation, not the fan-out, that
-	# ADR 0004 §6 is about.
+	# ADR 0004 §6 was about. What remains here is refusing to certify a
+	# separation nothing shows: the default note and this one wait in
+	# pr_prose behind `REVIEWAXESNOTE`, and only a transcript that shows
+	# both subjects earns the sentence asserting them.
 	#
 	# Matched over each call's description and prompt together and folded to
 	# lower case, because that wording is the model's rather than this
@@ -47,19 +69,47 @@ if [ "$flow" = issue ]; then
 	# without pinning phrasing the skill never fixed. Deliberately loose in
 	# the passing direction and strict in the one that matters: two sub-agents
 	# sent to do something else entirely do not read as a two-axis review.
-	named_axes="$(
-		jq '[ .messages[].parts[]?
+	#
+	# One boolean per subject rather than a single `all`, so the caveat can
+	# name the subject a transcript failed to show instead of claiming both
+	# are absent (#269): a one-axis transcript shows a standards subject and
+	# hides only spec, and "neither ... nor ..." would lie about that.
+	# `|| true` is a `set -euo pipefail` guard: a jq that fails must reach
+	# the `if` below and read as "no subjects named", not abort the runner.
+	axis_subjects="$(
+		jq -r '[ .messages[].parts[]?
         | select(.type == "tool" and .tool == "task")
         | ((.state.input.description // "") + " " + (.state.input.prompt // ""))
         | ascii_downcase
       ]
       | [ (map(select(test("standard"))) | length > 0),
           (map(select(test("spec"))) | length > 0) ]
-      | all' "$review_dir/session.json"
+      | map(tostring) | join(" ")' "$review_dir/session.json" || true
 	)"
+	standards_named="${axis_subjects%% *}"
+	spec_named="${axis_subjects##* }"
+	if [ "$axes" -gt 0 ] && { [ "$standards_named" != true ] || [ "$spec_named" != true ]; }; then
+		if [ "$standards_named" != true ] && [ "$spec_named" != true ]; then
+			subjects_clause="neither a standards nor a spec subject is identifiable"
+		elif [ "$standards_named" != true ]; then
+			subjects_clause="no standards subject is identifiable"
+		else
+			subjects_clause="no spec subject is identifiable"
+		fi
+		if [ -n "$degraded_what" ]; then
+			degraded_what="$degraded_what, and $subjects_clause across the $axes sub-agent call(s)"
+		else
+			degraded_what="the review made $axes sub-agent call(s), but $subjects_clause across them - the two axes below are not shown to be independently derived"
+		fi
+		log "#$number: the review fanned out $axes sub-agent(s), but $subjects_clause across them; the run degrades rather than stops (ADR 0007, amended - #269)"
+	fi
 
-	[ "$named_axes" = true ] ||
-		hand_back "the review spawned $axes sub-agent(s), but neither a standards nor a spec subject is identifiable across them, so this was not the code-review skill's two-axis pass. $unfinished"
+	if [ -n "$degraded_what" ]; then
+		# The note overrides the default sentence 100-pr.sh puts behind the
+		# `REVIEWAXESNOTE` token when it cannot be certified; pr_prose reads
+		# the variable at hand-off time (#269).
+		review_axes_note="This session's transcript could not show the fan-out the default shape certification asserts: $degraded_what. The run was handed over degraded rather than stopped, because this stage decides nothing and its output is prose a person reads next to the diff (ADR 0007, amended; #269)."
+	fi
 
 	log "#$number: review ran the code-review skill across $axes axes"
 

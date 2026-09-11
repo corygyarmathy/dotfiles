@@ -27,11 +27,23 @@ if [ "$flow" = issue ]; then
 			-e "s|BRANCH|$branch|g" \
 			-e "s|IMPLEMODEL|@MODEL@|g" \
 			-e "s|REVIEWMODEL|@REVIEW_MODEL@|g" \
+			-e "s|REVIEWAXESNOTE|$review_axes_note|g" \
 			-e "s/ATTEMPTS/$attempt/g" \
 			-e "s/CIROUNDS/$ci_round/g" \
 			-e "s|HANDOFF|@HANDOFF_LABEL@|g" \
 			"$1"
 	}
+
+	# The hand-off comment's shape certification (#269): the default note
+	# pr_prose puts behind the REVIEWAXESNOTE token is the verified two-axis
+	# sentence, set here so the substitution always has prose to render. It
+	# is only read at hand-off (140-handoff.sh): @PR_INTRO@, rendered at
+	# creation time, does not carry the token, and the review has not run
+	# yet. A transcript the verify stage (130) cannot certify overwrites the
+	# note and leaves its description in degraded_what, which the hand-off
+	# reads as the degradation flag.
+	review_axes_note="It ran across the skill's two axes - standards and spec, in separate sub-agent contexts - and the runner verified that fan-out from the session transcript rather than from the session's own account of itself."
+	degraded_what=""
 
 	# The body, rendered from whatever is known at the moment it is called.
 	# Called twice: once now, and once at the end of the run. Re-rendered
