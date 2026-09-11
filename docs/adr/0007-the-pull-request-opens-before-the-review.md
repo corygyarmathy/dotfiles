@@ -1,6 +1,13 @@
 # ADR 0007: The pull request opens before the review, and CI is the gate
 
-- **Status:** Proposed
+- **Status:** Proposed.
+
+    **Amended 2026-09-11 (labels stop carrying instructions).** §7 established that the hand-off label is a signal rather than a control. That principle is generalised in the successor agent ([`corygyarmathy/afk-agent`](https://github.com/corygyarmathy/afk-agent) ADR 0001 §14): every label becomes status the agent writes, and the only imperative channel from a human is a comment command resolved through a registry mapping command to job kind. One exception is retained - the eligibility label on an issue, which is how work enters the queue at all, and which is a filter rather than an instruction.
+
+    Two things follow. Adding a command - `/review` on a pull request the operator raised themselves, say - becomes a registry entry and a job kind rather than a new path through the pipeline. And "have I already acted on this?" gets a single place to be answered, instead of one answer for labels and another for comments.
+
+    Everything else here stands. §1's ordering, §3's division between CI as the correctness gate and the review as an advisory quality pass, and §6's placement of the denylist gate immediately before every push are all carried into the successor unchanged.
+
 - **Date:** 2026-09-09
 - **Related Artefacts:**
     - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §6, whose closing "never a PR" was written when the review was a gate. Its retry-in-the-same-session rule is upheld here and extended to a new kind of failure; §9 is untouched
