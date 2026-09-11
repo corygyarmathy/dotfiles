@@ -63,7 +63,7 @@ if [ "$flow" = issue ]; then
 	# without opening the pull request.
 	notify_title="AFK agent: PR ready for review (#$number)"
 	notify_body="$(printf '%s\n%s' "$pr_url" "$title")"
-	if [ "$review_degraded" -eq 1 ]; then
+	if [ -n "$degraded_what" ]; then
 		notify_title="AFK agent: PR ready for review, degraded (#$number)"
 		notify_body="$(printf '%s\n%s\n\n%s' "$pr_url" "$title" "$review_axes_note")"
 	fi

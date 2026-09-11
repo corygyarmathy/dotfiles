@@ -48,9 +48,6 @@ if [ "$flow" = issue ]; then
 			"$review_dir/session.json"
 	)"
 
-	review_degraded=0
-	degraded_what=""
-
 	if [ "$axes" -lt @REVIEW_AXES@ ]; then
 		degraded_what="the review made $axes sub-agent call(s) where the skill's @REVIEW_AXES@ are expected, so both axes appear to have been performed inline in the parent context - the two axes below are one reviewer's view, not two independently derived ones"
 		log "#$number: the review spawned $axes sub-agent(s), not @REVIEW_AXES@; the axes collapsed into one context, and the run degrades rather than stops (ADR 0007, amended - #269)"
@@ -72,35 +69,47 @@ if [ "$flow" = issue ]; then
 	# without pinning phrasing the skill never fixed. Deliberately loose in
 	# the passing direction and strict in the one that matters: two sub-agents
 	# sent to do something else entirely do not read as a two-axis review.
-	named_axes="$(
-		jq '[ .messages[].parts[]?
+	#
+	# One boolean per subject rather than a single `all`, so the caveat can
+	# name the subject a transcript failed to show instead of claiming both
+	# are absent (#269): a one-axis transcript shows a standards subject and
+	# hides only spec, and "neither ... nor ..." would lie about that.
+	# `|| true` is a `set -euo pipefail` guard: a jq that fails must reach
+	# the `if` below and read as "no subjects named", not abort the runner.
+	axis_subjects="$(
+		jq -r '[ .messages[].parts[]?
         | select(.type == "tool" and .tool == "task")
         | ((.state.input.description // "") + " " + (.state.input.prompt // ""))
         | ascii_downcase
       ]
       | [ (map(select(test("standard"))) | length > 0),
           (map(select(test("spec"))) | length > 0) ]
-      | all' "$review_dir/session.json" || true
+      | map(tostring) | join(" ")' "$review_dir/session.json" || true
 	)"
-	if [ "$axes" -gt 0 ] && [ "$named_axes" != true ]; then
-		if [ -n "$degraded_what" ]; then
-			degraded_what="$degraded_what, and neither a standards nor a spec subject is identifiable across the $axes sub-agent call(s)"
+	standards_named="${axis_subjects%% *}"
+	spec_named="${axis_subjects##* }"
+	if [ "$axes" -gt 0 ] && { [ "$standards_named" != true ] || [ "$spec_named" != true ]; }; then
+		if [ "$standards_named" != true ] && [ "$spec_named" != true ]; then
+			subjects_clause="neither a standards nor a spec subject is identifiable"
+		elif [ "$standards_named" != true ]; then
+			subjects_clause="no standards subject is identifiable"
 		else
-			degraded_what="the review made $axes sub-agent call(s), but neither a standards nor a spec subject is identifiable across them - the two axes below are not shown to be independently derived"
+			subjects_clause="no spec subject is identifiable"
 		fi
-		log "#$number: the review fanned out $axes sub-agent(s) without identifiable standards and spec subjects; the run degrades rather than stops (ADR 0007, amended - #269)"
+		if [ -n "$degraded_what" ]; then
+			degraded_what="$degraded_what, and $subjects_clause across the $axes sub-agent call(s)"
+		else
+			degraded_what="the review made $axes sub-agent call(s), but $subjects_clause across them - the two axes below are not shown to be independently derived"
+		fi
+		log "#$number: the review fanned out $axes sub-agent(s), but $subjects_clause across them; the run degrades rather than stops (ADR 0007, amended - #269)"
 	fi
 
-	case "$degraded_what" in
-	"") ;;
-	*)
-		review_degraded=1
+	if [ -n "$degraded_what" ]; then
 		# The note overrides the default sentence 100-pr.sh puts behind the
 		# `REVIEWAXESNOTE` token when it cannot be certified; pr_prose reads
 		# the variable at hand-off time (#269).
 		review_axes_note="This session's transcript could not show the fan-out the default shape certification asserts: $degraded_what. The run was handed over degraded rather than stopped, because this stage decides nothing and its output is prose a person reads next to the diff (ADR 0007, amended; #269)."
-		;;
-	esac
+	fi
 
 	log "#$number: review ran the code-review skill across $axes axes"
 

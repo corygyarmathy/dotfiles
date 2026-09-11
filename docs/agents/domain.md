@@ -61,10 +61,12 @@ The test: **would reversing this send you back to the Alternatives section, or j
 
 Watch for items that fuse both in one sentence, which is the failure mode that actually bites: "implementation gets up to 2 retries, and review is always a separate pass in a fresh context" welds a number you will change to a decision you won't. State the decision, then name where the parameter lives.
 
-## Never amend an ADR in place
+## Never amend an _accepted_ ADR in place
 
-When a decision genuinely changes, write a new ADR and set the old one's status to `Superseded by ADR NNNN`. Leave its body alone - a superseded ADR is still the correct record of what was decided and why, and rewriting it destroys the only thing it was for.
+A Proposed ADR has not been accepted and may be amended in place: an "Amended …" block records the change in the ADR's own words, keeping the decision and its revisions together until the ADR is accepted.
 
-This is what prevents amend/supplement chains. There is at most one hop from any ADR to its successor, never a trail of revisions, because the current state was never the ADR's job.
+When an accepted decision genuinely changes, write a new ADR and set the old one's status to `Superseded by ADR NNNN`. Leave its body alone - a superseded ADR is still the correct record of what was decided and why, and rewriting it destroys the only thing it was for.
+
+This is what prevents amend/supplement chains among accepted ADRs. There is at most one hop from any ADR to its successor, never a trail of revisions, because the current state was never the ADR's job.
 
 Relocating content without changing a decision - moving a parameter out to the plan, fixing a broken link - is not superseding and needs no new ADR. Say so in the commit message.
