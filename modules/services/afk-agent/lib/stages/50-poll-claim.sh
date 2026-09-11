@@ -118,7 +118,7 @@ revise_stuck_budget() {
 		die "#$number: could not relabel to $stuck_label; refusing to leave it in the revision queue"
 	fi
 
-	post_tracker_comment "$body"
+	post_tracker_comment pr "$body"
 
 	notify_stuck \
 		"the revision budget is spent on this pull request; further rounds do not run" \

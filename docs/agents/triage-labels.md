@@ -14,34 +14,50 @@ roles to the actual label strings used in this repo's issue tracker.
 Three further labels are written by the AFK runner rather than applied at
 triage, and are here because they share the tracker with the ones above:
 
-| Label                    | Applied to       | Meaning                                                        |
-| ------------------------ | ---------------- | -------------------------------------------------------------- |
-| `agent-working`          | the issue        | The AFK runner has claimed this ticket and is working it now   |
-| `agent-stuck`            | the issue        | The AFK runner stopped without finishing; its comments say why |
-| `agent-ready-for-review` | the pull request | CI is green on this branch and the agent's review has run      |
-| `agent-revising`         | the pull request | The AFK runner claimed this pull request for a revision round  |
+| Label                    | Applied to                                     | Meaning                                                        |
+| ------------------------ | ---------------------------------------------- | -------------------------------------------------------------- |
+| `agent-working`          | the issue                                      | The AFK runner has claimed this ticket and is working it now   |
+| `agent-stuck`            | the issue, or the pull request once it is open | The AFK runner stopped without finishing; its comments say why |
+| `agent-ready-for-review` | the pull request                               | CI is green on this branch and the agent's review has run      |
+| `agent-revising`         | the pull request                               | The AFK runner claimed this pull request for a revision round  |
 
 `agent-working` and `agent-stuck` sit on the issue on the ticket lane, and
 `agent-stuck` and `agent-revising` sit on the pull request on the revision lane
 (#196): only a revision run ever puts `agent-revising` on a pull request, which
-is what makes a dead revision run recognisable from outside.
+is what makes a dead revision run recognisable from outside. On the ticket
+lane, #271 puts past-push hand-backs there as well - the paragraph below has
+the split.
 
 The runner claims by swapping `ready-for-agent` for `agent-working` in a single
 edit, rather than by assigning itself, because GitHub will not let a GitHub App
 hold an issue assignment (ADR 0006). Dropping `ready-for-agent` is what stops
 the ticket being claimed twice; `agent-working` is what makes that visible.
 
-The stuck path (#175, the runner's `hand_back` in `modules/services/afk-agent.nix`) hands a ticket
-the runner cannot finish back in the same one-edit shape: `agent-working`
-becomes `agent-stuck`, next to a comment saying what was tried and why it
-stopped. Before the push, nothing else the run built survives - no pull
-request, no worktree, no branch. Past the push there is a pull request to
-reach: it is commented on too and left open without the hand-off label below,
-because it holds real work (ADR 0007 §2). `agent-stuck` is deliberately not
-`ready-for-agent` again: re-applying the claim marker would send a ticket the
+The stuck path (#175, the runner's `hand_back` in `modules/services/afk-agent.nix`, with the
+surface split as #271 records it) hands a ticket the runner cannot finish
+back next to a comment saying what was tried and why it stopped, and where
+the comment lands splits by the push, the way ADR 0007 §2 splits the run:
+
+- **Before the push** there is no pull request, so the ticket carries the
+  story: `agent-working` becomes `agent-stuck` on the issue, and nothing else
+  the run built survives - no worktree, no branch.
+- **Past the push** there is a pull request, the work and the failure are
+  both there, and that is the surface the hand-back addresses: the pull
+  request is commented on and relabelled `agent-stuck`, and left open without
+  the hand-off label below, because it holds real work (ADR 0007 §2). The
+  issue is touched only to lose its claim marker - no comment, no stuck
+  label, nothing else - so there is exactly one thread to read and the PR is
+  it.
+
+Past the push, "check the agent lifecycle" means looking at both surfaces: a
+stuck ticket whose hand-back went to a pull request shows there, not in the
+issue's history. `agent-stuck` is deliberately not `ready-for-agent` again: re-applying the claim marker would send a ticket the
 runner cannot finish straight round the frontier query, to burn its retry
 budget on the same failure every poll. A human decides what happens next -
-reshape the ticket and re-apply `ready-for-agent`, or take it by hand. An
+reshape the ticket and re-apply `ready-for-agent`, or take it by hand. Past
+the push, the pull request has to be dealt with first either way: a re-claim
+while its pull request is open is refused, because the branch would already
+exist. An
 `agent-working` ticket with no open pull request and no running unit is a run
 that died - the runner's next poll hands it back through the same path.
 

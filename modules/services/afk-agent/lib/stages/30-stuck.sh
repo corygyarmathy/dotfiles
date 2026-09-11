@@ -3,24 +3,24 @@
 #
 # A claimed ticket that cannot be carried to a hand-off is handed back
 # rather than dropped: the reason goes to this unit's journal AND to the
-# ticket as a comment, `$working_label` becomes `$stuck_label` in one
-# edit, and everything the run built that nothing points at is torn
-# down. No pull request is ever opened here, and the next poll starts
-# clean - which is what makes it safe for the success path to leave
-# nothing behind either.
+# surface the hand-back lives on, the claim is undone, and everything
+# the run built that nothing points at is torn down. No pull request is
+# ever opened here, and the next poll starts clean - which is what makes
+# it safe for the success path to leave nothing behind either.
 #
-# The two halves split by the push because
-# ADR 0007 moved the pull request in front of the review:
+# The surface splits by the push because
+# ADR 0007 moved the pull request in front of the review (and #271
+# routed this path by it):
 #
-# - Before the push, ADR 0004 §6's "never a PR" holds in full, and so
-#   does the plan's "no WIP branch left dangling for a run that never
-#   pushed": the worktree and the local branch go, and nothing reaches
-#   origin.
-# - Past the push there is a pull request to reach. It is commented on
-#   as well as the issue, and left open without the hand-off label -
-#   which is the only signal, from outside, that nobody has finished
-#   with it (ADR 0007 §2). It holds real work, so the branch stays on
-#   origin and locally, and only the worktree goes.
+# - Before the push there is no pull request, so the hand-back lives on
+#   the issue, carrying `agent-stuck`: the worktree and the local branch
+#   go, and nothing reaches origin.
+# - Past the push the hand-back lives on the pull request: it is
+#   commented on and relabelled `agent-stuck`, and left open without the
+#   hand-off label - which is the other signal, from outside, that
+#   nobody has finished with it (ADR 0007 §2). It holds real work, so
+#   the branch stays on origin and locally, and only the worktree goes.
+#   The issue loses its claim marker and nothing else.
 #
 # The order inside is load-bearing. The tracker writes come first
 # because they are the part that outlives this process: a teardown that
@@ -43,34 +43,71 @@
 # only the caller knows whether a ticket left carrying `$working_label`
 # is about to be retried by the guard or stranded by a teardown.
 #
-# The revision lane (#196) hands back over the pull request rather than
-# the issue, so the verbs read `$tracker_kind`: a pull request is not an
-# issue to `gh issue edit`'s relabel, and the hand-back must reach the
-# surface the reviewer is actually looking at.
+# Everything takes the surface it is being asked about explicitly, so a
+# caller - and the caller decides once, in hand_back - rather than
+# re-deriving it (#271): the revision lane hands back over the pull
+# request (`tracker_kind = pr`), and so does the ticket lane once the
+# run has pushed, because past that point the work and the failure both
+# live on the pull request and the issue holds nothing the runner did.
+# The verbs read `$surface`: a pull request is not an issue to `gh issue
+# edit`'s relabel, and the hand-back must reach the surface the reviewer
+# is actually looking at.
 stuck_closing() {
-	if [ "$tracker_kind" = pr ]; then
-		printf '%s\n' "The pull request is relabelled \`$stuck_label\`, so the runner can no longer see it. It needs a human decision: address the review comments by hand, or re-apply \`$handoff_label\` and write a fresh \`/revise\` comment to spend another revision round (docs/agents/triage-labels.md)."
+	local surface=$1
+	if [ "$surface" = pr ]; then
+		if [ "$tracker_kind" = pr ]; then
+			printf '%s\n' "The pull request is relabelled \`$stuck_label\`, so the runner can no longer see it. It needs a human decision: address the review comments by hand, or re-apply \`$handoff_label\` and write a fresh \`/revise\` comment to spend another revision round (docs/agents/triage-labels.md)."
+		else
+			printf '%s\n' "The pull request is relabelled \`$stuck_label\` and the claim marker is off the ticket. It needs a human decision: address the pull request by hand, or resolve it - merge or close - and reshape the ticket by re-applying \`$label\` to run it again. Re-claiming while the pull request is open is refused, because the branch would already exist (docs/agents/triage-labels.md)."
+		fi
 	else
 		printf '%s\n' "The ticket is relabelled \`$stuck_label\`. It needs a human decision: reshape it and re-apply \`$label\`, or take it by hand (docs/agents/triage-labels.md)."
 	fi
 }
 
 post_tracker_comment() {
-	if [ "$tracker_kind" = pr ]; then
-		if ! gh pr comment "$number" --repo "$repo" --body-file "$1"; then
+	local surface=$1
+	if [ "$surface" = pr ]; then
+		# `$number` is the pull request's number in the revision lane and
+		# the ticket's number in the ticket lane; the ticket lane knows its
+		# pull request only by URL.
+		if ! gh pr comment "$(if [ "$tracker_kind" = pr ]; then echo "$number"; else echo "$pr_url"; fi)" \
+			--repo "$repo" --body-file "$2"; then
 			echo "afk-agent: #$number: the comment could not be posted; the reason above is in this unit's journal" >&2
 		fi
 	else
-		if ! gh issue comment "$number" --repo "$repo" --body-file "$1"; then
+		if ! gh issue comment "$number" --repo "$repo" --body-file "$2"; then
 			echo "afk-agent: #$number: the comment could not be posted; the reason above is in this unit's journal" >&2
 		fi
 	fi
 }
 
 relabel_stuck() {
-	if [ "$tracker_kind" = pr ]; then
-		gh pr edit "$number" --repo "$repo" \
-			--remove-label "$revising_label" --add-label "$stuck_label"
+	local surface=$1
+	local stuck_rc=0 claim_rc=0
+	if [ "$surface" = pr ]; then
+		if [ "$tracker_kind" = pr ]; then
+			gh pr edit "$number" --repo "$repo" \
+				--remove-label "$revising_label" --add-label "$stuck_label"
+		else
+			# #271: once the run has a pull request to hand back over, the
+			# stuck label is the pull request's, and the issue keeps nothing
+			# but its loss of claim. Stuck first - it is the durable
+			# statement about the work - and the claim second. Both are
+			# attempted regardless, because a stuck label on the pull
+			# request does not make an issue carrying its claim marker any
+			# less stranded, and vice versa; the caller's warning covers
+			# whichever half failed.
+			gh pr edit "$pr_url" --repo "$repo" --add-label "$stuck_label" || stuck_rc=$?
+			gh issue edit "$number" --repo "$repo" \
+				--remove-label "$working_label" || claim_rc=$?
+			if [ "$stuck_rc" -ne 0 ]; then
+				return "$stuck_rc"
+			fi
+			if [ "$claim_rc" -ne 0 ]; then
+				return "$claim_rc"
+			fi
+		fi
 	else
 		gh issue edit "$number" --repo "$repo" \
 			--remove-label "$working_label" --add-label "$stuck_label"
@@ -81,6 +118,16 @@ hand_back() {
 	local reason=$1
 	local body="$run_dir/stuck.md"
 	local rescued=0
+
+	# The one place the surface is decided (#271): the revision lane hands
+	# back over its pull request, and the ticket lane hands back over the
+	# issue until the run has pushed - past that point there is a pull
+	# request to hand back over, the work and the failure are both there,
+	# and the issue is touched only to lose its claim.
+	local surface="$tracker_kind"
+	if [ "$tracker_kind" = issue ] && [ "$pr_url" != "" ]; then
+		surface="pr"
+	fi
 
 	echo "afk-agent: #$number: $reason" >&2
 
@@ -106,6 +153,8 @@ hand_back() {
 			# handed back, instead of being asked to write a fresh
 			# `/revise` when they want one.
 			printf '%s\n' "AFK agent: revision handed back. The AFK agent stopped work on this revision round."
+		elif [ "$surface" = pr ]; then
+			printf '%s\n' "The AFK agent stopped work on this ticket and is handing the pull request holding its work back."
 		else
 			printf '%s\n' "The AFK agent stopped work on this ticket and is handing it back, without opening a pull request."
 		fi
@@ -131,7 +180,7 @@ hand_back() {
 			fi
 		elif [ "$pr_url" != "" ]; then
 			printf '%s\n' \
-				"The pull request ($pr_url) is left open without the \`@HANDOFF_LABEL@\` label: it holds the branch's work, and the label's absence is what says from outside that nobody has finished with it (ADR 0007 §2). The worktree is removed and the branch is left untouched."
+				"The pull request ($pr_url) keeps the branch's work and now carries the \`$stuck_label\` label, so the hand-off label that says somebody has finished with it is not there and will not be (ADR 0007 §2, amended by #271). The claim marker is off the ticket. The worktree is removed and the branch is left untouched."
 		elif [ "$pushed" -eq 1 ]; then
 			printf '%s\n' \
 				"The worktree is removed. The branch \`$branch\` reached origin and is kept there - it holds the work the gate passed on, and a pull request can be opened from it by hand."
@@ -144,43 +193,36 @@ hand_back() {
 			printf '%s\n' "Nothing of this run was left behind."
 		fi
 		printf '%s\n' ""
-		stuck_closing
+		stuck_closing "$surface"
 	} >"$body"
 
-	post_tracker_comment "$body"
-
-	# The other half of reaching a run that failed past the push:
-	# The pull request gets the same story the issue does, so a
-	# reader who arrives at the pull request rather than the ticket is
-	# not left guessing. A comment on a pull request is reportable and
-	# removable; the hand-off label's absence is still what says this
-	# pull request is not finished.
-	#
-	# The revision lane is already there: its hand-back comment above
-	# went to the pull request, and posting the same body a second time
-	# would be noise about a reviewer's only copy of the story.
-	if [ "$tracker_kind" != pr ] && [ "$pr_url" != "" ]; then
-		if ! gh pr comment "$pr_url" --repo "$repo" --body-file "$body"; then
-			echo "afk-agent: #$number: the pull request comment could not be posted" >&2
-		fi
-	fi
+	post_tracker_comment "$surface" "$body"
 
 	# One edit, like the claim, so the ticket is never briefly carrying
-	# both labels or neither. A failure here is not fatal to what
-	# follows - the teardown still runs - but the journal says the ticket
-	# is stranded with its claim marker on, which is the loudness a
-	# half-handed-back ticket deserves.
-	if ! relabel_stuck; then
-		echo "afk-agent: #$number: could not relabel to $stuck_label; the ticket still carries $working_label and is invisible to the frontier query" >&2
+	# both labels or neither. On the pull-request surface the pull request
+	# and the issue both move (#271), in the order relabel_stuck says. A
+	# failure here is not fatal to what follows - the teardown still runs
+	# - but the journal says so, which is the loudness a half-handed-back
+	# run deserves.
+	if ! relabel_stuck "$surface"; then
+		echo "afk-agent: #$number: could not hand back over the $surface; the work may still be claimed and the stuck label is not where it should be" >&2
 	fi
 
 	# The notification. The tracker writes above are the
 	# durable half of the hand-back; this is the half that reaches
 	# somebody who is not looking at GitHub, at the lane's informational
 	# level (priority low, silent) - a stuck pipeline stops work until a
-	# human reads the ticket, but it should not wake them up to do it.
-	notify_stuck "$reason" \
-		"$(if [ "$pr_url" != "" ]; then printf '%s is open and unfinished' "$pr_url"; fi)"
+	# human reads the ticket, but it should not wake them up to do it. The
+	# link follows the surface (#271): the story now lives where the
+	# decision has to be made.
+	if [ "$surface" = pr ]; then
+		notify_stuck "$reason" \
+			"$(if [ "$pr_url" != "" ]; then printf '%s is open and unfinished' "$pr_url"; fi)" \
+			"Pull request: $pr_url"
+	else
+		notify_stuck "$reason" \
+			"$(if [ "$pr_url" != "" ]; then printf '%s is open and unfinished' "$pr_url"; fi)"
+	fi
 
 	if [ "$pushed" -eq 0 ]; then
 		# `$branch_created` says the branch is this run's to delete; the
@@ -365,7 +407,7 @@ hand_back_dead_run() {
 		jq -e "any(.labels[]?; .name == \"$stuck_label\")" >/dev/null 2>&1; then
 		log "#$number: already carries $stuck_label; clearing what is left of the dead run without writing to the tracker again"
 	else
-		if ! relabel_stuck; then
+		if ! relabel_stuck issue; then
 			die "#$number: could not relabel to $stuck_label; refusing to start a new ticket beside a dead run's wreckage"
 		fi
 
@@ -388,10 +430,10 @@ hand_back_dead_run() {
 			printf '%s\n' \
 				"The run's own state - its prompt, its logs, its attempt count - did not survive it, and is not recovered: resuming unattended work nobody can vouch for is the shape ADR 0004 §6 exists to prevent."
 			printf '%s\n' ""
-			stuck_closing
+			stuck_closing issue
 		} >"$body"
 
-		post_tracker_comment "$body"
+		post_tracker_comment issue "$body"
 
 		notify_stuck \
 			"An earlier run of the AFK agent died on this ticket with a worktree left behind; the ticket has been handed back for a human decision." \
