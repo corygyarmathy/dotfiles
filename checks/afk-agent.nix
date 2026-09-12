@@ -8,6 +8,14 @@
 # boots the module both ways and looks at the running system: two nodes, one
 # with the switch on and one with it off.
 #
+# A third node runs two instances side by side (#275): the module is
+# multi-instance now, and the claim that a second instance works a second
+# repository - its own unit, its own account, its own state directory and
+# worktree root, its own tracker - is exactly the kind a successful
+# evaluation cannot settle on its own. Two instances that both evaluated
+# but shared a state directory, or whose runners each baked in the other's
+# repository, would pass `nix build` and fail on homelab01 at 04:00.
+#
 # The other half is the plumbing the runner is handed. What this file owns is
 # everything around the logic - that the unit is reached by the timer rather
 # than at boot, that every credential it declares arrives, and that the
@@ -58,7 +66,7 @@
         networking.hostName = "afk-enabled";
         system.stateVersion = "24.11";
 
-        cg.service.afk-agent = {
+        cg.service.afk-agent.instances.afk-agent = {
           enable = true;
 
           # Not the default, deliberately. The default polls every quarter hour
@@ -69,6 +77,46 @@
           # is the property under test; that the default is a sane calendar
           # expression is the module's business, not this test's.
           schedule = "2100-01-01 00:00:00";
+        };
+      };
+
+    # Two instances, two repositories (#275). The first keeps the production
+    # default (`corygyarmathy/dotfiles`) and the production name, so what is
+    # under test is the shape homelab01 would gain a second entry of, not a
+    # bespoke pair. The schedule is as far out as the first node's, for the
+    # same reason: nothing here may run a poll.
+    twice =
+      { ... }:
+      {
+        imports = [
+          ../modules/services/afk-agent.nix
+          ../modules/services/ntfy.nix
+          ../modules/services/monitoring/monitoring.nix
+
+          (import ./stub-secrets.nix {
+            secrets."gh-ci/afk-agent-app-private-key" = "stub-app-key-VALUE-MUST-NOT-BE-LOGGED";
+            secrets."opencode/api-key" = "stub-opencode-key-VALUE-MUST-NOT-BE-LOGGED";
+            secrets."opencode/username" = "stub-opencode-user-VALUE-MUST-NOT-BE-LOGGED";
+            secrets."monitoring/ntfy/alerts-token" = "stub-ntfy-token-VALUE-MUST-NOT-BE-LOGGED";
+          })
+        ];
+
+        networking.hostName = "afk-twice";
+        system.stateVersion = "24.11";
+
+        cg.service.afk-agent.instances = {
+          afk-agent = {
+            enable = true;
+
+            # The far-future schedule the first node uses, for the same
+            # reason: nothing here may run a poll.
+            schedule = "2100-01-01 00:00:00";
+          };
+          afk-agent-proto = {
+            enable = true;
+            repository = "corygyarmathy/afk-agent";
+            schedule = "2100-01-01 00:00:00";
+          };
         };
       };
 
@@ -237,6 +285,75 @@
             "stub-ntfy-token-VALUE-MUST-NOT-BE-LOGGED",
         ]:
             assert value not in journal, "a credential value was logged"
+
+    with subtest("two instances work two repositories side by side"):
+        # #275: the module is multi-instance, and the claim worth more than
+        # an evaluation is that the second instance got its own everything -
+        # unit, timer, account, state directory, worktree root - and a runner
+        # script that works only its own repository. Two instances that
+        # evaluated but shared any of those would queue on one poll, overwrite
+        # one token cache, or work one checkout against two trackers.
+        twice.wait_for_unit("multi-user.target")
+
+        for unit, repo, other in [
+            ("afk-agent", "corygyarmathy/dotfiles", "corygyarmathy/afk-agent"),
+            ("afk-agent-proto", "corygyarmathy/afk-agent", "corygyarmathy/dotfiles"),
+        ]:
+            # The unit and the timer exist and the timer - not boot - is what
+            # would run it; systemd parsing the unit at all is what a bare
+            # evaluation cannot prove.
+            assert twice.succeed(f"systemctl is-enabled {unit}.timer").strip() == "enabled"
+            state = twice.succeed(f"systemctl show -p ActiveState --value {unit}.service").strip()
+            assert state == "inactive", f"{unit} ran without its timer firing: {state}"
+
+            # The service account exists, and its home is the instance's own
+            # state directory - which is also the StateDirectory systemd
+            # creates, so the two readings of "where this instance's state
+            # lives" cannot disagree.
+            home = twice.succeed(f"getent passwd {unit} | cut -d: -f6").strip()
+            state_dir = twice.succeed(
+                f"systemctl show -p StateDirectory --value {unit}.service"
+            ).strip()
+            assert home == f"/var/lib/{state_dir}", (
+                f"{unit}'s home {home} is not its state directory /var/lib/{state_dir}"
+            )
+
+            # The runner script is the instance's own: it bakes in this
+            # repository and this state directory - as the default of the
+            # environment override the check harness owns, which is the
+            # shape 00-env.sh actually gives it - and neither the other
+            # instance's repository nor its state directory appears anywhere
+            # in it. The worktree root is `$state_dir/worktrees` inside the
+            # script (00-env.sh), so the differing state directory is what
+            # separates the two checkouts - asserted here at the source
+            # rather than trusted from the prose.
+            script = twice.succeed(
+                f"systemctl cat {unit}.service | sed -n 's/^ExecStart=//p'"
+            ).strip()
+            body = twice.succeed(f"cat {script}")
+            # Built by concatenation rather than one f-string literal because
+            # the expected line contains a dollar sign directly followed by a
+            # brace, which the Nix string this Python lives in reads as an
+            # interpolation - the same script-versus-consumer grammar
+            # collision the state-directory assertion is here to police.
+            expected_state = 'state_dir="$' + "{AFK_STATE_DIR:-/var/lib/" + state_dir + "}"
+            assert expected_state in body, (
+                f"{unit}'s runner does not default to its own state directory:\n{body}"
+            )
+            assert f'repo="{repo}"' in body, (
+                f"{unit}'s runner does not poll {repo}:\n{body}"
+            )
+            assert f'"{other}"' not in body, (
+                f"{unit}'s runner can see the other instance's repository:\n{body}"
+            )
+
+        # And the two state directories are genuinely different, so the two
+        # worktree roots under them are too.
+        first = twice.succeed("systemctl show -p StateDirectory --value afk-agent.service").strip()
+        second = twice.succeed(
+            "systemctl show -p StateDirectory --value afk-agent-proto.service"
+        ).strip()
+        assert first != second, "both instances share one state directory"
 
     with subtest("the kill switch leaves nothing behind"):
         disabled.wait_for_unit("multi-user.target")

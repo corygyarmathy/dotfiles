@@ -69,7 +69,7 @@ let
         ../modules/services/ntfy.nix
         ../modules/services/monitoring/monitoring.nix
         {
-          cg.service.afk-agent.enable = true;
+          cg.service.afk-agent.instances.afk-agent.enable = true;
           system.stateVersion = "24.11";
         }
       ]
@@ -85,7 +85,7 @@ let
   # were on the edge of.
   quietEval = mkEval [
     {
-      cg.service.afk-agent.quietHours = [
+      cg.service.afk-agent.instances.afk-agent.quietHours = [
         "04:00-05:00"
         "23:30-03:30"
       ];
@@ -101,6 +101,26 @@ let
   # findutils, gnugrep, gnused, systemd), so this is exactly what the runner
   # will find at 04:00 on homelab01, and it cannot drift from it.
   unitPath = pkgs.lib.makeBinPath eval.config.systemd.services.afk-agent.path;
+
+  # The instance-name gate (#275), from the failing side. An instance name
+  # outside the `afk-agent(-<suffix>)?` shape must fail the evaluation rather
+  # than quietly create a unit, an account and a state directory named after
+  # whatever was typed - and it must do so even while the instance is
+  # disabled, because the name is malformed config either way. The gate
+  # lives in the module's config generation, not on the option's type: the
+  # module system skips a type's check when an option has exactly one
+  # definition, which would have made a type check a comment pretending to
+  # be a gate. Proven with tryEval because the property under test is that
+  # the evaluation *fails*; the eval differs from `eval` above only by the
+  # bad name, so a failure here is attributable to it.
+  badNameEval = mkEval [
+    {
+      cg.service.afk-agent.instances.bogus.enable = false;
+    }
+  ];
+  badNameFails =
+    !(builtins.tryEval (builtins.deepSeq badNameEval.config.users.users badNameEval.config.users.users))
+    .success;
 in
 pkgs.runCommand "check-afk-agent-runner"
   {
@@ -111,11 +131,16 @@ pkgs.runCommand "check-afk-agent-runner"
     script = builtins.toString runnerScript;
     quietScript = builtins.toString quietRunnerScript;
     eligibilityDoc = ../docs/agents/afk-eligibility.md;
+    badNameFails = pkgs.lib.boolToString badNameFails;
   }
   ''
     set -euo pipefail
 
     fail() { echo "FAIL: $*" >&2; exit 1; }
+
+    if [ "$badNameFails" != true ]; then
+      fail "an afk-agent instance named outside the afk-agent(-<suffix>)? shape evaluated instead of failing"
+    fi
 
     work=$PWD/work
     mkdir -p "$work"
