@@ -172,6 +172,7 @@ jobs:
           - auto-upgrade-build-gate
           - bless-boot-guard
           - digital-garden
+          - digital-garden-filter
           - digital-garden-sync-health
           - deploy-schema
           - deploy-activate
