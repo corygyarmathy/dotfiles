@@ -210,7 +210,13 @@ in
     # move `deploy`, proven on #198's merge with the rule active (ADR 0005).
     # The kill switch is this word: back to `false` plus a rebuild removes the
     # timer, the unit and the service account (checks/afk-agent.nix pins that).
-    afk-agent.enable = true;
+    # The instance name is the unit, the service account and the state
+    # directory (#275); `afk-agent` is the name the runner has always run
+    # under, so this evaluates to exactly what it did when the switch was one
+    # word. A second instance - the successor's repository,
+    # `corygyarmathy/afk-agent` - is another entry in `instances`, added when
+    # the operator turns it on, not by this file.
+    afk-agent.instances.afk-agent.enable = true;
 
     immich.enable = false;
     home-assistant.enable = false;

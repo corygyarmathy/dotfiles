@@ -7,6 +7,13 @@
 # it off in an emergency is one boolean: `enable = false` removes the
 # timer, the unit and the service account (pinned by checks/afk-agent.nix).
 #
+# Since #275 the module is multi-instance: `cg.service.afk-agent.instances.<name>`
+# declares one runner, and the name is the systemd unit, the service account
+# and the state directory it all runs under. homelab01's instance is named
+# `afk-agent`, which is why those names read bare there; a second instance
+# against a second repository (the successor's, `corygyarmathy/afk-agent`) is
+# another entry in that set, not a second module.
+#
 # Pipeline order:
 #
 #   claim -> isolate -> implement until the local gate agrees
@@ -39,8 +46,11 @@
 # how checks/afk-agent-runner.nix drives the assembled script - never a
 # copy - against a fixture origin and a mocked `gh`.
 #
-# Concurrency is one, enforced by systemd (a single non-templated unit;
-# ADR 0004 §8). The runner adds a guard against a *dead* run's leftovers,
+# Concurrency is one per instance, enforced by systemd (a single
+# non-templated unit per instance; ADR 0004 §8). Two instances on one host
+# run concurrently with each other - different repositories are different
+# queues, and each unit's own ceilings bound it - but each is still one
+# poll at a time. The runner adds a guard against a *dead* run's leftovers,
 # which systemd would otherwise start the next poll on top of.
 #
 # The revision loop (#196, as re-triggered by #247) is a second entry point on the
@@ -70,24 +80,31 @@
 let
   cfg = config.cg.service.afk-agent;
 
-  stateDir = "/var/lib/afk-agent";
-
-  # The `owner/name` this runner polls, claims from, and clones. One value
-  # rather than two, because `gh` and `git` need the same answer and a runner
-  # pointed at one repository's tracker while working another's checkout would
-  # be a confusing way to find that out. Not an option: there is one fleet
-  # here and one value, and an option nobody sets is a claim about
-  # configurability the repository does not honour.
-  repository = "corygyarmathy/dotfiles";
+  # The instance name becomes the systemd unit, the service account and the
+  # state directory, so its shape is a property of everything those names
+  # touch. Checked here rather than on the `instances` option's type because
+  # the module system skips a type's check when an option has exactly one
+  # definition - the common case - which would make the check a comment
+  # pretending to be a gate. It is called in every `mkIf` that generates an
+  # instance's config, so a malformed name fails the evaluation whether or
+  # not the instance is enabled.
+  instanceNameChecked =
+    name:
+    if lib.match "afk-agent(-[a-z0-9-]+)?" name == null then
+      throw "afk-agent instance name '${name}' is outside the afk-agent(-<suffix>)? shape; it becomes the systemd unit, the service account and the state directory"
+    else
+      true;
 
   # The credentials this unit runs on: the name systemd exposes them under in
   # $CREDENTIALS_DIRECTORY, mapped to the sops key each one is read from.
   # Written once because three places need the same answer - the `sops.secrets`
   # declarations, the `LoadCredential` list, and the preflight below - and a
   # set that drifts between them fails at 04:00 on a host rather than here.
-  # The runner's own GitHub identity (ADR 0006). The App is installed on this
-  # repository and no other, which is what makes its reach a property of the
-  # installation rather than of a scope list somebody has to keep right. The id
+  # The runner's own GitHub identity (ADR 0006). The App is installed on every
+  # repository an instance polls - `corygyarmathy/dotfiles` since ADR 0006,
+  # the successor's `corygyarmathy/afk-agent` since #275 - which is what
+  # makes its reach a property of the installation rather than of a scope
+  # list somebody has to keep right. The id
   # is the one in the App's settings URL and is not a secret - the private key
   # under `credentials` is the whole of what has to stay one.
   #
@@ -351,546 +368,663 @@ let
     builtins.readFile ./afk-agent/lib/prompts/pr-handoff.md
   );
 
-  runner = pkgs.writeShellApplication {
-    name = "afk-agent-run";
+  # One runner script per instance. The state directory and the repository
+  # are baked into the script rather than read at run time - the two
+  # environment overrides in 00-env.sh are the check harness's seam, not an
+  # operator's - so an instance whose unit works two repositories is not
+  # expressible, which is the point.
+  mkRunner =
+    {
+      stateDir,
+      repository,
+      instance,
+    }:
+    pkgs.writeShellApplication {
+      name = "afk-agent-run";
 
-    # Deliberately only coreutils. The tools the runner drives arrive from the
-    # unit's PATH (see `path` below) rather than being baked in here, so that
-    # the check can substitute a mocked `gh` for the real one - a runtimeInput
-    # would be prepended to PATH and shadow it. `require_tool` below is what
-    # turns that looser coupling into something that still fails loudly.
-    #
-    # `openssl` is the one exception, and it is here *because* a runtimeInput
-    # cannot be shadowed: the JWT it signs is the credential-critical path, so
-    # the check asserting the real binary by name is a property worth keeping.
-    # `curl` used to sit beside it, and moved out when the ntfy notifications
-    # #176 became the one thing the check has to be able to
-    # intercept - with the App token mint stubbed through `AFK_GH_TOKEN`,
-    # curl's only reachable use in a check run is the notification POST, and
-    # the harness records those calls exactly like it records `gh`'s. In
-    # production curl is on the unit's PATH through `toolchain` either way.
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.openssl
-    ];
+      # Deliberately only coreutils. The tools the runner drives arrive from the
+      # unit's PATH (see `path` below) rather than being baked in here, so that
+      # the check can substitute a mocked `gh` for the real one - a runtimeInput
+      # would be prepended to PATH and shadow it. `require_tool` below is what
+      # turns that looser coupling into something that still fails loudly.
+      #
+      # `openssl` is the one exception, and it is here *because* a runtimeInput
+      # cannot be shadowed: the JWT it signs is the credential-critical path, so
+      # the check asserting the real binary by name is a property worth keeping.
+      # `curl` used to sit beside it, and moved out when the ntfy notifications
+      # #176 became the one thing the check has to be able to
+      # intercept - with the App token mint stubbed through `AFK_GH_TOKEN`,
+      # curl's only reachable use in a check run is the notification POST, and
+      # the harness records those calls exactly like it records `gh`'s. In
+      # production curl is on the unit's PATH through `toolchain` either way.
+      runtimeInputs = [
+        pkgs.coreutils
+        pkgs.openssl
+      ];
 
-    text = import ./afk-agent/lib/runner.nix {
-      inherit
-        lib
-        stateDir
-        repository
-        ntfyUrl
-        ntfyTopic
-        deniedPaths
-        appId
-        botLogin
-        commitName
-        commitEmail
-        implementPrompt
-        rebasePrompt
-        prIntro
-        prHandoff
-        reviewPrompt
-        revisePrompt
-        permissionOverlay
-        reviewOverlay
-        ;
-      inherit (cfg)
-        model
-        variant
-        reviewModel
-        quietHours
-        maxAttempts
-        attemptTimeout
-        gateTimeout
-        gateTailLines
-        reviewTimeout
-        ciPollInterval
-        ciFirstCheckPolls
-        ciSettlePolls
-        maxCiRounds
-        maxRevisionRounds
-        revisingLabel
-        sessionListDepth
-        reviewAxes
-        label
-        baseBranch
-        branchPrefix
-        prLabel
-        workingLabel
-        stuckLabel
-        handoffLabel
-        ;
-      credentialNames = lib.attrNames credentials;
-      toolNames = lib.attrNames toolchain;
+      text = import ./afk-agent/lib/runner.nix {
+        inherit
+          lib
+          stateDir
+          repository
+          ntfyUrl
+          ntfyTopic
+          deniedPaths
+          appId
+          botLogin
+          commitName
+          commitEmail
+          implementPrompt
+          rebasePrompt
+          prIntro
+          prHandoff
+          reviewPrompt
+          revisePrompt
+          permissionOverlay
+          reviewOverlay
+          ;
+        inherit (instance)
+          model
+          variant
+          reviewModel
+          quietHours
+          maxAttempts
+          attemptTimeout
+          gateTimeout
+          gateTailLines
+          reviewTimeout
+          ciPollInterval
+          ciFirstCheckPolls
+          ciSettlePolls
+          maxCiRounds
+          maxRevisionRounds
+          revisingLabel
+          sessionListDepth
+          reviewAxes
+          label
+          baseBranch
+          branchPrefix
+          prLabel
+          workingLabel
+          stuckLabel
+          handoffLabel
+          ;
+        credentialNames = lib.attrNames credentials;
+        toolNames = lib.attrNames toolchain;
+      };
     };
-  };
 in
 {
   options.cg.service.afk-agent = {
-    enable = lib.mkEnableOption ''
-      the unattended AFK ticket runner.
+    # One runner per repository, keyed by the name everything it runs under
+    # takes: the systemd unit and timer, the service account and group, and
+    # the state directory (whose `worktrees/` subdirectory - the worktree
+    # root - varies with it, so a second instance works a second checkout,
+    # not the first one's). The key is load-bearing, which is why its shape
+    # is checked - see `instanceNameChecked` below for why the check lives
+    # in the config rather than on this option's type.
+    #
+    # Everything else about a runner is per instance too - schedule, labels,
+    # ceilings, models - because two repositories are two queues with two
+    # price profiles, not one queue with two targets. What is shared is the
+    # identity (the GitHub App and its id, ADR 0006) and the notification
+    # lane; both are properties of the host, not of a repository.
+    #
+    # #275 made this a set: there is more than one repository now - the
+    # successor agent is being built in `corygyarmathy/afk-agent` (its
+    # ADR 0001) and this prototype works its tickets - and the module had
+    # been honest about exactly one. homelab01's existing instance is named
+    # `afk-agent`, which is why the unit, account and state directory there
+    # read bare.
+    instances = lib.mkOption {
+      default = { };
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            enable = lib.mkEnableOption ''
+              the unattended AFK ticket runner for this instance's repository.
 
-      The pre-push denylist gate this switch used to wait on has landed (#174),
-      and so has the stuck path (#175): a ticket the runner
-      cannot carry to a hand-off is commented on, relabelled `agent-stuck`,
-      and torn down - so a failure neither wedges the next poll nor strands a
-      claimed ticket. Past the push the hand-back reaches the pull request
-      too: it is commented on and left open without the hand-off label, since
-      it holds real work (ADR 0007 §2). Notifications through the self-hosted
-      ntfy server (#176) - a handed-over pull request and a handed-back
-      ticket, both at the lane's silent, informational level - are wired to
-      the same switch and go off with it. OpenCode Go usage approaching a cap
-      is tracked separately against OpenCode's own usage API (see #221),
-      not by a ledger this runner keeps.
+              The pre-push denylist gate this switch used to wait on has landed (#174),
+              and so has the stuck path (#175): a ticket the runner
+              cannot carry to a hand-off is commented on, relabelled `agent-stuck`,
+              and torn down - so a failure neither wedges the next poll nor strands a
+              claimed ticket. Past the push the hand-back reaches the pull request
+              too: it is commented on and left open without the hand-off label, since
+              it holds real work (ADR 0007 §2). Notifications through the self-hosted
+              ntfy server (#176) - a handed-over pull request and a handed-back
+              ticket, both at the lane's silent, informational level - are wired to
+              the same switch and go off with it. OpenCode Go usage approaching a cap
+              is tracked separately against OpenCode's own usage API (see #221),
+              not by a ledger this runner keeps.
 
-      Nothing argues for leaving it off any more. The last thing that did was
-      #190 - whether `deploy` should restrict who may push, `deploy` being a
-      shorter route to the fleet than any workflow edit - and it is answered
-      and shipped: `restrict-deploy-updates` allows the `update` rule to be
-      bypassed by a deploy key alone, so `ci-promote-deploy` moves `deploy`
-      and no token this pipeline can hold does (ADR 0005). homelab01 turned
-      the switch on 2026-09-10.
-    '';
+              Nothing argues for leaving it off any more. The last thing that did was
+              #190 - whether `deploy` should restrict who may push, `deploy` being a
+              shorter route to the fleet than any workflow edit - and it is answered
+              and shipped: `restrict-deploy-updates` allows the `update` rule to be
+              bypassed by a deploy key alone, so `ci-promote-deploy` moves `deploy`
+              and no token this pipeline can hold does (ADR 0005). homelab01 turned
+              the switch on 2026-09-10.
+            '';
 
-    schedule = lib.mkOption {
-      type = lib.types.str;
-      default = "*:0/15";
-      example = "hourly";
-      description = ''
-        How often to poll for eligible tickets, as a systemd calendar
-        expression (systemd.time(7)).
+            # The `owner/name` this instance polls, claims from, and clones.
+            # One value rather than two, because `gh` and `git` need the same
+            # answer and a runner pointed at one repository's tracker while
+            # working another's checkout would be a confusing way to find
+            # that out.
+            #
+            # An option since #275, and not before: there was one fleet and
+            # one value, and an option nobody set was a claim about
+            # configurability the repository did not honour. The default is
+            # what that one value was, so the instance homelab01 already
+            # runs is unchanged by the promotion.
+            repository = lib.mkOption {
+              type = lib.types.str;
+              default = "corygyarmathy/dotfiles";
+              example = "corygyarmathy/afk-agent";
+              description = ''
+                The `owner/name` on GitHub this instance polls for eligible
+                tickets, claims from, and clones. The GitHub App must be
+                installed on it; its reach is the installation's, not a
+                scope list's (ADR 0006).
+              '';
+            };
 
-        ADR 0004 §3 accepts up to one interval of latency between a ticket
-        becoming eligible and work starting, so this trades promptness against
-        how often the GitHub API is asked a question whose answer is almost
-        always "nothing to do". A quarter hour is well inside that tolerance
-        and well inside any rate limit.
-      '';
-    };
+            schedule = lib.mkOption {
+              type = lib.types.str;
+              default = "*:0/15";
+              example = "hourly";
+              description = ''
+                How often to poll for eligible tickets, as a systemd calendar
+                expression (systemd.time(7)).
 
-    quietHours = lib.mkOption {
-      type = lib.types.listOf quietHoursWindowType;
-      default = [ ];
-      example = [
-        "08:00-18:00"
-        "23:30-06:30"
-      ];
-      description = ''
-        The quiet hours: windows during which the runner starts no work
-        (#211). Each entry is `HH:MM-HH:MM` in the host's local time, and a
-        window may span midnight (`23:30-06:30`). The default is the empty
-        list: no restrictions. This description is the full explanation of
-        the gate; the other places that mention it point here rather than
-        re-arguing it.
+                ADR 0004 §3 accepts up to one interval of latency between a ticket
+                becoming eligible and work starting, so this trades promptness against
+                how often the GitHub API is asked a question whose answer is almost
+                always "nothing to do". A quarter hour is well inside that tolerance
+                and well inside any rate limit.
+              '';
+            };
 
-        The reason the option exists at all is price, not load: OpenCode
-        Zen - the usage-based fallback behind this fleet's fixed Go
-        capacity - bills differently by the hour, and so does the Deepseek
-        model the review stage runs. A window is therefore a spend
-        boundary, not an availability one, and it is enforced at the front
-        of the poll: the timer keeps firing, and a run whose poll starts
-        inside a window logs that it is doing nothing and exits 0 - ahead
-        of the revision frontier and the ticket queue alike, so a revision
-        round does not slip through either.
+            quietHours = lib.mkOption {
+              type = lib.types.listOf quietHoursWindowType;
+              default = [ ];
+              example = [
+                "08:00-18:00"
+                "23:30-06:30"
+              ];
+              description = ''
+                The quiet hours: windows during which the runner starts no work
+                (#211). Each entry is `HH:MM-HH:MM` in the host's local time, and a
+                window may span midnight (`23:30-06:30`). The default is the empty
+                list: no restrictions. This description is the full explanation of
+                the gate; the other places that mention it point here rather than
+                re-arguing it.
 
-        What the gate does not do is stop a run that already started. A
-        window that opens mid-flight is not worth killing a claimed ticket
-        for - concurrency here is one (ADR 0004 §8), so a run in flight
-        would have blocked every later poll anyway, and the stranded
-        ticket, the open worktree and the hand-back it would need are a
-        worse price than the API spend it saves. A window is a scheduling
-        restriction, and scheduling is what the poll is.
-      '';
-    };
+                The reason the option exists at all is price, not load: OpenCode
+                Zen - the usage-based fallback behind this fleet's fixed Go
+                capacity - bills differently by the hour, and so does the Deepseek
+                model the review stage runs. A window is therefore a spend
+                boundary, not an availability one, and it is enforced at the front
+                of the poll: the timer keeps firing, and a run whose poll starts
+                inside a window logs that it is doing nothing and exits 0 - ahead
+                of the revision frontier and the ticket queue alike, so a revision
+                round does not slip through either.
 
-    maxRuntime = lib.mkOption {
-      type = lib.types.str;
-      default = "10h45m";
-      example = "90min";
-      description = ''
-        Ceiling on a single run, as `TimeoutStartSec` (systemd.time(7)).
+                What the gate does not do is stop a run that already started. A
+                window that opens mid-flight is not worth killing a claimed ticket
+                for - concurrency here is one (ADR 0004 §8), so a run in flight
+                would have blocked every later poll anyway, and the stranded
+                ticket, the open worktree and the hand-back it would need are a
+                worse price than the API spend it saves. A window is a scheduling
+                restriction, and scheduling is what the poll is.
+              '';
+            };
 
-        This is not decoration. A `oneshot` unit defaults to a 90-second start
-        timeout, which would kill every real run: the pilot measured 15-60
-        minutes per `opencode run`, and the implement stage allows two retries
-        on top of that. The ceiling still has to exist, because concurrency
-        here is one unit - a run that hangs blocks every later poll until
-        something stops it, and "something" should not have to be a person.
+            maxRuntime = lib.mkOption {
+              type = lib.types.str;
+              default = "10h45m";
+              example = "90min";
+              description = ''
+                Ceiling on a single run, as `TimeoutStartSec` (systemd.time(7)).
 
-        The default is the sum of every ceiling underneath it, which is what
-        makes it an honest bound rather than a guess. Three implement attempts
-        at an hour each with a gate after each is 5h15m; watching CI twice at
-        forty-five minutes a watch is 1h30m; the one CI fix round between those
-        watches is another attempt and another gate, 1h45m; the rebase stage's
-        conflict session (#242) is another attempt-shaped session and another
-        gate on the worst path, 1h45m; and the review pass is 30m. Ten hours
-        forty-five minutes.
+                This is not decoration. A `oneshot` unit defaults to a 90-second start
+                timeout, which would kill every real run: the pilot measured 15-60
+                minutes per `opencode run`, and the implement stage allows two retries
+                on top of that. The ceiling still has to exist, because concurrency
+                here is one unit - a run that hangs blocks every later poll until
+                something stops it, and "something" should not have to be a person.
 
-        # It grew with the pipeline - the CI rounds in particular - so
-        # re-derive it from the ceilings above rather than raising it
-        # reflexively if runs start hitting it.
+                The default is the sum of every ceiling underneath it, which is what
+                makes it an honest bound rather than a guess. Three implement attempts
+                at an hour each with a gate after each is 5h15m; watching CI twice at
+                forty-five minutes a watch is 1h30m; the one CI fix round between those
+                watches is another attempt and another gate, 1h45m; the rebase stage's
+                conflict session (#242) is another attempt-shaped session and another
+                gate on the worst path, 1h45m; and the review pass is 30m. Ten hours
+                forty-five minutes.
 
-        This is the outer bound rather than an expected duration - every
-        measured run of every stage is far inside it - but it is not free.
-        Concurrency here is one (ADR 0004 §8), so a run that hangs blocks every
-        later poll until this ceiling stops it, and a run that reaches it is
-        killed mid-ticket; the next poll's guard finds the worktree it left
-        and hands that ticket back (#175) - leaving an open pull
-        request untouched too, past the push (ADR 0007).
-      '';
-    };
+                # It grew with the pipeline - the CI rounds in particular - so
+                # re-derive it from the ceilings above rather than raising it
+                # reflexively if runs start hitting it.
 
-    maxMemory = lib.mkOption {
-      type = lib.types.str;
-      default = "6G";
-      example = "4G";
-      description = ''
-        Ceiling on a single run's memory, as `MemoryMax` (systemd.resource-control(5)).
+                This is the outer bound rather than an expected duration - every
+                measured run of every stage is far inside it - but it is not free.
+                Concurrency here is one (ADR 0004 §8), so a run that hangs blocks every
+                later poll until this ceiling stops it, and a run that reaches it is
+                killed mid-ticket; the next poll's guard finds the worktree it left
+                and hands that ticket back (#175) - leaving an open pull
+                request untouched too, past the push (ADR 0007).
+              '';
+            };
 
-        `maxRuntime` above bounds how long a run may take and nothing bounded
-        how much of the host it may take while doing it. On 2026-09-10 a run
-        that had already implemented its ticket and passed its own tests was
-        killed proving it: `nix flake check` reached 8.3 GB resident on a 15 GB
-        host with no swap, and the kernel's OOM killer fired with
-        `CONSTRAINT_NONE` - a global out-of-memory, not a cgroup one. It chose
-        the biggest process, which happened to be this unit's. It could as
-        easily have chosen Grafana, Prometheus or Jellyfin: an unattended
-        coding agent had become a denial-of-service risk to every other service
-        on the machine.
+            maxMemory = lib.mkOption {
+              type = lib.types.str;
+              default = "6G";
+              example = "4G";
+              description = ''
+                Ceiling on a single run's memory, as `MemoryMax` (systemd.resource-control(5)).
 
-        This is the containment for that, and the per-check gate above is what
-        makes it comfortable rather than tight. Scope it honestly: a `nix
-        build` hands the work to `nix-daemon.service`, which has a cgroup of
-        its own, so what this actually bounds is the evaluator, opencode, and
-        anything the model runs directly - which is precisely what overran.
+                `maxRuntime` above bounds how long a run may take and nothing bounded
+                how much of the host it may take while doing it. On 2026-09-10 a run
+                that had already implemented its ticket and passed its own tests was
+                killed proving it: `nix flake check` reached 8.3 GB resident on a 15 GB
+                host with no swap, and the kernel's OOM killer fired with
+                `CONSTRAINT_NONE` - a global out-of-memory, not a cgroup one. It chose
+                the biggest process, which happened to be this unit's. It could as
+                easily have chosen Grafana, Prometheus or Jellyfin: an unattended
+                coding agent had become a denial-of-service risk to every other service
+                on the machine.
 
-        The default leaves roughly 9 GB for everything else on homelab01,
-        whose other services sit at about 6 GB. Reaching it kills inside this
-        cgroup: the run dies, its worktree is left, and the next poll's guard
-        hands the ticket back (#175) - the same ending as the runtime
-        ceiling, and a far better one than taking the host with it.
+                This is the containment for that, and the per-check gate above is what
+                makes it comfortable rather than tight. Scope it honestly: a `nix
+                build` hands the work to `nix-daemon.service`, which has a cgroup of
+                its own, so what this actually bounds is the evaluator, opencode, and
+                anything the model runs directly - which is precisely what overran.
 
-        `MemoryHigh` is deliberately not set alongside it. `MemoryHigh`
-        throttles and reclaims before killing, which earns its place when
-        there is swap to reclaim into; homelab01 has none, and the memory in
-        question is a Nix evaluator's anonymous heap. It would buy a stall
-        rather than a survival.
-      '';
-    };
+                The default leaves roughly 9 GB for everything else on homelab01,
+                whose other services sit at about 6 GB. Reaching it kills inside this
+                cgroup: the run dies, its worktree is left, and the next poll's guard
+                hands the ticket back (#175) - the same ending as the runtime
+                ceiling, and a far better one than taking the host with it.
 
-    model = lib.mkOption {
-      type = lib.types.str;
-      default = "opencode-go/glm-5.3-flash";
-      description = ''
-        Model the implement stage (and the CI fix round) runs.
-        Settled by the pilot's cost/convergence measurements; see
-        docs/research/afk-agent-pilot-findings.md.
-      '';
-    };
+                `MemoryHigh` is deliberately not set alongside it. `MemoryHigh`
+                throttles and reclaims before killing, which earns its place when
+                there is swap to reclaim into; homelab01 has none, and the memory in
+                question is a Nix evaluator's anonymous heap. It would buy a stall
+                rather than a survival.
+              '';
+            };
 
-    variant = lib.mkOption {
-      type = lib.types.str;
-      default = "high";
-      description = "Reasoning variant passed to opencode for every session this runner opens.";
-    };
+            model = lib.mkOption {
+              type = lib.types.str;
+              default = "opencode-go/glm-5.3-flash";
+              description = ''
+                Model the implement stage (and the CI fix round) runs.
+                Settled by the pilot's cost/convergence measurements; see
+                docs/research/afk-agent-pilot-findings.md.
+              '';
+            };
 
-    reviewModel = lib.mkOption {
-      type = lib.types.str;
-      default = "opencode-go/deepseek-v4-pro";
-      description = ''
-        Model the advisory review pass runs. Chosen for findings quality
-        rather than gating; see ADR 0007 and
-        docs/research/afk-agent-pilot-findings.md.
-      '';
-    };
+            variant = lib.mkOption {
+              type = lib.types.str;
+              default = "high";
+              description = "Reasoning variant passed to opencode for every session this runner opens.";
+            };
 
-    label = lib.mkOption {
-      type = lib.types.str;
-      default = "ready-for-agent";
-      description = "Issue label the runner polls and claims (ADR 0004 §3, §5).";
-    };
+            reviewModel = lib.mkOption {
+              type = lib.types.str;
+              default = "opencode-go/deepseek-v4-pro";
+              description = ''
+                Model the advisory review pass runs. Chosen for findings quality
+                rather than gating; see ADR 0007 and
+                docs/research/afk-agent-pilot-findings.md.
+              '';
+            };
 
-    baseBranch = lib.mkOption {
-      type = lib.types.str;
-      default = "master";
-      description = "Branch the runner clones and the pull request targets.";
-    };
+            label = lib.mkOption {
+              type = lib.types.str;
+              default = "ready-for-agent";
+              description = "Issue label the runner polls and claims (ADR 0004 §3, §5).";
+            };
 
-    branchPrefix = lib.mkOption {
-      type = lib.types.str;
-      default = "afk/";
-      description = "Prefix for the per-ticket branch the runner creates.";
-    };
+            baseBranch = lib.mkOption {
+              type = lib.types.str;
+              default = "master";
+              description = "Branch the runner clones and the pull request targets.";
+            };
 
-    prLabel = lib.mkOption {
-      type = lib.types.str;
-      default = "afk-agent";
-      description = "Label applied to pull requests the runner opens.";
-    };
+            branchPrefix = lib.mkOption {
+              type = lib.types.str;
+              default = "afk/";
+              description = "Prefix for the per-ticket branch the runner creates.";
+            };
 
-    workingLabel = lib.mkOption {
-      type = lib.types.str;
-      default = "agent-working";
-      description = ''
-        Label a claimed ticket carries while the runner works it (ADR 0006;
-        see docs/agents/triage-labels.md).
-      '';
-    };
+            prLabel = lib.mkOption {
+              type = lib.types.str;
+              default = "afk-agent";
+              description = "Label applied to pull requests the runner opens.";
+            };
 
-    stuckLabel = lib.mkOption {
-      type = lib.types.str;
-      default = "agent-stuck";
-      description = ''
-        Label a handed-back ticket carries instead of `workingLabel`
-        (see docs/agents/triage-labels.md).
-      '';
-    };
+            workingLabel = lib.mkOption {
+              type = lib.types.str;
+              default = "agent-working";
+              description = ''
+                Label a claimed ticket carries while the runner works it (ADR 0006;
+                see docs/agents/triage-labels.md).
+              '';
+            };
 
-    handoffLabel = lib.mkOption {
-      type = lib.types.str;
-      default = "agent-ready-for-review";
-      description = ''
-        Label applied to the pull request once CI is green, the review has
-        verified, and the review's findings have been posted as its comment.
-        A signal, not a merge control (ADR 0007 §7).
-      '';
-    };
+            stuckLabel = lib.mkOption {
+              type = lib.types.str;
+              default = "agent-stuck";
+              description = ''
+                Label a handed-back ticket carries instead of `workingLabel`
+                (see docs/agents/triage-labels.md).
+              '';
+            };
 
-    revisingLabel = lib.mkOption {
-      type = lib.types.str;
-      default = "agent-revising";
-      description = ''
-        Label this runner applies to one of its own pull requests while a
-        revision round runs on it, and removes when the round finishes,
-        returning the pull request to `handoffLabel`. The revision trigger
-        is a `/revise` comment from an account other than the agent's
-        (plan item 12, #196, as re-triggered by #247), not this label or
-        any other: a half-written review starts nothing.
-      '';
-    };
+            handoffLabel = lib.mkOption {
+              type = lib.types.str;
+              default = "agent-ready-for-review";
+              description = ''
+                Label applied to the pull request once CI is green, the review has
+                verified, and the review's findings have been posted as its comment.
+                A signal, not a merge control (ADR 0007 §7).
+              '';
+            };
 
-    maxRevisionRounds = lib.mkOption {
-      type = lib.types.int;
-      default = 3;
-      description = ''
-        Revision rounds per pull request before the stuck path. Counted
-        from the round comments the runner leaves on the pull request
-        rather than from any state on disk, so a count survives the run
-        that made it. A fourth round does not run; the pull request goes
-        to the stuck path, and writing another `/revise` comment will not
-        spend another round.
-      '';
-    };
+            revisingLabel = lib.mkOption {
+              type = lib.types.str;
+              default = "agent-revising";
+              description = ''
+                Label this runner applies to one of its own pull requests while a
+                revision round runs on it, and removes when the round finishes,
+                returning the pull request to `handoffLabel`. The revision trigger
+                is a `/revise` comment from an account other than the agent's
+                (plan item 12, #196, as re-triggered by #247), not this label or
+                any other: a half-written review starts nothing.
+              '';
+            };
 
-    maxAttempts = lib.mkOption {
-      type = lib.types.int;
-      default = 3;
-      description = "Implement attempts per ticket: the first try plus two retries (ADR 0004 §6).";
-    };
+            maxRevisionRounds = lib.mkOption {
+              type = lib.types.int;
+              default = 3;
+              description = ''
+                Revision rounds per pull request before the stuck path. Counted
+                from the round comments the runner leaves on the pull request
+                rather than from any state on disk, so a count survives the run
+                that made it. A fourth round does not run; the pull request goes
+                to the stuck path, and writing another `/revise` comment will not
+                spend another round.
+              '';
+            };
 
-    attemptTimeout = lib.mkOption {
-      type = lib.types.int;
-      default = 3600;
-      description = "Ceiling in seconds on one implement attempt, so a stuck attempt fails countable rather than by the unit timeout.";
-    };
+            maxAttempts = lib.mkOption {
+              type = lib.types.int;
+              default = 3;
+              description = "Implement attempts per ticket: the first try plus two retries (ADR 0004 §6).";
+            };
 
-    gateTimeout = lib.mkOption {
-      type = lib.types.int;
-      default = 2700;
-      description = "Ceiling in seconds on one run of the local gate (the other half of an attempt).";
-    };
+            attemptTimeout = lib.mkOption {
+              type = lib.types.int;
+              default = 3600;
+              description = "Ceiling in seconds on one implement attempt, so a stuck attempt fails countable rather than by the unit timeout.";
+            };
 
-    gateTailLines = lib.mkOption {
-      type = lib.types.int;
-      default = 200;
-      description = "How many trailing lines of a failing gate's log are handed back to the model on a retry.";
-    };
+            gateTimeout = lib.mkOption {
+              type = lib.types.int;
+              default = 2700;
+              description = "Ceiling in seconds on one run of the local gate (the other half of an attempt).";
+            };
 
-    reviewTimeout = lib.mkOption {
-      type = lib.types.int;
-      default = 1800;
-      description = "Ceiling in seconds on the review pass. The review does not retry (ADR 0004 §6).";
-    };
+            gateTailLines = lib.mkOption {
+              type = lib.types.int;
+              default = 200;
+              description = "How many trailing lines of a failing gate's log are handed back to the model on a retry.";
+            };
 
-    ciPollInterval = lib.mkOption {
-      type = lib.types.int;
-      default = 60;
-      description = "Seconds between polls when watching the branch's CI.";
-    };
+            reviewTimeout = lib.mkOption {
+              type = lib.types.int;
+              default = 1800;
+              description = "Ceiling in seconds on the review pass. The review does not retry (ADR 0004 §6).";
+            };
 
-    ciFirstCheckPolls = lib.mkOption {
-      type = lib.types.int;
-      default = 10;
-      description = ''
-        Polls to wait for CI's first check before calling it absent rather
-        than slow (ADR 0007). The same bound is what tells a moved pull
-        request head apart from the post-push reporting window: a head
-        mismatch lasting this many polls is a rebase or push by a human,
-        and the watch follows the run it triggered (#248).
-      '';
-    };
+            ciPollInterval = lib.mkOption {
+              type = lib.types.int;
+              default = 60;
+              description = "Seconds between polls when watching the branch's CI.";
+            };
 
-    ciSettlePolls = lib.mkOption {
-      type = lib.types.int;
-      default = 45;
-      description = "Ceiling in polls on one CI watch (ADR 0007).";
-    };
+            ciFirstCheckPolls = lib.mkOption {
+              type = lib.types.int;
+              default = 10;
+              description = ''
+                Polls to wait for CI's first check before calling it absent rather
+                than slow (ADR 0007). The same bound is what tells a moved pull
+                request head apart from the post-push reporting window: a head
+                mismatch lasting this many polls is a rebase or push by a human,
+                and the watch follows the run it triggered (#248).
+              '';
+            };
 
-    maxCiRounds = lib.mkOption {
-      type = lib.types.int;
-      default = 2;
-      description = "CI watches per ticket: the initial watch plus one fix-and-rewatch round (ADR 0007).";
-    };
+            ciSettlePolls = lib.mkOption {
+              type = lib.types.int;
+              default = 45;
+              description = "Ceiling in polls on one CI watch (ADR 0007).";
+            };
 
-    sessionListDepth = lib.mkOption {
-      type = lib.types.int;
-      default = 20;
-      description = "How deep to look when turning an opencode session title back into a session id.";
-    };
+            maxCiRounds = lib.mkOption {
+              type = lib.types.int;
+              default = 2;
+              description = "CI watches per ticket: the initial watch plus one fix-and-rewatch round (ADR 0007).";
+            };
 
-    reviewAxes = lib.mkOption {
-      type = lib.types.int;
-      default = 2;
-      description = ''
-        Sub-agent contexts a genuine `code-review` pass fans out into: standards and spec.
-        The count is provenance rather than a pass condition: a transcript that cannot
-        show this many identifiable-axes calls degrades the hand-off's certification
-        instead of failing the run (#269).
-      '';
+            sessionListDepth = lib.mkOption {
+              type = lib.types.int;
+              default = 20;
+              description = "How deep to look when turning an opencode session title back into a session id.";
+            };
+
+            reviewAxes = lib.mkOption {
+              type = lib.types.int;
+              default = 2;
+              description = ''
+                Sub-agent contexts a genuine `code-review` pass fans out into: standards and spec.
+                The count is provenance rather than a pass condition: a transcript that cannot
+                show this many identifiable-axes calls degrades the hand-off's certification
+                instead of failing the run (#269).
+              '';
+            };
+          };
+        }
+      );
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    # The three credentials this service needs, read from the file
-    # homelab01 itself decrypts. No `owner`: they are handed to the unit with
+  # The config's top level is deliberately static. The per-instance
+  # generation happens under fixed parents (users, systemd), because the
+  # module system collects a path's definitions by walking each module's
+  # config structurally: a `mkMerge (mapAttrsToList ... cfg.instances)` at
+  # the root would force the `instances` read while collecting the
+  # definitions of `instances` itself, and recurse forever. Here the walk
+  # stops at the four static names, and each parent's value is forced only
+  # when that parent is actually consumed.
+  config = {
+    # The credentials every instance runs on, read from the file homelab01
+    # itself decrypts. No `owner`: they are handed to the units with
     # `LoadCredential`, which systemd reads as root and copies into the unit's
     # private credentials directory before it drops to the account below - so
     # the sops-nix defaults (root:root 0400) are exactly right, and there is
-    # no per-secret ownership for this module to get wrong.
-    sops.secrets = lib.genAttrs (lib.attrValues credentials) (_: { });
+    # no per-secret ownership for this module to get wrong. Declared once
+    # rather than per instance: the App identity is the host's (ADR 0006) and
+    # the set is the same for every repository, so the set is present while
+    # any instance is on and goes with the last one.
+    sops.secrets = lib.mkIf (
+      (lib.all instanceNameChecked (lib.attrNames cfg.instances))
+      && lib.any (i: i.enable) (lib.attrValues cfg.instances)
+    ) (lib.genAttrs (lib.attrValues credentials) (_: { }));
 
     # A dedicated account rather than root. It is the boundary around a
     # process that runs generated code with repo-write credentials, which is
-    # the added blast radius ADR 0004 names in its consequences.
-    users.users.afk-agent = {
-      isSystemUser = true;
-      group = "afk-agent";
-      home = stateDir;
-      description = "Unattended AFK ticket runner";
-    };
-    users.groups.afk-agent = { };
+    # the added blast radius ADR 0004 names in its consequences. The name is
+    # the instance's, as is the home - which is the state directory the unit
+    # below declares, so the two readings of "where this instance's state
+    # lives" cannot disagree.
+    users.users = lib.mkMerge (
+      lib.mapAttrsToList (
+        name: instance:
+        lib.mkIf (instanceNameChecked name && instance.enable) {
+          ${name} = {
+            isSystemUser = true;
+            group = name;
+            home = "/var/lib/${name}";
+            description = "Unattended AFK ticket runner";
+          };
+        }
+      ) cfg.instances
+    );
 
-    systemd.services.afk-agent = {
-      description = "Work one ready-for-agent ticket, unattended";
+    users.groups = lib.mkMerge (
+      lib.mapAttrsToList (
+        name: instance: lib.mkIf (instanceNameChecked name && instance.enable) { ${name} = { }; }
+      ) cfg.instances
+    );
 
-      # No `wantedBy`. The timer is the only thing that starts this, and a
-      # coding agent that also ran on every boot would be a surprise.
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
+    systemd.services = lib.mkMerge (
+      lib.mapAttrsToList (
+        name: instance:
+        lib.mkIf (instanceNameChecked name && instance.enable) (
+          let
+            # The name is the unit, and everything on disk follows it. The
+            # worktree root inside the runner is `$state_dir/worktrees`
+            # (00-env.sh), so it varies with this too - a second instance
+            # works a second checkout, not the first one's.
+            stateDir = "/var/lib/${name}";
+            repository = instance.repository;
+            runner = mkRunner { inherit stateDir repository instance; };
+          in
+          {
+            ${name} = {
+              description = "Work one ready-for-agent ticket from ${repository}, unattended";
 
-      # coreutils on top of the toolchain proper: not something the runner
-      # drives by name, just the shell utilities any script assumes.
-      path = lib.attrValues toolchain ++ [ pkgs.coreutils ];
+              # No `wantedBy`. The timer is the only thing that starts this, and a
+              # coding agent that also ran on every boot would be a surprise.
+              after = [ "network-online.target" ];
+              wants = [ "network-online.target" ];
 
-      # opencode and gh both keep state under $HOME; without this they resolve
-      # it from the account's passwd entry, which is the same directory - but
-      # only by coincidence, and only until someone changes one of them.
-      environment.HOME = stateDir;
+              # coreutils on top of the toolchain proper: not something the runner
+              # drives by name, just the shell utilities any script assumes.
+              path = lib.attrValues toolchain ++ [ pkgs.coreutils ];
 
-      # opencode spawns `$SHELL` for every bash call the model makes. Left
-      # unset, systemd fills it in from the service account's passwd entry,
-      # which is `nologin` for an `isSystemUser` account - so this is set here
-      # rather than by giving the account a login shell it has no other use
-      # for. See `toolchain.bash`, and `require_shell` in the preflight, which
-      # is what turns getting this wrong into a failed empty poll rather than a
-      # ticket claimed and then abandoned.
-      environment.SHELL = lib.getExe toolchain.bash;
+              # opencode and gh both keep state under $HOME; without this they resolve
+              # it from the account's passwd entry, which is the same directory - but
+              # only by coincidence, and only until someone changes one of them.
+              environment.HOME = stateDir;
 
-      serviceConfig = {
-        Type = "oneshot";
-        User = "afk-agent";
-        Group = "afk-agent";
-        StateDirectory = "afk-agent";
-        StateDirectoryMode = "0700";
-        WorkingDirectory = stateDir;
-        UMask = "0077";
-        TimeoutStartSec = cfg.maxRuntime;
+              # opencode spawns `$SHELL` for every bash call the model makes. Left
+              # unset, systemd fills it in from the service account's passwd entry,
+              # which is `nologin` for an `isSystemUser` account - so this is set here
+              # rather than by giving the account a login shell it has no other use
+              # for. See `toolchain.bash`, and `require_shell` in the preflight, which
+              # is what turns getting this wrong into a failed empty poll rather than a
+              # ticket claimed and then abandoned.
+              environment.SHELL = lib.getExe toolchain.bash;
 
-        # See `maxMemory`. The runtime ceiling's counterpart: this unit runs a
-        # coding agent that builds things, and until 2026-09-10 nothing stopped
-        # it exhausting the host's memory and taking unrelated services down
-        # with it.
-        MemoryMax = cfg.maxMemory;
+              serviceConfig = {
+                Type = "oneshot";
+                User = name;
+                Group = name;
+                StateDirectory = name;
+                StateDirectoryMode = "0700";
+                WorkingDirectory = stateDir;
+                UMask = "0077";
+                TimeoutStartSec = instance.maxRuntime;
 
-        LoadCredential = lib.mapAttrsToList (
-          alias: name: "${alias}:${config.sops.secrets.${name}.path}"
-        ) credentials;
+                # See `maxMemory`. The runtime ceiling's counterpart: this unit runs a
+                # coding agent that builds things, and until 2026-09-10 nothing stopped
+                # it exhausting the host's memory and taking unrelated services down
+                # with it.
+                MemoryMax = instance.maxMemory;
 
-        ExecStart = lib.getExe runner;
+                LoadCredential = lib.mapAttrsToList (
+                  alias: secret: "${alias}:${config.sops.secrets.${secret}.path}"
+                ) credentials;
 
-        # Hardening, bounded by what the job actually is. This unit exists to
-        # run a coding agent: it needs the network, it needs to write a
-        # checkout, and it needs to build. The strict posture the other
-        # services here get is not available, so what is left is the subset
-        # that costs nothing.
-        #
-        # Loosening a line here because a run demonstrably needs more is a
-        # legitimate outcome, not a failure of this posture.
-        NoNewPrivileges = true;
-        ProtectSystem = "full";
-        PrivateTmp = true;
-        PrivateDevices = true;
-        ProtectHome = true;
-        ProtectKernelTunables = true;
-        ProtectKernelModules = true;
-        ProtectControlGroups = true;
-        RestrictSUIDSGID = true;
-        RestrictRealtime = true;
-        LockPersonality = true;
-        SystemCallArchitectures = "native";
-        SystemCallFilter = [ "@system-service" ];
-        RestrictAddressFamilies = [
-          "AF_INET"
-          "AF_INET6"
-          "AF_UNIX"
-          # Go and Node both enumerate interfaces and read resolver state over
-          # netlink, so `gh` and `opencode` need this even though nothing in
-          # this unit opens a netlink socket deliberately. Left in rather than
-          # discovered on the first real run.
-          "AF_NETLINK"
-        ];
+                ExecStart = lib.getExe runner;
 
-        # Two settings above are weaker than the obvious choice, both
-        # deliberately:
-        #
-        # ProtectSystem is "full" rather than "strict". Every `nix build` this
-        # runs is a client of the Nix daemon, and connecting to a unix socket
-        # needs write access to the socket inode - which lives under /nix/var,
-        # and which "strict" would remount read-only.
-        #
-        # MemoryDenyWriteExecute is absent entirely. opencode is a JIT'd
-        # JavaScript runtime and needs writable-executable pages; the digital
-        # garden dropped the same exemption when its Node toolchain went away,
-        # and this is that exemption coming back for the same reason.
-      };
-    };
+                # Hardening, bounded by what the job actually is. This unit exists to
+                # run a coding agent: it needs the network, it needs to write a
+                # checkout, and it needs to build. The strict posture the other
+                # services here get is not available, so what is left is the subset
+                # that costs nothing.
+                #
+                # Loosening a line here because a run demonstrably needs more is a
+                # legitimate outcome, not a failure of this posture.
+                NoNewPrivileges = true;
+                ProtectSystem = "full";
+                PrivateTmp = true;
+                PrivateDevices = true;
+                ProtectHome = true;
+                ProtectKernelTunables = true;
+                ProtectKernelModules = true;
+                ProtectControlGroups = true;
+                RestrictSUIDSGID = true;
+                RestrictRealtime = true;
+                LockPersonality = true;
+                SystemCallArchitectures = "native";
+                SystemCallFilter = [ "@system-service" ];
+                RestrictAddressFamilies = [
+                  "AF_INET"
+                  "AF_INET6"
+                  "AF_UNIX"
+                  # Go and Node both enumerate interfaces and read resolver state over
+                  # netlink, so `gh` and `opencode` need this even though nothing in
+                  # this unit opens a netlink socket deliberately. Left in rather than
+                  # discovered on the first real run.
+                  "AF_NETLINK"
+                ];
 
-    systemd.timers.afk-agent = {
-      description = "Poll for ready-for-agent tickets";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnCalendar = cfg.schedule;
+                # Two settings above are weaker than the obvious choice, both
+                # deliberately:
+                #
+                # ProtectSystem is "full" rather than "strict". Every `nix build` this
+                # runs is a client of the Nix daemon, and connecting to a unix socket
+                # needs write access to the socket inode - which lives under /nix/var,
+                # and which "strict" would remount read-only.
+                #
+                # MemoryDenyWriteExecute is absent entirely. opencode is a JIT'd
+                # JavaScript runtime and needs writable-executable pages; the digital
+                # garden dropped the same exemption when its Node toolchain went away,
+                # and this is that exemption coming back for the same reason.
+              };
+            };
+          }
+        )
+      ) cfg.instances
+    );
 
-        # Explicitly not Persistent, unlike every other timer in this
-        # repository. Those catch up work that had to happen (a backup, a
-        # cleanup); a poll has nothing to catch up on. The tickets a missed
-        # poll would have found are still open at the next tick, and a
-        # Persistent timer would instead start a coding agent the moment a
-        # host finishes booting - including the reboot at the end of every
-        # nightly upgrade.
-        Persistent = false;
-      };
-    };
+    systemd.timers = lib.mkMerge (
+      lib.mapAttrsToList (
+        name: instance:
+        lib.mkIf (instanceNameChecked name && instance.enable) {
+          ${name} = {
+            description = "Poll ${instance.repository} for ready-for-agent tickets";
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnCalendar = instance.schedule;
+
+              # Explicitly not Persistent, unlike every other timer in this
+              # repository. Those catch up work that had to happen (a backup, a
+              # cleanup); a poll has nothing to catch up on. The tickets a missed
+              # poll would have found are still open at the next tick, and a
+              # Persistent timer would instead start a coding agent the moment a
+              # host finishes booting - including the reboot at the end of every
+              # nightly upgrade.
+              Persistent = false;
+            };
+          };
+        }
+      ) cfg.instances
+    );
   };
 }
