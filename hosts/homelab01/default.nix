@@ -196,6 +196,62 @@ in
       };
     };
 
+    # -------------------------------------------------------------------------
+    # AFK agent (corygyarmathy/afk-agent, `afk work`)
+    # -------------------------------------------------------------------------
+    # Every limit it runs with is written here; the module has no defaults
+    # (#281). The only job kind in the build today is `/review` on a pull
+    # request, so this works dotfiles' own tracker and does nothing without
+    # a command. The kill switch is `enable = false`.
+    afk-agent = {
+      enable = true;
+      repo = "corygyarmathy/dotfiles";
+      # The App's id, from its settings URL (ADR 0006). Not a secret.
+      appId = "4882603";
+
+      workers = 2;
+      poll = "1m";
+      # Well over a model run: a slow model can take 30-40 minutes, and a lease
+      # that lapses mid-run wastes the run.
+      lease = "2h";
+      # A brief GitHub or provider failure retries instead of parking - a park
+      # notifies, and should mean a human is needed.
+      retry = "15m";
+      maxAttempts = 3;
+      tokenWait = "1m";
+      tokens = { };
+
+      budget = {
+        age = "5m";
+        threshold = 90;
+      };
+
+      # Its own topic, not the alerting stack's `alerts`, so either can be
+      # muted without the other. Subscribe to it in the ntfy app.
+      notifyTopic = "afk-agent";
+
+      tiers = [
+        {
+          name = "review";
+          models = [
+            "opencode-go/deepseek-v4-pro"
+            "opencode-go/glm-5.3"
+          ];
+        }
+      ];
+      review = {
+        tier = "review";
+        needs = [ "tool_call" ];
+      };
+      modelAttempts = 2;
+      tierWait = "1h";
+      catalogueAge = "24h";
+
+      # A review builds nothing, so well under the prototype's 6G; the 2026-09-10
+      # global OOM on this host is why there is a ceiling at all.
+      maxMemory = "4G";
+    };
+
     immich.enable = false;
     home-assistant.enable = false;
     miniflux.enable = true;

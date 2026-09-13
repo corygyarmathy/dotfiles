@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "afk-agent": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789312798,
+        "narHash": "sha256-hBC8m6SRr08mjZk+tSvCa54T/anaiyMsTVs6CrrdjMg=",
+        "owner": "corygyarmathy",
+        "repo": "afk-agent",
+        "rev": "49a106801d0e86e31e82d3812f2a318d7f7a3004",
+        "type": "github"
+      },
+      "original": {
+        "owner": "corygyarmathy",
+        "repo": "afk-agent",
+        "type": "github"
+      }
+    },
     "base16": {
       "inputs": {
         "fromYaml": "fromYaml"
@@ -324,6 +340,7 @@
     },
     "root": {
       "inputs": {
+        "afk-agent": "afk-agent",
         "deploy-rs": "deploy-rs",
         "disko": "disko",
         "hardware": "hardware",
