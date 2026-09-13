@@ -8,6 +8,8 @@
 
     Everything else here stands. §1's ordering, §3's division between CI as the correctness gate and the review as an advisory quality pass, and §6's placement of the denylist gate immediately before every push are all carried into the successor unchanged.
 
+    **Amended 2026-09-13 (the prototype is deleted).** The implementation this ADR constrains has been removed (ADR 0004's 2026-09-13 amendment), so the `modules/services/afk-agent.nix` and `docs/plans/afk-agent-pipeline.md` named under Related Artefacts no longer exist. The decisions carried into the successor above are unaffected.
+
 - **Date:** 2026-09-09
 - **Related Artefacts:**
     - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §6, whose closing "never a PR" was written when the review was a gate. Its retry-in-the-same-session rule is upheld here and extended to a new kind of failure; §9 is untouched

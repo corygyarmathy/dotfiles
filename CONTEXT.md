@@ -4,4 +4,4 @@ The fleet's configuration and the services it runs: two NixOS hosts, their modul
 
 ## AFK agent
 
-The unattended runner's vocabulary - job, transition, claim, lease, command, hand-off - is defined in the [`afk-agent`](https://github.com/corygyarmathy/afk-agent) repository's `CONTEXT.md`, not here. This repository holds the NixOS module that packages and configures the runner, and (until cutover) the bash prototype it replaces; neither owns the language.
+The unattended runner's vocabulary - job, transition, claim, lease, command, hand-off - is defined in the [`afk-agent`](https://github.com/corygyarmathy/afk-agent) repository's `CONTEXT.md`, not here. This repository is where the NixOS module that packages and configures the runner lives (#281), and it does not own the language.

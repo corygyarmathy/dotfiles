@@ -196,22 +196,6 @@ in
       };
     };
 
-    # -------------------------------------------------------------------------
-    # AFK agent (unattended ticket runner)
-    # -------------------------------------------------------------------------
-    # On, 2026-09-10. Every condition this switch was held closed against has
-    # been met: the pre-push denylist gate landed with item 7 (#174) and runs
-    # against the diff before every push (#201 made that more than one); the
-    # stuck path landed with item 8 (#175), so a ticket the runner cannot
-    # finish is commented on, relabelled `agent-stuck` and torn down rather
-    # than left to wedge every later poll; the notifications landed with item
-    # 9 (#176), so both endings reach a phone; and #190 is answered and shipped
-    # - `restrict-deploy-updates` lets only `ci-promote-deploy`'s deploy key
-    # move `deploy`, proven on #198's merge with the rule active (ADR 0005).
-    # The kill switch is this word: back to `false` plus a rebuild removes the
-    # timer, the unit and the service account (checks/afk-agent.nix pins that).
-    afk-agent.enable = true;
-
     immich.enable = false;
     home-assistant.enable = false;
     miniflux.enable = true;

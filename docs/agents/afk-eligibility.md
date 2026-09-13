@@ -70,16 +70,7 @@ three moments:
    than trusted from the label - ADR 0004 §5 asks for the check twice precisely
    so the label is not the gate.
 3. **Mid-run**, if denylisted scope surfaces that the ticket never described.
-   That is a stuck-path exit (the runner's `hand_back`, `modules/services/afk-agent.nix`):
-   comment, relabel, no PR.
-
-The revision loop (#196) binds at moment 3 only, and that is deliberate rather
-than an oversight. Its diff is the one thing being judged, and `push_gate` runs
-against it immediately before the push, exactly as it does for a first push.
-Moment 2 deliberately does not: the prose a revision poll could read - the pull
-request's body - quotes commit messages written under an implement prompt that
-names these paths, so a literal prose match would refuse this loop its own
-pull requests. The diff, not the prose, is what is enforceable there.
+   That is a hand-back to a human, not a pull request.
 
 The list is **literal paths**. It does not stretch to cover things merely
 adjacent to them, and two of those are worth naming so nobody assumes a cover
@@ -102,7 +93,7 @@ the right scope merging its own PR - a question for the AFK identity
 (ADR 0006) rather than for triage.
 
 ADR 0006 answers it: no ruleset can carry §9 here, and not for the reason
-`docs/plans/afk-agent-pipeline.md` item 3 first gave - GitHub refuses to let a
+first given - GitHub refuses to let a
 mergeability-blocking ruleset apply to any actor other than every actor,
 bypass list included, which defeats it for a human merge as much as for the
 runner's own. Human merge stays a property of the runner's code, so this
@@ -149,9 +140,8 @@ What this buys is bounded: an added entry can cause an existing, sandboxed
 derivation to be built, and nothing else. It cannot introduce a step, reference
 a secret, or widen a permission.
 
-Checkable from the diff, roughly - and this sketch is now implemented as
-`push_gate` in `modules/services/afk-agent.nix`, which runs it against
-`git diff origin/master...HEAD` immediately before the push:
+Checkable from the diff, roughly - and it has to run against
+`git diff origin/master...HEAD` immediately before every push (ADR 0007 §6):
 
 ```bash
 # 1. nothing else under .github/workflows/ changed
@@ -171,36 +161,17 @@ edit to `ci.yml` would pass. That is accepted - comments do not execute.
 
 ### What stands behind it
 
-Nothing at GitHub's end. A fine-grained PAT cannot push anything under
-`.github/workflows/` without the Workflows permission, whatever the runner
-believes, and the runner's credential carries that permission precisely so this
-exception can be exercised (its permission table, `modules/services/afk-agent.nix`).
-Without it the runner would produce a correct diff and fail at the push instead.
+Nothing at GitHub's end. A credential cannot push anything under
+`.github/workflows/` without the Workflows permission, whatever the agent
+believes, and the agent's credential has to carry that permission precisely so
+this exception can be exercised. Without it the agent would produce a correct
+diff and fail at the push instead.
 
 That leaves all three enforcement moments above as the agent checking itself, so
 the diff check sketched here is the only control rather than an extra - and it
 has to run **before the push**. The push becomes a PR, the PR runs the head
 branch's workflow with the repository's secrets before anyone reads it, and
 after that there is nothing left to gate.
-
-Item 7 built it (#174) and item 13 (#201) moved it. It is now the first line of
-the one function in the runner that pushes, `push_branch`, and the push is the
-last: nothing sits between them, and nothing else in the script pushes at all.
-That matters more than it did, because a run pushes more than once now - a red
-CI run is fixed and the fix goes to the same branch (ADR 0007) - and a second
-push is every bit as capable of putting a workflow file on a branch that runs
-with this repository's secrets. `checks/afk-agent-runner.nix` exercises the gate
-against a real `ci.yml` in the fixture repository with the real `yq`, since the
-exception below turns entirely on what yq makes of both sides of the diff; it
-also reads `push_branch` itself, so an edit that put something between the gate
-and the push fails there rather than in production.
-
-Item 5's runner does re-check the denylist before it claims (moment 2 above),
-but that check reads the ticket's prose and this exception cannot be judged
-from prose at all: whether a `ci.yml` diff is additions-only to the matrix is a
-question about a diff that does not exist yet. The two are not substitutes, and
-the prose check is the weaker one - it is also blunt in the other direction,
-refusing any ticket that so much as names a denied path.
 
 This exception is the one place the denylist is not purely path-shaped, and the
 only one that _widens_ it rather than narrowing it. Like rule 2 below, it is
@@ -238,7 +209,7 @@ agent would have to stop and wait for a person, it is a judgement.
 
 That mid-flight stop is why a judgement is fatal rather than merely awkward. An
 agent that halts for a human decision looks exactly like an agent that broke,
-and the stuck path (item 8) has no way to tell the two apart - so the ticket
+and the hand-back has no way to tell the two apart - so the ticket
 either draws a stuck report for work that was going fine, or draws a success
 report the agent cannot justify.
 
@@ -275,5 +246,5 @@ amendment to 0004 (see `docs/agents/domain.md`).
 Unlike the denylist, rule 2 is applied **at triage only**. The runner does not
 re-gate on it before claiming: the judgement is made on ticket prose, and a
 false rejection there is indistinguishable from a real bail. If the runner
-discovers mid-run that it cannot determine its own success, that is a stuck-path
-exit (item 8), not a pre-claim rejection.
+discovers mid-run that it cannot determine its own success, that is a hand-back,
+not a pre-claim rejection.
