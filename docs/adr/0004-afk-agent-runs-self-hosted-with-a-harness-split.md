@@ -14,9 +14,11 @@
 
     Not changed by any of this: §1 (self-hosted on homelab01), §4 (the runner's own GitHub identity, as already amended by ADR 0006), §5 (eligibility bounded by a path denylist, enforced twice), §7 (a real NixOS module with a one-boolean kill switch - which now packages the Go agent as a flake input), and §9 (merge stays a human act), which the successor restates for its own repository.
 
+    **Amended 2026-09-13 (the prototype is deleted).** The bash runner is removed from this repository rather than kept running until the Go agent can replace it: it was costing more to keep working than the unattended work it produced was saving. Nothing in this repository now implements this ADR, and there is a gap with no unattended ticket work until the successor's module lands (#281). The decisions listed above as not changed are unaffected, and the prototype's code remains in git history.
+
 - **Date:** 2026-09-07
 - **Related Artefacts:**
-    - Implemented by: `modules/services/afk-agent.nix`, which owns this design's parameters - counts, prefixes, paths and option names; this ADR states decisions only. The measured evidence behind them is in `docs/research/afk-agent-pilot-findings.md`.
+    - Implemented by: `modules/services/afk-agent.nix` until 2026-09-13, when it was deleted (see the amendment above), which owned this design's parameters - counts, prefixes, paths and option names; this ADR states decisions only. The measured evidence behind them is in `docs/research/afk-agent-pilot-findings.md`.
     - Depends on: `docs/agents/issue-tracker.md` (the `ready-for-agent` label and claim convention), `.github/workflows/README.md` (the `FLAKE_UPDATE_TOKEN` precedent this follows), `modules/services/cloudflare-tunnel.nix` (considered, not used)
 
 ## Context

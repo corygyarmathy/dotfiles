@@ -11,89 +11,11 @@ roles to the actual label strings used in this repo's issue tracker.
 | `ready-for-human` | `ready-for-human`    | Requires human implementation            |
 | `wontfix`         | `wontfix`            | Will not be actioned                     |
 
-Three further labels are written by the AFK runner rather than applied at
-triage, and are here because they share the tracker with the ones above:
-
-| Label                    | Applied to                                     | Meaning                                                        |
-| ------------------------ | ---------------------------------------------- | -------------------------------------------------------------- |
-| `agent-working`          | the issue                                      | The AFK runner has claimed this ticket and is working it now   |
-| `agent-stuck`            | the issue, or the pull request once it is open | The AFK runner stopped without finishing; its comments say why |
-| `agent-ready-for-review` | the pull request                               | CI is green on this branch and the agent's review has run      |
-| `agent-revising`         | the pull request                               | The AFK runner claimed this pull request for a revision round  |
-
-`agent-working` and `agent-stuck` sit on the issue on the ticket lane, and
-`agent-stuck` and `agent-revising` sit on the pull request on the revision lane
-(#196): only a revision run ever puts `agent-revising` on a pull request, which
-is what makes a dead revision run recognisable from outside. On the ticket
-lane, #271 puts past-push hand-backs there as well - the paragraph below has
-the split.
-
-The runner claims by swapping `ready-for-agent` for `agent-working` in a single
-edit, rather than by assigning itself, because GitHub will not let a GitHub App
-hold an issue assignment (ADR 0006). Dropping `ready-for-agent` is what stops
-the ticket being claimed twice; `agent-working` is what makes that visible.
-
-The stuck path (#175, the runner's `hand_back` in `modules/services/afk-agent.nix`, with the
-surface split as #271 records it) hands a ticket the runner cannot finish
-back next to a comment saying what was tried and why it stopped, and where
-the comment lands splits by the push, the way ADR 0007 §2 splits the run:
-
-- **Before the push** there is no pull request, so the ticket carries the
-  story: `agent-working` becomes `agent-stuck` on the issue, and nothing else
-  the run built survives - no worktree, no branch.
-- **Past the push** there is a pull request, the work and the failure are
-  both there, and that is the surface the hand-back addresses: the pull
-  request is commented on and relabelled `agent-stuck`, and left open without
-  the hand-off label below, because it holds real work (ADR 0007 §2). The
-  issue is touched only to lose its claim marker - no comment, no stuck
-  label, nothing else - so there is exactly one thread to read and the PR is
-  it.
-
-Past the push, "check the agent lifecycle" means looking at both surfaces: a
-stuck ticket whose hand-back went to a pull request shows there, not in the
-issue's history. `agent-stuck` is deliberately not `ready-for-agent` again: re-applying the claim marker would send a ticket the
-runner cannot finish straight round the frontier query, to burn its retry
-budget on the same failure every poll. A human decides what happens next -
-reshape the ticket and re-apply `ready-for-agent`, or take it by hand. Past
-the push, the pull request has to be dealt with first either way: a re-claim
-while its pull request is open is refused, because the branch would already
-exist. An
-`agent-working` ticket with no open pull request and no running unit is a run
-that died - the runner's next poll hands it back through the same path.
-
-`agent-ready-for-review` is the runner's hand-off, and it goes on the pull
-request rather than on the issue. It arrives last, after the review's
-findings have been posted as a comment on the pull request by the agent's
-own account (#202, ADR 0006), so a pull request carrying the label carries
-the findings too (ADR 0007). Deliberately **not** `ready-for-human`: that
-is an issue triage role meaning "requires human implementation", and on an
-agent's own pull request it would read as "an agent could not do this" - the
-opposite of what happened. It joins `agent-working` and `agent-stuck` in the
-`agent-*` lifecycle family, which `agent-revising` extends: while a revision
-round runs, the claim is the only label the pull request carries, and the
-hand-off label goes back on once CI is green.
-
-The revision trigger itself (#196, as re-triggered by #247) is not a label but
-a `/revise` comment, written by an account other than the agent's on one of the
-runner's own pull requests: the runner reads that request - or, when the
-comment carries no text, the review comments written since its last word on
-the pull request - back into a revision session that pushes to the same
-branch, three rounds per pull request before the stuck path. A review comment
-without `/revise` starts nothing, and a half-written review is exactly that.
-The trigger is only visible on a pull request carrying `agent-ready-for-review`:
-once the stuck path relabels it `agent-stuck`, re-entering the loop takes both
-the hand-off label re-applied and a fresh `/revise` written after the hand-back
-comment - the request that started the last round was consumed by the round
-that acknowledged it.
-
-**It is a signal, not a control.** It says CI is green and a review has run; it
-does not say "you may merge", and nothing stops a merge before it is applied.
-That is deliberate: ADR 0004 §9 makes merging a human act, and a mechanism that
-could withhold a merge would be the runner holding a veto over the person rather
-than the other way round. A pull request from the runner without this label is
-one where CI never went green, the review could not be shown to have run, or the
-run died in between - all of which look the same from outside and all of which
-mean the same thing to a reader: nobody has finished with this yet.
+Issues and pull requests from before 2026-09-13 may also carry `agent-working`,
+`agent-stuck`, `agent-ready-for-review` or `agent-revising`. Those were written
+by the bash prototype runner, which has been deleted; its history is in git and
+in ADR 0004, 0006 and 0007. The successor's label vocabulary is not settled
+here - see the `afk-agent` repository's `docs/agents/triage-labels.md`.
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the
 corresponding label string from this table.

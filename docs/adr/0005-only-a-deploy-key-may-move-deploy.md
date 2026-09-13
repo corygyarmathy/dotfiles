@@ -5,7 +5,7 @@
 - **Related Artefacts:**
     - Narrows: [ADR 0001](0001-gitops-deployment-with-a-promoted-ref.md), which makes `deploy` the fleet's only contract - this decides who may move it
     - Answers: #190
-    - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/afk-eligibility.md` (rule 1's reasoning), `modules/services/afk-agent.nix` (the AFK identity's permissions)
+    - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/afk-eligibility.md` (rule 1's reasoning), `modules/services/afk-agent.nix` (the AFK identity's permissions; deleted with the bash prototype, 2026-09-13)
 
 ## Context
 

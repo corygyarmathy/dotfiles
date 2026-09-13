@@ -1,6 +1,9 @@
 # ADR 0006: The runner is a GitHub App, and merge stays a script's property
 
-- **Status:** Proposed
+- **Status:** Proposed.
+
+    **Amended 2026-09-13 (the prototype is deleted).** The bash runner that minted installation tokens in its preflight is gone (ADR 0004's 2026-09-13 amendment). Decision 1 carries to the successor unchanged: the Go agent will run as this same App, and teaching it to mint its own tokens and to know its `[bot]` login without `GET /user` - the 403 recorded under Verification - is [`corygyarmathy/afk-agent#34`](https://github.com/corygyarmathy/afk-agent/issues/34). The `modules/services/afk-agent.nix` and `docs/plans/afk-agent-pipeline.md` named under Related Artefacts no longer exist.
+
 - **Date:** 2026-09-09
 - **Related Artefacts:**
     - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §4, on the credential only - its no-second-account clause is upheld here rather than reversed - and §3, which loses the assignee as its claim marker
