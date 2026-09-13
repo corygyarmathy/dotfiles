@@ -164,6 +164,7 @@ jobs:
       fail-fast: false
       matrix:
         check:
+          - afk-agent
           - alert-rules
           - alert-rules-unit
           - alertmanager-config

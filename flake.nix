@@ -30,6 +30,14 @@
     # fleet keeps pulling; this is only the human-driven push from the laptop.
     deploy-rs.url = "github:serokell/deploy-rs";
     deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
+
+    # The AFK agent (modules/services/afk-agent.nix). Not a flake: it is a Go
+    # module with its one dependency vendored, so packages/afk-agent builds it
+    # with no network. Tracks master through the ordinary lock bumps - its
+    # master is protected by a ruleset with no bypass (its ADR 0003), and every
+    # bump is still a pull request through this repository's gate.
+    afk-agent.url = "github:corygyarmathy/afk-agent";
+    afk-agent.flake = false;
   };
 
   outputs =
@@ -223,6 +231,11 @@
           };
         in
         import ./packages pkgs
+        // {
+          # Beside the index rather than in it: its source is a flake input,
+          # and ./packages is handed only `pkgs`.
+          afk-agent = pkgs.callPackage ./packages/afk-agent { src = inputs.afk-agent; };
+        }
       );
 
       # Local preview for the digital garden:
