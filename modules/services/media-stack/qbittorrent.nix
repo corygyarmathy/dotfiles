@@ -77,6 +77,19 @@ in
           connects is alerted separately by `GluetunVpnDisconnected`.
         '';
       };
+
+      qbtReadyTimeoutSeconds = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 120;
+        description = ''
+          How long `vpn-port-sync` waits for qBittorrent's WebUI to accept
+          connections before skipping the run (polling every 5 seconds).
+          Covers a cold boot where the container unit reports "started"
+          before the app inside has bound its port, including however long
+          `--pull=newer` takes to fetch a fresh image. A skipped run retries
+          on the next timer fire.
+        '';
+      };
     };
   };
 
@@ -309,6 +322,36 @@ in
           if [ -z "$FORWARDED_PORT" ] || [ "$FORWARDED_PORT" = "0" ]; then
             echo "Could not get forwarded port from Gluetun (got: ''${FORWARDED_PORT:-empty})"
             exit 1
+          fi
+
+          # Gate on qBittorrent's WebUI actually accepting connections, not
+          # merely on its container unit being active. podman-qbittorrent.service
+          # reaches "active" as soon as the container process launches - the
+          # app inside still needs a moment (and, on a cold boot, however long
+          # `--pull=newer` takes) to bind its WebUI port. On 2026-09-14 this
+          # unit's OnBootSec fired inside that gap: curl connection-refused on
+          # the login request killed the whole script (the generated unit
+          # script runs under `set -e`) before it printed anything, and it sat
+          # `failed` long enough for upgrade verification to read it as "the
+          # new generation came up broken" - the same class of race as the
+          # gluetun wait above, just against a different dependency.
+          #
+          # So wait a bounded time, then skip the run rather than fail it -
+          # the timer fires again every 5 minutes.
+          QBT_UP=0
+          attempts=$(( ${toString cfg.vpn.qbtReadyTimeoutSeconds} / 5 ))
+          while [ "$attempts" -gt 0 ]; do
+            attempts=$(( attempts - 1 ))
+            if curl -s -o /dev/null --max-time 5 "http://localhost:${toString cfg.port}/api/v2/app/webapiVersion"; then
+              QBT_UP=1
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$QBT_UP" -ne 1 ]; then
+            echo "qBittorrent WebUI did not come up within ${toString cfg.vpn.qbtReadyTimeoutSeconds}s; skipping this run."
+            exit 0
           fi
 
           # qBittorrent >=5.2.0 returns 204 on login (not 200) and renamed
