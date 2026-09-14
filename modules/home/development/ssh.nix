@@ -40,7 +40,16 @@ in
         # that account only accepts its own key, not the human's. Offer only
         # the dedicated deploy key on those connections so the personal key is
         # never presented to the deploy account.
-        "deploy@homelab01 deploy@homelab02" = {
+        #
+        # This has to be a `Match` block, not a `Host` block: ssh_config's
+        # `Host` keyword only ever matches the hostname, never `user@host` -
+        # `Host deploy@homelab01` silently never matches anything. That was
+        # the actual bug behind deploy-rs's "SSH error": ssh fell through to
+        # the `*` block's personal key, which the `deploy` account's
+        # authorizedKeys doesn't list, so auth failed at the very end of the
+        # deploy run.
+        deploy-homelab = {
+          header = "Match host homelab01,homelab02 user deploy";
           User = "deploy";
           IdentitiesOnly = true;
           IdentityFile = [ "~/.ssh/deploy" ];
