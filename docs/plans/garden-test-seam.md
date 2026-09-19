@@ -6,15 +6,15 @@ Scope is bounded by [ADR 0009](../adr/0009-the-garden-stays-in-this-repository-a
 
 | #   | Item                                              | Size   | Depends on | Status      |
 | --- | ------------------------------------------------- | ------ | ---------- | ----------- |
-| 1   | One fixture, shared by the preview and the checks | small  | -          | not started |
-| 2   | Lift the pipeline out of the host evaluation      | small  | -          | not started |
-| 3   | One dotfile rule, one spelling                    | small  | -          | not started |
-| 4   | Golden: staging tree and rendered HTML            | medium | 1, 2       | not started |
-| 5   | Refusals and determinism, asserted explicitly     | small  | 1, 2       | not started |
-| 6   | Shrink the VM check to what a VM is for           | medium | 4, 5       | not started |
-| 7   | `filter_vault(...) -> Report`, and pass 5 split   | medium | 4, 5       | not started |
-| 8   | Stage names and the hue ring, declared once       | small  | 4          | not started |
-| 9   | One publish marker, matched the same way twice    | small  | 5          | not started |
+| 1   | One fixture, shared by the preview and the checks | small  | -          | open (#299) |
+| 2   | Lift the pipeline out of the host evaluation      | small  | -          | open (#300) |
+| 3   | One dotfile rule, one spelling                    | small  | -          | open (#301) |
+| 4   | Golden: staging tree and rendered HTML            | medium | #299, #300 | open (#302) |
+| 5   | Refusals and determinism, asserted explicitly     | small  | #299, #300 | open (#303) |
+| 6   | Shrink the VM check to what a VM is for           | medium | #302, #303 | open (#304) |
+| 7   | `filter_vault(...) -> Report`, and pass 5 split   | medium | #302, #303 | open (#305) |
+| 8   | Stage names and the hue ring, declared once       | small  | #302       | open (#306) |
+| 9   | One publish marker, matched the same way twice    | small  | #303       | open (#307) |
 
 Order matters in one place: the golden lands before the Python is touched, so that the cleanup in item 7 can be shown not to change what gets published. Item 6 lands after the golden has run green against at least one real change, not in the same pull request - deleting the old coverage in the commit that adds its replacement means the first evidence the replacement works is also the moment the old one is gone.
 
