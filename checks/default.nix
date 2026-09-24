@@ -408,6 +408,9 @@ in
   # colliding fixture vault, and its refusal is the assertion - see the file
   # for why the served site cannot carry this property.
   digital-garden-filter = import ./digital-garden-filter.nix { inherit pkgs; };
+  # Not a VM either: the one vault-path ignore rule, run through the filter,
+  # the stamp walk's find and a real inotifywait, which must all agree.
+  digital-garden-ignore = import ./digital-garden-ignore.nix { inherit pkgs; };
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;
     lib = pkgs.lib;
