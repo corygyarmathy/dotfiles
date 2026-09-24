@@ -172,6 +172,7 @@ jobs:
           - bless-boot-guard
           - digital-garden
           - digital-garden-filter
+          - digital-garden-ignore
           - digital-garden-sync-health
           - deploy-schema
           - deploy-activate
