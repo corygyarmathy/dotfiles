@@ -78,8 +78,10 @@ service starts or that its generated configuration is valid.
   the host supplying the differing value.
 - Changes to a package updater should be made in that package. The workflow
   discovers packages through `passthru.autoUpdate`.
-- Adding a host requires adding it to the build matrix in
-  `.github/workflows/ci.yml`; otherwise the gate does not protect it.
+- Adding a host or a check requires adding it to the matching matrix in
+  `.github/workflows/ci.yml`; otherwise the gate does not protect it. A check
+  missing from the `check:` matrix fails the `lint` job, which a local
+  `nix flake check` does not catch.
 - Changes to deployment semantics should include documentation or an ADR when
   they introduce or alter a durable architectural decision.
 

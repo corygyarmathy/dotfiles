@@ -109,6 +109,10 @@ let
   # of lib/filter.nix.
   filter = import ./lib/filter.nix { inherit pkgs; };
 
+  # Which vault paths the filter, the stamp walk and the watcher all ignore,
+  # in the dialect each one needs. See the header of lib/ignore.nix.
+  ignore = import ./lib/ignore.nix;
+
   stateDir = "/var/lib/digital-garden";
   vaultDir = "${stateDir}/vault";
 
@@ -200,15 +204,18 @@ let
       # unpublished notes.
       #
       # Gate one is a stat-only walk: no file is opened, so this stays cheap
-      # enough to run every minute. Dotfiles are excluded to match the filter,
-      # which ignores .obsidian/.git/.sync.lock — otherwise sync churn in
-      # .obsidian would rebuild the site constantly.
+      # enough to run every minute. It skips exactly what the filter skips
+      # (lib/ignore.nix) — otherwise sync churn in .obsidian would rebuild the
+      # site constantly. Run from inside the vault because the rule is written
+      # relative to it; %P makes the listing the same either way.
       vault_stamp="${stateDir}/stamp-vault"
       content_stamp="${stateDir}/stamp-content"
       vault_id=$(
         {
           echo "${buildInputsId}"
-          find "${vaultDir}" -name '.*' -prune -o -type f -printf '%P %s %T@\n' | sort
+          cd "${vaultDir}"
+          find . -regextype posix-extended -regex '${ignore.find}' -prune \
+            -o -type f -printf '%P %s %T@\n' | sort
         } | sha256sum | cut -d' ' -f1
       )
       if [ "$(cat "$vault_stamp" 2>/dev/null || true)" = "$vault_id" ]; then
@@ -221,7 +228,7 @@ let
       # staging is rebuilt from scratch every run, and the first date a note was
       # seen is not recoverable from anywhere else.
       python3 ${filter}/publish-filter.py "${vaultDir}" "${stateDir}/content" \
-        "${stateDir}/dates.json"
+        "${stateDir}/dates.json" '${ignore.relative}'
 
       # Defence in depth, and the reason it is here rather than in the
       # generator: this guards the staging tree itself, so it holds no matter
@@ -292,11 +299,14 @@ let
       done
 
       # Watch the vault only - never the state directory, where the builder
-      # itself writes, or a build would trigger another build forever. Dotfiles
-      # are excluded to match publish-filter.py, so Obsidian's own churn in
-      # .obsidian does not rebuild the site continuously.
+      # itself writes, or a build would trigger another build forever. It
+      # ignores exactly what publish-filter.py ignores (lib/ignore.nix), so
+      # Obsidian's own churn in .obsidian does not rebuild the site
+      # continuously. Watched as `.` because the rule is written relative to
+      # the vault root.
+      cd "${vaultDir}"
       inotifywait -q -m -r -e modify,create,delete,move,close_write \
-        --exclude '/\.' "${vaultDir}" \
+        --exclude '${ignore.inotify}' . \
         | while read -r _; do
             # A single logical change arrives as several events, and Obsidian
             # Sync delivers a burst over a few seconds. Wait for the burst to
