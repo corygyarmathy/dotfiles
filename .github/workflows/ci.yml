@@ -183,6 +183,7 @@ jobs:
           - grafana
           - host-alive
           - monitoring
+          - ntfy
           - publish
           - reverse-proxy
           - secrets
