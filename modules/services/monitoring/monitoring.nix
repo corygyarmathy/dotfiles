@@ -768,9 +768,14 @@ in
         #           warnings arrive silently (priority low) and are muted
         #           overnight. Resolutions follow their alert's route, so a
         #           resolved critical lands as an ordinary-priority all-clear.
-        #   email - the archive lane. Everything reaches it (the severity
-        #           routes `continue` past the push receiver into this one),
-        #           grouped by alertname so a fan-out of related alerts is
+        #   email - the archive lane. Everything reaches it through the
+        #           first child route, which matches every alert and
+        #           `continue`s into the push routes. It has to be a child:
+        #           Alertmanager hands an alert to the root receiver only
+        #           when no child route matches, so an email root with push
+        #           children archived nothing but info alerts - and when
+        #           ntfy itself was down, nothing reached anyone. Grouped
+        #           by alertname so a fan-out of related alerts is
         #           one message, repeating no more often than daily.
         #
         # Inhibition keeps one root cause from fanning out into many
@@ -794,7 +799,13 @@ in
               group_interval = "10m";
               repeat_interval = "24h";
 
-              routes = lib.optionals cfg.alertmanager.ntfy.enable [
+              routes = [
+                {
+                  receiver = "email";
+                  continue = true;
+                }
+              ]
+              ++ lib.optionals cfg.alertmanager.ntfy.enable [
                 # Tunnel outages inside the nightly maintenance window are the
                 # upgrade rebooting the host that owns the tunnel - expected,
                 # not an incident. Criticals normally ignore quiet hours by
@@ -805,7 +816,7 @@ in
                 # interval below.
                 {
                   receiver = "push";
-                  continue = true; # email still archives it
+                  continue = true;
                   matchers = [
                     "severity = \"critical\""
                     "alertname =~ \"CloudflareTunnel.*\""
@@ -820,7 +831,7 @@ in
                 }
                 {
                   receiver = "push";
-                  continue = true; # email still archives it
+                  continue = true;
                   matchers = [ "severity = \"critical\"" ];
                   group_by = [
                     "alertname"
