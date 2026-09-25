@@ -131,6 +131,9 @@ in
         key = enabled.succeed(f"${pkgs.jq}/bin/jq -r '.\"opencode-go\".key' {auth}").strip()
         assert key == "${opencodeKey}", "auth.json does not carry the opencode key"
 
+    with subtest("opencode finds the agent's skills under its $HOME"):
+        enabled.succeed("runuser -u afk-agent -- test -r /var/lib/afk-agent/.agents/skills/implement/SKILL.md")
+
     with subtest("the enrolment is a file the review tier resolves in"):
         env = enabled.succeed("systemctl show -p Environment --value afk-agent.service")
         enrolment = next(v.split("=", 1)[1] for v in env.split() if v.startswith("AFK_ENROLMENT="))
