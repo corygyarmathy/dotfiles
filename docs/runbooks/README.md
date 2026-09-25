@@ -18,6 +18,7 @@ notification lands on the right section directly.
 | [vpn.md](vpn.md)                             | Gluetun VPN connectivity and port forwarding                                            |
 | [digital-garden.md](digital-garden.md)       | Garden build and Obsidian sync                                                          |
 | [media-stack.md](media-stack.md)             | The download-root canary: a wiped/emptied shared download root                          |
+| [alerting.md](alerting.md)                   | The alerting pipeline itself: push delivery                                             |
 
 ## Conventions
 

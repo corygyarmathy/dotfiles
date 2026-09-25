@@ -150,6 +150,8 @@ in
         want=email,push route severity=critical alertname=ZfsPoolFaulted
         want=email,push route severity=warning alertname=NixosUpgradeFailed
         want=email route severity=info alertname=NixosRebootPending
+        # ...and "push is failing" goes to email only, whatever its severity.
+        want=email route severity=warning alertname=AlertPushFailing
 
         mkdir $out
       '';

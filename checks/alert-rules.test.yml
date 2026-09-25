@@ -268,3 +268,33 @@ tests:
       - eval_time: 10m
         alertname: HostUnreachableFromOutside
         exp_alerts: [ ]
+
+  # AlertPushFailing: a lane that keeps failing matures after its hold; a
+  # short run of failures - ntfy restarting during the upgrade window - drains
+  # out of the 10m window first and never does.
+  - interval: 1m
+    input_series:
+      - series: 'alertmanager_notifications_failed_total{job="alertmanager",instance="homelab01",integration="webhook",reason="serverError"}'
+        values: "0+2x40"
+      - series: 'alertmanager_notifications_failed_total{job="alertmanager",instance="homelab02",integration="webhook",reason="serverError"}'
+        values: "0 1 2 3 3+0x37"
+
+    alert_rule_test:
+      # homelab02's blip is still inside the window here, so a shorter hold
+      # would already have fired on it.
+      - eval_time: 12m
+        alertname: AlertPushFailing
+        exp_alerts: [ ]
+      - eval_time: 35m
+        alertname: AlertPushFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: alertmanager
+              instance: homelab01
+              integration: webhook
+              reason: serverError
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/alerting#alertpushfailing"
+              summary: "Push notifications from homelab01 are failing"
+              description: "Alertmanager on homelab01 has been failing to deliver to the ntfy bridge for 20+ minutes, so alerts are reaching email only. Check the bridge (journalctl -u alertmanager-ntfy) and the ntfy server on homelab01 (systemctl status ntfy-sh)."

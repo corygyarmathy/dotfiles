@@ -722,7 +722,20 @@ in
                 }
               ];
             }
-          ];
+          ]
+          # Each host's own Alertmanager, so AlertPushFailing can see its
+          # delivery counters. The instance is the host rather than the
+          # shared `localhost:<port>` target, which would make the two
+          # hosts' series - and their alerts - indistinguishable.
+          ++ lib.optional cfg.alertmanager.enable {
+            job_name = "alertmanager";
+            static_configs = [
+              {
+                targets = [ "localhost:${toString config.services.prometheus.alertmanager.port}" ];
+                labels.instance = config.networking.hostName;
+              }
+            ];
+          };
 
           ruleFiles = [ ./alert-rules.yml ];
           alertmanagers = lib.mkIf cfg.alertmanager.enable [
@@ -800,6 +813,12 @@ in
               repeat_interval = "24h";
 
               routes = [
+                # "Push is broken" is news only on a lane that still works,
+                # so this one stops here: email, never push.
+                {
+                  receiver = "email";
+                  matchers = [ "alertname = \"AlertPushFailing\"" ];
+                }
                 {
                   receiver = "email";
                   continue = true;
