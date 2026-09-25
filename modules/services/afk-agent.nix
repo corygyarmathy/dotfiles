@@ -291,6 +291,14 @@ in
     };
     users.groups.afk-agent = { };
 
+    # The skills opencode runs with, from the same afk-agent revision as the
+    # binary. The repository it works on carries no copy of its own, so they
+    # arrive through opencode's per-user skills directory under $HOME.
+    systemd.tmpfiles.rules = [
+      "d ${stateDir}/.agents 0700 afk-agent afk-agent -"
+      "L+ ${stateDir}/.agents/skills - - - - ${package.src}/.agents/skills"
+    ];
+
     systemd.services.afk-agent = {
       description = "AFK agent work pool";
       wantedBy = [ "multi-user.target" ];
