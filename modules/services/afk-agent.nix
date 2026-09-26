@@ -235,8 +235,10 @@ let
               [ (property name (lib.concatStringsSep " " value)) ]
             else if lib.isBool value then
               [ (property name (lib.boolToString value)) ]
-            else
+            else if lib.isString value || lib.isInt value then
               [ (property name (toString value)) ]
+            else
+              throw "afk-agent-run: no -p encoding for sandbox.${name}"
           ) sandbox
         );
         # Double-quoted rather than escapeShellArg'd, so the one expansion left
