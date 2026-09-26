@@ -2,9 +2,10 @@
 #
 # The Go successor to the bash prototype that lived at this path until #283.
 # Its design is that repository's ADR 0001; what it needs from a host is its
-# docs/agents/review.md. This module is where it is packaged and configured,
-# and nowhere else: the binary holds no defaults, every parameter is a flag with
-# an environment variable beside it, and `afk help` is the list of record.
+# docs/agents/review.md and docs/agents/implement.md. This module is where it
+# is packaged and configured, and nowhere else: the binary holds no defaults,
+# every parameter is a flag with an environment variable beside it, and
+# `afk help` is the list of record.
 #
 # The tuning options below have no defaults either, for the same reason. A
 # limit an unattended agent runs with should be read where the host is
@@ -18,7 +19,8 @@
 # flight and nothing else (ADR 0001 §2, §7).
 #
 # checks/afk-agent.nix boots this module with stub credentials and asserts the
-# unit gets past every parameter to its first request to GitHub.
+# unit, and a hand-run of an implement transition, each get past every
+# parameter to their first request to GitHub.
 {
   config,
   lib,
@@ -93,6 +95,168 @@ let
   };
 
   toEnv = lib.mapAttrs (_: toString);
+
+  # The local gate an implement session has to pass before anything is pushed
+  # (`--gate`): this repository's own CI, step for step, rather than a cheaper
+  # proxy. A branch the gate passes and CI fails costs a fix round and a CI
+  # run; one it fails costs a session, which is cheaper.
+  #
+  # CI's shape, not `nix flake check`: that evaluates every output in one
+  # process, and on 2026-09-10 the prototype's run of it reached 8.3 GB and
+  # took a global OOM on homelab01. One `nix build` per check is what CI's
+  # matrix does anyway. The checks are discovered, then held against ci.yml's
+  # matrix as CI's lint job does, which is also what makes the loop total. The
+  # hosts are discovered too, so a branch that adds one is gated on it.
+  #
+  # `nix fmt` formats in place before it fails, so a formatting failure also
+  # leaves the workspace dirty - which the agent hands back to the session as
+  # uncommitted changes, the right answer either way.
+  gate = pkgs.writeShellApplication {
+    name = "afk-agent-gate";
+    runtimeInputs = [
+      config.nix.package
+      pkgs.coreutils
+      pkgs.diffutils
+      pkgs.yq-go
+    ];
+    text = ''
+      names() { nix eval --raw "$1" --apply 'xs: builtins.concatStringsSep "\n" (builtins.attrNames xs)'; }
+
+      nix fmt -- --ci
+
+      lists="$(mktemp -d)"
+      trap 'rm -rf "$lists"' EXIT
+      names .#checks.x86_64-linux | LC_ALL=C sort >"$lists/flake-checks"
+      yq -r '.jobs.checks.strategy.matrix.check[]' .github/workflows/ci.yml | LC_ALL=C sort >"$lists/matrix-checks"
+      diff -u "$lists/flake-checks" "$lists/matrix-checks"
+
+      nix eval --raw .#devShells.x86_64-linux.default.drvPath >/dev/null
+      nix eval --json .#packages.x86_64-linux --apply 'ps: map (p: p.drvPath) (builtins.attrValues ps)' >/dev/null
+      nix eval --raw .#apps.x86_64-linux.garden-preview.program >/dev/null
+
+      while read -r check; do
+        nix build --no-link ".#checks.x86_64-linux.$check"
+      done <"$lists/flake-checks"
+
+      # An empty discovery is a gate that built nothing, which must not read
+      # as a gate that passed.
+      hosts="$(names .#nixosConfigurations)"
+      [ -n "$hosts" ]
+      for host in $hosts; do
+        nix build --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
+      done
+    '';
+  };
+
+  # The unit's confinement, shared with `afk-agent-run` below so that a
+  # hand-run is the unit in every respect but its lifetime.
+  sandbox = {
+    User = "afk-agent";
+    Group = "afk-agent";
+    StateDirectory = "afk-agent";
+    StateDirectoryMode = "0700";
+    WorkingDirectory = stateDir;
+    UMask = "0077";
+
+    LoadCredential = lib.mapAttrsToList (
+      name: secret: "${name}:${config.sops.secrets.${secret}.path}"
+    ) credentials;
+
+    MemoryMax = cfg.maxMemory;
+
+    # Hardening, bounded by what the job is: a network client that runs
+    # opencode, which is a JIT'd JavaScript runtime (so no
+    # MemoryDenyWriteExecute), and a gate that builds through the Nix daemon.
+    NoNewPrivileges = true;
+    # "strict" still lets a Nix client connect to the daemon's socket: a
+    # read-only mount does not refuse connect(2). The prototype ran with
+    # "full" believing otherwise, and checks/afk-agent.nix pins that it is not
+    # needed.
+    ProtectSystem = "strict";
+    ProtectHome = true;
+    PrivateTmp = true;
+    PrivateDevices = true;
+    ProtectKernelTunables = true;
+    ProtectKernelModules = true;
+    ProtectKernelLogs = true;
+    ProtectControlGroups = true;
+    ProtectClock = true;
+    ProtectHostname = true;
+    RestrictSUIDSGID = true;
+    RestrictRealtime = true;
+    RestrictNamespaces = true;
+    LockPersonality = true;
+    SystemCallArchitectures = "native";
+    SystemCallFilter = [ "@system-service" ];
+    RestrictAddressFamilies = [
+      "AF_INET"
+      "AF_INET6"
+      "AF_UNIX"
+      # Go and Node read interface and resolver state over netlink.
+      "AF_NETLINK"
+    ];
+  };
+
+  # A command run as the unit runs: its account, environment, credentials and
+  # confinement, in a transient unit. What afk-agent's docs/agents/implement.md
+  # means by "with the parameters in the environment", e.g.
+  #
+  #   sudo afk-agent-run afk run implement --issue 7
+  #
+  # Any command, not just `afk`, so the same wrapper answers "can the unit
+  # reach X" - which is how checks/afk-agent.nix asks it of the Nix daemon.
+  runAsUnit = pkgs.writeShellApplication {
+    name = "afk-agent-run";
+    text =
+      let
+        property = name: value: "-p ${lib.escapeShellArg "${name}=${value}"}";
+        properties = lib.concatLists (
+          lib.mapAttrsToList (
+            name: value:
+            if name == "LoadCredential" then
+              map (property name) value
+            else if lib.isList value then
+              [ (property name (lib.concatStringsSep " " value)) ]
+            else if lib.isBool value then
+              [ (property name (lib.boolToString value)) ]
+            else
+              [ (property name (toString value)) ]
+          ) sandbox
+        );
+        # Double-quoted rather than escapeShellArg'd, so the one expansion left
+        # in is the credentials directory: `--setenv` is literal, and the `%d`
+        # the unit's credential paths are written with is not expanded there.
+        quote =
+          v:
+          ''"${
+            lib.replaceStrings [ "%d" ] [ "$credentials" ] (
+              lib.replaceStrings [ "\\" ''"'' "$" "`" ] [ "\\\\" ''\"'' "\\$" "\\`" ] v
+            )
+          }"'';
+        unitEnv = config.systemd.services.afk-agent.environment;
+        environment = lib.mapAttrsToList (name: value: "--setenv=${quote "${name}=${value}"}") unitEnv;
+      in
+      ''
+        if [ "$#" -eq 0 ]; then
+          echo "usage: afk-agent-run <command> [args...], e.g. afk-agent-run afk run implement --issue 7" >&2
+          exit 2
+        fi
+        # systemd-run finds the command on its own PATH, not the unit's, so it
+        # is resolved here: on the unit's PATH, with `afk` added - there and
+        # not in the unit, where the model's shell would find it too.
+        command="$(PATH=${lib.getBin package}/bin:${unitEnv.PATH} command -v "$1")" || {
+          echo "afk-agent-run: $1: not on the unit's PATH" >&2
+          exit 127
+        }
+        shift
+        unit="afk-agent-run-$$"
+        credentials="/run/credentials/$unit.service"
+        exec ${config.systemd.package}/bin/systemd-run --quiet --pipe --wait --collect \
+          --unit="$unit" --service-type=exec \
+          ${lib.concatStringsSep " \\\n  " (properties ++ environment)} \
+          -- "$command" "$@"
+      '';
+  };
 in
 {
   options.cg.service.afk-agent = {
@@ -134,8 +298,9 @@ in
       type = duration;
       description = ''
         How long a worker's lease on a job is held (`--lease`). Must be longer
-        than a model run: a lease that lapses mid-run lets another worker take
-        the job, and the first run's work is thrown away.
+        than a model run, than the implement gate and than a push: a lease that
+        lapses mid-transition lets another worker take the job, and the first
+        worker's work is thrown away.
       '';
     };
 
@@ -164,8 +329,9 @@ in
       };
       description = ''
         Resource token capacities (`--token`): named permits for a host
-        constraint. No transition in the current build asks for one, so `{ }`
-        is an honest answer.
+        constraint. `implement-run` and `implement-gate` hold `heavy-build`,
+        and `afk work` refuses to start when a transition asks for a token
+        with no capacity.
       '';
     };
 
@@ -228,6 +394,89 @@ in
       };
     };
 
+    implement = {
+      branchPrefix = lib.mkOption {
+        type = lib.types.strMatching "[A-Za-z0-9._/-]+";
+        example = "afk/";
+        description = "Begins every branch the agent pushes, as `<prefix><issue>-<k>` (`--branch-prefix`).";
+      };
+
+      tier = lib.mkOption {
+        type = lib.types.str;
+        description = "The tier implementing draws its models from (`--implement-tier`). Must name one of `tiers`.";
+      };
+
+      needs = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        example = [ "tool_call" ];
+        description = "Capabilities an implementing model must have (`--implement-needs`), as models.dev names them.";
+      };
+
+      gateAttempts = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Sessions the local gate may fail before a hand-back (`--gate-attempts`).";
+      };
+
+      handOffLabel = lib.mkOption {
+        type = lib.types.str;
+        description = "The label the hand-off applies to the pull request: CI green and a review posted (`--hand-off-label`).";
+      };
+
+      denylist = lib.mkOption {
+        type = lib.types.nonEmptyListOf (lib.types.strMatching "[^,]+");
+        description = ''
+          Paths no pushed commit may touch (`--denylist`), as globs: `**` spans
+          directories and `*` stays in one segment. A commit touching one hands
+          back rather than pushing.
+        '';
+      };
+
+      ciWait = lib.mkOption {
+        type = duration;
+        description = "How often unfinished CI, or a review not yet posted, is read again (`--ci-wait`).";
+      };
+
+      ciCeiling = lib.mkOption {
+        type = duration;
+        description = "How long after a push CI may take before a hand-back (`--ci-ceiling`).";
+      };
+
+      ciFixes = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Red CI runs sent back to the session before a hand-back (`--ci-fixes`).";
+      };
+    };
+
+    effectRounds = lib.mkOption {
+      type = lib.types.ints.positive;
+      description = ''
+        Times a push, a pull request, a comment or a label is made before it
+        counts as never landing (`--effect-rounds`), for both job kinds.
+      '';
+    };
+
+    handBackLabel = lib.mkOption {
+      type = lib.types.str;
+      description = "The label a hand-back applies, on an issue or a pull request (`--hand-back-label`).";
+    };
+
+    commitIdentity = {
+      name = lib.mkOption {
+        type = lib.types.str;
+        example = "my-app[bot]";
+        description = ''
+          Author and committer name of the agent's commits. The agent sets
+          none of its own, and the service account has no git configuration.
+        '';
+      };
+
+      email = lib.mkOption {
+        type = lib.types.str;
+        example = "12345+my-app[bot]@users.noreply.github.com";
+        description = "Author and committer email of the agent's commits.";
+      };
+    };
+
     modelAttempts = lib.mkOption {
       type = lib.types.ints.positive;
       description = ''
@@ -269,6 +518,14 @@ in
         message = "cg.service.afk-agent.review.tier '${cfg.review.tier}' is not one of the enrolled tiers";
       }
       {
+        assertion = lib.any (tier: tier.name == cfg.implement.tier) cfg.tiers;
+        message = "cg.service.afk-agent.implement.tier '${cfg.implement.tier}' is not one of the enrolled tiers";
+      }
+      {
+        assertion = cfg.tokens ? heavy-build;
+        message = "cg.service.afk-agent.tokens needs a heavy-build capacity: implement-run and implement-gate hold it, and afk work refuses to start without one";
+      }
+      {
         assertion = (cfg.retry == null) == (cfg.maxAttempts == null);
         message = "cg.service.afk-agent: set retry and maxAttempts together, or neither (a failure then parks at once)";
       }
@@ -299,17 +556,21 @@ in
       "L+ ${stateDir}/.agents/skills - - - - ${package.src}/.agents/skills"
     ];
 
+    environment.systemPackages = [ runAsUnit ];
+
     systemd.services.afk-agent = {
       description = "AFK agent work pool";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
 
-      # git for the review's checkout; the rest for opencode's own tools.
+      # git for the checkouts and the push, sh for the gate, and nix for the
+      # model's own work on this repository; the rest for opencode's tools.
       path = [
         pkgs.git
         pkgs.bashInteractive
         pkgs.coreutils
+        config.nix.package
       ];
 
       # Paths and tuning only - no value in here is a secret, which
@@ -334,6 +595,27 @@ in
           AFK_MODEL_ATTEMPTS = cfg.modelAttempts;
           AFK_TIER_WAIT = cfg.tierWait;
           AFK_CATALOGUE_AGE = cfg.catalogueAge;
+
+          AFK_EFFECT_ROUNDS = cfg.effectRounds;
+          AFK_HAND_BACK_LABEL = cfg.handBackLabel;
+
+          AFK_BRANCH_PREFIX = cfg.implement.branchPrefix;
+          AFK_GATE = lib.getExe gate;
+          AFK_GATE_ATTEMPTS = cfg.implement.gateAttempts;
+          AFK_IMPLEMENT_TIER = cfg.implement.tier;
+          AFK_HAND_OFF_LABEL = cfg.implement.handOffLabel;
+          AFK_DENYLIST = lib.concatStringsSep "," cfg.implement.denylist;
+          AFK_CI_WAIT = cfg.implement.ciWait;
+          AFK_CI_CEILING = cfg.implement.ciCeiling;
+          AFK_CI_FIXES = cfg.implement.ciFixes;
+
+          # The model's sessions commit as whatever git finds, and the agent
+          # sets nothing. The environment rather than a gitconfig under HOME,
+          # so it covers every git the model runs without a file to keep.
+          GIT_AUTHOR_NAME = cfg.commitIdentity.name;
+          GIT_AUTHOR_EMAIL = cfg.commitIdentity.email;
+          GIT_COMMITTER_NAME = cfg.commitIdentity.name;
+          GIT_COMMITTER_EMAIL = cfg.commitIdentity.email;
 
           AFK_REPO = cfg.repo;
           AFK_APP_ID = cfg.appId;
@@ -360,20 +642,13 @@ in
         // lib.optionalAttrs (cfg.review.needs != [ ]) {
           AFK_REVIEW_NEEDS = lib.concatStringsSep "," cfg.review.needs;
         }
+        // lib.optionalAttrs (cfg.implement.needs != [ ]) {
+          AFK_IMPLEMENT_NEEDS = lib.concatStringsSep "," cfg.implement.needs;
+        }
       );
 
-      serviceConfig = {
+      serviceConfig = sandbox // {
         Type = "simple";
-        User = "afk-agent";
-        Group = "afk-agent";
-        StateDirectory = "afk-agent";
-        StateDirectoryMode = "0700";
-        WorkingDirectory = stateDir;
-        UMask = "0077";
-
-        LoadCredential = lib.mapAttrsToList (
-          name: secret: "${name}:${config.sops.secrets.${secret}.path}"
-        ) credentials;
 
         ExecStartPre = lib.getExe opencodeAuth;
         ExecStart = "${lib.getExe package} work";
@@ -389,37 +664,6 @@ in
         # first. systemd's default stop timeout is deliberately left to cut
         # that short: a killed transition costs itself and nothing else, and a
         # rebuild should not wait out a forty-minute model run.
-
-        MemoryMax = cfg.maxMemory;
-
-        # Hardening, bounded by what the job is: a network client that runs
-        # opencode, which is a JIT'd JavaScript runtime (so no
-        # MemoryDenyWriteExecute). Unlike the prototype it builds nothing
-        # through the Nix daemon, so the system can be read-only.
-        NoNewPrivileges = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        PrivateTmp = true;
-        PrivateDevices = true;
-        ProtectKernelTunables = true;
-        ProtectKernelModules = true;
-        ProtectKernelLogs = true;
-        ProtectControlGroups = true;
-        ProtectClock = true;
-        ProtectHostname = true;
-        RestrictSUIDSGID = true;
-        RestrictRealtime = true;
-        RestrictNamespaces = true;
-        LockPersonality = true;
-        SystemCallArchitectures = "native";
-        SystemCallFilter = [ "@system-service" ];
-        RestrictAddressFamilies = [
-          "AF_INET"
-          "AF_INET6"
-          "AF_UNIX"
-          # Go and Node read interface and resolver state over netlink.
-          "AF_NETLINK"
-        ];
       };
     };
   };
