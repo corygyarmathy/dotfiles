@@ -137,6 +137,22 @@ in
               and (.mute_time_intervals? | index("maintenance-window") != null))
         ' "$amConfigPath" >/dev/null
 
+        # Email is the archive lane and must receive every severity, not just
+        # whatever falls through the push routes. It is also the only lane
+        # left when ntfy itself is down: on 2026-09-25 the ntfy server failed
+        # on homelab01 and a night of warnings reached nobody, because the
+        # email root receiver never saw an alert that a push child matched.
+        route() {
+          got=$(amtool config routes test --config.file="$amConfigPath" "$@")
+          echo "$* -> $got"
+          [ "$got" = "$want" ] || { echo "expected: $want"; exit 1; }
+        }
+        want=email,push route severity=critical alertname=ZfsPoolFaulted
+        want=email,push route severity=warning alertname=NixosUpgradeFailed
+        want=email route severity=info alertname=NixosRebootPending
+        # ...and "push is failing" goes to email only, whatever its severity.
+        want=email route severity=warning alertname=AlertPushFailing
+
         mkdir $out
       '';
 
