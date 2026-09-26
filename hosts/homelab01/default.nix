@@ -211,9 +211,9 @@ in
 
       workers = 2;
       poll = "1m";
-      # Well over a model run, which can take 30-40 minutes, and over the
-      # implement gate, which builds every check and host. A lease that lapses
-      # mid-transition wastes the transition.
+      # Over an implement run - two model runs at worst, each bounded by
+      # `modelTimeout` - and over the implement gate, which builds every check
+      # and host. A lease that lapses mid-transition wastes the transition.
       lease = "3h";
       # A brief GitHub or provider failure retries instead of parking - a park
       # notifies, and should mean a human is needed.
@@ -231,6 +231,9 @@ in
       # Its own topic, not the alerting stack's `alerts`, so either can be
       # muted without the other. Subscribe to it in the ntfy app.
       notifyTopic = "afk-agent";
+      # With `tierWait` below, about three hours of a job deferred before a
+      # tier that stays exhausted is told; a bad few minutes stays quiet.
+      tierNotifyAfter = 3;
 
       tiers = [
         {
@@ -285,6 +288,8 @@ in
 
       modelAttempts = 2;
       tierWait = "1h";
+      # Reviews take 30-40 minutes. Twice this still fits inside `lease`.
+      modelTimeout = "1h";
       catalogueAge = "24h";
 
       # The prototype's figure, now that the gate's evaluator runs in this

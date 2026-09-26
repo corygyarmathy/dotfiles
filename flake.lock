@@ -3,11 +3,11 @@
     "afk-agent": {
       "flake": false,
       "locked": {
-        "lastModified": 1790412578,
-        "narHash": "sha256-3gq0RwmP8nUDOFE+x7i9MrDm0dyAab67X490F6zAKYg=",
+        "lastModified": 1790424247,
+        "narHash": "sha256-ClnQvli8YGYlqZWc5vGb9WpiHQ7XcNy7q8eOwawhqHg=",
         "owner": "corygyarmathy",
         "repo": "afk-agent",
-        "rev": "a5a831155280f261da2c6d382658f623bd83c07b",
+        "rev": "dc862f909b59247519987a5cc1c6a6991655b7c8",
         "type": "github"
       },
       "original": {

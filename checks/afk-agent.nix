@@ -76,6 +76,7 @@ in
             threshold = 90;
           };
           notifyTopic = "afk-agent";
+          tierNotifyAfter = 3;
           tiers = [
             {
               name = "review";
@@ -119,6 +120,7 @@ in
           };
           modelAttempts = 2;
           tierWait = "1h";
+          modelTimeout = "1h";
           catalogueAge = "24h";
           maxMemory = "6G";
         };

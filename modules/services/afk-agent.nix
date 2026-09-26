@@ -297,10 +297,11 @@ in
     lease = lib.mkOption {
       type = duration;
       description = ''
-        How long a worker's lease on a job is held (`--lease`). Must be longer
-        than a model run, than the implement gate and than a push: a lease that
-        lapses mid-transition lets another worker take the job, and the first
-        worker's work is thrown away.
+        How long a worker's lease on a job is held, and the longest an effect
+        may run (`--lease`). Should be longer than a transition - an implement
+        run is up to two model runs of `modelTimeout` each - than the implement
+        gate and than a push: a lease that lapses mid-transition lets another
+        worker take the job, and the first worker's work is thrown away.
       '';
     };
 
@@ -353,9 +354,19 @@ in
     notifyTopic = lib.mkOption {
       type = lib.types.strMatching "[A-Za-z0-9_-]+";
       description = ''
-        ntfy topic on this host's server that a parked job and a spent budget
-        are published to. A topic of its own, rather than the alerting stack's,
-        so either can be muted on the phone without muting the other.
+        ntfy topic on this host's server that a parked job, a spent budget and
+        a tier that stays exhausted are published to. A topic of its own,
+        rather than the alerting stack's, so either can be muted on the phone
+        without muting the other.
+      '';
+    };
+
+    tierNotifyAfter = lib.mkOption {
+      type = lib.types.ints.positive;
+      description = ''
+        Exhaustions of a job's tier, in one episode, before the operator is
+        told (`--tier-notify-after`). Each is a `tierWait` deferral, so this
+        is roughly how many of those a job sits through before anyone hears.
       '';
     };
 
@@ -490,6 +501,15 @@ in
       description = "How long an exhausted tier defers a job (`--tier-wait`).";
     };
 
+    modelTimeout = lib.mkOption {
+      type = duration;
+      description = ''
+        The longest one model run may take (`--model-timeout`), for both job
+        kinds. A run still going is killed with everything it started, and the
+        job's next run tries the next candidate.
+      '';
+    };
+
     catalogueAge = lib.mkOption {
       type = duration;
       description = "How long the cached models.dev catalogue is used before it is fetched again (`--catalogue-age`).";
@@ -588,12 +608,14 @@ in
 
           AFK_NOTIFY_URL = "http://127.0.0.1:${toString config.cg.service.ntfy.port}/${cfg.notifyTopic}";
           AFK_NOTIFY_KEY = credential "ntfy-token";
+          AFK_TIER_NOTIFY_AFTER = cfg.tierNotifyAfter;
 
           AFK_OPENCODE = lib.getExe pkgs.opencode;
           AFK_ENROLMENT = enrolment;
           AFK_REVIEW_TIER = cfg.review.tier;
           AFK_MODEL_ATTEMPTS = cfg.modelAttempts;
           AFK_TIER_WAIT = cfg.tierWait;
+          AFK_MODEL_TIMEOUT = cfg.modelTimeout;
           AFK_CATALOGUE_AGE = cfg.catalogueAge;
 
           AFK_EFFECT_ROUNDS = cfg.effectRounds;
