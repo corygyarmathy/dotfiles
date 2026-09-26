@@ -97,51 +97,67 @@ let
   toEnv = lib.mapAttrs (_: toString);
 
   # The local gate an implement session has to pass before anything is pushed
-  # (`--gate`): this repository's own CI, step for step, rather than a cheaper
-  # proxy. A branch the gate passes and CI fails costs a fix round and a CI
-  # run; one it fails costs a session, which is cheaper.
+  # (`--gate`): this repository's own CI, read from the workspace's ci.yml
+  # rather than restated here, so the two cannot drift apart. A branch the
+  # gate passes and CI fails costs a fix round and a CI run; one it fails
+  # costs a session, which is cheaper.
   #
-  # CI's shape, not `nix flake check`: that evaluates every output in one
-  # process, and on 2026-09-10 the prototype's run of it reached 8.3 GB and
-  # took a global OOM on homelab01. One `nix build` per check is what CI's
-  # matrix does anyway. The checks are discovered, then held against ci.yml's
-  # matrix as CI's lint job does, which is also what makes the loop total. The
-  # hosts are discovered too, so a branch that adds one is gated on it.
+  # The lint job's `run:` steps run as a runner runs a step with no `shell:`
+  # (`bash -e`), then one `nix build` per entry of the `checks` and `build`
+  # matrices. CI's shape, not `nix flake check`: that evaluates every output
+  # in one process, and on 2026-09-10 the prototype's run of it reached 8.3 GB
+  # and took a global OOM on homelab01. A lint step with anything a runner
+  # alone can read - an Actions expression, `shell:`, `env:`, `if:` - fails
+  # the gate rather than running as something it is not; so does an empty
+  # list, which is a gate that ran nothing.
+  #
+  # A session can edit ci.yml and pass its own gate, which is why the
+  # assertion below keeps .github/workflows on the denylist: the push is then
+  # handed back.
   #
   # `nix fmt` formats in place before it fails, so a formatting failure also
   # leaves the workspace dirty - which the agent hands back to the session as
-  # uncommitted changes, the right answer either way.
+  # uncommitted changes, the right answer either way. The lint steps write
+  # under /tmp, which the unit's gates share; `heavy-build` runs one at a time.
   gate = pkgs.writeShellApplication {
     name = "afk-agent-gate";
     runtimeInputs = [
       config.nix.package
+      pkgs.bash
       pkgs.coreutils
       pkgs.diffutils
       pkgs.yq-go
     ];
     text = ''
-      names() { nix eval --raw "$1" --apply 'xs: builtins.concatStringsSep "\n" (builtins.attrNames xs)'; }
+      ci=.github/workflows/ci.yml
+      lint='.jobs.lint.steps | map(select(has("run")))'
 
-      nix fmt -- --ci
+      odd="$(yq "(.jobs.lint | keys - [\"name\", \"runs-on\", \"steps\"] | length) + ($lint | map(select(keys - [\"name\", \"run\"] | length > 0)) | length)" "$ci")"
+      if [ "$odd" -ne 0 ]; then
+        echo "afk-agent-gate: ci.yml's lint job uses keys only a runner reads" >&2
+        exit 1
+      fi
 
-      lists="$(mktemp -d)"
-      trap 'rm -rf "$lists"' EXIT
-      names .#checks.x86_64-linux | LC_ALL=C sort >"$lists/flake-checks"
-      yq -r '.jobs.checks.strategy.matrix.check[]' .github/workflows/ci.yml | LC_ALL=C sort >"$lists/matrix-checks"
-      diff -u "$lists/flake-checks" "$lists/matrix-checks"
+      steps="$(yq "$lint | length" "$ci")"
+      [ "$steps" -gt 0 ]
+      for ((i = 0; i < steps; i++)); do
+        run="$(yq -r "$lint | .[$i].run" "$ci")"
+        case "$run" in
+          *\$\{\{*)
+            echo "afk-agent-gate: lint step $i uses an Actions expression" >&2
+            exit 1
+            ;;
+        esac
+        bash -e -c "$run"
+      done
 
-      nix eval --raw .#devShells.x86_64-linux.default.drvPath >/dev/null
-      nix eval --json .#packages.x86_64-linux --apply 'ps: map (p: p.drvPath) (builtins.attrValues ps)' >/dev/null
-      nix eval --raw .#apps.x86_64-linux.garden-preview.program >/dev/null
-
-      while read -r check; do
-        nix build --no-link ".#checks.x86_64-linux.$check"
-      done <"$lists/flake-checks"
-
-      # An empty discovery is a gate that built nothing, which must not read
-      # as a gate that passed.
-      hosts="$(names .#nixosConfigurations)"
+      checks="$(yq -r '.jobs.checks.strategy.matrix.check[]' "$ci")"
+      hosts="$(yq -r '.jobs.build.strategy.matrix.host[]' "$ci")"
+      [ -n "$checks" ]
       [ -n "$hosts" ]
+      for check in $checks; do
+        nix build --no-link ".#checks.x86_64-linux.$check"
+      done
       for host in $hosts; do
         nix build --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
       done
@@ -540,6 +556,10 @@ in
       {
         assertion = lib.any (tier: tier.name == cfg.implement.tier) cfg.tiers;
         message = "cg.service.afk-agent.implement.tier '${cfg.implement.tier}' is not one of the enrolled tiers";
+      }
+      {
+        assertion = lib.elem ".github/workflows/**" cfg.implement.denylist;
+        message = "cg.service.afk-agent.implement.denylist must keep .github/workflows/**: the gate runs the workspace's own ci.yml, so a session that edits it would gate itself";
       }
       {
         assertion = cfg.tokens ? heavy-build;
