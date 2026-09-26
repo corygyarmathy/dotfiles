@@ -66,16 +66,17 @@ in
           appId = "4882603";
           workers = 2;
           poll = "1m";
-          lease = "2h";
+          lease = "3h";
           retry = "15m";
           maxAttempts = 3;
           tokenWait = "1m";
-          tokens = { };
+          tokens.heavy-build = 1;
           budget = {
             age = "5m";
             threshold = 90;
           };
           notifyTopic = "afk-agent";
+          tierNotifyAfter = 3;
           tiers = [
             {
               name = "review";
@@ -84,15 +85,44 @@ in
                 "opencode-go/glm-5.3"
               ];
             }
+            {
+              name = "implement";
+              models = [
+                "opencode-go/glm-5.3-flash"
+                "opencode-go/deepseek-v4.1-flash"
+              ];
+            }
           ];
           review = {
             tier = "review";
             needs = [ "tool_call" ];
           };
+          implement = {
+            tier = "implement";
+            needs = [ "tool_call" ];
+            branchPrefix = "afk/";
+            gateAttempts = 3;
+            handOffLabel = "needs-review";
+            denylist = [
+              ".github/workflows/**"
+              "secrets/**"
+              ".sops.yaml"
+            ];
+            ciWait = "2m";
+            ciCeiling = "1h";
+            ciFixes = 2;
+          };
+          effectRounds = 3;
+          handBackLabel = "needs-decision";
+          commitIdentity = {
+            name = "corygyarmathy-afk-agent[bot]";
+            email = "326868600+corygyarmathy-afk-agent[bot]@users.noreply.github.com";
+          };
           modelAttempts = 2;
           tierWait = "1h";
+          modelTimeout = "1h";
           catalogueAge = "24h";
-          maxMemory = "4G";
+          maxMemory = "6G";
         };
       };
 
@@ -125,6 +155,23 @@ in
         # store path was supplied and writable under the hardening.
         enabled.succeed("test -f /var/lib/afk-agent/state.db")
 
+    with subtest("a hand-run of an implement transition gets past every parameter to GitHub"):
+        # `afk work` resolves the review's dependencies, and asks GitHub who it
+        # is, before it reads a single implement parameter, so the subtest
+        # above cannot see them. `afk run` on an implement transition reads
+        # all of them first. Through afk-agent-run, which is also what shows a
+        # hand-run is the unit's account, environment and credentials.
+        rc, out = enabled.execute("afk-agent-run afk run implement-gate --issue 1 2>&1")
+        assert rc == 1, f"exit {rc}, not a runtime failure - 2 is a usage error:\n{out}"
+        assert "api.github.com" in out, f"the run never reached GitHub:\n{out}"
+
+    with subtest("the unit reaches the Nix daemon under its confinement"):
+        # The gate builds through the daemon, from under ProtectSystem=strict.
+        # NIX_REMOTE=daemon so the query cannot quietly open the store itself.
+        enabled.succeed(
+            "afk-agent-run env NIX_REMOTE=daemon nix-store --query --hash $(readlink -f /run/current-system)"
+        )
+
     with subtest("opencode's credentials are provisioned from the key"):
         auth = "/var/lib/afk-agent/.local/share/opencode/auth.json"
         assert enabled.succeed(f"stat -c '%U %a' {auth}").strip() == "afk-agent 600"
@@ -134,12 +181,13 @@ in
     with subtest("opencode finds the agent's skills under its $HOME"):
         enabled.succeed("runuser -u afk-agent -- test -r /var/lib/afk-agent/.agents/skills/implement/SKILL.md")
 
-    with subtest("the enrolment is a file the review tier resolves in"):
+    with subtest("the enrolment is a file both tiers resolve in"):
         env = enabled.succeed("systemctl show -p Environment --value afk-agent.service")
         enrolment = next(v.split("=", 1)[1] for v in env.split() if v.startswith("AFK_ENROLMENT="))
-        enabled.succeed(
-            f"${pkgs.jq}/bin/jq -e '.tiers | map(select(.name == \"review\")) | .[0].models | length == 2' {enrolment}"
-        )
+        for tier in ["review", "implement"]:
+            enabled.succeed(
+                f"${pkgs.jq}/bin/jq -e '.tiers | map(select(.name == \"{tier}\")) | .[0].models | length == 2' {enrolment}"
+            )
 
     with subtest("no secret is in the unit's environment, the journal, or a command line"):
         for value in ["${opencodeKey}", "${ntfyToken}", "PRIVATE KEY"]:
