@@ -237,6 +237,30 @@ groups:
           summary: "{{ $labels.instance }} rebooted unexpectedly"
           description: 'System booted {{ printf "%.0f" $value }} seconds ago (outside maintenance window)'
 
+  - name: alerting
+    rules:
+      # Push delivery keeps failing. The push lane's one server is ntfy on
+      # homelab01, so when ntfy, its bridge or the tunnel breaks, every alert
+      # that would have said so is itself undeliverable on push - on
+      # 2026-09-25 a failed ntfy-sh left a whole evening of alerts reaching
+      # nobody. This one is routed to email only (monitoring.nix), the lane
+      # that does not share the failure.
+      #
+      # Alertmanager retries a failed webhook every few minutes until the
+      # next flush, so while there is anything to push, a broken lane keeps
+      # this counter climbing. The 10m window with a 20m hold is what
+      # separates that from ntfy restarting in the upgrade window: a blip
+      # of failures leaves the window within 10m and never matures.
+      - alert: AlertPushFailing
+        expr: increase(alertmanager_notifications_failed_total{job="alertmanager",integration="webhook"}[10m]) > 0
+        for: 20m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/alerting#alertpushfailing"
+          summary: "Push notifications from {{ $labels.instance }} are failing"
+          description: "Alertmanager on {{ $labels.instance }} has been failing to deliver to the ntfy bridge for 20+ minutes, so alerts are reaching email only. Check the bridge (journalctl -u alertmanager-ntfy) and the ntfy server on homelab01 (systemctl status ntfy-sh)."
+
   - name: zfs
     rules:
       # ZFS pool health - fires if pool is not ONLINE. DEGRADED and FAULTED

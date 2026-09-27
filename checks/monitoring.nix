@@ -215,7 +215,7 @@
           # One representative from each family the deployment pipeline depends
           # on. If alert-rules.yml is reorganised these names may legitimately
           # change - but they should change deliberately, not silently.
-          for expected in ["NixosDeployFailed", "NixosDeployStale", "NixosVerifyFailed"]:
+          for expected in ["NixosDeployFailed", "NixosDeployStale", "NixosVerifyFailed", "AlertPushFailing"]:
               assert expected in names, f"{expected} missing from loaded rules: {sorted(names)}"
 
       with subtest("a target is actually scraped"):
@@ -229,6 +229,17 @@
               return bool(result) and result[0]["value"][1] == "1"
 
           retry(node_up, timeout=timedelta(seconds=180))
+
+      with subtest("alertmanager's delivery counters are scraped under the host's name"):
+          # AlertPushFailing reads these. Alertmanager registers the counter
+          # per integration at startup, so the push lane's series exists at 0
+          # before anything has been sent. The instance must be the host, not
+          # the shared localhost target, or the two hosts' alerts would merge.
+          def am_scraped(_):
+              result = query('alertmanager_notifications_failed_total{job="alertmanager",integration="webhook"}')
+              return bool(result) and all(r["metric"]["instance"] == "${nodes.machine.networking.hostName}" for r in result)
+
+          retry(am_scraped, timeout=timedelta(seconds=180))
 
       with subtest("a remote probe is scraped and labelled for the away host"):
           # Item 9: reachability from outside the host. The remoteProbe must
