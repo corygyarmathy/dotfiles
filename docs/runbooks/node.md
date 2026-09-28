@@ -53,8 +53,8 @@ state for 5+ minutes. The unit name is in the notification.
 
 ### Dig deeper
 
-- Failed NFS mount units on homelab01 usually mean homelab02 or its pool was
-  down - cross-check ZFS and TargetDown alerts before chasing the mount.
+- `srv-media.mount` failed on homelab01 means homelab02, its pool, or the network between them is down - cross-check ZFS and TargetDown alerts before chasing the mount. It recovers by itself: the automount stays armed and retries on the next access, and the containers that bind `/srv/media` wait for it rather than starting without it (their units sit in `activating`, logging `not NFS-mounted`).
+- `srv-media.automount` failed is not meant to happen any more (the mount has no start limit). If it does, the media tree is the bare local directory: `systemctl reset-failed srv-media.automount srv-media.mount && systemctl start srv-media.automount`, then restart any container that binds `/srv/media` (sonarr, radarr, bazarr, cleanuparr) - a running container keeps the bind it started with.
 - If a unit failed during last night's upgrade window, read
   [deployment.md](deployment.md) first.
 
