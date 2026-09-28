@@ -17,8 +17,18 @@
 #
 # The unreachable network is an `unreachable` route to the server, added
 # before anything touches the mount and removed by the test: the same instant
-# ENETUNREACH homelab01 saw, and the recovery is asserted to need nothing more
-# than the route coming back.
+# ENETUNREACH homelab01 saw.
+#
+# Then the other outage: network up, server down (nfs-server stopped, so
+# connections are refused). Mount attempts are no longer instant - each is
+# activating until the mount timeout - and the waiting container never fails
+# either, so both are asserted to reach node_exporter in the states the
+# alert rules look for (checks/alert-rules.test.yml pins the rules
+# themselves: their `for:`s are too long for a VM). Recovery is asserted to
+# need nothing more than the server coming back.
+#
+# Last, the exporter's exclude: the per-container mounts podman makes must
+# exist as units, and must not reach node_exporter.
 #
 # The container is a local image loaded from the store, so it runs without a
 # registry; it binds the media tree exactly as sonarr/radarr/bazarr do, which
@@ -171,13 +181,38 @@
           client.succeed("rmdir /srv/media/downloads")
           client.succeed("systemctl start srv-media.automount")
 
-      with subtest("the network coming back is all it takes to recover"):
+      with subtest("network up, server down: the mount keeps failing slowly and the container keeps waiting"):
+          server.succeed("systemctl stop nfs-server.service")
           client.succeed(f"ip rule del to {server_ip} unreachable priority 100")
           client.succeed(f"ip -6 rule del to {server_ip6} unreachable priority 100")
+          # A refused connection is retried by mount.nfs, so the attempt runs
+          # into x-systemd.mount-timeout rather than failing instantly.
+          client.wait_until_succeeds("journalctl -u srv-media.mount | grep -q 'timed out'", timeout=90)
+          client.succeed("systemctl is-active srv-media.automount")
+          client.succeed('test -z "$(podman ps --quiet --filter name=^probe$)"')
+          client.succeed(
+              "curl -sf -o /tmp/node-metrics http://localhost:9100/metrics "
+              "&& grep -E 'node_systemd_unit_state[{]name=\"srv-media[.]mount\",state=\"(activating|failed)\"[^}]*[}] 1$' /tmp/node-metrics "
+              "&& grep -E 'node_systemd_unit_state[{]name=\"podman-probe[.]service\",state=\"activating\"[^}]*[}] 1$' /tmp/node-metrics"
+          )
+
+      with subtest("the server coming back is all it takes to recover"):
+          server.succeed("systemctl start nfs-server.service")
           client.wait_until_succeeds(
               "podman exec probe test -e /data/downloads/from-server", timeout=180
           )
           client.succeed("findmnt --types nfs,nfs4 --mountpoint /srv/media")
           client.succeed("systemctl is-active srv-media.automount")
+
+      with subtest("per-container mounts stay out of node_exporter"):
+          # Not vacuous: the running container has made such units.
+          client.succeed(
+              "systemctl list-units --all --type=mount --plain --no-legend "
+              "| grep -E '^(var-lib-containers|run-containers|run-netns)-'"
+          )
+          client.succeed("curl -sf -o /tmp/node-metrics http://localhost:9100/metrics")
+          client.fail(
+              "grep -E 'node_systemd_unit_state[{]name=\"(var-lib-containers|run-containers|run-netns|run-credentials)-' /tmp/node-metrics"
+          )
     '';
 }

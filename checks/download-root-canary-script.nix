@@ -13,7 +13,7 @@
 #     dead mount, not a wiped root, and must be reported 1/unconfirmed. The
 #     same goes for the bare mountpoint a FAILED automount leaves behind: the
 #     stat reaches the client's root filesystem, which is real but is not the
-#     store (homelab01 after the 2026-09-28 power cut).
+#     store.
 #
 # Ownership comes from `storage.type` at build time; the cases set it through
 # OWNER, as the owner (1) and as an NFS client (0).

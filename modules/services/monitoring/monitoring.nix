@@ -538,13 +538,15 @@ in
             port = 9100;
             # The systemd collector's default exclude also drops .mount and
             # .automount units, so SystemdUnitFailed could never see an NFS
-            # mount fail - homelab01's /srv/media automount sat failed after
-            # the 2026-09-28 power cut with nothing paging. Only the unit
-            # kinds that are noise are excluded here. `[.]` rather than `\.`
-            # because ExecStart would otherwise have to carry the backslash
-            # through systemd's own unescaping.
+            # mount fail. Excluded here are only the unit kinds that are
+            # noise, and the mounts podman and systemd make per container or
+            # per service run: named after an ID that is new on every start,
+            # each would be a fresh set of series every restart, and none is
+            # a mount anyone configured. `[.]` rather than `\.` because
+            # ExecStart would otherwise have to carry the backslash through
+            # systemd's own unescaping.
             extraFlags = [
-              "--collector.systemd.unit-exclude=.+[.](device|scope|slice)"
+              "--collector.systemd.unit-exclude=.+[.](device|scope|slice)|(var-lib-containers|run-containers|run-netns|run-credentials)-.+[.]mount"
             ]
             ++ lib.optionals cfg.textfileCollector.enable [
               "--collector.textfile.directory=/var/lib/prometheus-node-exporter"
