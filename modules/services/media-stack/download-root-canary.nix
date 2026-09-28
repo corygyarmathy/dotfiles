@@ -41,7 +41,13 @@
 #      NFS server unreachable) is the mount being down, not the root being
 #      empty - indistinguishable from a real wipe to a stat - so it is reported
 #      as unconfirmed (1) and a dead server pages through its own monitors
-#      (systemd units, ZFS, node reachability), not as data loss. A hung stat
+#      (systemd units, ZFS, node reachability), not as data loss. The same
+#      holds when the automount itself has failed and left the bare local
+#      mountpoint behind (homelab01, 2026-09-28): the stat then reaches the
+#      root filesystem, which is real but is not the store. So whether this
+#      host owns the store is decided by `storage.type` at build time, not
+#      guessed from the mount table, and an NFS client accepts an ENOENT as
+#      a deletion only when it came from an NFS mount. A hung stat
 #      on a hard-mounted server is bounded by timeout(1) (these mounts are
 #      `intr`, so the 60s limit holds) and also reported 1.
 #
@@ -87,6 +93,10 @@ let
     SENTINEL="''${SENTINEL:-${sentinel}}"
     PRIME_MARKER="''${PRIME_MARKER:-${primeMarker}}"
     MOUNTINFO="''${MOUNTINFO:-/proc/self/mountinfo}"
+    # 1 when the media tree is local storage this host owns, 0 on an NFS
+    # client. From the configuration, because a failed automount makes a
+    # client's mount table look like an owner's.
+    OWNER="''${OWNER:-${if stack.storage.type == "local" then "1" else "0"}}"
     TMP_FILE="$METRICS_FILE.tmp"
 
     mkdir -p "$METRICS_DIR"
@@ -128,17 +138,20 @@ let
       printf '%s' "$entry"
     }
 
-    # Whether the covering filesystem means this host owns the store. Owner =
-    # a real, reachable, local filesystem (homelab02's ZFS). NFS clients and
-    # automount triggers are observers, not owners.
-    owner_fs() {
+    # Whether the covering filesystem is the store itself. On the owner, any
+    # real local filesystem (homelab02's ZFS); never an NFS mount or an
+    # automount trigger. On a client, only the NFS mount - anything else is
+    # the bare mountpoint underneath a mount that is down.
+    store_fs() {
+      if [ "$OWNER" = 1 ]; then
+        case "$1" in
+          nfs|nfs4|autofs|"") return 1 ;;
+          *) return 0 ;;
+        esac
+      fi
       case "$1" in
-        nfs|nfs4|autofs|"")
-          return 1
-          ;;
-        *)
-          return 0
-          ;;
+        nfs|nfs4) return 0 ;;
+        *) return 1 ;;
       esac
     }
 
@@ -147,7 +160,7 @@ let
     # anything deleted after that stays deleted - a wiping service must never
     # be handed it back. If the store is not reachable yet (late ZFS import),
     # priming fails without the marker, so the next run retries.
-    if owner_fs "$(cover_fs "$SENTINEL")" && [ ! -e "$PRIME_MARKER" ]; then
+    if [ "$OWNER" = 1 ] && store_fs "$(cover_fs "$SENTINEL")" && [ ! -e "$PRIME_MARKER" ]; then
       if timeout 60 install -m 0644 /dev/null "$SENTINEL" 2>/dev/null; then
         : > "$PRIME_MARKER"
       else
@@ -180,14 +193,15 @@ let
         ;;
       *)
         if printf '%s' "$check" | grep -q "No such file"; then
-          if [ "$cover" = "autofs" ] || [ -z "$cover" ]; then
-            # ENOENT from an unmounted automount (NFS server unreachable) is
-            # indistinguishable from a wiped root to a stat. Report presence
-            # unconfirmed and let the mount's own monitors tell the story.
-            echo "download-root-canary: sentinel unreachable ($cover not mounted) - reporting present rather than missing" >&2
-          else
+          if store_fs "$cover"; then
             present=0
             state=missing
+          else
+            # ENOENT from an unmounted automount (NFS server unreachable), or
+            # from the bare mountpoint a failed automount leaves behind, is
+            # indistinguishable from a wiped root to a stat. Report presence
+            # unconfirmed and let the mount's own monitors tell the story.
+            echo "download-root-canary: sentinel unreachable (store not mounted, covered by ''${cover:-nothing}) - reporting present rather than missing" >&2
           fi
         else
           # Non-ENOENT failure (I/O error, automount failure): same reasoning

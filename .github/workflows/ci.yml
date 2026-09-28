@@ -182,6 +182,7 @@ jobs:
           - fmt-gate
           - grafana
           - host-alive
+          - media-nfs-recovery
           - monitoring
           - ntfy
           - publish
