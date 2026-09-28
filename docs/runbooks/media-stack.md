@@ -70,3 +70,20 @@ emptying it. What is promised is that it will not be _quietly_ empty.
   pinned by `checks/download-root-safety.nix`; the runtime script's storage
   behaviour is pinned by `checks/download-root-canary-script.nix`. See the
   module header for the honest scope of what has to be registered there.
+
+## ContainerStuckStarting
+
+**Severity:** warning · **Fires when:** a `podman-*.service` unit has been `activating` for 15+ minutes - started, but never running. It never reaches `failed`, so `SystemdUnitFailed` cannot see it.
+
+### Do now
+
+- On homelab01 this is almost always the media guard: every container that binds `/srv/media` refuses to start until the tree is the NFS mount, fails after a minute, and is restarted by `Restart=`. `ssh homelab01 journalctl -u <unit> -n 20` - `media-data-mounted: /srv/media is not NFS-mounted` confirms it.
+- Then the mount is the problem, not the container: `systemctl status srv-media.mount srv-media.automount`, and check homelab02 (`TargetDown`, ZFS alerts). See `SystemdUnitFailed` in [node.md](node.md#systemdunitfailed).
+
+### Dig deeper
+
+- Any other message in the unit's journal (image pull hanging, a stuck `ExecStartPre`) is that container's own problem - the alert covers every podman container, guarded or not.
+
+### Fix
+
+- Bring the NFS mount back; the guarded containers start by themselves within a minute of it mounting. Nothing needs restarting.

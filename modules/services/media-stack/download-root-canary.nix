@@ -43,8 +43,8 @@
 #      as unconfirmed (1) and a dead server pages through its own monitors
 #      (systemd units, ZFS, node reachability), not as data loss. The same
 #      holds when the automount itself has failed and left the bare local
-#      mountpoint behind (homelab01, 2026-09-28): the stat then reaches the
-#      root filesystem, which is real but is not the store. So whether this
+#      mountpoint behind: the stat then reaches the root filesystem, which is
+#      real but is not the store. So whether this
 #      host owns the store is decided by `storage.type` at build time, not
 #      guessed from the mount table, and an NFS client accepts an ENOENT as
 #      a deletion only when it came from an NFS mount. A hung stat

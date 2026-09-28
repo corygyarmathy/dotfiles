@@ -39,22 +39,25 @@ let
 
   # Refuses to let a container start until the media tree is the NFS mount
   # rather than the bare directory underneath it. podman resolves a bind at
-  # start and keeps it: a container that starts while the automount is down
-  # binds the empty mountpoint and stays on it after the mount comes back,
-  # which is what homelab01 did after the 2026-09-28 power cut - sonarr,
-  # radarr and bazarr running against an empty /srv/media until restarted.
+  # start and keeps it: a container started while the automount is down binds
+  # the empty mountpoint and stays on it after the mount comes back.
   #
-  # Waits about a minute before failing so each failed start is far slower
-  # than the unit's start limit (5 in 10s): the unit's Restart= then retries
+  # Waits a minute before failing so each failed start is far slower than the
+  # unit's start limit (5 in 10s): the unit's Restart= then retries
   # indefinitely while the server is away, and a container that crash-loops
-  # on its own still hits the limit and fails loudly as before.
+  # on its own still hits the limit and fails loudly as before. The minute is
+  # a deadline, not a count of tries, because a hard mount against a server
+  # that stopped answering makes each try as slow as its stat timeout.
   waitForData = pkgs.writeShellScript "media-data-mounted" ''
     set -u
     data=${lib.escapeShellArg cfg.dataPath}
-    for _ in $(${pkgs.coreutils}/bin/seq 12); do
+    deadline=60
+    while ((SECONDS < deadline)); do
       # Touching the path is what fires the automount. Bounded because a hard
-      # mount against a server that stopped answering blocks in stat().
-      ${pkgs.coreutils}/bin/timeout 10 ${pkgs.coreutils}/bin/stat -f -- "$data/." >/dev/null 2>&1 || true
+      # mount against a server that stopped answering blocks in stat(); never
+      # past the deadline, and never 0, which timeout(1) reads as no limit.
+      left=$((deadline - SECONDS))
+      ${pkgs.coreutils}/bin/timeout "$((left < 10 ? left : 10))" ${pkgs.coreutils}/bin/stat -f -- "$data/." >/dev/null 2>&1 || true
       if ${pkgs.util-linux}/bin/findmnt --noheadings --types nfs,nfs4 --mountpoint "$data" >/dev/null; then
         exit 0
       fi
@@ -228,12 +231,12 @@ in
     fileSystems.${cfg.dataPath} = lib.mkIf nfs cfg.storage.nfsFileSystem;
 
     # Never let the mount unit hit its start limit. Every access through the
-    # automount is a start attempt, and when the network is not up yet they
-    # fail instantly - a handful of services touching the path at boot spent
-    # the default 5-in-10s in one second on 2026-09-28. The automount then
-    # fails for good (mount-start-limit-hit), nothing retries it, and every
-    # later access sees the bare local directory. Unlimited, the automount
-    # stays armed and the first access after the server is back mounts it.
+    # automount is a start attempt, and while the network is down they fail
+    # instantly, so a few services touching the path at boot spend the default
+    # 5-in-10s at once. The automount then fails for good
+    # (mount-start-limit-hit), nothing retries it, and every later access sees
+    # the bare local directory. Unlimited, the automount stays armed and the
+    # first access after the server is back mounts it.
     systemd.units.${dataMountUnit} = lib.mkIf nfs {
       overrideStrategy = "asDropin";
       text = ''
