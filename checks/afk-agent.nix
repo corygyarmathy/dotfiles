@@ -39,6 +39,41 @@ let
     kill -0 "$bystander" && echo "bystander alive"
     kill "$bystander"
   '';
+
+  # The build-side subtest's workspace: a one-step lint job, then a check whose
+  # builder grows without bound inside nix-daemon's cgroup. The host matrix is
+  # never reached.
+  buildOomCi = pkgs.writeText "ci.yml" ''
+    jobs:
+      lint:
+        runs-on: x
+        steps:
+          - run: "true"
+      checks:
+        strategy:
+          matrix:
+            check: [hog]
+      build:
+        strategy:
+          matrix:
+            host: [none]
+  '';
+  buildOomFlake = pkgs.writeText "flake.nix" ''
+    {
+      outputs = _: {
+        checks.x86_64-linux.hog = derivation {
+          name = "hog";
+          system = "x86_64-linux";
+          builder = "/bin/sh";
+          args = [ "-c" "x=x; while :; do x=$x$x; done" ];
+        };
+      };
+    }
+  '';
+  buildOomGate = pkgs.writeShellScript "afk-agent-build-oom-gate" ''
+    cd build-oom
+    "$AFK_GATE" && echo "gate passed" || echo "gate failed"
+  '';
 in
 {
   name = "afk-agent";
@@ -139,6 +174,23 @@ in
           catalogueAge = "24h";
           maxMemory = "6G";
         };
+        nix.settings = {
+          max-jobs = 1;
+          cores = 4;
+        };
+        systemd.services.nix-daemon.serviceConfig = {
+          MemoryHigh = "4G";
+          MemoryMax = "6G";
+          CPUWeight = 20;
+        };
+
+        # What profiles/common.nix gives the gate's `nix build`, and no
+        # substituters for it to wait on: the VM has no network.
+        nix.settings.experimental-features = [
+          "nix-command"
+          "flakes"
+        ];
+        nix.settings.substituters = lib.mkForce [ ];
       };
 
     # The switch off. No stub secrets: declaring none when disabled is part of
@@ -206,13 +258,42 @@ in
         ).strip()
         enabled.succeed(f"systemctl set-property --runtime {unit} MemoryMax=256M")
         enabled.succeed("touch /var/lib/afk-agent/oom-gate/go")
-        # Done when the hand-run returns, however the unit ended.
-        enabled.wait_until_succeeds("! pgrep -x systemd-run", timeout=120)
+        # The deciding signal is how systemd ended the unit: the bystander can
+        # print before systemd acts on the kill, and under `OOMPolicy=stop` the
+        # hand-run does not return at all.
+        enabled.wait_until_fails(f"systemctl is-active {unit}", timeout=120)
+        journal = enabled.succeed(f"journalctl -u {unit} --no-pager")
+        assert "result 'oom-kill'" not in journal, f"the unit did not outlive the OOM kill:\n{journal}"
+        enabled.wait_until_succeeds("! pgrep -x systemd-run", timeout=30)
         out = enabled.succeed("cat /tmp/oom-gate.out")
         kernel = enabled.succeed("journalctl -k --no-pager")
         assert "gate failed" in out, f"the gate did not fail:\n{out}"
+        assert "running out of memory" in out, f"the gate did not say why it failed:\n{out}"
         assert "bystander alive" in out, f"the OOM kill took more than the gate:\n{out}\n{kernel}"
         assert "(tail)" in kernel, f"the kernel did not kill the gate's lint step:\n{kernel}"
+        enabled.succeed("echo 2 >/proc/sys/vm/panic_on_oom")
+
+    with subtest("a build that outgrows nix-daemon's ceiling fails the gate, and the daemon serves on"):
+        enabled.succeed("echo 0 >/proc/sys/vm/panic_on_oom")
+        enabled.succeed(
+            "mkdir -p /var/lib/afk-agent/build-oom/.github/workflows",
+            "cp ${buildOomCi} /var/lib/afk-agent/build-oom/.github/workflows/ci.yml",
+            "cp ${buildOomFlake} /var/lib/afk-agent/build-oom/flake.nix",
+            "chown -R afk-agent:afk-agent /var/lib/afk-agent/build-oom",
+            "chmod -R u+w /var/lib/afk-agent/build-oom",
+        )
+        # Lowered for this run only, as the gate's own ceiling is above.
+        enabled.succeed("systemctl set-property --runtime nix-daemon.service MemoryHigh=infinity MemoryMax=128M")
+        out = enabled.succeed("afk-agent-run ${buildOomGate} 2>&1")
+        events = enabled.succeed("cat /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events")
+        enabled.succeed("systemctl set-property --runtime nix-daemon.service MemoryHigh=4G MemoryMax=6G")
+        assert "gate failed" in out, f"the gate did not fail:\n{out}"
+        assert "oom_kill 0" not in events, f"the build was not OOM-killed in nix-daemon's cgroup:\n{out}\n{events}"
+        assert "running out of memory" in out, f"the gate did not say why it failed:\n{out}"
+        enabled.succeed("systemctl is-active nix-daemon.service")
+        enabled.succeed(
+            "afk-agent-run env NIX_REMOTE=daemon nix-store --query --hash $(readlink -f /run/current-system)"
+        )
         enabled.succeed("echo 2 >/proc/sys/vm/panic_on_oom")
 
     with subtest("opencode's credentials are provisioned from the key"):

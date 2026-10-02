@@ -293,7 +293,8 @@ in
       catalogueAge = "24h";
 
       # The prototype's figure, now that the gate's evaluator runs in this
-      # cgroup (the builds are nix-daemon's). The 2026-09-10 global OOM on
+      # cgroup (the builds are nix-daemon's, bounded under "Nix builds"
+      # below). The 2026-09-10 global OOM on
       # this host is why there is a ceiling at all.
       maxMemory = "6G";
     };
@@ -645,6 +646,26 @@ in
   environment.sessionVariables = {
     # Help applications find VA-API drivers
     LIBVA_DRIVER_NAME = "iHD";
+  };
+
+  # ============================================================================
+  # Nix builds
+  # ============================================================================
+  # afk-agent's gate builds every check and host here, VM tests included (up to
+  # 4G of guest each), and the daemon's defaults would run twelve of them at
+  # once with no ceiling. Builds are bounded instead, at the cost of time: one
+  # derivation at a time on a third of the cores, squeezed into swap above
+  # `MemoryHigh` and killed at `MemoryMax` - which fails that build, not the
+  # host. With the agent's own 6G and the services' ~5G, that fits in 15G of
+  # RAM. The weight keeps Jellyfin and the rest first in line for the CPU.
+  nix.settings = {
+    max-jobs = 1;
+    cores = 4;
+  };
+  systemd.services.nix-daemon.serviceConfig = {
+    MemoryHigh = "4G";
+    MemoryMax = "6G";
+    CPUWeight = 20;
   };
 
   # ============================================================================

@@ -121,7 +121,8 @@ let
   # under /tmp, which the unit's gates share; `heavy-build` runs one at a time.
   #
   # The gate's evaluators share the unit's cgroup and `MemoryMax` with opencode
-  # and the pool itself; the builds are nix-daemon's. Raising its own
+  # and the pool itself; the builds are nix-daemon's, under the daemon's own
+  # `MemoryMax`, which the assertion below requires the host to set. Raising its own
   # oom_score_adj, which every child inherits, makes the gate what the kernel
   # kills when the cgroup is full - so the gate fails, rather than the session
   # that ran it - and `OOMPolicy` below keeps the pool running past the kill.
@@ -136,6 +137,31 @@ let
     ];
     text = ''
       echo 1000 >/proc/self/oom_score_adj
+
+      # A process the kernel killed for memory fails the gate like a broken
+      # build would - an evaluator exits 137, a VM test's driver loses its
+      # VM - so the gate says so, rather than leave a session to spend an
+      # attempt fixing code. The counters are this unit's cgroup and
+      # nix-daemon's, where the builds run.
+      oom_kills() {
+        local file key value n=0
+        for file in "/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)/memory.events" \
+          /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events; do
+          [ -r "$file" ] || continue
+          while read -r key value; do
+            if [ "$key" = oom_kill ]; then n=$((n + value)); fi
+          done <"$file"
+        done
+        echo "$n"
+      }
+      kills="$(oom_kills)"
+      report_oom() {
+        local status=$?
+        if [ "$status" -ne 0 ] && [ "$(oom_kills)" -gt "$kills" ]; then
+          echo "afk-agent-gate: the kernel killed a process at a memory ceiling while the gate ran, so this failure is the host running out of memory, not necessarily the change" >&2
+        fi
+      }
+      trap report_oom EXIT
 
       ci=.github/workflows/ci.yml
       lint='.jobs.lint.steps | map(select(has("run")))'
@@ -578,6 +604,10 @@ in
       {
         assertion = cfg.tokens ? heavy-build;
         message = "cg.service.afk-agent.tokens needs a heavy-build capacity: implement-run and implement-gate hold it, and afk work refuses to start without one";
+      }
+      {
+        assertion = config.systemd.services.nix-daemon.serviceConfig ? MemoryMax;
+        message = "cg.service.afk-agent's gate builds every check through nix-daemon; give systemd.services.nix-daemon a MemoryMax, so a build that outgrows the host fails instead of taking it down";
       }
       {
         assertion = (cfg.retry == null) == (cfg.maxAttempts == null);
