@@ -24,6 +24,7 @@
 # parameter to their first request to GitHub.
 {
   config,
+  options,
   lib,
   pkgs,
   self,
@@ -339,6 +340,38 @@ in
       type = lib.types.str;
       example = "4882603";
       description = "The GitHub App's app ID or client ID (`--app-id`). Not a secret; the key is.";
+    };
+
+    eligibilityLabel = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching ".+");
+      default = null;
+      example = "ready-for-agent";
+      description = ''
+        The label that opts an issue in to being implemented with nobody
+        asking (`--eligibility-label`): an open issue carrying it, with no
+        open blocker, is taken as `/implement` would take it. `null`, the
+        default, takes nothing unattended, and work starts only on a command.
+
+        Here rather than in the binary because label strings are the
+        tracker's, and so this repository's (docs/agents/triage-labels.md).
+        It reaches the unit only with `reviewQueueLimit`.
+      '';
+    };
+
+    reviewQueueLimit = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 3;
+      description = ''
+        Pull requests waiting on the operator's review - those carrying
+        `implement.handOffLabel`, plus implements and revisions not yet
+        handed off - before intake takes no more issues through
+        `eligibilityLabel` (`--review-queue-limit`). Commands, reviews and
+        revisions run whatever the queue.
+
+        A default, unlike the tuning options, so that unattended intake is
+        never on without a limit: it is passed whenever `eligibilityLabel`
+        is set, and setting it without one fails evaluation.
+      '';
     };
 
     workers = lib.mkOption {
@@ -683,6 +716,14 @@ in
         assertion = (cfg.retry == null) == (cfg.maxAttempts == null);
         message = "cg.service.afk-agent: set retry and maxAttempts together, or neither (a failure then parks at once)";
       }
+      {
+        # The other half - a label without a limit - cannot be written: the
+        # limit has a default and is passed whenever the label is.
+        assertion =
+          cfg.eligibilityLabel != null
+          || options.cg.service.afk-agent.reviewQueueLimit.highestPrio == (lib.mkOptionDefault null).priority;
+        message = "cg.service.afk-agent.reviewQueueLimit is set without eligibilityLabel: it limits only what that label takes, so on its own it does nothing";
+      }
     ];
 
     # The binary reads each secret once, at startup (its ADR 0005 §6), so a
@@ -811,6 +852,12 @@ in
               label: globs: "${label}=${lib.concatStringsSep "," globs}"
             ) cfg.implement.sensitive
           );
+        }
+        # Together or not at all, so intake never takes unattended without
+        # the limit.
+        // lib.optionalAttrs (cfg.eligibilityLabel != null) {
+          AFK_ELIGIBILITY_LABEL = cfg.eligibilityLabel;
+          AFK_REVIEW_QUEUE_LIMIT = cfg.reviewQueueLimit;
         }
       );
 
