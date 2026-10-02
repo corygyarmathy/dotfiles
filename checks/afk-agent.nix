@@ -164,6 +164,16 @@ in
             ciCeiling = "1h";
             ciFixes = 2;
             sizeSignal = 400;
+            # Not homelab01's, which names none: empty passes nothing, so
+            # only a set with something in it shows the binary parses what
+            # the module writes. Two labels, one with a space and two globs.
+            sensitive = {
+              "job store schema" = [
+                "internal/store/**"
+                "internal/store.go"
+              ];
+              CI = [ ".github/workflows/**" ];
+            };
           };
           effectRounds = 3;
           handBackLabel = "needs-decision";
@@ -333,6 +343,17 @@ in
         procedure = "https://github.com/corygyarmathy/skills/blob/master/docs/operators-review.md"
         assert params.get("AFK_REVIEW_PROCEDURE") == procedure, f"AFK_REVIEW_PROCEDURE is {params.get('AFK_REVIEW_PROCEDURE')!r}"
         assert "--review-procedure" in usage, f"afk help does not list --review-procedure:\n{usage}"
+
+    with subtest("the sensitive paths reach the unit in the form the binary parses"):
+        # Optional to the binary - unset, no description says it touches a
+        # sensitive path. What it parses is shown by the implement hand-run
+        # above, which reads it and would have ended in a usage error.
+        # A label has spaces in it, which systemd quotes and `params` splits.
+        import shlex
+        quoted = dict(v.split("=", 1) for v in shlex.split(env))
+        sensitive = "CI=.github/workflows/**;job store schema=internal/store/**,internal/store.go"
+        assert quoted.get("AFK_SENSITIVE") == sensitive, f"AFK_SENSITIVE is {quoted.get('AFK_SENSITIVE')!r}"
+        assert "--sensitive" in usage, f"afk help does not list --sensitive:\n{usage}"
 
     with subtest("no secret is in the unit's environment, the journal, or a command line"):
         for value in ["${opencodeKey}", "${ntfyToken}", "PRIVATE KEY"]:
