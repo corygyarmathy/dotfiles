@@ -521,6 +521,25 @@ in
         '';
       };
 
+      sensitive = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nonEmptyListOf (lib.types.strMatching "[^,;]+"));
+        default = { };
+        example = {
+          "job store schema" = [ "internal/store/**" ];
+          "CI" = [ ".github/workflows/**" ];
+        };
+        description = ''
+          The operator's sensitive paths (`--sensitive`): label to globs, with
+          the same matching as `denylist`. A pull request touching one says so
+          in its description, with the label and the files it matched, so the
+          review reads those line by line. Empty, the default, turns that off.
+
+          Here rather than in the repository, because the agent could edit a
+          file there in its own pull request. One instance serves one
+          repository, so the list is that repository's.
+        '';
+      };
+
       ciWait = lib.mkOption {
         type = duration;
         description = "How often unfinished CI, or a review not yet posted, is read again (`--ci-wait`).";
@@ -643,6 +662,14 @@ in
       {
         assertion = lib.elem ".github/workflows/**" cfg.implement.denylist;
         message = "cg.service.afk-agent.implement.denylist must keep .github/workflows/**: the gate runs the workspace's own ci.yml, so a session that edits it would gate itself";
+      }
+      {
+        # `--sensitive` separates entries with `;` and a label from its globs
+        # with `=`, and its line lists labels as `label (files)`, by commas.
+        assertion = lib.all (label: builtins.match "[^,;=()]*[^,;=()[:space:]][^,;=()]*" label != null) (
+          lib.attrNames cfg.implement.sensitive
+        );
+        message = "cg.service.afk-agent.implement.sensitive: a label needs a character other than whitespace, and none of , ; = ( )";
       }
       {
         assertion = cfg.tokens ? heavy-build;
@@ -777,6 +804,13 @@ in
         }
         // lib.optionalAttrs (cfg.implement.needs != [ ]) {
           AFK_IMPLEMENT_NEEDS = lib.concatStringsSep "," cfg.implement.needs;
+        }
+        // lib.optionalAttrs (cfg.implement.sensitive != { }) {
+          AFK_SENSITIVE = lib.concatStringsSep ";" (
+            lib.mapAttrsToList (
+              label: globs: "${label}=${lib.concatStringsSep "," globs}"
+            ) cfg.implement.sensitive
+          );
         }
       );
 
