@@ -254,6 +254,10 @@ in
       review = {
         tier = "review";
         needs = [ "tool_call" ];
+        # The reviewing-changes skill's own defaults (afk-agent#110, #120),
+        # written here so the limits are read where the host is configured.
+        floor = "should-fix";
+        foldCut = 50;
       };
       implement = {
         tier = "implement";
@@ -275,6 +279,8 @@ in
         ciWait = "2m";
         ciCeiling = "1h";
         ciFixes = 2;
+        # afk-agent#107's resolution.
+        sizeSignal = 400;
       };
       effectRounds = 3;
       handBackLabel = "needs-decision";

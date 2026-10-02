@@ -459,6 +459,28 @@ in
         example = [ "tool_call" ];
         description = "Capabilities a review's model must have (`--review-needs`), as models.dev names them.";
       };
+
+      floor = lib.mkOption {
+        type = lib.types.enum [
+          "blocker"
+          "should-fix"
+          "consider"
+        ];
+        description = ''
+          The least severity an advisory review reports (`--review-floor`).
+          Passed to the reviewing-changes skill, which leaves out every finding
+          below it.
+        '';
+      };
+
+      foldCut = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = ''
+          Changed lines below which an advisory review folds Approach into
+          Correctness (`--review-fold-cut`). Passed to the reviewing-changes
+          skill, which does the counting.
+        '';
+      };
     };
 
     implement = {
@@ -511,6 +533,15 @@ in
       ciFixes = lib.mkOption {
         type = lib.types.ints.positive;
         description = "Red CI runs sent back to the session before a hand-back (`--ci-fixes`).";
+      };
+
+      sizeSignal = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = ''
+          Changed non-test lines a pull request may have (`--size-signal`).
+          Work over it is pushed to its branch and handed back, rather than
+          opened as a pull request.
+        '';
       };
     };
 
@@ -677,6 +708,8 @@ in
           AFK_OPENCODE = lib.getExe pkgs.opencode;
           AFK_ENROLMENT = enrolment;
           AFK_REVIEW_TIER = cfg.review.tier;
+          AFK_REVIEW_FLOOR = cfg.review.floor;
+          AFK_REVIEW_FOLD_CUT = cfg.review.foldCut;
           AFK_MODEL_ATTEMPTS = cfg.modelAttempts;
           AFK_TIER_WAIT = cfg.tierWait;
           AFK_MODEL_TIMEOUT = cfg.modelTimeout;
@@ -694,6 +727,7 @@ in
           AFK_CI_WAIT = cfg.implement.ciWait;
           AFK_CI_CEILING = cfg.implement.ciCeiling;
           AFK_CI_FIXES = cfg.implement.ciFixes;
+          AFK_SIZE_SIGNAL = cfg.implement.sizeSignal;
 
           # The model's sessions commit as whatever git finds, and the agent
           # sets nothing. The environment rather than a gitconfig under HOME,

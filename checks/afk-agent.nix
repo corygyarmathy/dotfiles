@@ -146,6 +146,8 @@ in
           review = {
             tier = "review";
             needs = [ "tool_call" ];
+            floor = "should-fix";
+            foldCut = 50;
           };
           implement = {
             tier = "implement";
@@ -161,6 +163,7 @@ in
             ciWait = "2m";
             ciCeiling = "1h";
             ciFixes = 2;
+            sizeSignal = 400;
           };
           effectRounds = 3;
           handBackLabel = "needs-decision";
@@ -312,6 +315,17 @@ in
             enabled.succeed(
                 f"${pkgs.jq}/bin/jq -e '.tiers | map(select(.name == \"{tier}\")) | .[0].models | length == 2' {enrolment}"
             )
+
+    with subtest("the advisory review's floor and fold cut reach the unit, and the binary reads them"):
+        # Optional to the binary - unset, the skill's own defaults hold - so
+        # neither a parameter the module forgot nor a pin that predates them
+        # fails the subtests above.
+        params = dict(v.split("=", 1) for v in env.split() if "=" in v)
+        assert params.get("AFK_REVIEW_FLOOR") == "should-fix", f"AFK_REVIEW_FLOOR is {params.get('AFK_REVIEW_FLOOR')!r}"
+        assert params.get("AFK_REVIEW_FOLD_CUT") == "50", f"AFK_REVIEW_FOLD_CUT is {params.get('AFK_REVIEW_FOLD_CUT')!r}"
+        usage = enabled.succeed("afk-agent-run afk help 2>&1")
+        for flag in ["--review-floor", "--review-fold-cut"]:
+            assert flag in usage, f"afk help does not list {flag}:\n{usage}"
 
     with subtest("no secret is in the unit's environment, the journal, or a command line"):
         for value in ["${opencodeKey}", "${ntfyToken}", "PRIVATE KEY"]:
