@@ -11,7 +11,8 @@
 # limit an unattended agent runs with should be read where the host is
 # configured, not inherited from a module nobody opens. What the module decides
 # itself is plumbing with one right answer: where the store lives, which
-# credentials arrive and how, which opencode runs, and where ntfy is.
+# credentials arrive and how, which opencode runs, where ntfy is, and where the
+# operator's review procedure is published.
 #
 # `afk work` is a long-running pool, not a oneshot on a timer: it polls on its
 # own (`poll`) and every transition is its own crash boundary, so a restart -
@@ -543,6 +544,17 @@ in
           opened as a pull request.
         '';
       };
+
+      reviewProcedure = lib.mkOption {
+        type = lib.types.strMatching "https?://[^/]+.*";
+        default = "https://github.com/corygyarmathy/skills/blob/master/docs/operators-review.md";
+        description = ''
+          The operator's review procedure, which the fixed reminder in every
+          pull request description links (`--review-procedure`). A default,
+          unlike the tuning options: it is where the document lives, not a
+          limit to choose.
+        '';
+      };
     };
 
     effectRounds = lib.mkOption {
@@ -728,6 +740,7 @@ in
           AFK_CI_CEILING = cfg.implement.ciCeiling;
           AFK_CI_FIXES = cfg.implement.ciFixes;
           AFK_SIZE_SIGNAL = cfg.implement.sizeSignal;
+          AFK_REVIEW_PROCEDURE = cfg.implement.reviewProcedure;
 
           # The model's sessions commit as whatever git finds, and the agent
           # sets nothing. The environment rather than a gitconfig under HOME,
