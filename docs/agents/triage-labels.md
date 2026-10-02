@@ -15,7 +15,10 @@ Issues and pull requests from before 2026-09-13 may also carry `agent-working`,
 `agent-stuck`, `agent-ready-for-review` or `agent-revising`. Those were written
 by the bash prototype runner, which has been deleted; its history is in git and
 in ADR 0004, 0006 and 0007. The successor's label vocabulary is not settled
-here - see the `afk-agent` repository's `docs/agents/triage-labels.md`.
+here - see the `afk-agent` repository's `docs/agents/triage-labels.md` - with
+one exception: `ready-for-agent` is homelab01's
+`cg.service.afk-agent.eligibilityLabel`, so applying it queues the issue for
+unattended work, taken once it has no open blocker.
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the
 corresponding label string from this table.

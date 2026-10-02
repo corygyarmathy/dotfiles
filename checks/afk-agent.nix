@@ -114,6 +114,8 @@ in
           enable = true;
           repo = "corygyarmathy/dotfiles";
           appId = "4882603";
+          eligibilityLabel = "ready-for-agent";
+          reviewQueueLimit = 3;
           workers = 2;
           poll = "1m";
           lease = "3h";
@@ -354,6 +356,16 @@ in
         sensitive = "CI=.github/workflows/**;job store schema=internal/store/**,internal/store.go"
         assert quoted.get("AFK_SENSITIVE") == sensitive, f"AFK_SENSITIVE is {quoted.get('AFK_SENSITIVE')!r}"
         assert "--sensitive" in usage, f"afk help does not list --sensitive:\n{usage}"
+
+    with subtest("unattended intake reaches the unit with its limit, and the binary reads both"):
+        # Optional to the binary - unset, nothing is taken unattended and
+        # there is no limit - so only this sees either go missing. What it
+        # parses is shown by the first subtest, which would have ended in a
+        # usage error on a malformed limit.
+        assert params.get("AFK_ELIGIBILITY_LABEL") == "ready-for-agent", f"AFK_ELIGIBILITY_LABEL is {params.get('AFK_ELIGIBILITY_LABEL')!r}"
+        assert params.get("AFK_REVIEW_QUEUE_LIMIT") == "3", f"AFK_REVIEW_QUEUE_LIMIT is {params.get('AFK_REVIEW_QUEUE_LIMIT')!r}"
+        for flag in ["--eligibility-label", "--review-queue-limit"]:
+            assert flag in usage, f"afk help does not list {flag}:\n{usage}"
 
     with subtest("no secret is in the unit's environment, the journal, or a command line"):
         for value in ["${opencodeKey}", "${ntfyToken}", "PRIVATE KEY"]:

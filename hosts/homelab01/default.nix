@@ -201,13 +201,18 @@ in
     # -------------------------------------------------------------------------
     # Every limit it runs with is written here; the module has no defaults
     # (#281). It answers `/review` on a pull request and `/implement` on an
-    # issue, on dotfiles' own tracker, and does nothing without a command. The
-    # kill switch is `enable = false`.
+    # issue, on dotfiles' own tracker, and takes `ready-for-agent` issues with
+    # nobody asking. The kill switch is `enable = false`.
     afk-agent = {
       enable = true;
       repo = "corygyarmathy/dotfiles";
       # The App's id, from its settings URL (ADR 0006). Not a secret.
       appId = "4882603";
+      # docs/agents/afk-eligibility.md is what earns an issue this label.
+      # Both `null` turns unattended intake off and leaves commands working.
+      eligibilityLabel = "ready-for-agent";
+      # afk-agent#119's suggested value.
+      reviewQueueLimit = 3;
 
       workers = 2;
       poll = "1m";

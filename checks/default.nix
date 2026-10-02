@@ -403,6 +403,11 @@ in
       '';
 
   afk-agent = testLib.mkTest ./afk-agent.nix;
+  # Not a VM: whether each assertion fires is a question about evaluation.
+  afk-agent-assertions = import ./afk-agent-assertions.nix {
+    inherit pkgs self;
+    lib = pkgs.lib;
+  };
   digital-garden = testLib.mkTest ./digital-garden.nix;
   # Also not a VM: the filter is invoked directly against a deliberately
   # colliding fixture vault, and its refusal is the assertion - see the file
