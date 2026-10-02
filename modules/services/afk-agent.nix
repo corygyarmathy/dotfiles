@@ -119,6 +119,12 @@ let
   # leaves the workspace dirty - which the agent hands back to the session as
   # uncommitted changes, the right answer either way. The lint steps write
   # under /tmp, which the unit's gates share; `heavy-build` runs one at a time.
+  #
+  # The gate's evaluators share the unit's cgroup and `MemoryMax` with opencode
+  # and the pool itself; the builds are nix-daemon's. Raising its own
+  # oom_score_adj, which every child inherits, makes the gate what the kernel
+  # kills when the cgroup is full - so the gate fails, rather than the session
+  # that ran it - and `OOMPolicy` below keeps the pool running past the kill.
   gate = pkgs.writeShellApplication {
     name = "afk-agent-gate";
     runtimeInputs = [
@@ -129,6 +135,8 @@ let
       pkgs.yq-go
     ];
     text = ''
+      echo 1000 >/proc/self/oom_score_adj
+
       ci=.github/workflows/ci.yml
       lint='.jobs.lint.steps | map(select(has("run")))'
 
@@ -179,6 +187,10 @@ let
     ) credentials;
 
     MemoryMax = cfg.maxMemory;
+    # systemd's default, `stop`, takes the whole pool down for one process the
+    # kernel killed at `MemoryMax` - every transition in flight with it, to make
+    # a gate fail. The killed process's own caller sees it die instead.
+    OOMPolicy = "continue";
 
     # Hardening, bounded by what the job is: a network client that runs
     # opencode, which is a JIT'd JavaScript runtime (so no

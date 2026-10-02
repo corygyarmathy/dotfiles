@@ -24,6 +24,21 @@ let
 
   opencodeKey = "stub-opencode-key-VALUE-MUST-NOT-LEAK";
   ntfyToken = "stub-ntfy-token-VALUE-MUST-NOT-LEAK";
+
+  # The memory subtest's run, as the unit: a bystander standing in for opencode,
+  # then the gate. The bystander holds 160M of a 256M ceiling, so it is the
+  # larger process when the gate's lint step fills the rest - the gate is the
+  # kernel's choice only because of its oom_score_adj.
+  oomGate = pkgs.writeShellScript "afk-agent-oom-gate" ''
+    cd oom-gate
+    until [ -e go ]; do sleep 0.1; done
+    ${pkgs.python3}/bin/python3 -c 'import time; b = b"a" * (160 << 20); open("ready", "w").close(); time.sleep(600)' &
+    bystander=$!
+    until [ -e ready ]; do sleep 0.1; done
+    "$AFK_GATE" && echo "gate passed" || echo "gate failed"
+    kill -0 "$bystander" && echo "bystander alive"
+    kill "$bystander"
+  '';
 in
 {
   name = "afk-agent";
@@ -171,6 +186,34 @@ in
         enabled.succeed(
             "afk-agent-run env NIX_REMOTE=daemon nix-store --query --hash $(readlink -f /run/current-system)"
         )
+
+    with subtest("a gate that outgrows the memory ceiling fails, and nothing else in the unit does"):
+        # The test instrumentation panics on any OOM, a cgroup's included;
+        # production keeps the kernel's default.
+        enabled.succeed("echo 0 >/proc/sys/vm/panic_on_oom")
+        # A workspace whose one lint step grows without bound.
+        enabled.succeed(
+            "mkdir -p /var/lib/afk-agent/oom-gate/.github/workflows",
+            "printf 'jobs:\\n  lint:\\n    runs-on: x\\n    steps:\\n      - run: tail /dev/zero\\n' >/var/lib/afk-agent/oom-gate/.github/workflows/ci.yml",
+            "chown -R afk-agent:afk-agent /var/lib/afk-agent/oom-gate",
+            "afk-agent-run ${oomGate} >/tmp/oom-gate.out 2>&1 &",
+        )
+        # The ceiling lowered to one the VM can reach on the hand-run's own
+        # transient unit, so the module's values stay homelab01's.
+        unit = enabled.wait_until_succeeds(
+            "systemctl list-units --plain --no-legend 'afk-agent-run-*.service' | awk '{print $1}' | grep .",
+            timeout=30,
+        ).strip()
+        enabled.succeed(f"systemctl set-property --runtime {unit} MemoryMax=256M")
+        enabled.succeed("touch /var/lib/afk-agent/oom-gate/go")
+        # Done when the hand-run returns, however the unit ended.
+        enabled.wait_until_succeeds("! pgrep -x systemd-run", timeout=120)
+        out = enabled.succeed("cat /tmp/oom-gate.out")
+        kernel = enabled.succeed("journalctl -k --no-pager")
+        assert "gate failed" in out, f"the gate did not fail:\n{out}"
+        assert "bystander alive" in out, f"the OOM kill took more than the gate:\n{out}\n{kernel}"
+        assert "(tail)" in kernel, f"the kernel did not kill the gate's lint step:\n{kernel}"
+        enabled.succeed("echo 2 >/proc/sys/vm/panic_on_oom")
 
     with subtest("opencode's credentials are provisioned from the key"):
         auth = "/var/lib/afk-agent/.local/share/opencode/auth.json"
