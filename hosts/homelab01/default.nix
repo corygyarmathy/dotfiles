@@ -209,10 +209,9 @@ in
       # The App's id, from its settings URL (ADR 0006). Not a secret.
       appId = "4882603";
       # docs/agents/afk-eligibility.md is what earns an issue this label.
-      # `null` turns unattended intake off and leaves commands working.
+      # Both `null` turns unattended intake off and leaves commands working.
       eligibilityLabel = "ready-for-agent";
-      # afk-agent#119's default, written here so the limit is read where the
-      # host is configured.
+      # afk-agent#119's suggested value.
       reviewQueueLimit = 3;
 
       workers = 2;
