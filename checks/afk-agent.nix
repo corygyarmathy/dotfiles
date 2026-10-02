@@ -327,6 +327,13 @@ in
         for flag in ["--review-floor", "--review-fold-cut"]:
             assert flag in usage, f"afk help does not list {flag}:\n{usage}"
 
+    with subtest("the review procedure's link reaches the unit, and the binary reads it"):
+        # Optional to the binary - unset, a description's reminder says it has
+        # no link - so only this sees the module's default go missing.
+        procedure = "https://github.com/corygyarmathy/skills/blob/master/docs/operators-review.md"
+        assert params.get("AFK_REVIEW_PROCEDURE") == procedure, f"AFK_REVIEW_PROCEDURE is {params.get('AFK_REVIEW_PROCEDURE')!r}"
+        assert "--review-procedure" in usage, f"afk help does not list --review-procedure:\n{usage}"
+
     with subtest("no secret is in the unit's environment, the journal, or a command line"):
         for value in ["${opencodeKey}", "${ntfyToken}", "PRIVATE KEY"]:
             assert value not in env, "a credential value is in the unit's environment"
