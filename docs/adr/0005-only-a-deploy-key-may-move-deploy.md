@@ -5,7 +5,7 @@
 - **Related Artefacts:**
     - Narrows: [ADR 0001](0001-gitops-deployment-with-a-promoted-ref.md), which makes `deploy` the fleet's only contract - this decides who may move it
     - Answers: #190
-    - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/afk-eligibility.md` (rule 1's reasoning), `modules/services/afk-agent.nix` (the AFK identity's permissions; deleted with the bash prototype, 2026-09-13)
+    - Constrains: `.github/workflows/ci.yml` (the `promote` job), `docs/agents/triage-labels.md` (the path denylist rule), `modules/services/afk-agent.nix` (the AFK identity's permissions; deleted with the bash prototype, 2026-09-13)
 
 ## Context
 
@@ -34,7 +34,7 @@ Three further probes, each a throwaway ruleset on a ref that does not exist, sep
 
 **3. `promote` pushes over SSH with that key, and the job no longer takes `contents: write`.** The private key is the `PROMOTE_DEPLOY_KEY` Actions secret, written to a temporary file for the length of one push. Dropping `contents: write` is a consequence worth having: `ci.yml` now declares `contents: read` with no job opting out, so the workflow's `GITHUB_TOKEN` cannot write to this repository at all.
 
-**4. This narrows the exposure; it does not close it, and the path denylist stays load-bearing.** A workflow run can still reach `deploy`, because the key it needs is a repository secret and a `pull_request` event runs the workflow file from the PR's head branch. That is the long way round `docs/agents/afk-eligibility.md` already denies, and it is why `.github/workflows/` remains on the denylist. What changes is the short way: reaching `deploy` now requires getting a workflow edit onto a branch, rather than one `git push`.
+**4. This narrows the exposure; it does not close it, and the path denylist stays load-bearing.** A workflow run can still reach `deploy`, because the key it needs is a repository secret and a `pull_request` event runs the workflow file from the PR's head branch. That is the long way round the AFK path denylist (`docs/agents/triage-labels.md`) already denies, and it is why `.github/workflows/` remains on the denylist. What changes is the short way: reaching `deploy` now requires getting a workflow edit onto a branch, rather than one `git push`.
 
 ## Consequences
 
