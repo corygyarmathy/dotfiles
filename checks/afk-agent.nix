@@ -177,6 +177,7 @@ in
               CI = [ ".github/workflows/**" ];
             };
           };
+          revise.replays = 1;
           effectRounds = 3;
           handBackLabel = "needs-decision";
           commitIdentity = {
@@ -244,6 +245,14 @@ in
         # all of them first. Through afk-agent-run, which is also what shows a
         # hand-run is the unit's account, environment and credentials.
         rc, out = enabled.execute("afk-agent-run afk run implement-gate --issue 1 2>&1")
+        assert rc == 1, f"exit {rc}, not a runtime failure - 2 is a usage error:\n{out}"
+        assert "api.github.com" in out, f"the run never reached GitHub:\n{out}"
+
+    with subtest("a hand-run of a revise transition gets past every parameter to GitHub"):
+        # A revision reads every implement parameter and its replay bound
+        # before it asks GitHub who it is, and a missing or malformed bound
+        # is a usage error, so only reaching GitHub shows `--replays` arrived.
+        rc, out = enabled.execute("afk-agent-run afk run revise-replay --pr 1 2>&1")
         assert rc == 1, f"exit {rc}, not a runtime failure - 2 is a usage error:\n{out}"
         assert "api.github.com" in out, f"the run never reached GitHub:\n{out}"
 

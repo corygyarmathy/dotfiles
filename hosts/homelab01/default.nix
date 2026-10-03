@@ -287,6 +287,12 @@ in
         # afk-agent#107's resolution.
         sizeSignal = 400;
       };
+      revise = {
+        # The push made during a revision is almost always the operator's,
+        # so one is replayed onto and a second, which means they are
+        # working the branch, hands it back. Each replay is another gate run.
+        replays = 1;
+      };
       effectRounds = 3;
       handBackLabel = "needs-decision";
       # The App's bot account, so commits link to it on GitHub. The id is
