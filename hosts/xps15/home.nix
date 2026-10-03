@@ -167,8 +167,6 @@
 
     # Entertainment
     discord
-    zotero
-    texstudio # Req. for zotero?
     calibre
     gargoyle
 
