@@ -9,7 +9,9 @@ name: flake-update
 #
 #   update  - runs `nix flake update` once, so every host is diffed against the
 #             same lock. Running it per-host would race: nixpkgs moves between
-#             jobs and the hosts would end up on different revisions.
+#             jobs and the hosts would end up on different revisions. Then
+#             refreshes any package hash that depends on the lock, so the lock
+#             never ships without the hashes it needs.
 #   diff    - per host: build at the old lock, build at the new one, and record
 #             `nix store diff-closures` between them.
 #   pr      - assembles one pull request carrying every host's delta in the
@@ -42,6 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.update.outputs.changed }}
+      files: ${{ steps.rehash.outputs.files }}
+      rehashed: ${{ steps.rehash.outputs.summary }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -59,12 +63,68 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Some fixed-output hashes are a function of the lock, not just of the
+      # package's own pins: caddy-with-plugins resolves its Go modules with
+      # nixpkgs' toolchain, so a lock bump alone can stale its vendor hash.
+      # package-update cannot fix that - it runs against master's lock, where
+      # the old hash is still correct - so without this step the lock PR and
+      # the hash PR each fail CI without the other (#348). Packages declare it
+      # with passthru.rehashScript, under the same contract as updateScript
+      # (see package-update.yml); this job discovers them rather than listing
+      # them, so adding one means editing the package, not this file.
+      #
+      # Fatal by design: a rehash that fails leaves a lock no host can build,
+      # which is exactly what the diff jobs would fail on anyway.
+      - name: Refresh lock-dependent hashes
+        id: rehash
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+
+          mapfile -t packages < <(
+            nix eval --json '.#packages.x86_64-linux' --apply \
+              'ps: builtins.filter (n: ps.${n} ? rehashScript) (builtins.attrNames ps)' \
+              | jq -r '.[]'
+          )
+
+          summaries=""
+          for package in "${packages[@]}"; do
+            mapfile -t argv < <(
+              nix eval --json ".#packages.x86_64-linux.${package}.rehashScript" | jq -r '.[]'
+            )
+            echo "::notice::Running: ${argv[*]}"
+            out="$("${argv[@]}")"
+            if [ -n "$out" ]; then
+              # First line is the summary by contract; the rest is a diff the
+              # PR's file view already shows.
+              summaries="$summaries- $(printf '%s' "$out" | head -1)"$'\n'
+            fi
+          done
+
+          # Trust the working tree, not the output: these are the files the
+          # artifact carries and the PR commits alongside flake.lock.
+          files="$(git diff --name-only -- . ':!flake.lock')"
+          {
+            echo 'files<<FILES_EOF'
+            echo 'flake.lock'
+            if [ -n "$files" ]; then
+              printf '%s\n' "$files"
+            fi
+            echo 'FILES_EOF'
+            echo 'summary<<REHASH_EOF'
+            printf '%s' "$summaries"
+            echo 'REHASH_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload the updated lock
         if: steps.update.outputs.changed == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flake-lock
-          path: flake.lock
+          # Paths keep their place relative to the repo root (their common
+          # ancestor always is, since flake.lock lives there), so downloading
+          # the artifact into a checkout overlays them in place.
+          path: ${{ steps.rehash.outputs.files }}
           retention-days: 1
 
   diff:
@@ -107,8 +167,9 @@ jobs:
       - name: Build ${{ matrix.host }} at the updated lock
         run: |
           set -euo pipefail
-          # flake.lock is tracked, so overwriting it in place is enough for Nix
-          # to evaluate against it - the tree is simply dirty.
+          # flake.lock - and any hash the update job refreshed against it - is
+          # tracked, so overwriting it in place is enough for Nix to evaluate
+          # against it - the tree is simply dirty.
           nix build --no-link --print-out-paths --print-build-logs \
             ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel" \
             > after.path
@@ -168,11 +229,19 @@ jobs:
 
       - name: Assemble the delta summary
         id: summary
+        env:
+          REHASHED: ${{ needs.update.outputs.rehashed }}
         run: |
           set -euo pipefail
 
           summary=""
           any_changed=false
+
+          # Named in the commit body so a hash changing under a lock bump reads
+          # as deliberate in `git log`, not as an unexplained edit.
+          if [ -n "$REHASHED" ]; then
+            summary="### Lock-dependent hashes refreshed"$'\n\n'"$REHASHED"$'\n\n'
+          fi
 
           for host in homelab01 homelab02 xps15; do
             file="diff-$host.txt"
@@ -210,7 +279,9 @@ jobs:
           branch: deps/flake-lock
           base: master
           delete-branch: true
-          add-paths: flake.lock
+          # flake.lock plus whatever the update job rehashed against it; never
+          # the diff-*.txt files sitting in the workspace.
+          add-paths: ${{ needs.update.outputs.files }}
           title: "build(nix): update flake.lock"
           commit-message: |
             build(nix): update flake.lock
@@ -219,7 +290,8 @@ jobs:
 
             ${{ steps.summary.outputs.summary }}
           body: |
-            Automated `flake.lock` update.
+            Automated `flake.lock` update, with any package hash that depends
+            on the lock refreshed against it (`passthru.rehashScript`).
 
             The per-host deltas below are recorded in the commit body so they
             land in `git log` on merge (ADR 0001).
