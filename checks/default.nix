@@ -408,6 +408,9 @@ in
     inherit pkgs self;
     lib = pkgs.lib;
   };
+  # Also not a VM: which transitions hold a token is a question about the
+  # pinned source's registry, which the file says no running binary answers.
+  afk-agent-tokens = import ./afk-agent-tokens.nix { inherit self; };
   digital-garden = testLib.mkTest ./digital-garden.nix;
   # Also not a VM: the filter is invoked directly against a deliberately
   # colliding fixture vault, and its refusal is the assertion - see the file

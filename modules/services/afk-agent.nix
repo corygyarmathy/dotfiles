@@ -418,8 +418,9 @@ in
         Resource token capacities (`--token`): named permits for a host
         constraint. Building transitions hold `heavy-build`: implement's
         (`implement-run`, `implement-gate`) and revise's (`revise-run`,
-        `revise-gate`), and `afk work` refuses to start when a transition
-        asks for a token with no capacity.
+        `revise-gate`, which checks/afk-agent-tokens.nix holds the pin to),
+        and `afk work` refuses to start when a transition asks for a token
+        with no capacity.
       '';
     };
 
