@@ -2,7 +2,8 @@
 #
 # The Go successor to the bash prototype that lived at this path until #283.
 # Its design is that repository's ADR 0001; what it needs from a host is its
-# docs/agents/review.md and docs/agents/implement.md. This module is where it
+# docs/agents/review.md, docs/agents/implement.md and docs/agents/revise.md.
+# This module is where it
 # is packaged and configured, and nowhere else: the binary holds no defaults,
 # every parameter is a flag with an environment variable beside it, and
 # `afk help` is the list of record.
@@ -20,8 +21,8 @@
 # flight and nothing else (ADR 0001 §2, §7).
 #
 # checks/afk-agent.nix boots this module with stub credentials and asserts the
-# unit, and a hand-run of an implement transition, each get past every
-# parameter to their first request to GitHub.
+# unit, and hand-runs of an implement and a revise transition, each get past
+# every parameter to their first request to GitHub.
 {
   config,
   lib,
@@ -254,9 +255,11 @@ let
 
   # A command run as the unit runs: its account, environment, credentials and
   # confinement, in a transient unit. What afk-agent's docs/agents/implement.md
-  # means by "with the parameters in the environment", e.g.
+  # and docs/agents/revise.md mean by "with the parameters in the environment",
+  # e.g.
   #
   #   sudo afk-agent-run afk run implement --issue 7
+  #   sudo afk-agent-run afk run revise --pr 7
   #
   # Any command, not just `afk`, so the same wrapper answers "can the unit
   # reach X" - which is how checks/afk-agent.nix asks it of the Nix daemon.
@@ -295,7 +298,7 @@ let
       in
       ''
         if [ "$#" -eq 0 ]; then
-          echo "usage: afk-agent-run <command> [args...], e.g. afk-agent-run afk run implement --issue 7" >&2
+          echo "usage: afk-agent-run <command> [args...], e.g. afk-agent-run afk run implement --issue 7, or a revision: afk-agent-run afk run revise --pr 7" >&2
           exit 2
         fi
         # systemd-run finds the command on its own PATH, not the unit's, so it
@@ -413,9 +416,10 @@ in
       };
       description = ''
         Resource token capacities (`--token`): named permits for a host
-        constraint. `implement-run` and `implement-gate` hold `heavy-build`,
-        and `afk work` refuses to start when a transition asks for a token
-        with no capacity.
+        constraint. Building transitions hold `heavy-build`: implement's
+        (`implement-run`, `implement-gate`) and revise's (`revise-run`,
+        `revise-gate`), and `afk work` refuses to start when a transition
+        asks for a token with no capacity.
       '';
     };
 
@@ -519,13 +523,13 @@ in
 
       tier = lib.mkOption {
         type = lib.types.str;
-        description = "The tier implementing draws its models from (`--implement-tier`). Must name one of `tiers`.";
+        description = "The tier implementing, and every revision, draws its models from (`--implement-tier`). Must name one of `tiers`. The revise ticket (afk-agent#146) gave revisions this tier rather than one of their own.";
       };
 
       needs = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         example = [ "tool_call" ];
-        description = "Capabilities an implementing model must have (`--implement-needs`), as models.dev names them.";
+        description = "Capabilities implementing, and every revision, requires (`--implement-needs`), as models.dev names them.";
       };
 
       gateAttempts = lib.mkOption {
@@ -610,7 +614,8 @@ in
           it, before the next such push hands it back (`--replays`). Zero
           hands it back at the first such push. Each replay runs the
           implement gate again. A revision otherwise takes
-          the implement options: its gate, tier, denylist and hand-off label.
+          the implement options: its gate, attempts, tier, needs, denylist,
+          sensitive paths, size signal, CI bounds and hand-off label.
         '';
       };
     };
@@ -712,7 +717,7 @@ in
       }
       {
         assertion = cfg.tokens ? heavy-build;
-        message = "cg.service.afk-agent.tokens needs a heavy-build capacity: implement-run and implement-gate hold it, and afk work refuses to start without one";
+        message = "cg.service.afk-agent.tokens needs a heavy-build capacity: implement's and revise's building transitions hold it (implement-run, implement-gate, revise-run, revise-gate), and afk work refuses to start without one";
       }
       {
         assertion = config.systemd.services.nix-daemon.serviceConfig ? MemoryMax;
