@@ -92,7 +92,7 @@
   // The extensions list is a derived copy of the union of ./treefmt.toml's
   // includes: opencode matches an extension with exact string equality, so
   // there is no catch-all, and a new formatter has to be added here as well
-  // as there (AGENTS.md's formatting section names both lists).
+  // as there (./treefmt.toml's header names both lists).
   "formatter": {
     "treefmt": {
       "command": ["nix", "fmt", "--", "$FILE"],
