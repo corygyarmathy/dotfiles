@@ -166,6 +166,7 @@ jobs:
         check:
           - afk-agent
           - afk-agent-assertions
+          - afk-agent-tokens
           - alert-rules
           - alert-rules-unit
           - alertmanager-config
