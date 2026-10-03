@@ -200,9 +200,10 @@ in
     # AFK agent (corygyarmathy/afk-agent, `afk work`)
     # -------------------------------------------------------------------------
     # Every limit it runs with is written here; the module has no defaults
-    # (#281). It answers `/review` on a pull request and `/implement` on an
-    # issue, on dotfiles' own tracker, and takes `ready-for-agent` issues with
-    # nobody asking. The kill switch is `enable = false`.
+    # (#281). It answers `/review` and `/revise` on a pull request, and
+    # `/implement` on an issue, on dotfiles' own tracker, and takes
+    # `ready-for-agent` issues with nobody asking. The kill switch is
+    # `enable = false`.
     afk-agent = {
       enable = true;
       repo = "corygyarmathy/dotfiles";
