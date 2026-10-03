@@ -209,7 +209,7 @@ in
       repo = "corygyarmathy/dotfiles";
       # The App's id, from its settings URL (ADR 0006). Not a secret.
       appId = "4882603";
-      # docs/agents/afk-eligibility.md is what earns an issue this label.
+      # docs/agents/triage-labels.md is what earns an issue this label.
       # Both `null` turns unattended intake off and leaves commands working.
       eligibilityLabel = "ready-for-agent";
       # afk-agent#119's suggested value.
@@ -272,10 +272,9 @@ in
         gateAttempts = 3;
         # afk-agent's docs/agents/triage-labels.md.
         handOffLabel = "needs-review";
-        # docs/agents/afk-eligibility.md rule 1, as globs. Its one exception,
-        # new entries in ci.yml's checks matrix, is not expressible as a glob
-        # and the App has no Workflows permission, so a ticket that adds a
-        # check is handed back at the push.
+        # Triage keeps tickets that need these off `ready-for-agent`, including
+        # one that adds a flake check to ci.yml's matrix
+        # (docs/agents/triage-labels.md).
         denylist = [
           ".github/workflows/**"
           "secrets/**"

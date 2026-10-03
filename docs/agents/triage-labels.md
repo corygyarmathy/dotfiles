@@ -25,12 +25,45 @@ corresponding label string from this table.
 
 ## Choosing between `ready-for-agent` and `ready-for-human`
 
-Being fully specified is necessary but not sufficient for `ready-for-agent`.
-Two further rules decide whether a ticket may be worked unattended at all - a
-path denylist, and a test of whether the agent can tell for itself that it
-succeeded. A ticket failing either gets `ready-for-human` however well written
-it is.
+Applying `ready-for-agent` starts unattended work, so being fully specified is
+necessary but not enough. A ticket that fails any of these three gets
+`ready-for-human`, however well written it is.
 
-Both are in [afk-eligibility.md](afk-eligibility.md), along with what to do with
-a ticket that fails the second one, which is usually to reshape it rather than
-to relabel it.
+### 1. Its scope needs no denied path
+
+The paths are homelab01's `cg.service.afk-agent.implement.denylist`
+(`hosts/homelab01/default.nix`). The agent checks them only when it pushes,
+after the work is done, so triage is where a denied ticket is caught cheaply.
+Why `.github/workflows/` is denied when every diff is reviewed anyway is in
+[`.github/workflows/README.md`](../../.github/workflows/README.md).
+
+The list is literal paths. A module adding a `sops.secrets.<name>` declaration
+changes what a host decrypts without touching `secrets/` or `.sops.yaml`, and
+`.github/` outside `workflows/` is not denied.
+
+### 2. It adds no flake check
+
+A new check has to be added to the `checks` matrix in
+`.github/workflows/ci.yml`, which is a denied path, so the push would be handed
+back with the work done. Updating an existing check is fine.
+
+### 3. The agent can tell whether it succeeded
+
+Ask it of each acceptance criterion, not of the ticket as a whole:
+
+| Shape            | What it is                                                                      | Eligible?                    |
+| ---------------- | ------------------------------------------------------------------------------- | ---------------------------- |
+| **Gate**         | Machine-decidable. The agent runs something and reads the result.               | Yes                          |
+| **Confirmation** | A human looks _after_ the gates have passed. The work is complete without them. | Yes, if marked as not a gate |
+| **Judgement**    | A human decision that shapes the work _while it is being done_.                 | No                           |
+
+The line between the last two is when the human acts: if the agent would have
+to stop and wait for a person, it is a judgement. A judgement is fatal rather
+than awkward because an agent halted for a decision looks exactly like one that
+broke.
+
+A ticket that fails this usually has a checkable half and a visual half fused
+into one criterion. Reshape it before relabelling: turn the checkable half into
+a check that fails before the change and passes after, mark the human half in
+the criterion itself as a confirmation, and use `ready-for-human` only if a
+judgement is still left. Issue #180 is the worked example.
