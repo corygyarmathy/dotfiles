@@ -604,11 +604,12 @@ in
 
     revise = {
       replays = lib.mkOption {
-        type = lib.types.ints.positive;
+        type = lib.types.ints.unsigned;
         description = ''
           Times one revision is replayed onto a push someone else made during
-          it, before the next such push hands it back (`--replays`). Each
-          replay runs the implement gate again. A revision otherwise takes
+          it, before the next such push hands it back (`--replays`). Zero
+          hands it back at the first such push. Each replay runs the
+          implement gate again. A revision otherwise takes
           the implement options: its gate, tier, denylist and hand-off label.
         '';
       };
@@ -618,7 +619,7 @@ in
       type = lib.types.ints.positive;
       description = ''
         Times a push, a pull request, a comment or a label is made before it
-        counts as never landing (`--effect-rounds`), for both job kinds.
+        counts as never landing (`--effect-rounds`), for every job kind.
       '';
     };
 
@@ -660,8 +661,8 @@ in
     modelTimeout = lib.mkOption {
       type = duration;
       description = ''
-        The longest one model run may take (`--model-timeout`), for both job
-        kinds. A run still going is killed with everything it started, and the
+        The longest one model run may take (`--model-timeout`), for every job
+        kind. A run still going is killed with everything it started, and the
         job's next run tries the next candidate.
       '';
     };
