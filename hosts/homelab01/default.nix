@@ -200,26 +200,34 @@ in
     # AFK agent (corygyarmathy/afk-agent, `afk work`)
     # -------------------------------------------------------------------------
     # Every limit it runs with is written here; the module has no defaults
-    # (#281). The only job kind in the build today is `/review` on a pull
-    # request, so this works dotfiles' own tracker and does nothing without
-    # a command. The kill switch is `enable = false`.
+    # (#281). It answers `/review` and `/revise` on a pull request, and
+    # `/implement` on an issue, on dotfiles' own tracker, and takes
+    # `ready-for-agent` issues with nobody asking. The kill switch is
+    # `enable = false`.
     afk-agent = {
       enable = true;
       repo = "corygyarmathy/dotfiles";
       # The App's id, from its settings URL (ADR 0006). Not a secret.
       appId = "4882603";
+      # docs/agents/afk-eligibility.md is what earns an issue this label.
+      # Both `null` turns unattended intake off and leaves commands working.
+      eligibilityLabel = "ready-for-agent";
+      # afk-agent#119's suggested value.
+      reviewQueueLimit = 3;
 
       workers = 2;
       poll = "1m";
-      # Well over a model run: a slow model can take 30-40 minutes, and a lease
-      # that lapses mid-run wastes the run.
-      lease = "2h";
+      # Over an implement run - two model runs at worst, each bounded by
+      # `modelTimeout` - and over the implement gate, which builds every check
+      # and host. A lease that lapses mid-transition wastes the transition.
+      lease = "3h";
       # A brief GitHub or provider failure retries instead of parking - a park
       # notifies, and should mean a human is needed.
       retry = "15m";
       maxAttempts = 3;
       tokenWait = "1m";
-      tokens = { };
+      # The gate's builds, one at a time: homelab01 has no headroom for two.
+      tokens.heavy-build = 1;
 
       budget = {
         age = "5m";
@@ -229,6 +237,9 @@ in
       # Its own topic, not the alerting stack's `alerts`, so either can be
       # muted without the other. Subscribe to it in the ntfy app.
       notifyTopic = "afk-agent";
+      # With `tierWait` below, about three hours of a job deferred before a
+      # tier that stays exhausted is told; a bad few minutes stays quiet.
+      tierNotifyAfter = 3;
 
       tiers = [
         {
@@ -238,18 +249,72 @@ in
             "opencode-go/glm-5.3"
           ];
         }
+        {
+          name = "implement";
+          models = [
+            "opencode-go/glm-5.3-flash"
+            "opencode-go/deepseek-v4.1-flash"
+          ];
+        }
       ];
       review = {
         tier = "review";
         needs = [ "tool_call" ];
+        # The reviewing-changes skill's own defaults (afk-agent#110, #120),
+        # written here so the limits are read where the host is configured.
+        floor = "should-fix";
+        foldCut = 50;
       };
+      implement = {
+        tier = "implement";
+        needs = [ "tool_call" ];
+        branchPrefix = "afk/";
+        gateAttempts = 3;
+        # afk-agent's docs/agents/triage-labels.md.
+        handOffLabel = "needs-review";
+        # docs/agents/afk-eligibility.md rule 1, as globs. Its one exception,
+        # new entries in ci.yml's checks matrix, is not expressible as a glob
+        # and the App has no Workflows permission, so a ticket that adds a
+        # check is handed back at the push.
+        denylist = [
+          ".github/workflows/**"
+          "secrets/**"
+          ".sops.yaml"
+        ];
+        # CI takes 4-9 minutes.
+        ciWait = "2m";
+        ciCeiling = "1h";
+        ciFixes = 2;
+        # afk-agent#107's resolution.
+        sizeSignal = 400;
+      };
+      revise = {
+        # The push made during a revision is almost always the operator's,
+        # so one is replayed onto and a second, which means they are
+        # working the branch, hands it back. Each replay is another gate run.
+        replays = 1;
+      };
+      effectRounds = 3;
+      handBackLabel = "needs-decision";
+      # The App's bot account, so commits link to it on GitHub. The id is
+      # the bot user's (`gh api 'users/corygyarmathy-afk-agent[bot]'`), not
+      # the App's.
+      commitIdentity = {
+        name = "corygyarmathy-afk-agent[bot]";
+        email = "326868600+corygyarmathy-afk-agent[bot]@users.noreply.github.com";
+      };
+
       modelAttempts = 2;
       tierWait = "1h";
+      # Reviews take 30-40 minutes. Twice this still fits inside `lease`.
+      modelTimeout = "1h";
       catalogueAge = "24h";
 
-      # A review builds nothing, so well under the prototype's 6G; the 2026-09-10
-      # global OOM on this host is why there is a ceiling at all.
-      maxMemory = "4G";
+      # The prototype's figure, now that the gate's evaluator runs in this
+      # cgroup (the builds are nix-daemon's, bounded under "Nix builds"
+      # below). The 2026-09-10 global OOM on
+      # this host is why there is a ceiling at all.
+      maxMemory = "6G";
     };
 
     immich.enable = false;
@@ -599,6 +664,26 @@ in
   environment.sessionVariables = {
     # Help applications find VA-API drivers
     LIBVA_DRIVER_NAME = "iHD";
+  };
+
+  # ============================================================================
+  # Nix builds
+  # ============================================================================
+  # afk-agent's gate builds every check and host here, VM tests included (up to
+  # 4G of guest each), and the daemon's defaults would run twelve of them at
+  # once with no ceiling. Builds are bounded instead, at the cost of time: one
+  # derivation at a time on a third of the cores, squeezed into swap above
+  # `MemoryHigh` and killed at `MemoryMax` - which fails that build, not the
+  # host. With the agent's own 6G and the services' ~5G, that fits in 15G of
+  # RAM. The weight keeps Jellyfin and the rest first in line for the CPU.
+  nix.settings = {
+    max-jobs = 1;
+    cores = 4;
+  };
+  systemd.services.nix-daemon.serviceConfig = {
+    MemoryHigh = "4G";
+    MemoryMax = "6G";
+    CPUWeight = 20;
   };
 
   # ============================================================================

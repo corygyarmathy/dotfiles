@@ -107,20 +107,32 @@ in
     # No firewall rule: ntfy binds 127.0.0.1, Caddy proxies to it locally,
     # and external traffic arrives through the tunnel, not direct ports.
 
-    # The upstream module runs the server under a DynamicUser while also
-    # declaring a static ntfy-sh user and shipping /etc/ntfy/server.yml
-    # "to configure access control via the cli". Those conflict: the state
-    # directory ends up owned by a transient UID, so `sudo -u ntfy-sh ntfy
-    # user add` cannot read or create anything in it, and the one-time
-    # bootstrap this module documents is impossible. Pinning the service to
-    # the static user reconciles them; everything else in the unit's
-    # hardening block stands.
+    # The upstream module runs the server under a DynamicUser while still
+    # shipping /etc/ntfy/server.yml "to configure access control via the
+    # cli". Those conflict: the state directory ends up owned by a transient
+    # UID, so `sudo -u ntfy-sh ntfy user add` cannot read or create anything
+    # in it, and the one-time bootstrap this module documents is impossible.
+    # Pinning the service to a static user reconciles them; everything else
+    # in the unit's hardening block stands.
+    #
+    # The user is declared here, not borrowed from upstream: upstream used to
+    # declare it alongside the DynamicUser and has since dropped it, which
+    # left the unit failing at step USER on the first switch after the
+    # nixpkgs bump. Re-declaring it reuses the UID NixOS recorded in
+    # /var/lib/nixos/uid-map, so existing state stays owned correctly.
     #
     # The Z tmpfiles rule recursively reasserts ownership on every boot and
     # switch: a host that ever ran the dynamic-user incarnation keeps files
     # chowned to a UID that no longer exists, which surfaces as sqlite's
     # "attempt to write a readonly database".
     systemd.tmpfiles.rules = [ "Z /var/lib/ntfy-sh 0700 ntfy-sh ntfy-sh -" ];
+
+    users.users.ntfy-sh = {
+      isSystemUser = true;
+      group = "ntfy-sh";
+      home = "/var/lib/ntfy-sh";
+    };
+    users.groups.ntfy-sh = { };
 
     systemd.services.ntfy-sh.serviceConfig = {
       DynamicUser = lib.mkForce false;

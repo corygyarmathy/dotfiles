@@ -403,6 +403,14 @@ in
       '';
 
   afk-agent = testLib.mkTest ./afk-agent.nix;
+  # Not a VM: whether each assertion fires is a question about evaluation.
+  afk-agent-assertions = import ./afk-agent-assertions.nix {
+    inherit pkgs self;
+    lib = pkgs.lib;
+  };
+  # Also not a VM: which transitions hold a token is a question about the
+  # pinned source's registry, which the file says no running binary answers.
+  afk-agent-tokens = import ./afk-agent-tokens.nix { inherit self; };
   digital-garden = testLib.mkTest ./digital-garden.nix;
   # Also not a VM: the filter is invoked directly against a deliberately
   # colliding fixture vault, and its refusal is the assertion - see the file
@@ -430,7 +438,9 @@ in
   fmt-gate = import ./fmt-gate.nix { inherit pkgs self; };
   grafana = testLib.mkTest ./grafana.nix;
   host-alive = testLib.mkTest ./host-alive.nix;
+  media-nfs-recovery = testLib.mkTest ./media-nfs-recovery.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
+  ntfy = testLib.mkTest ./ntfy.nix;
 
   # Not a VM: what it asserts is a shape in the generated configuration, and
   # the file says why that shape is worth a check of its own.

@@ -10,7 +10,13 @@
 #     back every ten minutes;
 #   - only a stat that reached a real, mounted filesystem is allowed to confirm
 #     absence. ENOENT from an unmounted automount (server unreachable) is a
-#     dead mount, not a wiped root, and must be reported 1/unconfirmed.
+#     dead mount, not a wiped root, and must be reported 1/unconfirmed. The
+#     same goes for the bare mountpoint a FAILED automount leaves behind: the
+#     stat reaches the client's root filesystem, which is real but is not the
+#     store.
+#
+# Ownership comes from `storage.type` at build time; the cases set it through
+# OWNER, as the owner (1) and as an NFS client (0).
 #
 # The script under test is taken from the module's own evaluated ExecStart
 # (never a copy) and driven through the environment overrides the script
@@ -86,6 +92,7 @@ pkgs.runCommand "check-download-root-canary-script" { script = builtins.toString
     }
 
     echo "case: the owner primes on its first post-boot run"
+    export OWNER=1
     zfs
     rm -f "$SENTINEL" "$PRIME_MARKER"
     run
@@ -103,6 +110,7 @@ pkgs.runCommand "check-download-root-canary-script" { script = builtins.toString
     [ "$(metric)" = 0 ] || fail "metric != 0 after a confirmed deletion"
 
     echo "case: nfs client observes a genuine missing sentinel (server mounted)"
+    export OWNER=0
     nfs
     rm -f "$SENTINEL" "$PRIME_MARKER"
     run
@@ -123,6 +131,7 @@ pkgs.runCommand "check-download-root-canary-script" { script = builtins.toString
     [ "$(metric)" = 0 ] || fail "cover resolved to autofs over the real mount"
 
     echo "case: the root filesystem alone covers the store - owner primes through it"
+    export OWNER=1
     rootfs
     rm -f "$SENTINEL" "$PRIME_MARKER"
     run
@@ -131,12 +140,23 @@ pkgs.runCommand "check-download-root-canary-script" { script = builtins.toString
     [ "$(metric)" = 1 ] || fail "metric != 1 after a root-fs prime"
 
     echo "case: server down - unmounted automount, sentinel unreachable"
+    export OWNER=0
     autofs_alone
     rm -f "$SENTINEL" "$PRIME_MARKER"
     run
     [ "$(metric)" = 1 ] || fail "an unreachable sentinel was reported missing"
     [ ! -e "$SENTINEL" ] || fail "client wrote into an unmounted store"
     [ ! -e "$PRIME_MARKER" ] || fail "an unmounted trigger was marked primed"
+    grep -q "unreachable" "$PWD/err.log" || fail "no unconfirmed log line"
+
+    echo "case: failed automount - the client's bare mountpoint is neither primed nor believed"
+    export OWNER=0
+    rootfs
+    rm -f "$SENTINEL" "$PRIME_MARKER"
+    run
+    [ "$(metric)" = 1 ] || fail "a bare client mountpoint was reported as a wiped root"
+    [ ! -e "$SENTINEL" ] || fail "client primed through its own root filesystem"
+    [ ! -e "$PRIME_MARKER" ] || fail "client marked itself primed"
     grep -q "unreachable" "$PWD/err.log" || fail "no unconfirmed log line"
 
     touch "$out"

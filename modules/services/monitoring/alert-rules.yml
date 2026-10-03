@@ -45,21 +45,35 @@ groups:
       # (failed unless tail) or (failed joined with tail): disjoint halves of
       # the failed set, never duplicates.
       #
-      # The comparisons carry their own parentheses because * binds tighter
-      # than == in PromQL; unparenthesised, the match clause attaches to the
-      # scalar side and the parser rejects it outright - which is how this was
-      # caught, by the unit test below rather than on a host.
+      # The failed set is its own record, systemd_unit_failing, rather than
+      # inline comparisons: * binds tighter than == in PromQL, so an inline
+      # `x == 1 * on (...)` attaches the match clause to the scalar side and
+      # the parser rejects it outright - which is how this was caught, by the
+      # unit test below rather than on a host.
+      - record: systemd_unit_failing
+        # A mount behind an automount that something keeps touching - the
+        # media stack's container guards do, every few seconds - never stays
+        # failed: each access starts it again, it sits in activating until
+        # its mount timeout, fails, and is restarted within seconds. A 1m
+        # scrape then rarely lands on `failed`, and a `for:` on the failed
+        # state alone never matures. Activating-or-failed is continuous
+        # through that loop, and a mount activating for minutes is failing
+        # all the same. Mounts are only in the second half, so a mount's
+        # series keeps one label set whichever state a scrape lands on - a
+        # state label that came and went would restart the `for:`.
+        expr: |
+          node_systemd_unit_state{name!~".+[.]mount",state="failed"} == 1
+          or
+          sum without (state) (
+            node_systemd_unit_state{name=~".+[.]mount",state=~"activating|failed"}
+          ) == 1
       - record: systemd_unit_failed_with_journal_tail
         expr: |
-          (
-            node_systemd_unit_state{state="failed"} == 1
-          )
+          systemd_unit_failing
           unless on (instance, name) systemd_unit_journal_tail_info
           or
           (
-            (
-              node_systemd_unit_state{state="failed"} == 1
-            )
+            systemd_unit_failing
             * on (instance, name) group_left (tail) systemd_unit_journal_tail_info
           )
 
@@ -602,3 +616,19 @@ groups:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/media-stack#downloadrootcanarymissing"
           summary: "Download root canary missing on {{ $labels.instance }}"
           description: "The sentinel file in the download root has been confirmed absent for 20+ minutes. Either the download root was wiped or emptied, or the sentinel was removed deliberately - a stopped canary timer cannot fire this alert (node_exporter keeps serving the last-written metric), so check the download-root-canary unit and then face a wiped root."
+
+      # A container unit stuck starting (modules/services/media-stack/media-stack.nix
+      # guards every container that binds the NFS media tree). While the tree
+      # is not mounted the guard fails each start after a minute and Restart=
+      # tries again, so the unit sits in activating indefinitely and never
+      # reaches failed - SystemdUnitFailed cannot see it. 15m is far past any
+      # image pull or the guard's own minute, and short of the evening.
+      - alert: ContainerStuckStarting
+        expr: node_systemd_unit_state{name=~"podman-.+[.]service",state="activating"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/media-stack#containerstuckstarting"
+          summary: "Container {{ $labels.name }} stuck starting on {{ $labels.instance }}"
+          description: "{{ $labels.name }} has been starting for 15+ minutes without running. For a container that binds /srv/media this is its guard waiting for the NFS mount - check srv-media.mount and homelab02."

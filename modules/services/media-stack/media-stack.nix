@@ -18,11 +18,54 @@
   config,
   pkgs,
   lib,
+  utils,
   ...
 }:
 
 let
   cfg = config.cg.service.media-stack;
+
+  nfs = cfg.storage.type == "nfs";
+  dataMountUnit = "${utils.escapeSystemdPath cfg.dataPath}.mount";
+
+  # Whether a container volume ("host:container[:opts]") binds the media tree
+  # or anything under it.
+  bindsData =
+    volume:
+    let
+      host = builtins.head (lib.splitString ":" volume);
+    in
+    host == cfg.dataPath || lib.hasPrefix "${cfg.dataPath}/" host;
+
+  # Refuses to let a container start until the media tree is the NFS mount
+  # rather than the bare directory underneath it. podman resolves a bind at
+  # start and keeps it: a container started while the automount is down binds
+  # the empty mountpoint and stays on it after the mount comes back.
+  #
+  # Waits a minute before failing so each failed start is far slower than the
+  # unit's start limit (5 in 10s): the unit's Restart= then retries
+  # indefinitely while the server is away, and a container that crash-loops
+  # on its own still hits the limit and fails loudly as before. The minute is
+  # a deadline, not a count of tries, because a hard mount against a server
+  # that stopped answering makes each try as slow as its stat timeout.
+  waitForData = pkgs.writeShellScript "media-data-mounted" ''
+    set -u
+    data=${lib.escapeShellArg cfg.dataPath}
+    deadline=60
+    while ((SECONDS < deadline)); do
+      # Touching the path is what fires the automount. Bounded because a hard
+      # mount against a server that stopped answering blocks in stat(); never
+      # past the deadline, and never 0, which timeout(1) reads as no limit.
+      left=$((deadline - SECONDS))
+      ${pkgs.coreutils}/bin/timeout "$((left < 10 ? left : 10))" ${pkgs.coreutils}/bin/stat -f -- "$data/." >/dev/null 2>&1 || true
+      if ${pkgs.util-linux}/bin/findmnt --noheadings --types nfs,nfs4 --mountpoint "$data" >/dev/null; then
+        exit 0
+      fi
+      ${pkgs.coreutils}/bin/sleep 5
+    done
+    echo "media-data-mounted: $data is not NFS-mounted; not starting against the bare mountpoint" >&2
+    exit 1
+  '';
 in
 {
   options.cg.service.media-stack = {
@@ -141,6 +184,29 @@ in
         ];
         description = "NFS mount options";
       };
+
+      nfsFileSystem = lib.mkOption {
+        type = lib.types.attrs;
+        internal = true;
+        readOnly = true;
+        default = {
+          device = "${cfg.storage.nfsServer}:${cfg.storage.nfsExportPath}";
+          fsType = "nfs";
+          options = cfg.storage.nfsMountOptions ++ [
+            "x-systemd.automount"
+            "x-systemd.idle-timeout=600"
+            "x-systemd.requires=network-online.target"
+            "x-systemd.after=network-online.target"
+            "x-systemd.mount-timeout=30"
+            "_netdev"
+          ];
+        };
+        description = ''
+          The fileSystems entry for dataPath when storage.type = nfs. An option
+          only so a VM test can mount exactly this: the test VM replaces
+          `fileSystems` with `virtualisation.fileSystems` wholesale.
+        '';
+      };
     };
   };
 
@@ -162,18 +228,58 @@ in
     };
 
     # NFS mount configuration (when using NAS)
-    fileSystems.${cfg.dataPath} = lib.mkIf (cfg.storage.type == "nfs") {
-      device = "${cfg.storage.nfsServer}:${cfg.storage.nfsExportPath}";
-      fsType = "nfs";
-      options = cfg.storage.nfsMountOptions ++ [
-        "x-systemd.automount"
-        "x-systemd.idle-timeout=600"
-        "x-systemd.requires=network-online.target"
-        "x-systemd.after=network-online.target"
-        "x-systemd.mount-timeout=30"
-        "_netdev"
-      ];
+    fileSystems.${cfg.dataPath} = lib.mkIf nfs cfg.storage.nfsFileSystem;
+
+    # Never let the mount unit hit its start limit. Every access through the
+    # automount is a start attempt, and while the network is down they fail
+    # instantly, so a few services touching the path at boot spend the default
+    # 5-in-10s at once. The automount then fails for good
+    # (mount-start-limit-hit), nothing retries it, and every later access sees
+    # the bare local directory. Unlimited, the automount stays armed and the
+    # first access after the server is back mounts it.
+    systemd.units.${dataMountUnit} = lib.mkIf nfs {
+      overrideStrategy = "asDropin";
+      text = ''
+        [Unit]
+        StartLimitIntervalSec=0
+      '';
     };
+
+    # Containers that bind the media tree depend on the NFS mount. Wants
+    # rather than Requires: a Requires on a mount that fails at boot leaves the
+    # container dead with nothing to restart it, so the dependency is held by
+    # the ExecStartPre guard instead, whose failure Restart= does retry. Only
+    # for NFS storage - a local tree has no bare mountpoint to fall onto.
+    systemd.services = lib.mkMerge [
+      (lib.mkIf nfs (
+        lib.mapAttrs'
+          (
+            _: container:
+            lib.nameValuePair container.serviceName {
+              wants = [ dataMountUnit ];
+              after = [ dataMountUnit ];
+              serviceConfig.ExecStartPre = lib.mkBefore [ "${waitForData}" ];
+            }
+          )
+          (
+            lib.filterAttrs (_: c: lib.any bindsData c.volumes) config.virtualisation.oci-containers.containers
+          )
+      ))
+
+      # Create the arr-network before any containers start
+      {
+        podman-network-arr = {
+          description = "Create podman network for media stack";
+          after = [ "podman.service" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${pkgs.podman}/bin/podman network create arr-network --ignore";
+          };
+        };
+      }
+    ];
 
     # Create directory structure with correct permissions
     # Config directory is always local; data directories only when storage is local
@@ -193,17 +299,5 @@ in
       [ "d ${cfg.dataPath} 2775 ${cfg.user} ${cfg.group} -" ]
       ++ map (dir: "d ${cfg.dataPath}/${dir} 2775 ${cfg.user} ${cfg.group} -") cfg.directories
     );
-
-    # Create the arr-network before any containers start
-    systemd.services.podman-network-arr = {
-      description = "Create podman network for media stack";
-      after = [ "podman.service" ];
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = "${pkgs.podman}/bin/podman network create arr-network --ignore";
-      };
-    };
   };
 }

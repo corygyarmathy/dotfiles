@@ -16,6 +16,16 @@
 #   - the annotation templates render the tail into the notification, and
 #     degrade to the journalctl pointer when there is no tail.
 #
+#   - a mount that keeps failing to mount pages even though a scrape rarely
+#     lands on `failed`: retried every few seconds, it spends nearly all its
+#     time in `activating` until its mount timeout. Its series must keep one
+#     label set across both states, or the `for:` would restart each time a
+#     scrape caught it failed. An active mount never pages.
+#   - ContainerStuckStarting: a container unit that has been activating for
+#     15 minutes (the media stack's guard waiting for the NFS mount, retried
+#     by Restart= and so never failed) pages; one that took a few minutes to
+#     start does not.
+#
 # And, for the download-root canary (item 8 of the hardening plan):
 #   - DownloadRootCanaryMissing must not fire while
 #     download_root_canary_present is 1, and must mature (after its `for:`)
@@ -114,6 +124,79 @@ tests:
               runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/deployment#nixosupgradefailed"
               summary: "NixOS upgrade failed on homelab02:9100"
               description: "The nixos-upgrade service has failed.\n\nRecent upgrade output:\nerror: hash mismatch in fixed-output derivation"
+
+  # A flapping mount, a steadily failed one, and an active one. The flapping
+  # series is the NFS media mount with its server down: activating for most
+  # of every cycle, failed for a few seconds that a 1m scrape mostly misses.
+  - interval: 1m
+    input_series:
+      - series: 'node_systemd_unit_state{job="node",instance="homelab01:9100",name="srv-media.mount",state="activating",type="nfs"}'
+        values: "1 1 0 1 1 1 1 0 1 1 1 1 1 0 1 1 1 1 1 1 1"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab01:9100",name="srv-media.mount",state="failed",type="nfs"}'
+        values: "0 0 1 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0 0"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab02:9100",name="broken.mount",state="failed",type="ext4"}'
+        values: "1+0x20"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab02:9100",name="broken.mount",state="activating",type="ext4"}'
+        values: "0+0x20"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab01:9100",name="boot.mount",state="failed",type="vfat"}'
+        values: "0+0x20"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab01:9100",name="boot.mount",state="activating",type="vfat"}'
+        values: "0+0x20"
+
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: SystemdUnitFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: homelab01:9100
+              name: srv-media.mount
+              type: nfs
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#systemdunitfailed"
+              summary: "Systemd unit failed on homelab01:9100"
+              description: "Unit srv-media.mount has been in failed state for 5+ minutes. No journal output was captured - check journalctl -u srv-media.mount."
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: homelab02:9100
+              name: broken.mount
+              type: ext4
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#systemdunitfailed"
+              summary: "Systemd unit failed on homelab02:9100"
+              description: "Unit broken.mount has been in failed state for 5+ minutes. No journal output was captured - check journalctl -u broken.mount."
+
+  # ContainerStuckStarting: a guarded container waiting out an NFS outage is
+  # activating throughout (the guard, then Restart='s auto-restart, which is
+  # also activating); one that took three minutes to pull and start is not
+  # stuck.
+  - interval: 1m
+    input_series:
+      - series: 'node_systemd_unit_state{job="node",instance="homelab01:9100",name="podman-sonarr.service",state="activating",type="notify"}'
+        values: "1+0x20"
+      - series: 'node_systemd_unit_state{job="node",instance="homelab01:9100",name="podman-radarr.service",state="activating",type="notify"}'
+        values: "1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: ContainerStuckStarting
+        exp_alerts: [ ]
+      - eval_time: 16m
+        alertname: ContainerStuckStarting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: homelab01:9100
+              name: podman-sonarr.service
+              state: activating
+              type: notify
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/media-stack#containerstuckstarting"
+              summary: "Container podman-sonarr.service stuck starting on homelab01:9100"
+              description: "podman-sonarr.service has been starting for 15+ minutes without running. For a container that binds /srv/media this is its guard waiting for the NFS mount - check srv-media.mount and homelab02."
 
   # The download-root canary rule: 1 stays silent, a sustained 0 fires only
   # after `for: 20m`. The exporter primes the sentinel once per boot and does

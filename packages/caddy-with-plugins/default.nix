@@ -3,11 +3,16 @@
 # The plugin pins and the vendor `hash` must move together: the hash covers the
 # vendored Go modules for exactly these pins, and it drifts even under a pinned
 # nixpkgs because transitive dependencies resolve at build time
-# (https://github.com/nixos/nixpkgs/issues/450289). Bumping a pin - or taking a
-# nixpkgs Caddy bump - without rehashing is a red gate on every host, as in
-# #229. Both are refreshed by ./update.sh, which is also this package's
-# passthru.updateScript for .github/workflows/package-update.yml, so the weekly
-# updater proposes the next hash rather than a broken CI run.
+# (https://github.com/nixos/nixpkgs/issues/450289). Bumping a pin without
+# rehashing is a red gate on every host, as in #229.
+#
+# The hash is also a function of the lock: the modules are resolved by nixpkgs'
+# own Go toolchain, so a lock bump can stale it with Caddy and every pin
+# unchanged (#348). The weekly package-update runs against master's lock and
+# cannot see that, so ./update.sh serves two callers: as passthru.updateScript
+# it moves pins and hash for package-update, and as passthru.rehashScript
+# (--hash-only) it rehashes against the new lock inside flake-update, so the
+# lock and the hash it needs land in the same commit.
 { caddy }:
 
 (caddy.withPlugins {
@@ -16,7 +21,7 @@
     "github.com/mholt/caddy-ratelimit@v0.1.0"
   ];
   # Refreshed by ./update.sh - never hand-edit.
-  hash = "sha256-aYsGQTUvBNC24YCLqGZ+1BR0rpmtkZ1oNL/TVpMEuhg=";
+  hash = "sha256-YyNPUdy+Ag8f9CuRqe4LJGeCql9ApRNrzdMdRluwzE4=";
 }).overrideAttrs
   (old: {
     passthru = (old.passthru or { }) // {
@@ -39,5 +44,14 @@
       # Repo-relative rather than a store path: the script edits the plugin pins
       # in this directory, which nix-update cannot do.
       updateScript = [ "packages/caddy-with-plugins/update.sh" ];
+
+      # Run by .github/workflows/flake-update.yml after `nix flake update`, so
+      # a lock bump carries the hash it needs instead of failing every host.
+      # Same contract as updateScript; hash only, since a pin bump is a plugin
+      # release and belongs to package-update's PR.
+      rehashScript = [
+        "packages/caddy-with-plugins/update.sh"
+        "--hash-only"
+      ];
     };
   })

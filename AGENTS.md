@@ -80,6 +80,9 @@ service starts or that its generated configuration is valid.
   discovers packages through `passthru.autoUpdate`.
 - Adding a host requires adding it to the build matrix in
   `.github/workflows/ci.yml`; otherwise the gate does not protect it.
+- Adding a flake check likewise requires adding it to the `checks` matrix in
+  `.github/workflows/ci.yml`; the `lint` job fails when the two lists
+  disagree.
 - Changes to deployment semantics should include documentation or an ADR when
   they introduce or alter a durable architectural decision.
 

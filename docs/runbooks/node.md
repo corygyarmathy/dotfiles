@@ -35,8 +35,7 @@ target for 5 minutes. `job="node"` means a host's node_exporter is unreachable
 
 ## SystemdUnitFailed
 
-**Severity:** warning · **Fires when:** any systemd unit has been in failed
-state for 5+ minutes. The unit name is in the notification.
+**Severity:** warning · **Fires when:** any systemd unit has been in failed state for 5+ minutes, or a mount unit has been failing to mount - `activating` or `failed`, in any mix - for 5+ minutes. The unit name is in the notification.
 
 ### Do now
 
@@ -53,8 +52,8 @@ state for 5+ minutes. The unit name is in the notification.
 
 ### Dig deeper
 
-- Failed NFS mount units on homelab01 usually mean homelab02 or its pool was
-  down - cross-check ZFS and TargetDown alerts before chasing the mount.
+- `srv-media.mount` failing on homelab01 means homelab02, its pool, or the network between them is down - cross-check ZFS and TargetDown alerts before chasing the mount. It is rarely caught sitting in `failed`: the containers that bind `/srv/media` retry it every few seconds, so it spends most of its time `activating` until its 30s mount timeout. It recovers by itself: the automount stays armed and retries on the next access, and those containers wait for it rather than starting without it (their units sit in `activating`, logging `not NFS-mounted`, and page as `ContainerStuckStarting` after 15 minutes).
+- `srv-media.automount` failed is not meant to happen any more (the mount has no start limit). If it does, the media tree is the bare local directory: `systemctl reset-failed srv-media.automount srv-media.mount && systemctl start srv-media.automount`, then restart every container that binds `/srv/media` - a running container keeps the bind it started with. They are exactly the units that want the mount: `systemctl restart $(systemctl list-dependencies --reverse --plain srv-media.mount | grep -o 'podman-.*[.]service')`.
 - If a unit failed during last night's upgrade window, read
   [deployment.md](deployment.md) first.
 

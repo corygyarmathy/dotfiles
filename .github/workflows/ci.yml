@@ -165,6 +165,8 @@ jobs:
       matrix:
         check:
           - afk-agent
+          - afk-agent-assertions
+          - afk-agent-tokens
           - alert-rules
           - alert-rules-unit
           - alertmanager-config
@@ -183,7 +185,9 @@ jobs:
           - fmt-gate
           - grafana
           - host-alive
+          - media-nfs-recovery
           - monitoring
+          - ntfy
           - publish
           - reverse-proxy
           - secrets

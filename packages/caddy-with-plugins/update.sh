@@ -9,7 +9,15 @@
 # release boundary reads differently from a hash-only refresh.
 #
 # Usage:
-#   packages/caddy-with-plugins/update.sh   # refresh pins + hash, no-op if current
+#   packages/caddy-with-plugins/update.sh               # refresh pins + hash, no-op if current
+#   packages/caddy-with-plugins/update.sh --hash-only   # refresh the hash for the current lock
+#
+# --hash-only is this package's passthru.rehashScript, run by
+# .github/workflows/flake-update.yml against the freshly updated lock. The hash
+# is a function of nixpkgs' Go toolchain as well as the pins, so a lock bump
+# alone can stale it (#348) - and only a run against the *new* lock can compute
+# the replacement. Pin bumps stay out of that path: they cross a plugin release
+# boundary and belong in package-update's own PR, not the nightly lock bump.
 #
 # Requires nix, git and network. Prints nothing on stdout when already current;
 # on a change the first stdout line is a one-line summary (the updater contract
@@ -19,6 +27,16 @@ set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../.." # repo root, wherever invoked from
 FILE="packages/caddy-with-plugins/default.nix"
+
+hash_only=false
+case "${1:-}" in
+"") ;;
+--hash-only) hash_only=true ;;
+*)
+	echo "usage: $0 [--hash-only]" >&2
+	exit 2
+	;;
+esac
 
 latest_tag() { # $1 = owner/repo
 	# Stable tags only: a prerelease is never proposed unattended.
@@ -32,25 +50,27 @@ latest_tag() { # $1 = owner/repo
 summaries=()
 
 # 1. Plugin pins. The module path implies the repo (github.com/<owner>/<repo>).
-specs="$(grep -o '"github\.com/[^"]*@[^"]*"' "$FILE" | tr -d '"' || true)"
-if [ -z "$specs" ]; then
-	echo "no plugin pins found in $FILE" >&2
-	exit 1
-fi
-while read -r spec; do
-	mod="${spec%@*}"
-	current="${spec#*@}"
-	repo="${mod#github.com/}"
-	latest="$(latest_tag "$repo")"
-	if [ -z "$latest" ]; then
-		echo "could not list tags for $repo" >&2
+if ! "$hash_only"; then
+	specs="$(grep -o '"github\.com/[^"]*@[^"]*"' "$FILE" | tr -d '"' || true)"
+	if [ -z "$specs" ]; then
+		echo "no plugin pins found in $FILE" >&2
 		exit 1
 	fi
-	if [ "$latest" != "$current" ]; then
-		sed -i "s|\"$mod@$current\"|\"$mod@$latest\"|" "$FILE"
-		summaries+=("$repo $current -> $latest")
-	fi
-done <<<"$specs"
+	while read -r spec; do
+		mod="${spec%@*}"
+		current="${spec#*@}"
+		repo="${mod#github.com/}"
+		latest="$(latest_tag "$repo")"
+		if [ -z "$latest" ]; then
+			echo "could not list tags for $repo" >&2
+			exit 1
+		fi
+		if [ "$latest" != "$current" ]; then
+			sed -i "s|\"$mod@$current\"|\"$mod@$latest\"|" "$FILE"
+			summaries+=("$repo $current -> $latest")
+		fi
+	done <<<"$specs"
+fi
 
 # 2. Vendor hash: rebuild; on a mismatch adopt the hash Nix reports, then verify.
 log="$(mktemp)"

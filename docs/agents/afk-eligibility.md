@@ -81,8 +81,9 @@ that isn't there:
 - `.github/` outside `workflows/` - `CODEOWNERS`, dependabot config, issue
   templates - is not denied.
 
-`.agents/skills/` and `docs/agents/` are deliberately **not** denied, this file
-included. The pipeline has to be able to work its own maintenance tickets, and
+`docs/agents/` is deliberately **not** denied, this file included. (The skills
+the agent runs with are no longer in this repository; they come from
+afk-agent's own.) The pipeline has to be able to work its own maintenance tickets, and
 human merge (ADR 0004 §9) is the gate on what it writes there.
 
 Worth knowing while relying on that: merge being a human act is currently the

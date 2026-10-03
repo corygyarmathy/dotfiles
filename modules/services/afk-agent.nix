@@ -2,15 +2,17 @@
 #
 # The Go successor to the bash prototype that lived at this path until #283.
 # Its design is that repository's ADR 0001; what it needs from a host is its
-# docs/agents/review.md. This module is where it is packaged and configured,
-# and nowhere else: the binary holds no defaults, every parameter is a flag with
-# an environment variable beside it, and `afk help` is the list of record.
+# docs/agents/review.md, docs/agents/implement.md and docs/agents/revise.md.
+# This module is where it is packaged and configured, and nowhere else: the
+# binary holds no defaults, every parameter is a flag with an environment
+# variable beside it, and `afk help` is the list of record.
 #
 # The tuning options below have no defaults either, for the same reason. A
 # limit an unattended agent runs with should be read where the host is
 # configured, not inherited from a module nobody opens. What the module decides
 # itself is plumbing with one right answer: where the store lives, which
-# credentials arrive and how, which opencode runs, and where ntfy is.
+# credentials arrive and how, which opencode runs, where ntfy is, and where the
+# operator's review procedure is published.
 #
 # `afk work` is a long-running pool, not a oneshot on a timer: it polls on its
 # own (`poll`) and every transition is its own crash boundary, so a restart -
@@ -18,7 +20,8 @@
 # flight and nothing else (ADR 0001 §2, §7).
 #
 # checks/afk-agent.nix boots this module with stub credentials and asserts the
-# unit gets past every parameter to its first request to GitHub.
+# unit, and hand-runs of an implement and a revise transition, each get past
+# every parameter to their first request to GitHub.
 {
   config,
   lib,
@@ -93,6 +96,226 @@ let
   };
 
   toEnv = lib.mapAttrs (_: toString);
+
+  # The local gate an implement session has to pass before anything is pushed
+  # (`--gate`): this repository's own CI, read from the workspace's ci.yml
+  # rather than restated here, so the two cannot drift apart. A branch the
+  # gate passes and CI fails costs a fix round and a CI run; one it fails
+  # costs a session, which is cheaper.
+  #
+  # The lint job's `run:` steps run as a runner runs a step with no `shell:`
+  # (`bash -e`), then one `nix build` per entry of the `checks` and `build`
+  # matrices. CI's shape, not `nix flake check`: that evaluates every output
+  # in one process, and on 2026-09-10 the prototype's run of it reached 8.3 GB
+  # and took a global OOM on homelab01. A lint step with anything a runner
+  # alone can read - an Actions expression, `shell:`, `env:`, `if:` - fails
+  # the gate rather than running as something it is not; so does an empty
+  # list, which is a gate that ran nothing.
+  #
+  # A session can edit ci.yml and pass its own gate, which is why the
+  # assertion below keeps .github/workflows on the denylist: the push is then
+  # handed back.
+  #
+  # `nix fmt` formats in place before it fails, so a formatting failure also
+  # leaves the workspace dirty - which the agent hands back to the session as
+  # uncommitted changes, the right answer either way. The lint steps write
+  # under /tmp, which the unit's gates share; `heavy-build` runs one at a time.
+  #
+  # The gate's evaluators share the unit's cgroup and `MemoryMax` with opencode
+  # and the pool itself; the builds are nix-daemon's, under the daemon's own
+  # `MemoryMax`, which the assertion below requires the host to set. Raising its own
+  # oom_score_adj, which every child inherits, makes the gate what the kernel
+  # kills when the cgroup is full - so the gate fails, rather than the session
+  # that ran it - and `OOMPolicy` below keeps the pool running past the kill.
+  gate = pkgs.writeShellApplication {
+    name = "afk-agent-gate";
+    runtimeInputs = [
+      config.nix.package
+      pkgs.bash
+      pkgs.coreutils
+      pkgs.diffutils
+      pkgs.yq-go
+    ];
+    text = ''
+      echo 1000 >/proc/self/oom_score_adj
+
+      # A process the kernel killed for memory fails the gate like a broken
+      # build would - an evaluator exits 137, a VM test's driver loses its
+      # VM - so the gate says so, rather than leave a session to spend an
+      # attempt fixing code. The counters are this unit's cgroup and
+      # nix-daemon's, where the builds run.
+      oom_kills() {
+        local file key value n=0
+        for file in "/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)/memory.events" \
+          /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events; do
+          [ -r "$file" ] || continue
+          while read -r key value; do
+            if [ "$key" = oom_kill ]; then n=$((n + value)); fi
+          done <"$file"
+        done
+        echo "$n"
+      }
+      kills="$(oom_kills)"
+      report_oom() {
+        local status=$?
+        if [ "$status" -ne 0 ] && [ "$(oom_kills)" -gt "$kills" ]; then
+          echo "afk-agent-gate: the kernel killed a process at a memory ceiling while the gate ran, so this failure is the host running out of memory, not necessarily the change" >&2
+        fi
+      }
+      trap report_oom EXIT
+
+      ci=.github/workflows/ci.yml
+      lint='.jobs.lint.steps | map(select(has("run")))'
+
+      odd="$(yq "(.jobs.lint | keys - [\"name\", \"runs-on\", \"steps\"] | length) + ($lint | map(select(keys - [\"name\", \"run\"] | length > 0)) | length)" "$ci")"
+      if [ "$odd" -ne 0 ]; then
+        echo "afk-agent-gate: ci.yml's lint job uses keys only a runner reads" >&2
+        exit 1
+      fi
+
+      steps="$(yq "$lint | length" "$ci")"
+      [ "$steps" -gt 0 ]
+      for ((i = 0; i < steps; i++)); do
+        run="$(yq -r "$lint | .[$i].run" "$ci")"
+        case "$run" in
+          *\$\{\{*)
+            echo "afk-agent-gate: lint step $i uses an Actions expression" >&2
+            exit 1
+            ;;
+        esac
+        bash -e -c "$run"
+      done
+
+      checks="$(yq -r '.jobs.checks.strategy.matrix.check[]' "$ci")"
+      hosts="$(yq -r '.jobs.build.strategy.matrix.host[]' "$ci")"
+      [ -n "$checks" ]
+      [ -n "$hosts" ]
+      for check in $checks; do
+        nix build --no-link ".#checks.x86_64-linux.$check"
+      done
+      for host in $hosts; do
+        nix build --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
+      done
+    '';
+  };
+
+  # The unit's confinement, shared with `afk-agent-run` below so that a
+  # hand-run is the unit in every respect but its lifetime.
+  sandbox = {
+    User = "afk-agent";
+    Group = "afk-agent";
+    StateDirectory = "afk-agent";
+    StateDirectoryMode = "0700";
+    WorkingDirectory = stateDir;
+    UMask = "0077";
+
+    LoadCredential = lib.mapAttrsToList (
+      name: secret: "${name}:${config.sops.secrets.${secret}.path}"
+    ) credentials;
+
+    MemoryMax = cfg.maxMemory;
+    # systemd's default, `stop`, takes the whole pool down for one process the
+    # kernel killed at `MemoryMax` - every transition in flight with it, to make
+    # a gate fail. The killed process's own caller sees it die instead.
+    OOMPolicy = "continue";
+
+    # Hardening, bounded by what the job is: a network client that runs
+    # opencode, which is a JIT'd JavaScript runtime (so no
+    # MemoryDenyWriteExecute), and a gate that builds through the Nix daemon.
+    NoNewPrivileges = true;
+    # "strict" still lets a Nix client connect to the daemon's socket: a
+    # read-only mount does not refuse connect(2). The prototype ran with
+    # "full" believing otherwise, and checks/afk-agent.nix pins that it is not
+    # needed.
+    ProtectSystem = "strict";
+    ProtectHome = true;
+    PrivateTmp = true;
+    PrivateDevices = true;
+    ProtectKernelTunables = true;
+    ProtectKernelModules = true;
+    ProtectKernelLogs = true;
+    ProtectControlGroups = true;
+    ProtectClock = true;
+    ProtectHostname = true;
+    RestrictSUIDSGID = true;
+    RestrictRealtime = true;
+    RestrictNamespaces = true;
+    LockPersonality = true;
+    SystemCallArchitectures = "native";
+    SystemCallFilter = [ "@system-service" ];
+    RestrictAddressFamilies = [
+      "AF_INET"
+      "AF_INET6"
+      "AF_UNIX"
+      # Go and Node read interface and resolver state over netlink.
+      "AF_NETLINK"
+    ];
+  };
+
+  # A command run as the unit runs: its account, environment, credentials and
+  # confinement, in a transient unit. What afk-agent's docs/agents/implement.md
+  # and docs/agents/revise.md mean by "with the parameters in the environment",
+  # e.g.
+  #
+  #   sudo afk-agent-run afk run implement --issue 7
+  #   sudo afk-agent-run afk run revise --pr 7
+  #
+  # Any command, not just `afk`, so the same wrapper answers "can the unit
+  # reach X" - which is how checks/afk-agent.nix asks it of the Nix daemon.
+  runAsUnit = pkgs.writeShellApplication {
+    name = "afk-agent-run";
+    text =
+      let
+        property = name: value: "-p ${lib.escapeShellArg "${name}=${value}"}";
+        properties = lib.concatLists (
+          lib.mapAttrsToList (
+            name: value:
+            if name == "LoadCredential" then
+              map (property name) value
+            else if lib.isList value then
+              [ (property name (lib.concatStringsSep " " value)) ]
+            else if lib.isBool value then
+              [ (property name (lib.boolToString value)) ]
+            else if lib.isString value || lib.isInt value then
+              [ (property name (toString value)) ]
+            else
+              throw "afk-agent-run: no -p encoding for sandbox.${name}"
+          ) sandbox
+        );
+        # Double-quoted rather than escapeShellArg'd, so the one expansion left
+        # in is the credentials directory: `--setenv` is literal, and the `%d`
+        # the unit's credential paths are written with is not expanded there.
+        quote =
+          v:
+          ''"${
+            lib.replaceStrings [ "%d" ] [ "$credentials" ] (
+              lib.replaceStrings [ "\\" ''"'' "$" "`" ] [ "\\\\" ''\"'' "\\$" "\\`" ] v
+            )
+          }"'';
+        unitEnv = config.systemd.services.afk-agent.environment;
+        environment = lib.mapAttrsToList (name: value: "--setenv=${quote "${name}=${value}"}") unitEnv;
+      in
+      ''
+        if [ "$#" -eq 0 ]; then
+          echo "usage: afk-agent-run <command> [args...], e.g. afk-agent-run afk run implement --issue 7, or a revision: afk-agent-run afk run revise --pr 7" >&2
+          exit 2
+        fi
+        # systemd-run finds the command on its own PATH, not the unit's, so it
+        # is resolved here: on the unit's PATH, with `afk` added - there and
+        # not in the unit, where the model's shell would find it too.
+        command="$(PATH=${lib.getBin package}/bin:${unitEnv.PATH} command -v "$1")" || {
+          echo "afk-agent-run: $1: not on the unit's PATH" >&2
+          exit 127
+        }
+        shift
+        unit="afk-agent-run-$$"
+        credentials="/run/credentials/$unit.service"
+        exec ${config.systemd.package}/bin/systemd-run --quiet --pipe --wait --collect \
+          --unit="$unit" --service-type=exec \
+          ${lib.concatStringsSep " \\\n  " (properties ++ environment)} \
+          -- "$command" "$@"
+      '';
+  };
 in
 {
   options.cg.service.afk-agent = {
@@ -120,6 +343,32 @@ in
       description = "The GitHub App's app ID or client ID (`--app-id`). Not a secret; the key is.";
     };
 
+    eligibilityLabel = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching ".+");
+      example = "ready-for-agent";
+      description = ''
+        The label that opts an issue in to being implemented with nobody
+        asking (`--eligibility-label`): an open issue carrying it, with no
+        open blocker, is taken as `/implement` would take it. `null`, with
+        `reviewQueueLimit` null, takes nothing unattended, and work starts
+        only on a command.
+
+        Here rather than in the binary because label strings are the
+        tracker's, and so this repository's (docs/agents/triage-labels.md).
+      '';
+    };
+
+    reviewQueueLimit = lib.mkOption {
+      type = lib.types.nullOr lib.types.ints.positive;
+      description = ''
+        Pull requests waiting on the operator's review - those carrying
+        `implement.handOffLabel`, plus implements and revisions not yet
+        handed off - before intake takes no more issues through
+        `eligibilityLabel` (`--review-queue-limit`). Commands, reviews and
+        revisions run whatever the queue.
+      '';
+    };
+
     workers = lib.mkOption {
       type = lib.types.ints.positive;
       description = "Transitions executing at once (`--workers`).";
@@ -133,9 +382,11 @@ in
     lease = lib.mkOption {
       type = duration;
       description = ''
-        How long a worker's lease on a job is held (`--lease`). Must be longer
-        than a model run: a lease that lapses mid-run lets another worker take
-        the job, and the first run's work is thrown away.
+        How long a worker's lease on a job is held, and the longest an effect
+        may run (`--lease`). Should be longer than a transition - an implement
+        run is up to two model runs of `modelTimeout` each - than the implement
+        gate and than a push: a lease that lapses mid-transition lets another
+        worker take the job, and the first worker's work is thrown away.
       '';
     };
 
@@ -164,8 +415,11 @@ in
       };
       description = ''
         Resource token capacities (`--token`): named permits for a host
-        constraint. No transition in the current build asks for one, so `{ }`
-        is an honest answer.
+        constraint. Building transitions hold `heavy-build`: implement's
+        (`implement-run`, `implement-gate`) and revise's (`revise-run`,
+        `revise-gate`, which checks/afk-agent-tokens.nix holds the pin to),
+        and `afk work` refuses to start when a transition asks for a token
+        with no capacity.
       '';
     };
 
@@ -187,9 +441,19 @@ in
     notifyTopic = lib.mkOption {
       type = lib.types.strMatching "[A-Za-z0-9_-]+";
       description = ''
-        ntfy topic on this host's server that a parked job and a spent budget
-        are published to. A topic of its own, rather than the alerting stack's,
-        so either can be muted on the phone without muting the other.
+        ntfy topic on this host's server that a parked job, a spent budget and
+        a tier that stays exhausted are published to. A topic of its own,
+        rather than the alerting stack's, so either can be muted on the phone
+        without muting the other.
+      '';
+    };
+
+    tierNotifyAfter = lib.mkOption {
+      type = lib.types.ints.positive;
+      description = ''
+        Exhaustions of a job's tier, in one episode, before the operator is
+        told (`--tier-notify-after`). Each is a `tierWait` deferral, so this
+        is roughly how many of those a job sits through before anyone hears.
       '';
     };
 
@@ -226,6 +490,163 @@ in
         example = [ "tool_call" ];
         description = "Capabilities a review's model must have (`--review-needs`), as models.dev names them.";
       };
+
+      floor = lib.mkOption {
+        type = lib.types.enum [
+          "blocker"
+          "should-fix"
+          "consider"
+        ];
+        description = ''
+          The least severity an advisory review reports (`--review-floor`).
+          Passed to the reviewing-changes skill, which leaves out every finding
+          below it.
+        '';
+      };
+
+      foldCut = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = ''
+          Changed lines below which an advisory review folds Approach into
+          Correctness (`--review-fold-cut`). Passed to the reviewing-changes
+          skill, which does the counting.
+        '';
+      };
+    };
+
+    implement = {
+      branchPrefix = lib.mkOption {
+        type = lib.types.strMatching "[A-Za-z0-9._/-]+";
+        example = "afk/";
+        description = "Begins every branch the agent pushes, as `<prefix><issue>-<k>` (`--branch-prefix`).";
+      };
+
+      tier = lib.mkOption {
+        type = lib.types.str;
+        description = "The tier implementing, and revising, draws its models from (`--implement-tier`). Must name one of `tiers`.";
+      };
+
+      needs = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        example = [ "tool_call" ];
+        description = "Capabilities implementing, and revising, requires (`--implement-needs`), as models.dev names them.";
+      };
+
+      gateAttempts = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Sessions the local gate may fail before a hand-back (`--gate-attempts`).";
+      };
+
+      handOffLabel = lib.mkOption {
+        type = lib.types.str;
+        description = "The label the hand-off applies to the pull request: CI green and a review posted (`--hand-off-label`).";
+      };
+
+      denylist = lib.mkOption {
+        type = lib.types.nonEmptyListOf (lib.types.strMatching "[^,]+");
+        description = ''
+          Paths no pushed commit may touch (`--denylist`), as globs: `**` spans
+          directories and `*` stays in one segment. A commit touching one hands
+          back rather than pushing.
+        '';
+      };
+
+      sensitive = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nonEmptyListOf (lib.types.strMatching "[^,;]+"));
+        default = { };
+        example = {
+          "job store schema" = [ "internal/store/**" ];
+          "CI" = [ ".github/workflows/**" ];
+        };
+        description = ''
+          The operator's sensitive paths (`--sensitive`): label to globs, with
+          the same matching as `denylist`. A pull request touching one says so
+          in its description, with the label and the files it matched, so the
+          review reads those line by line. Empty, the default, turns that off.
+
+          Here rather than in the repository, because the agent could edit a
+          file there in its own pull request. One instance serves one
+          repository, so the list is that repository's.
+        '';
+      };
+
+      ciWait = lib.mkOption {
+        type = duration;
+        description = "How often unfinished CI, or a review not yet posted, is read again (`--ci-wait`).";
+      };
+
+      ciCeiling = lib.mkOption {
+        type = duration;
+        description = "How long after a push CI may take before a hand-back (`--ci-ceiling`).";
+      };
+
+      ciFixes = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Red CI runs sent back to the session before a hand-back (`--ci-fixes`).";
+      };
+
+      sizeSignal = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = ''
+          Changed non-test lines a pull request may have (`--size-signal`).
+          Work over it is pushed to its branch and handed back, rather than
+          opened as a pull request.
+        '';
+      };
+
+      reviewProcedure = lib.mkOption {
+        type = lib.types.strMatching "https?://[^/]+.*";
+        default = "https://github.com/corygyarmathy/skills/blob/master/docs/operators-review.md";
+        description = ''
+          The operator's review procedure, which the fixed reminder in every
+          pull request description links (`--review-procedure`). A default,
+          unlike the tuning options: it is where the document lives, not a
+          limit to choose.
+        '';
+      };
+    };
+
+    revise = {
+      replays = lib.mkOption {
+        type = lib.types.ints.unsigned;
+        description = ''
+          Times one revision is replayed onto a push someone else made during
+          it, before the next such push hands it back (`--replays`). Zero
+          hands it back at the first such push. Each replay runs the
+          implement gate again. A revision otherwise runs on the implement
+          options; which ones is afk-agent's docs/agents/revise.md.
+        '';
+      };
+    };
+
+    effectRounds = lib.mkOption {
+      type = lib.types.ints.positive;
+      description = ''
+        Times a push, a pull request, a comment or a label is made before it
+        counts as never landing (`--effect-rounds`), for every job kind.
+      '';
+    };
+
+    handBackLabel = lib.mkOption {
+      type = lib.types.str;
+      description = "The label a hand-back applies, on an issue or a pull request (`--hand-back-label`).";
+    };
+
+    commitIdentity = {
+      name = lib.mkOption {
+        type = lib.types.str;
+        example = "my-app[bot]";
+        description = ''
+          Author and committer name of the agent's commits. The agent sets
+          none of its own, and the service account has no git configuration.
+        '';
+      };
+
+      email = lib.mkOption {
+        type = lib.types.str;
+        example = "12345+my-app[bot]@users.noreply.github.com";
+        description = "Author and committer email of the agent's commits.";
+      };
     };
 
     modelAttempts = lib.mkOption {
@@ -239,6 +660,15 @@ in
     tierWait = lib.mkOption {
       type = duration;
       description = "How long an exhausted tier defers a job (`--tier-wait`).";
+    };
+
+    modelTimeout = lib.mkOption {
+      type = duration;
+      description = ''
+        The longest one model run may take (`--model-timeout`), for every job
+        kind. A run still going is killed with everything it started, and the
+        job's next run tries the next candidate.
+      '';
     };
 
     catalogueAge = lib.mkOption {
@@ -269,8 +699,36 @@ in
         message = "cg.service.afk-agent.review.tier '${cfg.review.tier}' is not one of the enrolled tiers";
       }
       {
+        assertion = lib.any (tier: tier.name == cfg.implement.tier) cfg.tiers;
+        message = "cg.service.afk-agent.implement.tier '${cfg.implement.tier}' is not one of the enrolled tiers";
+      }
+      {
+        assertion = lib.elem ".github/workflows/**" cfg.implement.denylist;
+        message = "cg.service.afk-agent.implement.denylist must keep .github/workflows/**: the gate runs the workspace's own ci.yml, so a session that edits it would gate itself";
+      }
+      {
+        # `--sensitive` separates entries with `;` and a label from its globs
+        # with `=`, and its line lists labels as `label (files)`, by commas.
+        assertion = lib.all (label: builtins.match "[^,;=()]*[^,;=()[:space:]][^,;=()]*" label != null) (
+          lib.attrNames cfg.implement.sensitive
+        );
+        message = "cg.service.afk-agent.implement.sensitive: a label needs a character other than whitespace, and none of , ; = ( )";
+      }
+      {
+        assertion = cfg.tokens ? heavy-build;
+        message = "cg.service.afk-agent.tokens needs a heavy-build capacity: implement's and revise's building transitions hold it (implement-run, implement-gate, revise-run, revise-gate), and afk work refuses to start without one";
+      }
+      {
+        assertion = config.systemd.services.nix-daemon.serviceConfig ? MemoryMax;
+        message = "cg.service.afk-agent's gate builds every check through nix-daemon; give systemd.services.nix-daemon a MemoryMax, so a build that outgrows the host fails instead of taking it down";
+      }
+      {
         assertion = (cfg.retry == null) == (cfg.maxAttempts == null);
         message = "cg.service.afk-agent: set retry and maxAttempts together, or neither (a failure then parks at once)";
+      }
+      {
+        assertion = (cfg.eligibilityLabel == null) == (cfg.reviewQueueLimit == null);
+        message = "cg.service.afk-agent: set eligibilityLabel and reviewQueueLimit together, or neither (intake is then off, and commands still work)";
       }
     ];
 
@@ -291,17 +749,29 @@ in
     };
     users.groups.afk-agent = { };
 
+    # The skills opencode runs with, from the same afk-agent revision as the
+    # binary. The repository it works on carries no copy of its own, so they
+    # arrive through opencode's per-user skills directory under $HOME.
+    systemd.tmpfiles.rules = [
+      "d ${stateDir}/.agents 0700 afk-agent afk-agent -"
+      "L+ ${stateDir}/.agents/skills - - - - ${package.src}/.agents/skills"
+    ];
+
+    environment.systemPackages = [ runAsUnit ];
+
     systemd.services.afk-agent = {
       description = "AFK agent work pool";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
 
-      # git for the review's checkout; the rest for opencode's own tools.
+      # git for the checkouts and the push, sh for the gate, and nix for the
+      # model's own work on this repository; the rest for opencode's tools.
       path = [
         pkgs.git
         pkgs.bashInteractive
         pkgs.coreutils
+        config.nix.package
       ];
 
       # Paths and tuning only - no value in here is a secret, which
@@ -319,13 +789,42 @@ in
 
           AFK_NOTIFY_URL = "http://127.0.0.1:${toString config.cg.service.ntfy.port}/${cfg.notifyTopic}";
           AFK_NOTIFY_KEY = credential "ntfy-token";
+          AFK_TIER_NOTIFY_AFTER = cfg.tierNotifyAfter;
 
           AFK_OPENCODE = lib.getExe pkgs.opencode;
           AFK_ENROLMENT = enrolment;
           AFK_REVIEW_TIER = cfg.review.tier;
+          AFK_REVIEW_FLOOR = cfg.review.floor;
+          AFK_REVIEW_FOLD_CUT = cfg.review.foldCut;
           AFK_MODEL_ATTEMPTS = cfg.modelAttempts;
           AFK_TIER_WAIT = cfg.tierWait;
+          AFK_MODEL_TIMEOUT = cfg.modelTimeout;
           AFK_CATALOGUE_AGE = cfg.catalogueAge;
+
+          AFK_EFFECT_ROUNDS = cfg.effectRounds;
+          AFK_HAND_BACK_LABEL = cfg.handBackLabel;
+
+          AFK_BRANCH_PREFIX = cfg.implement.branchPrefix;
+          AFK_GATE = lib.getExe gate;
+          AFK_GATE_ATTEMPTS = cfg.implement.gateAttempts;
+          AFK_IMPLEMENT_TIER = cfg.implement.tier;
+          AFK_HAND_OFF_LABEL = cfg.implement.handOffLabel;
+          AFK_DENYLIST = lib.concatStringsSep "," cfg.implement.denylist;
+          AFK_CI_WAIT = cfg.implement.ciWait;
+          AFK_CI_CEILING = cfg.implement.ciCeiling;
+          AFK_CI_FIXES = cfg.implement.ciFixes;
+          AFK_SIZE_SIGNAL = cfg.implement.sizeSignal;
+          AFK_REVIEW_PROCEDURE = cfg.implement.reviewProcedure;
+
+          AFK_REPLAYS = cfg.revise.replays;
+
+          # The model's sessions commit as whatever git finds, and the agent
+          # sets nothing. The environment rather than a gitconfig under HOME,
+          # so it covers every git the model runs without a file to keep.
+          GIT_AUTHOR_NAME = cfg.commitIdentity.name;
+          GIT_AUTHOR_EMAIL = cfg.commitIdentity.email;
+          GIT_COMMITTER_NAME = cfg.commitIdentity.name;
+          GIT_COMMITTER_EMAIL = cfg.commitIdentity.email;
 
           AFK_REPO = cfg.repo;
           AFK_APP_ID = cfg.appId;
@@ -352,20 +851,26 @@ in
         // lib.optionalAttrs (cfg.review.needs != [ ]) {
           AFK_REVIEW_NEEDS = lib.concatStringsSep "," cfg.review.needs;
         }
+        // lib.optionalAttrs (cfg.implement.needs != [ ]) {
+          AFK_IMPLEMENT_NEEDS = lib.concatStringsSep "," cfg.implement.needs;
+        }
+        // lib.optionalAttrs (cfg.implement.sensitive != { }) {
+          AFK_SENSITIVE = lib.concatStringsSep ";" (
+            lib.mapAttrsToList (
+              label: globs: "${label}=${lib.concatStringsSep "," globs}"
+            ) cfg.implement.sensitive
+          );
+        }
+        # The assertion above keeps the two together, so intake never takes
+        # unattended work without the limit.
+        // lib.optionalAttrs (cfg.eligibilityLabel != null) {
+          AFK_ELIGIBILITY_LABEL = cfg.eligibilityLabel;
+          AFK_REVIEW_QUEUE_LIMIT = cfg.reviewQueueLimit;
+        }
       );
 
-      serviceConfig = {
+      serviceConfig = sandbox // {
         Type = "simple";
-        User = "afk-agent";
-        Group = "afk-agent";
-        StateDirectory = "afk-agent";
-        StateDirectoryMode = "0700";
-        WorkingDirectory = stateDir;
-        UMask = "0077";
-
-        LoadCredential = lib.mapAttrsToList (
-          name: secret: "${name}:${config.sops.secrets.${secret}.path}"
-        ) credentials;
 
         ExecStartPre = lib.getExe opencodeAuth;
         ExecStart = "${lib.getExe package} work";
@@ -381,37 +886,6 @@ in
         # first. systemd's default stop timeout is deliberately left to cut
         # that short: a killed transition costs itself and nothing else, and a
         # rebuild should not wait out a forty-minute model run.
-
-        MemoryMax = cfg.maxMemory;
-
-        # Hardening, bounded by what the job is: a network client that runs
-        # opencode, which is a JIT'd JavaScript runtime (so no
-        # MemoryDenyWriteExecute). Unlike the prototype it builds nothing
-        # through the Nix daemon, so the system can be read-only.
-        NoNewPrivileges = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        PrivateTmp = true;
-        PrivateDevices = true;
-        ProtectKernelTunables = true;
-        ProtectKernelModules = true;
-        ProtectKernelLogs = true;
-        ProtectControlGroups = true;
-        ProtectClock = true;
-        ProtectHostname = true;
-        RestrictSUIDSGID = true;
-        RestrictRealtime = true;
-        RestrictNamespaces = true;
-        LockPersonality = true;
-        SystemCallArchitectures = "native";
-        SystemCallFilter = [ "@system-service" ];
-        RestrictAddressFamilies = [
-          "AF_INET"
-          "AF_INET6"
-          "AF_UNIX"
-          # Go and Node read interface and resolver state over netlink.
-          "AF_NETLINK"
-        ];
       };
     };
   };
