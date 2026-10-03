@@ -3,10 +3,9 @@
 # The Go successor to the bash prototype that lived at this path until #283.
 # Its design is that repository's ADR 0001; what it needs from a host is its
 # docs/agents/review.md, docs/agents/implement.md and docs/agents/revise.md.
-# This module is where it
-# is packaged and configured, and nowhere else: the binary holds no defaults,
-# every parameter is a flag with an environment variable beside it, and
-# `afk help` is the list of record.
+# This module is where it is packaged and configured, and nowhere else: the
+# binary holds no defaults, every parameter is a flag with an environment
+# variable beside it, and `afk help` is the list of record.
 #
 # The tuning options below have no defaults either, for the same reason. A
 # limit an unattended agent runs with should be read where the host is
@@ -524,13 +523,13 @@ in
 
       tier = lib.mkOption {
         type = lib.types.str;
-        description = "The tier implementing, and every revision, draws its models from (`--implement-tier`). Must name one of `tiers`. The revise ticket (afk-agent#146) gave revisions this tier rather than one of their own.";
+        description = "The tier implementing, and revising, draws its models from (`--implement-tier`). Must name one of `tiers`.";
       };
 
       needs = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         example = [ "tool_call" ];
-        description = "Capabilities implementing, and every revision, requires (`--implement-needs`), as models.dev names them.";
+        description = "Capabilities implementing, and revising, requires (`--implement-needs`), as models.dev names them.";
       };
 
       gateAttempts = lib.mkOption {
@@ -614,9 +613,8 @@ in
           Times one revision is replayed onto a push someone else made during
           it, before the next such push hands it back (`--replays`). Zero
           hands it back at the first such push. Each replay runs the
-          implement gate again. A revision otherwise takes
-          the implement options: its gate, attempts, tier, needs, denylist,
-          sensitive paths, size signal, CI bounds and hand-off label.
+          implement gate again. A revision otherwise runs on the implement
+          options; which ones is afk-agent's docs/agents/revise.md.
         '';
       };
     };
