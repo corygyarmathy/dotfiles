@@ -602,6 +602,18 @@ in
       };
     };
 
+    revise = {
+      replays = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = ''
+          Times one revision is replayed onto a push someone else made during
+          it, before the next such push hands it back (`--replays`). Each
+          replay runs the implement gate again. A revision otherwise takes
+          the implement options: its gate, tier, denylist and hand-off label.
+        '';
+      };
+    };
+
     effectRounds = lib.mkOption {
       type = lib.types.ints.positive;
       description = ''
@@ -798,6 +810,8 @@ in
           AFK_CI_FIXES = cfg.implement.ciFixes;
           AFK_SIZE_SIGNAL = cfg.implement.sizeSignal;
           AFK_REVIEW_PROCEDURE = cfg.implement.reviewProcedure;
+
+          AFK_REPLAYS = cfg.revise.replays;
 
           # The model's sessions commit as whatever git finds, and the agent
           # sets nothing. The environment rather than a gitconfig under HOME,
