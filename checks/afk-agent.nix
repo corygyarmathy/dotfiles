@@ -319,6 +319,14 @@ in
         )
         enabled.succeed("echo 2 >/proc/sys/vm/panic_on_oom")
 
+    with subtest("a check name CI's check-names job would refuse fails the gate, saying why"):
+        # Split by the gate's loop, "x y" would fail anyway, as two attributes
+        # nobody named; the message is what shows the name was refused.
+        enabled.succeed("echo '[\"x y\"]' >/var/lib/afk-agent/build-oom/checks/matrix.json")
+        out = enabled.succeed("afk-agent-run ${buildOomGate} 2>&1")
+        assert "gate failed" in out, f"the gate did not fail:\n{out}"
+        assert "check-names job requires" in out, f"the gate did not say the name was refused:\n{out}"
+
     with subtest("opencode's credentials are provisioned from the key"):
         auth = "/var/lib/afk-agent/.local/share/opencode/auth.json"
         assert enabled.succeed(f"stat -c '%U %a' {auth}").strip() == "afk-agent 600"
