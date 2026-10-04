@@ -1,0 +1,2 @@
+# afk-agent counts these as test lines in its pull-request size signal.
+checks/** afk-test
