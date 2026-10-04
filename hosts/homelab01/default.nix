@@ -272,8 +272,7 @@ in
         gateAttempts = 3;
         # afk-agent's docs/agents/triage-labels.md.
         handOffLabel = "needs-review";
-        # Triage keeps tickets that need these off `ready-for-agent`, including
-        # one that adds a flake check to ci.yml's matrix
+        # Triage keeps tickets that need these off `ready-for-agent`
         # (docs/agents/triage-labels.md).
         denylist = [
           ".github/workflows/**"

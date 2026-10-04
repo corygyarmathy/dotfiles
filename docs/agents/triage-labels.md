@@ -26,7 +26,7 @@ corresponding label string from this table.
 ## Choosing between `ready-for-agent` and `ready-for-human`
 
 Applying `ready-for-agent` starts unattended work, so being fully specified is
-necessary but not enough. A ticket that fails any of these three gets
+necessary but not enough. A ticket that fails either of these gets
 `ready-for-human`, however well written it is.
 
 ### 1. Its scope needs no denied path
@@ -42,20 +42,7 @@ The list is literal paths. A module adding a `sops.secrets.<name>` declaration
 changes what a host decrypts without touching `secrets/` or `.sops.yaml`, and
 `.github/` outside `workflows/` is not denied.
 
-### 2. It adds no flake check
-
-A new check has to be added to the `checks` matrix in
-`.github/workflows/ci.yml`, which rule 1 denies. Updating an existing check is
-fine.
-
-The bash prototype had a narrow exception for that matrix entry. The successor
-does not, and could not push one anyway: its App has no
-[Workflows permission](https://github.com/corygyarmathy/afk-agent/blob/master/docs/agents/implement.md#what-it-needs-on-the-host).
-Dropping the exception was decided on
-[corygyarmathy/afk-agent#100](https://github.com/corygyarmathy/afk-agent/issues/100#issuecomment-5969127555);
-revisit this rule if the App gains that permission.
-
-### 3. The agent can tell whether it succeeded
+### 2. The agent can tell whether it succeeded
 
 Ask it of each acceptance criterion, not of the ticket as a whole:
 
