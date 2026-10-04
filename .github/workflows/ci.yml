@@ -121,21 +121,13 @@ jobs:
       # naming them is that a check added to ./checks and not to that file
       # silently stops being run - the same "gate that quietly stops gating"
       # failure the `always()` note on the gate job is about. So assert the two
-      # agree, and that every name is one `check-names` would accept.
+      # agree.
       #
       # jq is a lint-time tool rather than a build input, so taking it from the
       # unpinned registry is fine here; it is not going into anything shipped.
       - name: Every flake check is in checks/matrix.json
         run: |
           set -euo pipefail
-          # The same test as `check-names`, repeated because the afk-agent's
-          # local gate runs this job's steps and not that one's.
-          nix shell nixpkgs#jq --command jq -e \
-            'type == "array" and length > 0 and all(.[]; type == "string" and test("\\A[a-z][a-z0-9-]*\\z"))' \
-            checks/matrix.json >/dev/null || {
-            echo "::error file=checks/matrix.json::must be a non-empty array of names matching ^[a-z][a-z0-9-]*$"
-            exit 1
-          }
           # LC_ALL=C on both sides: the names contain hyphens, which some
           # locales collate as though they were not there, and a comparison
           # that depends on the runner's locale is a comparison that will

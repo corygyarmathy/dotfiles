@@ -104,14 +104,13 @@ let
   # run; one it fails costs a session, which is cheaper.
   #
   # The lint job's `run:` steps run as a runner runs a step with no `shell:`
-  # (`bash -e`), then one `nix build` per entry of the `checks` matrix (whose
-  # names lint has already validated) and the `build` matrix. CI's shape, not
-  # `nix flake check`: that evaluates every output in one process, and on
-  # 2026-09-10 the prototype's run of it reached 8.3 GB and took a global OOM
-  # on homelab01. A lint step with anything a runner alone can read - an
-  # Actions expression, `shell:`, `env:`, `if:` - fails the gate rather than
-  # running as something it is not; so does an empty list, which is a gate
-  # that ran nothing.
+  # (`bash -e`), then one `nix build` per entry of the `checks` matrix and the
+  # `build` matrix. CI's shape, not `nix flake check`: that evaluates every
+  # output in one process, and on 2026-09-10 the prototype's run of it reached
+  # 8.3 GB and took a global OOM on homelab01. A lint step with anything a
+  # runner alone can read - an Actions expression, `shell:`, `env:`, `if:` -
+  # fails the gate rather than running as something it is not; so does an
+  # empty list, which is a gate that ran nothing.
   #
   # A session can edit ci.yml and pass its own gate, which is why the
   # assertion below keeps .github/workflows on the denylist: the push is then
@@ -188,6 +187,13 @@ let
         bash -e -c "$run"
       done
 
+      # The names CI's `check-names` job accepts and no others. One that is not
+      # a bare word would otherwise be split or globbed by the loop below and
+      # fail as an attribute nobody named, which tells the session nothing.
+      if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string" and test("\\A[a-z][a-z0-9-]*\\z"))' checks/matrix.json >/dev/null; then
+        echo "afk-agent-gate: checks/matrix.json must be a non-empty array of names matching ^[a-z][a-z0-9-]*\$, as ci.yml's check-names job requires" >&2
+        exit 1
+      fi
       checks="$(jq -r '.[]' checks/matrix.json)"
       hosts="$(yq -r '.jobs.build.strategy.matrix.host[]' "$ci")"
       [ -n "$checks" ]
