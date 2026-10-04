@@ -98,19 +98,20 @@ let
   toEnv = lib.mapAttrs (_: toString);
 
   # The local gate an implement session has to pass before anything is pushed
-  # (`--gate`): this repository's own CI, read from the workspace's ci.yml
-  # rather than restated here, so the two cannot drift apart. A branch the
-  # gate passes and CI fails costs a fix round and a CI run; one it fails
-  # costs a session, which is cheaper.
+  # (`--gate`): this repository's own CI, read from the workspace's ci.yml and
+  # checks/matrix.json rather than restated here, so the two cannot drift
+  # apart. A branch the gate passes and CI fails costs a fix round and a CI
+  # run; one it fails costs a session, which is cheaper.
   #
   # The lint job's `run:` steps run as a runner runs a step with no `shell:`
-  # (`bash -e`), then one `nix build` per entry of the `checks` and `build`
-  # matrices. CI's shape, not `nix flake check`: that evaluates every output
-  # in one process, and on 2026-09-10 the prototype's run of it reached 8.3 GB
-  # and took a global OOM on homelab01. A lint step with anything a runner
-  # alone can read - an Actions expression, `shell:`, `env:`, `if:` - fails
-  # the gate rather than running as something it is not; so does an empty
-  # list, which is a gate that ran nothing.
+  # (`bash -e`), then one `nix build` per entry of the `checks` matrix (whose
+  # names lint has already validated) and the `build` matrix. CI's shape, not
+  # `nix flake check`: that evaluates every output in one process, and on
+  # 2026-09-10 the prototype's run of it reached 8.3 GB and took a global OOM
+  # on homelab01. A lint step with anything a runner alone can read - an
+  # Actions expression, `shell:`, `env:`, `if:` - fails the gate rather than
+  # running as something it is not; so does an empty list, which is a gate
+  # that ran nothing.
   #
   # A session can edit ci.yml and pass its own gate, which is why the
   # assertion below keeps .github/workflows on the denylist: the push is then
@@ -134,6 +135,7 @@ let
       pkgs.bash
       pkgs.coreutils
       pkgs.diffutils
+      pkgs.jq
       pkgs.yq-go
     ];
     text = ''
@@ -186,7 +188,7 @@ let
         bash -e -c "$run"
       done
 
-      checks="$(yq -r '.jobs.checks.strategy.matrix.check[]' "$ci")"
+      checks="$(jq -r '.[]' checks/matrix.json)"
       hosts="$(yq -r '.jobs.build.strategy.matrix.host[]' "$ci")"
       [ -n "$checks" ]
       [ -n "$hosts" ]
