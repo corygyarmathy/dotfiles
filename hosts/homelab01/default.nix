@@ -273,7 +273,13 @@ in
         # afk-agent's docs/agents/triage-labels.md.
         handOffLabel = "needs-review";
         # Triage keeps tickets that need these off `ready-for-agent`
-        # (docs/agents/triage-labels.md).
+        # (docs/agents/triage-labels.md). Only a path that review cannot
+        # protect belongs here: a workflow runs with the repository's secrets
+        # before anyone reads it (.github/workflows/README.md), and the agent
+        # holds no sops key, so it can neither make nor check a change to what
+        # is encrypted or to who can decrypt it. Everything
+        # else, checks/ included, is left to review: weakening a test is a
+        # diff like any other.
         denylist = [
           ".github/workflows/**"
           "secrets/**"
