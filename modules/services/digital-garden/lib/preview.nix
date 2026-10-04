@@ -45,6 +45,12 @@
   workingTreeFixture,
   defaultVault ? "$HOME/git/personal-notes",
 }:
+let
+  # The same rule the service ignores vault paths by, imported rather than
+  # passed in: it reads no configuration, so there is nothing for a host to
+  # disagree with. See the header of lib/ignore.nix.
+  ignore = import ./ignore.nix;
+in
 pkgs.writeShellApplication {
   name = "garden-preview";
   runtimeInputs = [
@@ -150,7 +156,7 @@ pkgs.writeShellApplication {
       started=$(date +%s%N)
       # Same filter, same arguments, same boundary as the service.
       python3 ${filter}/publish-filter.py "$vault" "$state/content" \
-        "$cache/$ledger" || return 1
+        "$cache/$ledger" '${ignore.relative}' || return 1
       ${lib.getExe renderer} "$state/content" "$state/public.new" "$css" \
         > "$state/render.log" 2>&1 || {
           echo "render failed:" >&2
@@ -211,23 +217,26 @@ pkgs.writeShellApplication {
     # the old inode into oblivion and never fires again, so the first save
     # after startup would be the last one the preview ever noticed.
     #
-    # Exclude the paths whose churn would re-render for no reason - Obsidian's
-    # own writes to .obsidian, git's to .git, and the .sync.lock marker -
-    # rather than every dotted path. An earlier version excluded all of them
-    # with '/\.', which also silenced a checkout under a dotted directory like
-    # .claude/worktrees/: the watched stylesheet there never re-rendered, and
-    # the loop this command exists to run silently stopped. The filter ignores
-    # all of these, so rendering for them would report work that did not happen.
+    # Exclude what the filter ignores (lib/ignore.nix) - Obsidian's writes to
+    # .obsidian, git's to .git, the .sync.lock marker - because rendering for
+    # them would report work that did not happen. The rule only ever looks
+    # BELOW the vault root, and that is why the vault is watched as `.` from
+    # inside it: an earlier exclusion of '/\.' also matched the vault's and the
+    # stylesheet's own ancestors, so under a dotted directory like
+    # .claude/worktrees/ every event was excluded and the loop this command
+    # exists to run silently stopped. The stylesheet's directory is watched by
+    # its absolute path, which the rule never matches.
     cssdir=$(dirname "$css")
+    cd "$vault"
     inotifywait -q -m -r -e modify,create,delete,move,close_write \
-      --exclude '/(\.obsidian|\.git)(/|$)|\.sync\.lock$' --format '%w%f' "$vault/" "$cssdir/" \
+      --exclude '${ignore.inotify}' --format '%w%f' . "$cssdir/" \
       | while read -r changed; do
         # The watch is on the stylesheet's directory rather than the file (see
         # above), so it also fires for the editor's own scratch files - swap
         # files, backups, the numbered file vim writes to test the directory.
         # Re-rendering for those would report work that did not happen.
         case "$changed" in
-          "$css" | "$vault"/*) ;;
+          "$css" | ./*) ;;
           *) continue ;;
         esac
         # Drain the rest of the burst: a single save arrives as several events,

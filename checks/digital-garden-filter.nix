@@ -18,6 +18,8 @@ let
   # The filter as ONE directory - the same assembly the service and the
   # preview run, not a copy assembled a second time here. See lib/filter.nix.
   filter = import ../modules/services/digital-garden/lib/filter.nix { inherit pkgs; };
+  # The ignore rule is an argument to the filter; pass the service's own.
+  ignore = import ../modules/services/digital-garden/lib/ignore.nix;
   # pyyaml for the frontmatter pass, exactly as the service's build script
   # provides it.
   python = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
@@ -33,7 +35,7 @@ pkgs.runCommand "check-digital-garden-filter-shelf-collision"
   ''
     set -euo pipefail
     fail() { echo "FAIL: $*" >&2; exit 1; }
-    run() { python3 "$filter/publish-filter.py" "$@"; }
+    run() { python3 "$filter/publish-filter.py" "$@" '${ignore.relative}'; }
 
     # --- a colliding vault is refused ---------------------------------------
     # Two DIFFERENT leaf names that slug to the same shelf (`Meetings` and
