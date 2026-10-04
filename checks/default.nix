@@ -9,8 +9,9 @@
 # whole point of this directory: these tests boot real VMs and assert against
 # them.
 #
-# Exposed as flake `checks`, so `nix flake check` runs them and the existing
-# `nixos ci` gate picks them up with no workflow changes.
+# Exposed as flake `checks`, so `nix flake check` runs them locally. CI builds
+# each one as its own shard of the `checks` job, which takes the names from
+# ./matrix.json: a new check goes there too, and `lint` fails if it is missing.
 #
 # TEST MODULES, NOT HOSTS. A whole host configuration will not boot in a VM:
 # disko expects real disks, ZFS expects a pool, sops expects host keys,
