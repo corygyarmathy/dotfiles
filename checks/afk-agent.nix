@@ -42,17 +42,14 @@ let
 
   # The build-side subtest's workspace: a one-step lint job, then a check whose
   # builder grows without bound inside nix-daemon's cgroup. The host matrix is
-  # never reached.
+  # never reached. The check is named in checks/matrix.json, as in this
+  # repository; ci.yml's `checks` job only reads that file.
   buildOomCi = pkgs.writeText "ci.yml" ''
     jobs:
       lint:
         runs-on: x
         steps:
           - run: "true"
-      checks:
-        strategy:
-          matrix:
-            check: [hog]
       build:
         strategy:
           matrix:
@@ -303,6 +300,8 @@ in
             "mkdir -p /var/lib/afk-agent/build-oom/.github/workflows",
             "cp ${buildOomCi} /var/lib/afk-agent/build-oom/.github/workflows/ci.yml",
             "cp ${buildOomFlake} /var/lib/afk-agent/build-oom/flake.nix",
+            "mkdir -p /var/lib/afk-agent/build-oom/checks",
+            "echo '[\"hog\"]' >/var/lib/afk-agent/build-oom/checks/matrix.json",
             "chown -R afk-agent:afk-agent /var/lib/afk-agent/build-oom",
             "chmod -R u+w /var/lib/afk-agent/build-oom",
         )
