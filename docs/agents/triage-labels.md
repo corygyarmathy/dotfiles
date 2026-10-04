@@ -32,7 +32,8 @@ necessary but not enough. A ticket that fails any of these three gets
 ### 1. Its scope needs no denied path
 
 The paths are homelab01's `cg.service.afk-agent.implement.denylist`
-(`hosts/homelab01/default.nix`). The agent checks them only when it pushes,
+(`hosts/homelab01/default.nix`). The agent checks them only
+[when it pushes](https://github.com/corygyarmathy/afk-agent/blob/master/docs/agents/implement.md#the-push),
 after the work is done, so triage is where a denied ticket is caught cheaply.
 Why `.github/workflows/` is denied when every diff is reviewed anyway is in
 [`.github/workflows/README.md`](../../.github/workflows/README.md).
@@ -44,8 +45,15 @@ changes what a host decrypts without touching `secrets/` or `.sops.yaml`, and
 ### 2. It adds no flake check
 
 A new check has to be added to the `checks` matrix in
-`.github/workflows/ci.yml`, which is a denied path, so the push would be handed
-back with the work done. Updating an existing check is fine.
+`.github/workflows/ci.yml`, which rule 1 denies. Updating an existing check is
+fine.
+
+The bash prototype had a narrow exception for that matrix entry. The successor
+does not, and could not push one anyway: its App has no
+[Workflows permission](https://github.com/corygyarmathy/afk-agent/blob/master/docs/agents/implement.md#what-it-needs-on-the-host).
+Dropping the exception was decided on
+[corygyarmathy/afk-agent#100](https://github.com/corygyarmathy/afk-agent/issues/100#issuecomment-5969127555);
+revisit this rule if the App gains that permission.
 
 ### 3. The agent can tell whether it succeeded
 
