@@ -1,2 +1,5 @@
 # afk-agent counts these as test lines in its pull-request size signal.
 checks/** afk-test
+# Check wiring rather than checks, so it counts as code.
+checks/default.nix -afk-test
+checks/matrix.json -afk-test
