@@ -75,7 +75,7 @@ in
 
       # DAP
       delve
-      python312Packages.debugpy
+      python3Packages.debugpy
 
       # Utilities
       imagemagick

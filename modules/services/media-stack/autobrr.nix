@@ -57,14 +57,10 @@ in
       }
     ];
 
-    # Autobrr session secret (generate with: nix-shell -p openssl --run "openssl rand -hex 32")
-    sops.secrets."media-stack/autobrr/session-secret" = { };
-
     # Native NixOS Autobrr service
     services.autobrr = {
       enable = true;
       openFirewall = true;
-      secretFile = config.sops.secrets."media-stack/autobrr/session-secret".path;
       settings = {
         host = "0.0.0.0";
         port = cfg.port;
