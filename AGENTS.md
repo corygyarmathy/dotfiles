@@ -80,7 +80,7 @@ including deciding between `ready-for-agent` and `ready-for-human`, see
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See
 `docs/agents/domain.md`.
 
 ### Documentation
