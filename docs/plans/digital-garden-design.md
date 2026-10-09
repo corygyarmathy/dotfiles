@@ -933,7 +933,7 @@ Reported as four faults in one composition: the header hangs off the right of th
 
 Two hours, and it is the largest change in how the site feels for the least code on this list.
 
-About that, and about a hundred lines of it are stylesheet comment. The risk that did not appear in the estimate is the one that cost the most: `garden-preview` watches the stylesheet's directory with `inotifywait --exclude '/\.'`, so a checkout under `.claude/worktrees/` never re-renders and the loop this whole plan depends on silently stops working — three screenshots were compared before the loop was found to be showing the same page each time. The fix in the session was to render from a copy of the stylesheet outside the dotted path; the fix in the repository is to exclude the directories that rule means (`.obsidian`, `.git`) rather than every path with a dot in it, and it belongs to whichever session next touches `preview.nix`.
+About that, and about a hundred lines of it are stylesheet comment. The risk that did not appear in the estimate is the one that cost the most: `garden-preview` watches the stylesheet's directory with `inotifywait --exclude '/\.'`, so a checkout under `.claude/worktrees/` never re-renders and the loop this whole plan depends on silently stops working — three screenshots were compared before the loop was found to be showing the same page each time. The fix in the session was to render from a copy of the stylesheet outside the dotted path; the fix in the repository is the one rule in `lib/ignore.nix` (#301), which only looks below the vault root, so a dotted ancestor never silences the watch.
 
 ## 20. Ambient Life on the 404
 
