@@ -4,18 +4,6 @@
 
 This repository is Cory's NixOS fleet configuration. It manages the hosts through a gated GitOps pipeline (see further: [[.github/workflows/README.md]]).
 
-## Working Method
-
-1. Always isolate work in a git worktree.
-2. Inspect the relevant files and trace how the current configuration works
-   before editing.
-3. State important assumptions when the request is ambiguous. Do not broaden a
-   focused change into an unrelated refactor.
-4. Make the smallest correct change and preserve established naming and layout.
-5. Add or update a check when changing observable service behavior, CI should always gate objective _correctness_.
-6. Run the narrowest useful checks, then run the full relevant check when
-   practical. Report commands, results, and any checks that could not run.
-
 ## Formatting
 
 `nix fmt` (treefmt with ./treefmt.toml) is the formatter of record, and CI
@@ -29,20 +17,13 @@ ADR 0008 for why it is shaped this way.
   file and re-edit it purely to adjust formatting beyond that single pass. If
   `nix fmt -- --ci` still disagrees afterwards, report the mismatch instead
   of retrying.
-- Some files are deliberately outside the pipeline: sops-encrypted payloads,
-  Hugo layouts (Go templates, not HTML), the garden's rendering fixture, and
-  generated lockfiles - see the `excludes` in ./treefmt.toml. Leave those
-  alone rather than formatting them by hand.
-- Adding or changing a formatter means editing ./treefmt.toml first - it is
-  the canonical definition - plus the two lists that must mirror it: the
-  `runtimeInputs` in flake.nix (the pinned binaries) and the `extensions` in
-  configs/opencode/opencode.jsonc (the harness matches extensions exactly, so
-  there is no catch-all). checks/fmt-gate fails the gate when a formatter is
-  declared without its binary.
+- Files in the `excludes` of ./treefmt.toml are deliberately outside the
+  pipeline. Leave them alone rather than formatting them by hand.
 
 ## Validation
 
-Useful checks include:
+Add or update a check when changing observable service behavior: CI should
+always gate objective _correctness_. Useful checks include:
 
 ```bash
 nix flake check --print-build-logs
@@ -50,9 +31,7 @@ nix build --print-build-logs ".#nixosConfigurations.<host>.config.system.build.t
 ```
 
 Use the host names `homelab01`, `homelab02`, and `xps15`. For local iteration,
-`nixos-rebuild build --flake .#<host>` avoids activation. Do not activate a
-configuration on a remote host or run deployment/recovery commands unless the
-user explicitly requests that operational action.
+`nixos-rebuild build --flake .#<host>` avoids activation.
 
 The checks in `checks/` are NixOS VM behavior tests and are part of
 `nix flake check`; do not treat a successful evaluation alone as proof that a
@@ -63,8 +42,8 @@ service starts or that its generated configuration is valid.
 - All repo secrets are encrypted with `sops` in `secrets/`. See further: [[secrets/README.md]].
 - Do not weaken SSH, firewall, SOPS, service confinement, deployment gates, or
   branch protections to make a check pass.
-- Do not run destructive commands, remote activation, or production-affecting
-  operations without explicit confirmation.
+- Do not run destructive commands, activate a configuration on a remote host,
+  or run deployment or recovery commands without explicit confirmation.
 
 ## Change-Specific Guidance
 
@@ -80,20 +59,11 @@ service starts or that its generated configuration is valid.
   discovers packages through `passthru.autoUpdate`.
 - Adding a host requires adding it to the build matrix in
   `.github/workflows/ci.yml`; otherwise the gate does not protect it.
-- Adding a flake check likewise requires adding it to the `checks` matrix in
-  `.github/workflows/ci.yml`; the `lint` job fails when the two lists
-  disagree.
+- Adding a flake check likewise requires adding its name to
+  `checks/matrix.json`, which the `checks` matrix reads; the `lint` job fails
+  when that file and the flake's checks disagree.
 - Changes to deployment semantics should include documentation or an ADR when
   they introduce or alter a durable architectural decision.
-
-## Response Expectations
-
-For each completed task, summarise:
-
-- What changed and why.
-- Files changed, especially any security or deployment-sensitive files.
-- Checks run and their results.
-- Assumptions, residual risks, or skipped verification.
 
 ## Agent skills
 
@@ -104,13 +74,13 @@ Issues live in this repo's GitHub Issues (via the `gh` CLI). See
 
 ### Triage labels
 
-Five canonical roles map 1:1 to the tracker's label strings. See
-`docs/agents/triage-labels.md`. Whether a ticket may be worked unattended is a
-separate question with two rules: `docs/agents/afk-eligibility.md`.
+Five canonical roles map 1:1 to the tracker's label strings. When triaging,
+including deciding between `ready-for-agent` and `ready-for-human`, see
+`docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See
 `docs/agents/domain.md`.
 
 ### Documentation

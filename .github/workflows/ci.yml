@@ -115,16 +115,17 @@ jobs:
           nix eval --raw .#apps.x86_64-linux.garden-preview.program
           echo
 
-      # The matrix below names each check explicitly rather than discovering
-      # them, because discovery costs a serialised job ahead of every shard and
-      # the gate has a wall-clock budget. The price of naming them is that a
-      # check added to ./checks and not added to the matrix silently stops
-      # being run - the same "gate that quietly stops gating" failure the
-      # `always()` note on the gate job is about. So assert the two agree.
+      # The `checks` matrix names each check explicitly, in checks/matrix.json,
+      # rather than discovering them, because discovery costs a serialised job
+      # ahead of every shard and the gate has a wall-clock budget. The price of
+      # naming them is that a check added to ./checks and not to that file
+      # silently stops being run - the same "gate that quietly stops gating"
+      # failure the `always()` note on the gate job is about. So assert the two
+      # agree.
       #
-      # yq is a lint-time tool rather than a build input, so taking it from the
+      # jq is a lint-time tool rather than a build input, so taking it from the
       # unpinned registry is fine here; it is not going into anything shipped.
-      - name: Every flake check is in the matrix
+      - name: Every flake check is in checks/matrix.json
         run: |
           set -euo pipefail
           # LC_ALL=C on both sides: the names contain hyphens, which some
@@ -134,14 +135,47 @@ jobs:
           nix eval --raw .#checks.x86_64-linux \
             --apply 'cs: builtins.concatStringsSep "\n" (builtins.attrNames cs)' \
             | LC_ALL=C sort > /tmp/flake-checks
-          nix shell nixpkgs#yq-go --command \
-            yq -r '.jobs.checks.strategy.matrix.check[]' .github/workflows/ci.yml \
+          nix shell nixpkgs#jq --command jq -r '.[]' checks/matrix.json \
             | LC_ALL=C sort > /tmp/matrix-checks
           if ! diff -u /tmp/flake-checks /tmp/matrix-checks; then
-            echo "::error::checks in the flake and checks in the ci.yml matrix disagree (- flake, + matrix)"
+            echo "::error::checks in the flake and checks in checks/matrix.json disagree (- flake, + matrix.json)"
             exit 1
           fi
-          echo "::notice::$(wc -l < /tmp/flake-checks) checks, all present in the matrix"
+          echo "::notice::$(wc -l < /tmp/flake-checks) checks, all present in checks/matrix.json"
+
+  # Reads the `checks` matrix out of checks/matrix.json, which lives outside
+  # .github/workflows/ so that adding a check does not edit a workflow (see
+  # "Changing the pipeline" in ./README.md).
+  #
+  # A pull request's branch can edit that file, and its names reach a job that
+  # holds the Cachix token before anyone has reviewed them. So each name must
+  # match a pattern that cannot carry shell syntax, or nothing runs. `\A` and
+  # `\z` rather than `^` and `$`, which in jq also accept a trailing newline.
+  #
+  # Only the file is checked out and nix is never installed, so this costs
+  # seconds ahead of the shards rather than the evaluation discovery would.
+  check-names:
+    name: check names
+    runs-on: ubuntu-latest
+    outputs:
+      checks: ${{ steps.read.outputs.checks }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: checks/matrix.json
+          sparse-checkout-cone-mode: false
+
+      - name: Read and validate checks/matrix.json
+        id: read
+        run: |
+          set -euo pipefail
+          jq -e \
+            'type == "array" and length > 0 and all(.[]; type == "string" and test("\\A[a-z][a-z0-9-]*\\z"))' \
+            checks/matrix.json >/dev/null || {
+            echo "::error file=checks/matrix.json::must be a non-empty array of names matching ^[a-z][a-z0-9-]*$"
+            exit 1
+          }
+          echo "checks=$(jq -c . checks/matrix.json)" >>"$GITHUB_OUTPUT"
 
   # One runner per check, rather than one runner running `nix flake check`.
   #
@@ -157,41 +191,14 @@ jobs:
   # wall clock is the thing with a budget.
   checks:
     name: check ${{ matrix.check }}
+    needs: check-names
     runs-on: ubuntu-latest
     strategy:
       # Same reasoning as the host matrix: knowing that three checks fail is
       # more useful than knowing that one does.
       fail-fast: false
       matrix:
-        check:
-          - afk-agent
-          - afk-agent-assertions
-          - afk-agent-tokens
-          - alert-rules
-          - alert-rules-unit
-          - alertmanager-config
-          - auto-upgrade-build-gate
-          - bless-boot-guard
-          - digital-garden
-          - digital-garden-filter
-          - digital-garden-ignore
-          - digital-garden-sync-health
-          - deploy-schema
-          - deploy-activate
-          - deploy-sudo
-          - download-root-canary
-          - download-root-canary-script
-          - download-root-safety
-          - fmt-gate
-          - grafana
-          - host-alive
-          - media-nfs-recovery
-          - monitoring
-          - ntfy
-          - publish
-          - reverse-proxy
-          - secrets
-          - upgrade-verify
+        check: ${{ fromJSON(needs.check-names.outputs.checks) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -228,10 +235,14 @@ jobs:
             echo "::warning::/dev/kvm absent - NixOS tests fall back to TCG emulation"
           fi
 
+      # Through `env:`, never interpolated into the script: the name comes from
+      # a file a pull request can edit.
       - name: Run ${{ matrix.check }}
+        env:
+          CHECK: ${{ matrix.check }}
         run: |
           nix build --print-build-logs --no-link \
-            ".#checks.x86_64-linux.${{ matrix.check }}"
+            ".#checks.x86_64-linux.$CHECK"
 
   build:
     name: build ${{ matrix.host }}
@@ -283,7 +294,7 @@ jobs:
   gate:
     name: nixos ci
     runs-on: ubuntu-latest
-    needs: [lint, checks, build]
+    needs: [lint, check-names, checks, build]
     # `always()` so the gate reports a real failure when a dependency fails.
     # Without it the job is *skipped*, and a skipped required check does not
     # block a merge - the gate would silently stop gating.
@@ -291,13 +302,17 @@ jobs:
     steps:
       # A matrix dependency reports one aggregate result, so `checks` and
       # `build` here each stand for every shard: any shard failing makes the
-      # whole `needs` entry fail.
+      # whole `needs` entry fail. `checks` is skipped, not failed, when
+      # `check-names` rejects the file, which the comparison below also
+      # catches; `check-names` is listed so the log says which happened.
       - name: Verify all checks passed
         run: |
-          echo "lint:   ${{ needs.lint.result }}"
-          echo "checks: ${{ needs.checks.result }}"
-          echo "build:  ${{ needs.build.result }}"
+          echo "lint:        ${{ needs.lint.result }}"
+          echo "check-names: ${{ needs.check-names.result }}"
+          echo "checks:      ${{ needs.checks.result }}"
+          echo "build:       ${{ needs.build.result }}"
           [ "${{ needs.lint.result }}" = "success" ] || exit 1
+          [ "${{ needs.check-names.result }}" = "success" ] || exit 1
           [ "${{ needs.checks.result }}" = "success" ] || exit 1
           [ "${{ needs.build.result }}" = "success" ] || exit 1
 

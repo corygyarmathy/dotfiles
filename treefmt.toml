@@ -9,6 +9,11 @@
 # prettier runs before markdownlint-cli2 on Markdown, goimports before
 # gofumpt on Go - the same order the editor applies them in.
 #
+# Two lists mirror the formatters here, and change with them: the
+# `runtimeInputs` in flake.nix (the pinned binaries; checks/fmt-gate fails
+# when one is missing) and the `extensions` in configs/opencode/opencode.jsonc
+# (opencode matches extensions exactly, so there is no catch-all).
+#
 # Run from the repo root. treefmt resolves its tree root from the enclosing
 # git worktree, so this also works for agent worktrees.
 

@@ -42,17 +42,14 @@ let
 
   # The build-side subtest's workspace: a one-step lint job, then a check whose
   # builder grows without bound inside nix-daemon's cgroup. The host matrix is
-  # never reached.
+  # never reached. The check is named in checks/matrix.json, as in this
+  # repository; ci.yml's `checks` job only reads that file.
   buildOomCi = pkgs.writeText "ci.yml" ''
     jobs:
       lint:
         runs-on: x
         steps:
           - run: "true"
-      checks:
-        strategy:
-          matrix:
-            check: [hog]
       build:
         strategy:
           matrix:
@@ -303,6 +300,8 @@ in
             "mkdir -p /var/lib/afk-agent/build-oom/.github/workflows",
             "cp ${buildOomCi} /var/lib/afk-agent/build-oom/.github/workflows/ci.yml",
             "cp ${buildOomFlake} /var/lib/afk-agent/build-oom/flake.nix",
+            "mkdir -p /var/lib/afk-agent/build-oom/checks",
+            "echo '[\"hog\"]' >/var/lib/afk-agent/build-oom/checks/matrix.json",
             "chown -R afk-agent:afk-agent /var/lib/afk-agent/build-oom",
             "chmod -R u+w /var/lib/afk-agent/build-oom",
         )
@@ -319,6 +318,14 @@ in
             "afk-agent-run env NIX_REMOTE=daemon nix-store --query --hash $(readlink -f /run/current-system)"
         )
         enabled.succeed("echo 2 >/proc/sys/vm/panic_on_oom")
+
+    with subtest("a check name CI's check-names job would refuse fails the gate, saying why"):
+        # Split by the gate's loop, "x y" would fail anyway, as two attributes
+        # nobody named; the message is what shows the name was refused.
+        enabled.succeed("echo '[\"x y\"]' >/var/lib/afk-agent/build-oom/checks/matrix.json")
+        out = enabled.succeed("afk-agent-run ${buildOomGate} 2>&1")
+        assert "gate failed" in out, f"the gate did not fail:\n{out}"
+        assert "check-names job requires" in out, f"the gate did not say the name was refused:\n{out}"
 
     with subtest("opencode's credentials are provisioned from the key"):
         auth = "/var/lib/afk-agent/.local/share/opencode/auth.json"

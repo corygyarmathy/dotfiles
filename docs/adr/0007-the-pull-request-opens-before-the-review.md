@@ -15,7 +15,7 @@
     - Amends: [ADR 0004](0004-afk-agent-runs-self-hosted-with-a-harness-split.md) §6, whose closing "never a PR" was written when the review was a gate. Its retry-in-the-same-session rule is upheld here and extended to a new kind of failure; §9 is untouched
     - Answers: #201, #271, and (the amendment block at §3) #269
     - Depends on: [ADR 0006](0006-the-runner-is-a-github-app.md), which gives the runner an identity that can edit a pull request body without being mistaken for the operator
-    - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, since shipped), `modules/services/afk-agent.nix` (items 8 and 13's shipped implementation), `docs/agents/triage-labels.md` (the hand-off label), `docs/agents/afk-eligibility.md` (the pre-push gate's placement)
+    - Constrains: `docs/plans/afk-agent-pipeline.md` (items 12 and 15, since shipped), `modules/services/afk-agent.nix` (items 8 and 13's shipped implementation), `docs/agents/triage-labels.md` (the hand-off label), the AFK path denylist (`docs/agents/triage-labels.md`; the pre-push gate's placement)
 
 ## Context
 
@@ -49,7 +49,7 @@ There is a sentence in the way. ADR 0004 §6 ends: "A ticket that exhausts its r
 
 **5. The number of CI rounds, and what a failed fix does, are bounded.** Both are parameters, owned by `modules/services/afk-agent.nix`. What is decided here is that they are bounded at all, and that exhausting them stops the run rather than merging, retrying forever, or handing over anyway.
 
-**6. The pre-push denylist gate moves with the push.** It runs immediately before every push, with nothing between the two - including the push a CI fix round makes. It remains the only enforcement of `docs/agents/afk-eligibility.md` on the push path, and the reason is unchanged: a pushed branch runs its own workflow file with this repository's secrets before anybody reads it.
+**6. The pre-push denylist gate moves with the push.** It runs immediately before every push, with nothing between the two - including the push a CI fix round makes. It remains the only enforcement of the AFK path denylist on the push path, and the reason is unchanged: a pushed branch runs its own workflow file with this repository's secrets before anybody reads it.
 
 **7. The hand-off is a label, and a label is a signal rather than a control.** It says "CI is green and a review has run", not "you may merge". Nothing prevents a merge before it is applied, and nothing should: ADR 0004 §9 makes merging a human act, and a mechanism that could withhold a merge would be the runner acquiring a veto over the human instead of the other way round. Which label, and its wording, are parameters recorded in `docs/agents/triage-labels.md`.
 
