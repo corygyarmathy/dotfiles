@@ -253,12 +253,9 @@
       # judged against - the vault is a poor test of a stylesheet, because it
       # contains whatever it happens to contain.
       #
-      # The renderer comes out of the serving host's own evaluated config
-      # rather than being rebuilt here, so the preview cannot drift from what
-      # is deployed. That host is the gateway: the garden is published to the
-      # internet, and the gateway is the machine that owns the tunnel
-      # everything public goes through. Item 2 of docs/plans/structural-
-      # cleanup.md replaces this with a lookup by publication.
+      # Both are built by the same function, from the same settings, as the
+      # service is (lib/pipeline.nix and lib/site.nix), so the preview cannot
+      # drift from what is deployed - and building it evaluates no host.
       apps = forAllSystems (
         system:
         let
@@ -267,20 +264,15 @@
             overlays = builtins.attrValues self.overlays;
             config.allowUnfree = true;
           };
-          garden = self.nixosConfigurations.${fleet.roles.gateway}.config.cg.service.digital-garden;
-          # caddyConfig takes no settings, so importing serve.nix again for it
-          # duplicates no configuration - unlike the renderer, which is read
-          # out of the host's own evaluated config below.
-          serve = import ./modules/services/digital-garden/lib/serve.nix {
-            inherit (nixpkgs) lib;
-          };
+          garden =
+            (import ./modules/services/digital-garden/lib/pipeline.nix {
+              inherit pkgs;
+              inherit (nixpkgs) lib;
+            }).mkGarden
+              (import ./modules/services/digital-garden/lib/site.nix { inherit (fleet) domain; });
           preview = import ./modules/services/digital-garden/lib/preview.nix {
-            inherit pkgs serve;
+            inherit pkgs garden;
             inherit (nixpkgs) lib;
-            inherit (garden) renderer styleSheet filter;
-            workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
-            fixture = ./modules/services/digital-garden/lib/hugo/fixture;
-            workingTreeFixture = "modules/services/digital-garden/lib/hugo/fixture";
           };
 
           # Item 5 of docs/plans/desktop-design.md. The colour half of the

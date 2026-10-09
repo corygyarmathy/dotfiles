@@ -39,12 +39,11 @@ in
       siteDescription ? "",
       styleSheet,
       footerLinks ? { },
-      locale ? "en-au",
     }:
     let
       config = pkgs.writeText "hugo.toml" ''
         baseURL = 'https://${baseUrl}/'
-        locale = '${locale}'
+        locale = 'en-au'
         title = ${builtins.toJSON siteTitle}
         enableRobotsTXT = true
 

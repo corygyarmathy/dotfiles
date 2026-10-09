@@ -88,26 +88,26 @@ let
 
   obsidian-headless = self.packages.${pkgs.stdenv.hostPlatform.system}.obsidian-headless;
 
-  # Rendering and serving live under ./lib so that the local preview runs the
-  # same code as this service does. See the headers there.
-  serve = import ./lib/serve.nix { inherit lib; };
-  hugo = import ./lib/hugo.nix { inherit pkgs lib; };
+  # The site's own settings, which the option defaults below are read from so
+  # that the preview, which reads the same file, renders what this serves.
+  site = import ./lib/site.nix { inherit (config.cg.fleet) domain; };
 
-  renderer = hugo.mkRenderer {
-    inherit (cfg)
-      baseUrl
-      siteTitle
-      siteDescription
-      styleSheet
-      footerLinks
-      ;
-  };
-
-  # The publish filter: publish-filter.py and the bonsai.py it imports,
-  # assembled into one directory. The assembly lives under ./lib so the check
-  # in checks/ runs the very same two files the service does; see the header
-  # of lib/filter.nix.
-  filter = import ./lib/filter.nix { inherit pkgs; };
+  # Filtering, rendering and serving live under ./lib so that the local
+  # preview runs the same code as this service does. See lib/pipeline.nix.
+  inherit
+    ((import ./lib/pipeline.nix { inherit pkgs lib; }).mkGarden {
+      inherit (cfg)
+        baseUrl
+        siteTitle
+        siteDescription
+        styleSheet
+        footerLinks
+        ;
+    })
+    renderer
+    filter
+    serve
+    ;
 
   # Which vault paths the filter, the stamp walk and the watcher all ignore,
   # in the dialect each one needs. See the header of lib/ignore.nix.
@@ -384,22 +384,28 @@ in
       '';
     };
 
+    # The site's settings. Each defaults to lib/site.nix, which is also what
+    # `nix run .#garden-preview` renders with, so setting one on a host makes
+    # the preview differ from what that host serves. Change the site there.
+    # They stay options so that a behaviour test can render a different site.
     baseUrl = lib.mkOption {
       type = lib.types.str;
-      default = "garden.${config.cg.fleet.domain}";
+      default = site.baseUrl;
       defaultText = lib.literalExpression ''"garden.''${config.cg.fleet.domain}"'';
       description = "Public base URL, without scheme; the scheme is added by the renderer";
     };
 
     siteTitle = lib.mkOption {
       type = lib.types.str;
-      default = "Cory Gyarmathy";
+      default = site.siteTitle;
+      defaultText = lib.literalMD "the title in `lib/site.nix`";
       description = "Site title shown in the header";
     };
 
     siteDescription = lib.mkOption {
       type = lib.types.str;
-      default = "Notes and essays, published from a private vault.";
+      default = site.siteDescription;
+      defaultText = lib.literalMD "the description in `lib/site.nix`";
       description = ''
         One sentence describing the site.
 
@@ -432,15 +438,12 @@ in
 
     footerLinks = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
-      default = { };
-      example = {
-        GitHub = "https://github.com/corygyarmathy";
-        Resume = "";
-      };
+      default = site.footerLinks;
+      defaultText = lib.literalMD "the links in `lib/site.nix`";
       description = ''
         Links shown in the site footer, and in the masthead at the top of
-        every page, as a name -> URL map. Empty by default, which renders no
-        list at all rather than an empty one. One list rather than two so that
+        every page, as a name -> URL map. An empty map renders no list at
+        all rather than an empty one. One list rather than two so that
         "where else to find me" cannot say different things at the top and the
         bottom of the same page.
 
@@ -456,38 +459,9 @@ in
       '';
     };
 
-    renderer = lib.mkOption {
-      type = lib.types.package;
-      readOnly = true;
-      internal = true;
-      default = renderer;
-      defaultText = lib.literalMD "the renderer built from the options above";
-      description = ''
-        The `digital-garden-render` program this host's settings produce,
-        exposed so that `nix run .#garden-preview` can run the very same one.
-        Reading it from here rather than rebuilding it in the flake is what
-        stops the preview and the server drifting apart.
-      '';
-    };
-
-    filter = lib.mkOption {
-      type = lib.types.package;
-      readOnly = true;
-      internal = true;
-      default = filter;
-      defaultText = lib.literalMD "publish-filter.py and bonsai.py, in one directory";
-      description = ''
-        The publish filter, as a directory holding `publish-filter.py` and the
-        `bonsai.py` it imports. Exposed for the same reason `renderer` is: so
-        that `nix run .#garden-preview` runs the very same filter the server
-        does rather than a path assembled a second time in the flake, where the
-        two could drift apart without anything failing.
-      '';
-    };
-
     styleSheet = lib.mkOption {
       type = lib.types.path;
-      default = ./lib/hugo/assets/main.css;
+      default = site.styleSheet;
       defaultText = lib.literalMD "the stylesheet the templates are written against";
       description = ''
         The site's entire stylesheet, built as `assets/main.css`. Not an
@@ -499,9 +473,9 @@ in
         change a colour or a margin, edit the default in place.
 
         A path rather than a block of inline lines, so that the preview can be
-        pointed at the file in the working tree and re-render on save. Inline
-        Nix lines can only reach the preview through a fresh evaluation of the
-        whole host, which is most of what made tuning this site tedious.
+        pointed at the file in the working tree and re-render on save, with no
+        Nix evaluation in the loop - the lack of which is most of what made
+        tuning this site tedious.
       '';
     };
   };

@@ -420,6 +420,9 @@ in
   # Not a VM either: the one vault-path ignore rule, run through the filter,
   # the stamp walk's find and a real inotifywait, which must all agree.
   digital-garden-ignore = import ./digital-garden-ignore.nix { inherit pkgs; };
+  # Not a VM: whether a serving host has overridden the site the preview
+  # renders is a question about evaluation.
+  digital-garden-site = import ./digital-garden-site.nix { inherit pkgs self; };
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;
     lib = pkgs.lib;
