@@ -163,6 +163,7 @@ in
             ciCeiling = "1h";
             ciFixes = 2;
             sizeSignal = 400;
+            freshSessionAt = 200000;
             # Not homelab01's, which names none: empty passes nothing, so
             # only a set with something in it shows the binary parses what
             # the module writes. Two labels, one with a space and two globs.
