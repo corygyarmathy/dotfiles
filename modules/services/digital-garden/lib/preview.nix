@@ -25,27 +25,28 @@
 {
   pkgs,
   lib,
-  serve,
-  # The publish filter as a DIRECTORY, holding publish-filter.py and the
-  # bonsai.py it imports. Read out of the serving host's own config, like the
-  # renderer, so the preview cannot filter differently from the server.
-  filter,
-  renderer,
-  styleSheet,
-  # Where the same stylesheet lives in the working tree. Preferred when the
-  # command is run from the repository root, so that editing it re-renders with
-  # no Nix evaluation in the loop.
-  workingTreeStyleSheet,
-  # The rendering fixture: a vault whose only job is to put every element the
-  # theme styles onto as few pages as possible, so that a stylesheet change can
-  # be judged by looking at two screenshots rather than nine. Same
-  # working-tree-first treatment as the stylesheet, and for the same reason -
-  # the fixture is edited about as often as the CSS it exists to exercise.
-  fixture,
-  workingTreeFixture,
+  # The pipeline, as lib/pipeline.nix builds it from lib/site.nix: the same
+  # filter, renderer and serving config the service is built from, so the
+  # preview cannot filter, render or route differently from the server.
+  garden,
   defaultVault ? "$HOME/git/personal-notes",
 }:
 let
+  inherit (garden)
+    filter
+    renderer
+    serve
+    styleSheet
+    fixture
+    ;
+
+  # Where the stylesheet and the fixture live in the working tree. Preferred
+  # when the command is run from the repository root, so that editing either
+  # re-renders with no Nix evaluation in the loop - the fixture is edited
+  # about as often as the CSS it exists to exercise.
+  workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
+  workingTreeFixture = "modules/services/digital-garden/lib/hugo/fixture";
+
   # The same rule the service ignores vault paths by, imported rather than
   # passed in: it reads no configuration, so there is nothing for a host to
   # disagree with. See the header of lib/ignore.nix.
@@ -102,8 +103,8 @@ pkgs.writeShellApplication {
 
     # Prefer the stylesheet in the working tree when there is one, because that
     # is the file you are about to edit. The store copy baked into the renderer
-    # is only reachable through a fresh evaluation of the host, which is the
-    # loop this command exists to avoid.
+    # only changes through a fresh evaluation, which is the loop this command
+    # exists to avoid.
     if [ -z "$css" ]; then
       if [ -f ${workingTreeStyleSheet} ]; then
         css=${workingTreeStyleSheet}

@@ -336,19 +336,10 @@ in
     # -------------------------------------------------------------------------
     # Only notes carrying `publish: true` are ever copied out of the vault;
     # see modules/services/digital-garden/publish-filter.py.
+    # The site's title, links and stylesheet are not set here: they live in
+    # modules/services/digital-garden/lib/site.nix, which the preview reads too.
     digital-garden = {
       enable = true;
-      baseUrl = "garden.${domain}";
-      siteTitle = "Cory Gyarmathy";
-      # An empty URL renders as muted text rather than as a link, so these two
-      # hold their place in the header's link list until they have somewhere
-      # to point - rather than shipping two 404s or two stub pages to stand in
-      # for them. Fill in a URL and it becomes an ordinary link.
-      footerLinks = {
-        GitHub = "https://github.com/corygyarmathy";
-        Projects = "";
-        Resume = "";
-      };
       source = "obsidian-sync";
 
       # The layout is one column with a masthead, and the stylesheet the

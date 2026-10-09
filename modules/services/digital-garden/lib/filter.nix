@@ -7,12 +7,11 @@
 # `${./.}`, so that nothing else in this directory (the whole of lib/, a stray
 # __pycache__) is dragged into the store and into the build stamp.
 #
-# Lives under ./lib, the way sync-health.nix does, so that the consumer which
-# runs the filter directly against a fixture (checks/digital-garden-filter.nix)
-# imports this same assembly rather than re-assembling a second copy that could
-# drift from what the service runs. The module exposes the result as
-# cg.service.digital-garden.filter for the same reason the preview reads it
-# from there.
+# Lives under ./lib, the way sync-health.nix does, so that the service and
+# the preview (through lib/pipeline.nix) and the checks which run the filter
+# directly against a fixture (checks/digital-garden-filter.nix) all run this
+# same assembly rather than re-assembling a second copy that could drift from
+# what the service runs.
 { pkgs }:
 
 pkgs.runCommand "digital-garden-filter" { } ''
