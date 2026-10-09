@@ -1,10 +1,12 @@
 # The garden's pipeline - filter, renderer, serving config - as one function
 # of the site's settings.
 #
-# The service, `nix run .#garden-preview` and the checks all call this, which
-# is what keeps the preview from drifting from the server: both are handed
+# The service and `nix run .#garden-preview` both call this, which is what
+# keeps the preview from drifting from the server: both are handed
 # the same pieces built from the same settings (lib/site.nix), rather than the
 # preview reading them back out of an evaluated host.
+# The filter checks import lib/filter.nix directly: it takes no settings, so
+# it is the same derivation either way.
 { pkgs, lib }:
 {
   mkGarden =

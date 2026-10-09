@@ -43,8 +43,10 @@ let
   # Where the stylesheet and the fixture live in the working tree. Preferred
   # when the command is run from the repository root, so that editing either
   # re-renders with no Nix evaluation in the loop - the fixture is edited
-  # about as often as the CSS it exists to exercise.
-  workingTreeStyleSheet = "modules/services/digital-garden/lib/hugo/assets/main.css";
+  # about as often as the CSS it exists to exercise. The stylesheet's path is
+  # derived from the one the renderer bakes in, so pointing lib/site.nix at
+  # another file moves the preview with it.
+  workingTreeStyleSheet = lib.path.removePrefix ../../../.. styleSheet;
   workingTreeFixture = "modules/services/digital-garden/lib/hugo/fixture";
 
   # The same rule the service ignores vault paths by, imported rather than
