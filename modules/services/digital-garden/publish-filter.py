@@ -127,7 +127,13 @@ The home page is excluded as a SOURCE. It is a table of contents that links to
 everything, so counting it would give every note the same backlink and tell a
 reader nothing they did not get by arriving from it.
 
-Usage: publish-filter.py <vault> <staging> <ledger>
+Which vault paths are read at all is not decided here. <ignore> is a regex,
+matched against each path relative to the vault, naming the paths the filter
+never opens (dotted ones: .obsidian, .git, .trash). The watchers and the build
+stamp have to agree with it about which files exist, so it is defined once in
+lib/ignore.nix and passed in rather than spelled a second time here.
+
+Usage: publish-filter.py <vault> <staging> <ledger> <ignore>
 """
 
 import hashlib
@@ -659,11 +665,12 @@ def update_ledger(ledger, key, text, today, seed_revisions=0):
 
 
 def main(argv):
-    if len(argv) != 4:
+    if len(argv) != 5:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
     vault, staging = Path(argv[1]).resolve(), Path(argv[2]).resolve()
     ledger_path = Path(argv[3]).resolve()
+    ignored = re.compile(argv[4])
     if not vault.is_dir():
         print(f"vault not a directory: {vault}", file=sys.stderr)
         return 2
@@ -678,9 +685,7 @@ def main(argv):
     collisions = []
     skipped = 0
     for path in sorted(vault.rglob("*")):
-        if not path.is_file() or any(
-            p.startswith(".") for p in path.relative_to(vault).parts
-        ):
+        if not path.is_file() or ignored.match(path.relative_to(vault).as_posix()):
             continue
         if path.suffix.lower() in ATTACHMENT_SUFFIXES:
             attachments.setdefault(path.name.lower(), path)
