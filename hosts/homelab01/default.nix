@@ -291,6 +291,11 @@ in
         ciFixes = 2;
         # afk-agent#107's resolution.
         sizeSignal = 400;
+        # Both implement models have a 1M context and no dearer long-context
+        # band, so the reason to start fresh is the quality of a long session
+        # and the cache reads every turn re-sends. 200k is a judgement, not a
+        # measurement (#374): revisit it with the per-turn token data.
+        freshSessionAt = 200000;
       };
       revise = {
         # The push made during a revision is almost always the operator's,

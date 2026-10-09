@@ -602,6 +602,18 @@ in
         '';
       };
 
+      freshSessionAt = lib.mkOption {
+        type = lib.types.ints.unsigned;
+        description = ''
+          Input tokens of a session's last turn over which a gate retry, a CI
+          fix or a cut starts a fresh session, rather than continuing the one
+          that wrote the branch (`--fresh-session-at`). A revision does the
+          same. Zero continues every session. The fresh session gets the issue
+          and the failure or the cut, and finds the earlier commits on its
+          branch.
+        '';
+      };
+
       reviewProcedure = lib.mkOption {
         type = lib.types.strMatching "https?://[^/]+.*";
         default = "https://github.com/corygyarmathy/skills/blob/master/docs/operators-review.md";
@@ -822,6 +834,7 @@ in
           AFK_CI_CEILING = cfg.implement.ciCeiling;
           AFK_CI_FIXES = cfg.implement.ciFixes;
           AFK_SIZE_SIGNAL = cfg.implement.sizeSignal;
+          AFK_FRESH_SESSION_AT = cfg.implement.freshSessionAt;
           AFK_REVIEW_PROCEDURE = cfg.implement.reviewProcedure;
 
           AFK_REPLAYS = cfg.revise.replays;
