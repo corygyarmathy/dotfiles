@@ -35,8 +35,6 @@ pkgs.runCommand "check-digital-garden-ignore"
     ];
     inherit filter;
     ignoreRelative = ignore.relative;
-    ignoreFind = ignore.find;
-    ignoreInotify = ignore.inotify;
   }
   ''
     set -euo pipefail
@@ -54,6 +52,9 @@ pkgs.runCommand "check-digital-garden-ignore"
     note .git/COMMIT.md
     note notes/.trash/old.md
     note sub/.claude/worktrees/co/notes/nested.md
+    # A newline in a directory name: Python's `.` stops at it and ERE's does
+    # not, so a rule written with `.` would let the filter read this one.
+    note $'a\nb/.trash/gone.md'
     touch "$vault/.sync.lock"
 
     # What every consumer should see, by vault-relative path.
@@ -73,18 +74,17 @@ pkgs.runCommand "check-digital-garden-ignore"
     $expected"
 
     # --- the stamp walk ------------------------------------------------------
-    # The same find expression the build script runs, from the same place.
-    walked=$(cd "$vault" && find . -regextype posix-extended -regex "$ignoreFind" \
-      -prune -o -type f -printf '%P\n' | sort)
+    # The build script's own prune fragment, from the same place.
+    walked=$(cd "$vault" && find . ${ignore.findPrune} -o -type f -printf '%P\n' | sort)
     [ "$walked" = "$expected" ] || fail "stamp walk saw:
     $walked
     expected:
     $expected"
 
     # --- the watchers --------------------------------------------------------
-    # The same flags both watchers pass, from inside the vault, plus the
-    # preview's second watch on a stylesheet directory that is itself under
-    # the dotted ancestor - the exact shape the old exclusion silenced. Every
+    # The exclusion fragment both watchers splice in, from inside the vault,
+    # with the events they watch for, plus the preview's second watch on a
+    # stylesheet directory that is itself under the dotted ancestor - the exact shape the old exclusion silenced. Every
     # file is written, then a sentinel; events arrive in order, so once the
     # sentinel is reported every earlier event has been too.
     assets="$root/.claude/worktrees/wt/assets"
@@ -93,7 +93,7 @@ pkgs.runCommand "check-digital-garden-ignore"
     events=$(mktemp)
     errors=$(mktemp)
     (cd "$vault" && exec inotifywait -m -r -e modify,create,delete,move,close_write \
-      --exclude "$ignoreInotify" --format '%w%f' . "$assets/" > "$events" 2> "$errors") &
+      ${ignore.inotifyExclude} --format '%w%f' . "$assets/" > "$events" 2> "$errors") &
     watcher=$!
     wait_for() {
       for _ in $(seq 200); do

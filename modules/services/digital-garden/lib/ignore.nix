@@ -19,26 +19,33 @@
 #
 # Every dialect is relative to the vault root: the shell consumers run from
 # inside the vault and name it as `.`, so no path ever has to be escaped into a
-# regex. checks/digital-garden-ignore.nix runs all three dialects against one
-# vault and asserts they agree.
+# regex. The shell forms are whole argument fragments, flags included, so a
+# consumer splices them in rather than restating how its tool reads a regex.
+# checks/digital-garden-ignore.nix splices the same fragments into a real find
+# and a real inotifywait, runs the filter beside them on one vault, and
+# asserts all three agree.
 let
-  # ERE over a vault-relative path: optional leading directories, then a
-  # component that starts with a dot.
-  dotted = "(.*/)?\\.";
+  # ERE over a vault-relative path: any leading directories, then a component
+  # that starts with a dot. `[^/]` rather than `.`, because Python's `.` stops
+  # at a newline and POSIX ERE's does not: a directory named with one would
+  # otherwise be read by the filter and ignored by find and the watchers.
+  dotted = "([^/]*/)*\\.";
 in
 {
   # publish-filter.py's fourth argument, applied with re.match to each path
   # relative to the vault, e.g. "notes/.trash/old.md".
   relative = "^${dotted}";
 
-  # `find . -regextype posix-extended -regex <this> -prune`, run from the vault
-  # root. find's -regex must match the WHOLE path, hence the trailing .*, and
-  # find names every path from the start point, hence the leading ./.
-  find = "\\./${dotted}.*";
+  # Spliced into `find . <this> -o ...`, run from the vault root. Without
+  # -regextype, find reads the regex as emacs syntax, where the parentheses
+  # are literal and nothing is pruned. find's -regex must match the WHOLE
+  # path, hence the trailing .*, and find names every path from the start
+  # point, hence the leading ./.
+  findPrune = "-regextype posix-extended -regex '\\./${dotted}.*' -prune";
 
-  # `inotifywait --exclude <this> ... .`, run from the vault root. inotifywait
-  # searches rather than matches, so it is anchored explicitly; paths outside
-  # the vault (the preview also watches the stylesheet's directory) start
-  # with / and are never excluded by it.
-  inotify = "^\\./${dotted}";
+  # Spliced into `inotifywait ... <this> .`, run from the vault root.
+  # inotifywait searches rather than matches, so it is anchored explicitly;
+  # paths outside the vault (the preview also watches the stylesheet's
+  # directory) start with / and are never excluded by it.
+  inotifyExclude = "--exclude '^\\./${dotted}'";
 }

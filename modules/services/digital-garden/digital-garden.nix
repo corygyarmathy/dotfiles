@@ -214,8 +214,7 @@ let
         {
           echo "${buildInputsId}"
           cd "${vaultDir}"
-          find . -regextype posix-extended -regex '${ignore.find}' -prune \
-            -o -type f -printf '%P %s %T@\n' | sort
+          find . ${ignore.findPrune} -o -type f -printf '%P %s %T@\n' | sort
         } | sha256sum | cut -d' ' -f1
       )
       if [ "$(cat "$vault_stamp" 2>/dev/null || true)" = "$vault_id" ]; then
@@ -306,7 +305,7 @@ let
       # the vault root.
       cd "${vaultDir}"
       inotifywait -q -m -r -e modify,create,delete,move,close_write \
-        --exclude '${ignore.inotify}' . \
+        ${ignore.inotifyExclude} . \
         | while read -r _; do
             # A single logical change arrives as several events, and Obsidian
             # Sync delivers a burst over a few seconds. Wait for the burst to

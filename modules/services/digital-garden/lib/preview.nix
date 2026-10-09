@@ -229,7 +229,7 @@ pkgs.writeShellApplication {
     cssdir=$(dirname "$css")
     cd "$vault"
     inotifywait -q -m -r -e modify,create,delete,move,close_write \
-      --exclude '${ignore.inotify}' --format '%w%f' . "$cssdir/" \
+      ${ignore.inotifyExclude} --format '%w%f' . "$cssdir/" \
       | while read -r changed; do
         # The watch is on the stylesheet's directory rather than the file (see
         # above), so it also fires for the editor's own scratch files - swap
