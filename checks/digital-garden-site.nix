@@ -14,7 +14,9 @@
 # - The garden flake's domain is the fleet's. Its packages.renderer is built
 #   from this flake's nixpkgs (the input follows ours) and its own `lib.site`,
 #   so it is the same derivation as one built from `lib.site` with the fleet's
-#   domain exactly when the two domains agree.
+#   domain exactly when the two domains agree - provided the garden builds
+#   packages.renderer with nothing but lib.mkGarden, which is why the failure
+#   names that as the other cause.
 #
 # Not a VM: which settings a host ends up with is a question about evaluation.
 {
@@ -61,8 +63,10 @@ pkgs.runCommand "check-digital-garden-site" { } (
     ${lib.concatMapStringsSep "\n" (line: "echo ${lib.escapeShellArg "  ${line}"} >&2") overridden}
   ''
   + lib.optionalString (!domainAgrees) ''
-    echo "the garden repository's flake.nix renders its preview for a domain other" >&2
-    echo ${lib.escapeShellArg "than the fleet's (${domain}), so its preview no longer shows what the host serves."} >&2
+    echo "the garden repository's preview renderer is not the one built from its lib.site" >&2
+    echo ${lib.escapeShellArg "with the fleet's domain (${domain}), so its preview no longer shows what the host serves."} >&2
+    echo "Most likely its flake.nix states a different domain; otherwise it builds" >&2
+    echo "packages.renderer some other way than lib.mkGarden (lib.site { domain; })." >&2
   ''
   + (if overridden == [ ] && domainAgrees then "touch $out" else "exit 1")
 )
