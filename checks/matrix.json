@@ -11,8 +11,6 @@
   "deploy-schema",
   "deploy-sudo",
   "digital-garden",
-  "digital-garden-filter",
-  "digital-garden-ignore",
   "digital-garden-site",
   "digital-garden-sync-health",
   "download-root-canary",

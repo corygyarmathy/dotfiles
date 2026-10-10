@@ -335,9 +335,10 @@ in
     # Digital Garden (published subset of the Obsidian vault)
     # -------------------------------------------------------------------------
     # Only notes carrying `publish: true` are ever copied out of the vault;
-    # see modules/services/digital-garden/publish-filter.py.
-    # The site's title, links and stylesheet are not set here: they live in
-    # modules/services/digital-garden/lib/site.nix, which the preview reads too.
+    # see publish-filter.py in the garden repository (the `digital-garden`
+    # flake input). The site's title, links and stylesheet are not set here:
+    # they live in that repository's lib/site.nix, which its preview reads
+    # too, and checks/digital-garden-site.nix fails if they are.
     digital-garden = {
       enable = true;
       source = "obsidian-sync";

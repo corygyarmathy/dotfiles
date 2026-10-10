@@ -106,6 +106,26 @@
         "type": "github"
       }
     },
+    "digital-garden": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791595860,
+        "narHash": "sha256-edFc8ivCKQIOoonXdi1siz/M10GvSkEHF/ZuI4tgeEw=",
+        "owner": "corygyarmathy",
+        "repo": "digital-garden",
+        "rev": "6128a0dcfb5ee1c1fc95c02bcd3b470e7c80ba0f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "corygyarmathy",
+        "repo": "digital-garden",
+        "type": "github"
+      }
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -342,6 +362,7 @@
       "inputs": {
         "afk-agent": "afk-agent",
         "deploy-rs": "deploy-rs",
+        "digital-garden": "digital-garden",
         "disko": "disko",
         "hardware": "hardware",
         "home-manager": "home-manager",

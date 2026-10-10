@@ -38,6 +38,14 @@
     # bump is still a pull request through this repository's gate.
     afk-agent.url = "github:corygyarmathy/afk-agent";
     afk-agent.flake = false;
+
+    # The digital garden's pipeline (modules/services/digital-garden). Its
+    # nixpkgs follows ours because `lib.mkGarden` is handed the host's `pkgs`
+    # and builds nothing from its own, so a second nixpkgs would be locked and
+    # never used. Arrives like afk-agent: through the nightly lock bump, as a
+    # pull request through this repository's gate.
+    digital-garden.url = "github:corygyarmathy/digital-garden";
+    digital-garden.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -238,24 +246,6 @@
         }
       );
 
-      # Local preview for the digital garden:
-      #
-      #   nix run .#garden-preview
-      #   nix run .#garden-preview -- --fixture
-      #
-      # The first renders the published subset of the vault with the same
-      # renderer and serves it with the same Caddy config the server uses,
-      # re-rendering on save. See modules/services/digital-garden/lib/preview.nix
-      # for why.
-      #
-      # The second renders the theme's own fixture instead: every element the
-      # stylesheet styles, on four pages, which is what a visual change is
-      # judged against - the vault is a poor test of a stylesheet, because it
-      # contains whatever it happens to contain.
-      #
-      # Both are built by the same function, from the same settings, as the
-      # service is (lib/pipeline.nix and lib/site.nix), so the preview cannot
-      # drift from what is deployed - and building it evaluates no host.
       apps = forAllSystems (
         system:
         let
@@ -264,17 +254,6 @@
             overlays = builtins.attrValues self.overlays;
             config.allowUnfree = true;
           };
-          garden =
-            (import ./modules/services/digital-garden/lib/pipeline.nix {
-              inherit pkgs;
-              inherit (nixpkgs) lib;
-            }).mkGarden
-              (import ./modules/services/digital-garden/lib/site.nix { inherit (fleet) domain; });
-          preview = import ./modules/services/digital-garden/lib/preview.nix {
-            inherit pkgs garden;
-            inherit (nixpkgs) lib;
-          };
-
           # Item 5 of docs/plans/desktop-design.md. The colour half of the
           # waybar and rofi configuration is generated from lib/kanagawa-wave.nix
           # and *also* checked in, so that configs/ keeps working on a machine
@@ -301,14 +280,6 @@
             };
         in
         {
-          garden-preview = {
-            type = "app";
-            program = nixpkgs.lib.getExe preview;
-            meta = {
-              description = "Local preview that renders and serves the digital garden exactly as the server does";
-            };
-          };
-
           write-palette = {
             type = "app";
             program = nixpkgs.lib.getExe writePalette;

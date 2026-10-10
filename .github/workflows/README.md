@@ -59,7 +59,7 @@ Default setup rather than advanced is deliberate. Advanced setup would put a gen
 
 The reason it is all noise is that `remote_and_local` assumes an attacker who controls local files, argv or env, and for these tools the operator supplying those paths is a systemd unit with fixed arguments. There is no privilege boundary for the taint to cross. Reverting to `remote` returns the repo to zero alerts while `extended` keeps the broader non-taint queries. A permanently noisy Security tab is worse than a quiet one, because it is the one you stop reading.
 
-**Do not expect CodeQL to protect `publish-filter.py`.** Its failure mode is publishing a note that was never marked for publication, which is a logic property, not a taint path. The VM test in `checks/` is the only real control there, and the `remote_and_local` experiment above is evidence for that rather than against it.
+**Do not expect CodeQL to protect `publish-filter.py`**, which now lives in the [garden repository](https://github.com/corygyarmathy/digital-garden) and is outside this scan entirely. Its failure mode is publishing a note that was never marked for publication, which is a logic property, not a taint path. The VM test in `checks/` is the only real control there, and the `remote_and_local` experiment above is evidence for that rather than against it.
 
 ### How a night runs
 
