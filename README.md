@@ -50,17 +50,9 @@ ssh homelab01 sudo systemctl start nixos-upgrade.service
 
 # Local machine, from the working tree
 sudo nixos-rebuild switch --flake .#xps15
-
-# See the digital garden as it will be published, without publishing it
-nix run .#garden-preview
 ```
 
-`garden-preview` renders the published subset of the local Obsidian vault with the
-same renderer and serves it with the same Caddy config the server uses, then
-re-renders whenever a note or the site's stylesheet
-(`modules/services/digital-garden/lib/hugo/assets/main.css`) changes. Before it
-existed, seeing a CSS change meant a full PR -> gate -> merge -> promote ->
-upgrade round trip, which is minutes; the render itself is under a second.
+The digital garden's pipeline, and its `garden-preview`, live in [`corygyarmathy/digital-garden`](https://github.com/corygyarmathy/digital-garden); this repository runs it as the `digital-garden` flake input, and a change merged there reaches homelab01 through the nightly lock bump.
 
 The `deploy` command above uses `coryg@`-less SSH: it connects as `deploy` and elevates to root with sudo, because `cg.ssh-hardening` sets `PermitRootLogin = "no"` and `AllowUsers` is `coryg` and `deploy` over SSH, so root SSH is refused on both servers. `nixos-rebuild --target-host` needs `--elevate=sudo` and `--ask-elevate-password` for the same reason — `wheelNeedsPassword` is on. `deploy` was [item 6](docs/plans/deployment-hardening.md) of the hardening plan; `nixos-rebuild --target-host` is the fallback.
 

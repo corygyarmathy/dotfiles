@@ -97,11 +97,6 @@ jobs:
       # developer's machine, because the path is already in their store from
       # the last host build - a false pass that only shows up on a clean
       # runner.
-      #
-      # `apps` is the expensive one: garden-preview reads homelab01's
-      # evaluated config, so this evaluates a whole host. It is kept because
-      # nothing else covers preview.nix, and the job still finishes far inside
-      # the host builds it runs beside.
       - name: Evaluate the outputs nothing else covers
         run: |
           set -euo pipefail
@@ -112,8 +107,8 @@ jobs:
           nix eval --json .#packages.x86_64-linux \
             --apply 'ps: builtins.map (p: p.drvPath) (builtins.attrValues ps)'
           echo "apps:"
-          nix eval --raw .#apps.x86_64-linux.garden-preview.program
-          echo
+          nix eval --json .#apps.x86_64-linux \
+            --apply 'as: builtins.map (a: a.program) (builtins.attrValues as)'
 
       # The `checks` matrix names each check explicitly, in checks/matrix.json,
       # rather than discovering them, because discovery costs a serialised job

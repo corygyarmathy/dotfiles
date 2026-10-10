@@ -67,6 +67,12 @@
 # filter turns that into a computed `maturity:` stage. Both are explained in
 # publish-filter.py.
 #
+# The filter, the renderer and the serving config are the garden repository's
+# (github:corygyarmathy/digital-garden, this flake's `digital-garden` input);
+# the paths named in comments here are paths in that repository. What runs
+# them - the units, the watcher, the sync client, the second-layer check - is
+# this module's.
+#
 # Secrets required, depending on `source` (which file they live in is decided
 # by cg.sops-nix; see secrets/README.md):
 #   git:           digital-garden/deploy-key
@@ -81,6 +87,7 @@
   lib,
   pkgs,
   self,
+  inputs,
   ...
 }:
 let
@@ -88,14 +95,20 @@ let
 
   obsidian-headless = self.packages.${pkgs.stdenv.hostPlatform.system}.obsidian-headless;
 
-  # The site's own settings, which the option defaults below are read from so
-  # that the preview, which reads the same file, renders what this serves.
-  site = import ./lib/site.nix { inherit (config.cg.fleet) domain; };
+  # The pipeline - filter, renderer, serving config - and the site's own
+  # settings live in the garden repository, which runs its preview from the
+  # same two functions. See its lib/pipeline.nix and lib/site.nix.
+  garden = inputs.digital-garden.lib;
 
-  # Filtering, rendering and serving live under ./lib so that the local
-  # preview runs the same code as this service does. See lib/pipeline.nix.
+  # The site's own settings, which the option defaults below are read from so
+  # that the preview, which reads the same settings, renders what this serves.
+  site = garden.site { inherit (config.cg.fleet) domain; };
+
+  # Built from this host's `pkgs`: the garden repository's lock governs only
+  # its own checks and preview.
   inherit
-    ((import ./lib/pipeline.nix { inherit pkgs lib; }).mkGarden {
+    (garden.mkGarden {
+      inherit pkgs;
       inherit (cfg)
         baseUrl
         siteTitle
@@ -110,8 +123,9 @@ let
     ;
 
   # Which vault paths the filter, the stamp walk and the watcher all ignore,
-  # in the dialect each one needs. See the header of lib/ignore.nix.
-  ignore = import ./lib/ignore.nix;
+  # in the dialect each one needs. See the header of the garden repository's
+  # lib/ignore.nix.
+  ignore = garden.ignore;
 
   stateDir = "/var/lib/digital-garden";
   vaultDir = "${stateDir}/vault";
@@ -384,9 +398,10 @@ in
       '';
     };
 
-    # The site's settings. Each defaults to lib/site.nix, which is also what
-    # `nix run .#garden-preview` renders with, so setting one on a host makes
-    # the preview differ from what that host serves. Change the site there.
+    # The site's settings. Each defaults to the garden repository's
+    # lib/site.nix, which is also what its preview renders with, so setting one
+    # on a host makes the preview differ from what that host serves (and
+    # checks/digital-garden-site.nix fails). Change the site there.
     # They stay options so that a behaviour test can render a different site.
     baseUrl = lib.mkOption {
       type = lib.types.str;
@@ -398,14 +413,14 @@ in
     siteTitle = lib.mkOption {
       type = lib.types.str;
       default = site.siteTitle;
-      defaultText = lib.literalMD "the title in `lib/site.nix`";
+      defaultText = lib.literalMD "the title in the garden repository's `lib/site.nix`";
       description = "Site title shown in the header";
     };
 
     siteDescription = lib.mkOption {
       type = lib.types.str;
       default = site.siteDescription;
-      defaultText = lib.literalMD "the description in `lib/site.nix`";
+      defaultText = lib.literalMD "the description in the garden repository's `lib/site.nix`";
       description = ''
         One sentence describing the site.
 
@@ -439,7 +454,7 @@ in
     footerLinks = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = site.footerLinks;
-      defaultText = lib.literalMD "the links in `lib/site.nix`";
+      defaultText = lib.literalMD "the links in the garden repository's `lib/site.nix`";
       description = ''
         Links shown in the site footer, and in the masthead at the top of
         every page, as a name -> URL map. An empty map renders no list at
@@ -466,7 +481,7 @@ in
       description = ''
         The site's entire stylesheet, built as `assets/main.css`. Not an
         override layered onto a theme — there is no theme underneath, so this
-        file and the templates in `lib/hugo/layouts` are the whole design and
+        file and the templates in the garden repository's `lib/hugo/layouts` are the whole design and
         are written against each other.
 
         Replacing it means restyling the site rather than adjusting it; to

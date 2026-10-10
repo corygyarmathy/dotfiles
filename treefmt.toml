@@ -42,12 +42,6 @@ command = "prettier"
 options = ["--write"]
 includes = ["*.css", "*.html", "*.json", "*.jsonc", "*.md", "*.yaml", "*.yml"]
 excludes = [
-  # Go templates, not HTML: actions inside tags (`<a href="{{ ... }}">`,
-  # `</h{{ .Level }}>`) are SyntaxErrors to prettier's HTML parser, so one
-  # layout fails the whole batch - and the layouts it can parse it reflows
-  # across action boundaries, which changes rendered whitespace. The garden
-  # VM check (checks/digital-garden.nix) is what covers these files.
-  "modules/services/digital-garden/lib/hugo/layouts/**",
   # A symlink to the repo-root config (for the editor - see
   # .markdownlint-cli2.yaml). Formatting it would write the same bytes as
   # formatting the target, concurrently.
@@ -75,11 +69,6 @@ excludes = [
   # (MD041) and reuses top-level headings per skill. Prettier still
   # normalises whitespace in these files; markdownlint has nothing to add.
   "**/SKILL.md",
-  # The garden's rendering fixture is test input, deliberately adversarial:
-  # adjacent single-paragraph callouts must stay separate blockquotes for
-  # the hue family to be judgeable (MD028). The VM check stages its own
-  # vault; this one is judged by looking at the preview.
-  "modules/services/digital-garden/lib/hugo/fixture/**",
 ]
 priority = 2
 

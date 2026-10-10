@@ -413,16 +413,9 @@ in
   # pinned source's registry, which the file says no running binary answers.
   afk-agent-tokens = import ./afk-agent-tokens.nix { inherit self; };
   digital-garden = testLib.mkTest ./digital-garden.nix;
-  # Also not a VM: the filter is invoked directly against a deliberately
-  # colliding fixture vault, and its refusal is the assertion - see the file
-  # for why the served site cannot carry this property.
-  digital-garden-filter = import ./digital-garden-filter.nix { inherit pkgs; };
-  # Not a VM either: the one vault-path ignore rule, run through the filter,
-  # the stamp walk's find and a real inotifywait, which must all agree.
-  digital-garden-ignore = import ./digital-garden-ignore.nix { inherit pkgs; };
-  # Not a VM: whether a serving host has overridden the site the preview
-  # renders is a question about evaluation.
-  digital-garden-site = import ./digital-garden-site.nix { inherit pkgs self; };
+  # Not a VM: whether a serving host serves the site the garden repository's
+  # preview renders is a question about evaluation.
+  digital-garden-site = import ./digital-garden-site.nix { inherit pkgs self inputs; };
   digital-garden-sync-health = import ./digital-garden-sync-health.nix {
     inherit pkgs;
     lib = pkgs.lib;
