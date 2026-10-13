@@ -17,6 +17,7 @@
 #   };
 {
   config,
+  options,
   lib,
   pkgs,
   ...
@@ -186,6 +187,14 @@ let
     }
   ];
 
+  # nixpkgs 7fd4004 replaced services.adguardhome.host/port with
+  # settings.http.address. Before it, the module overwrote that setting with
+  # host:port (defaulting to 0.0.0.0:3000), so the bind has to go through
+  # host/port there; after it, setting host/port is deprecated and conflicts
+  # with the address. Upstream's default for `host` tells the two apart.
+  # TODO: drop once flake.lock is past 7fd4004.
+  legacyHostPort = (options.services.adguardhome.host.default or null) != null;
+
 in
 {
   # Reads config.cg.fleet and contributes to config.cg.publish, so it declares
@@ -240,7 +249,7 @@ in
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Whether to open firewall ports for DNS and web interface";
+      description = "Whether to open firewall ports for DNS";
     };
     extraRewrites = lib.mkOption {
       type = lib.types.listOf (
@@ -300,16 +309,11 @@ in
       # Set to false for fully declarative (Nix-only) config
       mutableSettings = false;
 
-      # Open firewall for DNS
-      openFirewall = cfg.openFirewall;
-
-      # Web interface port
-      port = cfg.webPort;
-
       # AdGuard Home configuration
       # Reference: https://github.com/AdguardTeam/AdGuardHome/wiki/Configuration
       settings = {
-        # HTTP server settings (web interface)
+        # HTTP server settings (web interface). Loopback only: Caddy fronts it
+        # (cg.publish proxies to localhost).
         http = {
           address = "127.0.0.1:${toString cfg.webPort}";
         };
@@ -445,13 +449,16 @@ in
         # Schema version (don't change unless upgrading)
         schema_version = 29;
       };
+    }
+    // lib.optionalAttrs legacyHostPort {
+      host = "127.0.0.1";
+      port = cfg.webPort;
     };
 
-    # Additional firewall rules
+    # DNS only: the web interface binds loopback and is reached through Caddy.
     networking.firewall = lib.mkIf cfg.openFirewall {
       allowedTCPPorts = [
         cfg.dnsPort # DNS over TCP
-        cfg.webPort # Web interface
       ];
       allowedUDPPorts = [
         cfg.dnsPort # DNS over UDP (primary)
