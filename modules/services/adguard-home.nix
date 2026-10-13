@@ -17,7 +17,6 @@
 #   };
 {
   config,
-  options,
   lib,
   pkgs,
   ...
@@ -186,14 +185,6 @@ let
       id = 7;
     }
   ];
-
-  # nixpkgs 7fd4004 replaced services.adguardhome.host/port with
-  # settings.http.address. Before it, the module overwrote that setting with
-  # host:port (defaulting to 0.0.0.0:3000), so the bind has to go through
-  # host/port there; after it, setting host/port is deprecated and conflicts
-  # with the address. Upstream's default for `host` tells the two apart.
-  # TODO: drop once flake.lock is past 7fd4004.
-  legacyHostPort = (options.services.adguardhome.host.default or null) != null;
 
 in
 {
@@ -449,10 +440,6 @@ in
         # Schema version (don't change unless upgrading)
         schema_version = 29;
       };
-    }
-    // lib.optionalAttrs legacyHostPort {
-      host = "127.0.0.1";
-      port = cfg.webPort;
     };
 
     # DNS only: the web interface binds loopback and is reached through Caddy.
