@@ -403,6 +403,7 @@ in
         touch $out
       '';
 
+  adguard-home = testLib.mkTest ./adguard-home.nix;
   afk-agent = testLib.mkTest ./afk-agent.nix;
   # Not a VM: whether each assertion fires is a question about evaluation.
   afk-agent-assertions = import ./afk-agent-assertions.nix {
