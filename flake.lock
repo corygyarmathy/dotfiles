@@ -113,11 +113,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792087066,
-        "narHash": "sha256-42s6ZXGrXVUvPGFx31NoMMhLf4tw9mTN/yosaS6TvYM=",
+        "lastModified": 1792342843,
+        "narHash": "sha256-ZMOTcYxjS4QqEAilKa0nsMRAFR5FgUoc3A/SJcnUMbs=",
         "owner": "corygyarmathy",
         "repo": "digital-garden",
-        "rev": "674e53b24bb1e6334b9ee2c4706202829f8e0095",
+        "rev": "d1dd8e19d12a294a3bd86125e0fae62544055b98",
         "type": "github"
       },
       "original": {
@@ -303,11 +303,11 @@
     },
     "nixpkgs-unstable-small": {
       "locked": {
-        "lastModified": 1792234340,
-        "narHash": "sha256-QI3lSHgcDJ9iSXAHCrX2ES/3QZ+J/Of74pFI/Z+4abg=",
+        "lastModified": 1792291545,
+        "narHash": "sha256-LW33+dSrpSw4Xpz3cDKqNARm84z0+bRNsv+7m6exF84=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "0541f3358c07bae491588b698fcca2e1abc361aa",
+        "rev": "713b2077af0de16b3a02fc1760d233cf55e7dc4e",
         "type": "github"
       },
       "original": {
@@ -319,11 +319,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1791956154,
-        "narHash": "sha256-jBYGPi4udQ9uo4KQp9m2J0546nJVQitG15gvZSaVVAs=",
+        "lastModified": 1792094642,
+        "narHash": "sha256-zp8ToDMnqZcu4o4IH9pdwXFXGp7yLm/M0dEnNWnyd7I=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "55bfb4d7437bd4e09ab7cba58a43bd68eb310044",
+        "rev": "fe13242281a67641c0102cdb1087f0ebe586c7df",
         "type": "github"
       },
       "original": {
