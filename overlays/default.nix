@@ -22,6 +22,29 @@
         doCheck = false;
       }
     );
+
+    # TEMPORARY: diff-cover 10.5.1's HTML golden files expect raw `"` but the
+    # highlighter now emits `&quot;`, breaking sqlfluff (nvim) on every host.
+    # Fixed by the 10.6.0 bump; the version guard makes this inert once it
+    # lands, after which delete it.
+    # https://github.com/NixOS/nixpkgs/issues/576851
+    pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+      (_pyFinal: pyPrev: {
+        diff-cover = pyPrev.diff-cover.overridePythonAttrs (
+          old:
+          final.lib.optionalAttrs (old.version == "10.5.1") {
+            disabledTests = (old.disabledTests or [ ]) ++ [
+              "test_added_file_pycodestyle_html"
+              "test_added_file_pyflakes_html"
+              "test_added_file_pylint_html"
+              "test_all_reports"
+              "test_fail_under_html"
+              "test_fail_under_pass_html"
+            ];
+          }
+        );
+      })
+    ];
   };
 
   # Access stable packages via pkgs.stable
