@@ -69,9 +69,10 @@ in
       # "net.ipv6.conf.all.disable_ipv6" = 1;
     };
 
-    # Enable kernel lockdown in integrity mode
+    # No `lockdown=`: kernels from nixpkgs 02c087f enforce it, and it rejects
+    # out-of-tree modules (nvidia, zfs) whose certificates are not in the
+    # kernel image. Re-enabling it is #394.
     boot.kernelParams = [
-      "lockdown=integrity"
       "page_alloc.shuffle=1"
       "debugfs=off"
     ]
