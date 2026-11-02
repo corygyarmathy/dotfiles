@@ -113,15 +113,30 @@ groups:
           summary: "High CPU usage on {{ $labels.instance }}"
           description: 'CPU usage is {{ printf "%.1f" $value }}%'
 
+      # Fires only past the temperature the drive is rated to operate at,
+      # where it throttles and wear accelerates: below that is advisory. NVMe
+      # drives report their own limit alongside the reading, as further
+      # temperature_type series of the same metric; SATA drives report none,
+      # so they are held to 60C, the lowest rated maximum among common
+      # HDD lines.
       - alert: HighDriveTemperature
-        expr: smartctl_device_temperature > 55
+        expr: |
+          smartctl_device_temperature{temperature_type="current"}
+            >= on(instance, device) group_left()
+          smartctl_device_temperature{temperature_type="op_limit_max"}
+          or
+          (
+            smartctl_device_temperature{temperature_type="current"}
+              unless on(instance, device)
+            smartctl_device_temperature{temperature_type="op_limit_max"}
+          ) >= 60
         for: 10m
         labels:
           severity: warning
         annotations:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highdrivetemperature"
-          summary: "Drive {{ $labels.device }} running hot on {{ $labels.instance }}"
-          description: 'Temperature is {{ printf "%.0f" $value }}°C (threshold: 55°C)'
+          summary: "Drive {{ $labels.device }} at its temperature limit on {{ $labels.instance }}"
+          description: 'Temperature is {{ printf "%.0f" $value }}°C, at or past the rated operating limit'
 
       - alert: HighSystemTemperature
         expr: node_hwmon_temp_celsius > 90
