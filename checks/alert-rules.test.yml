@@ -44,6 +44,10 @@
 #     that is genuinely out of reach - which also takes its services with it -
 #     co-fires both. The last two fixtures pin that separation so nobody
 #     re-couples them.
+#
+#   - HighDriveTemperature compares each drive's reading against its own
+#     rated limit, never the limit series themselves: an NVMe drive reports
+#     both under the same metric name, told apart only by temperature_type.
 rule_files:
   - @RULES@
 
@@ -351,3 +355,67 @@ tests:
       - eval_time: 10m
         alertname: HostUnreachableFromOutside
         exp_alerts: [ ]
+
+  # HighDriveTemperature, against the series smartctl_exporter really emits:
+  # an NVMe drive reports its rated limits as further temperature_type series
+  # of the same metric. Comparing those constants against a fixed number fired
+  # this alert continuously on both hosts while the drives sat at 25C. Cool
+  # drives of both kinds must stay silent; a hot one fires once, on its
+  # reading.
+  - interval: 1m
+    input_series:
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab01:9633",device="nvme0",temperature_type="current"}'
+        values: "25+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab01:9633",device="nvme0",temperature_type="op_limit_max"}'
+        values: "83+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab01:9633",device="nvme0",temperature_type="critical_limit_max"}'
+        values: "87+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab02:9633",device="sda",temperature_type="current"}'
+        values: "35+0x15"
+
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighDriveTemperature
+        exp_alerts: []
+
+  # Past its own limit, an NVMe drive fires: 70C does not alert against an
+  # 83C limit, 84C does. A SATA drive, reporting no limit, is held to 60C.
+  - interval: 1m
+    input_series:
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab01:9633",device="nvme0",temperature_type="current"}'
+        values: "84+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab01:9633",device="nvme0",temperature_type="op_limit_max"}'
+        values: "83+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab02:9633",device="nvme0",temperature_type="current"}'
+        values: "70+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab02:9633",device="nvme0",temperature_type="op_limit_max"}'
+        values: "84+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab02:9633",device="sda",temperature_type="current"}'
+        values: "61+0x15"
+      - series: 'smartctl_device_temperature{job="smartctl",instance="homelab02:9633",device="sdb",temperature_type="current"}'
+        values: "55+0x15"
+
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighDriveTemperature
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: smartctl
+              instance: homelab01:9633
+              device: nvme0
+              temperature_type: current
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highdrivetemperature"
+              summary: "Drive nvme0 at its temperature limit on homelab01:9633"
+              description: "Temperature is 84°C, at or past the rated operating limit"
+          - exp_labels:
+              severity: warning
+              job: smartctl
+              instance: homelab02:9633
+              device: sda
+              temperature_type: current
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highdrivetemperature"
+              summary: "Drive sda at its temperature limit on homelab02:9633"
+              description: "Temperature is 61°C, at or past the rated operating limit"

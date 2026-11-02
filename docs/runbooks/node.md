@@ -128,8 +128,9 @@ healthy. This is hardware telling you it is dying.
 
 ## HighDriveTemperature / HighSystemTemperature
 
-**Severity:** warning · **Fires when:** a drive exceeds 55C for 10m or an
-hwmon sensor exceeds 90C for 5m.
+**Severity:** warning · **Fires when:** a drive has been at or past its rated
+operating limit for 10m (the limit the NVMe drive reports, or 60C for SATA
+drives, which report none), or an hwmon sensor exceeds 90C for 5m.
 
 ### Do now
 
@@ -140,7 +141,8 @@ hwmon sensor exceeds 90C for 5m.
 ### Fix
 
 - Clean filters/fans, check the cupboard isn't closed up, verify the fan
-  curve. Sustained 55C+ drives shorten life; treat as maintenance, not outage.
+  curve. A drive at its limit throttles and wears faster - fix the airflow
+  before the next hot spell rather than waiting this one out.
 
 ## UnexpectedReboot
 
