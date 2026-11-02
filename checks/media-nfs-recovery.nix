@@ -92,6 +92,9 @@
             nfsServer = "server";
           };
         };
+        # Every guarded container start blocks multi-user.target until it
+        # gives up, so the production minute is a minute of every run.
+        cg.service.media-stack.storage.mountWaitSeconds = 15;
         cg.service.media-stack.canary.enable = true;
         cg.service.monitoring.enable = true;
 
@@ -128,8 +131,10 @@
       metrics = "/var/lib/prometheus-node-exporter/download_root_canary.prom"
 
       start_all()
-      server.wait_for_unit("nfs-server.service")
-      client.wait_for_unit("multi-user.target")
+      # Bounded so a VM that never boots fails here, naming the machine,
+      # instead of sitting out lib.nix's whole globalTimeout.
+      server.wait_for_unit("nfs-server.service", timeout=120)
+      client.wait_for_unit("multi-user.target", timeout=180)
 
       with subtest("the automount survives a burst of instant mount failures"):
           client.succeed(f"(ip route get {server_ip} 2>&1 || true) | grep -q 'Network is unreachable'")
@@ -173,10 +178,14 @@
           client.fail("test -e /run/download-root-canary-primed")
           # How homelab01's containers got onto the bare directory: a start
           # while the automount was gone. Without the guard podman binds the
-          # local mountpoint here within a second or two.
+          # local mountpoint here within a second or two; with it, this start
+          # ends in the guard's refusal, which is what is waited for.
           client.succeed("systemctl reset-failed podman-probe.service || true")
           client.succeed("systemctl restart --no-block podman-probe.service")
-          client.sleep(20)
+          since = client.succeed("date +%s").strip()
+          client.wait_until_succeeds(
+              f"journalctl -u podman-probe.service --since @{since} | grep -q 'not NFS-mounted'", timeout=60
+          )
           client.succeed('test -z "$(podman ps --quiet --filter name=^probe$)"')
           client.succeed("rmdir /srv/media/downloads")
           client.succeed("systemctl start srv-media.automount")

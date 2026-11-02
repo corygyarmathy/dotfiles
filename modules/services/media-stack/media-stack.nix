@@ -42,16 +42,17 @@ let
   # start and keeps it: a container started while the automount is down binds
   # the empty mountpoint and stays on it after the mount comes back.
   #
-  # Waits a minute before failing so each failed start is far slower than the
-  # unit's start limit (5 in 10s): the unit's Restart= then retries
-  # indefinitely while the server is away, and a container that crash-loops
-  # on its own still hits the limit and fails loudly as before. The minute is
-  # a deadline, not a count of tries, because a hard mount against a server
-  # that stopped answering makes each try as slow as its stat timeout.
+  # Waits storage.mountWaitSeconds (a minute) before failing so each failed
+  # start is far slower than the unit's start limit (5 in 10s): the unit's
+  # Restart= then retries indefinitely while the server is away, and a
+  # container that crash-loops on its own still hits the limit and fails
+  # loudly as before. The wait is a deadline, not a count of tries, because a
+  # hard mount against a server that stopped answering makes each try as slow
+  # as its stat timeout.
   waitForData = pkgs.writeShellScript "media-data-mounted" ''
     set -u
     data=${lib.escapeShellArg cfg.dataPath}
-    deadline=60
+    deadline=${toString cfg.storage.mountWaitSeconds}
     while ((SECONDS < deadline)); do
       # Touching the path is what fires the automount. Bounded because a hard
       # mount against a server that stopped answering blocks in stat(); never
@@ -205,6 +206,18 @@ in
           The fileSystems entry for dataPath when storage.type = nfs. An option
           only so a VM test can mount exactly this: the test VM replaces
           `fileSystems` with `virtualisation.fileSystems` wholesale.
+        '';
+      };
+
+      mountWaitSeconds = lib.mkOption {
+        type = lib.types.ints.between 10 600;
+        internal = true;
+        default = 60;
+        description = ''
+          How long a container binding dataPath waits for the NFS mount before
+          its start fails and Restart= tries again. An option only so a VM
+          test need not sit out the minute; at least 10 so a failed start can
+          never come fast enough to spend the start limit.
         '';
       };
     };
