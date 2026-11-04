@@ -59,6 +59,23 @@
       }
     );
 
+    # TEMPORARY: opencode 2.2.5's node_modules hash was computed with bun 1.4.2,
+    # but the bump to 1.4.4 (merged a few hours later) changes the output, so
+    # the fixed-output derivation fails to build on every host. Applies
+    # upstream's rehash; the hash guard makes this inert once it lands, after
+    # which delete it.
+    # https://github.com/NixOS/nixpkgs/pull/582675
+    opencode = prev.opencode.overrideAttrs (
+      old:
+      final.lib.optionalAttrs
+        ((old.node_modules.outputHash or null) == "sha256-xfOVcw1+waLVNhFDwzOtzxrUSQEogvn88YomydOlhwc=")
+        {
+          node_modules = old.node_modules.overrideAttrs (_: {
+            outputHash = "sha256-prx9dX7kUvs/E3zopkaPk5LXh3xJAy5sZeum/W8L7cA=";
+          });
+        }
+    );
+
     # TEMPORARY: diff-cover 10.5.1's HTML golden files expect raw `"` but the
     # highlighter now emits `&quot;`, breaking sqlfluff (nvim) on every host.
     # Fixed by the 10.6.0 bump; the version guard makes this inert once it
