@@ -121,6 +121,21 @@
         );
       })
     ];
+
+    # TEMPORARY: when an MST output (DP-4 on xps15) comes up connected but
+    # modeless, a blur-property refresh builds framebuffers for its 0x0 size
+    # and Hyprland aborts in IFramebuffer::alloc; greetd restarts it into the
+    # same abort. The patch skips modeless monitors in that refresh. No
+    # upstream fix exists (both reports were closed without one), so there is
+    # no guard: when a Hyprland bump stops the patch applying, the xps15 build
+    # fails and someone must check whether upstream now handles it. Delete it
+    # too once upstream guards the 0x0 case anywhere else (for example in
+    # CMonitor::resources()), since the patch would still apply but be dead.
+    # https://github.com/corygyarmathy/dotfiles/issues/406
+    # https://github.com/hyprwm/Hyprland/issues/16370
+    hyprland = prev.hyprland.overrideAttrs (old: {
+      patches = (old.patches or [ ]) ++ [ ./hyprland-skip-modeless-monitor-blur-refresh.patch ];
+    });
   };
 
   # Access stable packages via pkgs.stable

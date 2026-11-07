@@ -1,0 +1,17 @@
+diff --git a/src/config/supplementary/propRefresher/PropRefresher.cpp b/src/config/supplementary/propRefresher/PropRefresher.cpp
+index f199ce7..8b4975c 100644
+--- a/src/config/supplementary/propRefresher/PropRefresher.cpp
++++ b/src/config/supplementary/propRefresher/PropRefresher.cpp
+@@ -83,6 +83,12 @@ void CPropRefresher::refreshProp(const bool execdAsScheduled) {
+             if (!m)
+                 continue;
+ 
++            // A connected output whose modeset failed has no mode and a 0x0
++            // transformed size; building its resources would abort in
++            // IFramebuffer::alloc. resources() rebuilds them once a mode lands.
++            if (m->m_transformedSize.x <= 0 || m->m_transformedSize.y <= 0)
++                continue;
++
+             m->resources()->refreshBlurFB();
+ 
+             if (*PBLURENABLED) {
