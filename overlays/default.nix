@@ -76,6 +76,20 @@
         }
     );
 
+    # TEMPORARY: cargoSetupHook now exports ZSTD_SYS_USE_PKG_CONFIG=1 for every
+    # Rust build, but pagefind lacks pkg-config and zstd, so zstd-sys panics
+    # and the digital garden (homelab01) fails to build. Applies upstream's
+    # missing inputs; the guard makes this inert once nixos-unstable carries
+    # the fix, after which delete it.
+    # https://github.com/NixOS/nixpkgs/pull/585555
+    pagefind = prev.pagefind.overrideAttrs (
+      old:
+      final.lib.optionalAttrs (!builtins.elem final.zstd (old.buildInputs or [ ])) {
+        buildInputs = (old.buildInputs or [ ]) ++ [ final.zstd ];
+        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.pkg-config ];
+      }
+    );
+
     # TEMPORARY: diff-cover 10.5.1's HTML golden files expect raw `"` but the
     # highlighter now emits `&quot;`, breaking sqlfluff (nvim) on every host.
     # Fixed by the 10.6.0 bump; the version guard makes this inert once it
