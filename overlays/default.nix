@@ -133,6 +133,23 @@
             ];
           }
         );
+
+        # The tinydtls bundled in DTLSSocket defaults to
+        # force_renegotiation_info, aborting with handshake_failure when a
+        # ServerHello lacks the RFC 5746 extension. IKEA TRÅDFRI gateway
+        # firmware 1.21.0057 omits it, so Home Assistant's tradfri pairing
+        # (homelab01) times out with a correct security code. DTLSSocket does
+        # not expose the parameter, so this flips the compiled-in default.
+        # The extension guards against renegotiation attacks, and tinydtls
+        # never renegotiates (it supports only RFC 5746's initial-handshake
+        # form), so nothing is lost. No guard: --replace-fail fails the build when a bump
+        # changes the line, at which point check whether it is still needed.
+        dtlssocket = pyPrev.dtlssocket.overridePythonAttrs (old: {
+          postPatch = (old.postPatch or "") + ''
+            substituteInPlace DTLSSocket/tinydtls/dtls.c \
+              --replace-fail '.force_renegotiation_info = 1,' '.force_renegotiation_info = 0,'
+          '';
+        });
       })
     ];
 
