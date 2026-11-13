@@ -10,8 +10,9 @@
 # - The core settings stay editable in the UI (any source but "yaml"), so
 #   onboarding can set the location. One stray key in configuration.yaml -
 #   the upstream module's `time_zone` default, say - flips this.
-# - The three integrations for the house's devices load, so adding one in
-#   the UI does not fail on a missing dependency.
+# - The integrations the module ships load, so adding one in the UI does not
+#   fail on a missing dependency.
+# - The Prometheus endpoint serves metrics to an authenticated scraper.
 # - It listens on loopback only; Caddy is the way in.
 {
   name = "home-assistant";
@@ -77,7 +78,19 @@
           # the one that locks the page.
           assert core["config_source"] != "yaml", "core settings are locked to configuration.yaml"
 
-      for handler in ["hue", "tradfri", "tplink"]:
+      with subtest("the prometheus endpoint serves metrics"):
+          # A YAML integration, set up in a later bootstrap stage than the
+          # HTTP server, so the route 404s for a while after the port opens.
+          metrics = machine.wait_until_succeeds(
+              f"curl -sf {auth} {base}/api/prometheus", timeout=300
+          )
+          assert "# TYPE" in metrics, metrics[:500]
+
+      for handler in [
+          "hue", "tradfri", "tplink",
+          "adguard", "jellyfin", "ntfy", "qbittorrent", "radarr", "sonarr",
+          "adaptive_lighting",
+      ]:
           with subtest(f"the {handler} integration loads"):
               flow = json.loads(machine.succeed(
                   f"curl -sf -X POST {auth} {base}/api/config/config_entries/flow "
