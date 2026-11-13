@@ -4,6 +4,12 @@
 # - Local control of the house's lights and plugs from one UI and the mobile app
 # - Integrations for what is actually in the house: Philips Hue (via the Hue
 #   Bridge), IKEA TRÅDFRI (via the TRÅDFRI gateway) and TP-Link Kasa plugs
+# - Integrations for the homelab's own services: Jellyfin (playback-driven
+#   lighting), ntfy (notifications), AdGuard Home, qBittorrent, Sonarr and
+#   Radarr
+# - Adaptive Lighting (a custom component) for colour temperature that
+#   follows the day
+# - Its entities as Prometheus metrics at /api/prometheus
 #
 # Architecture:
 # - Home Assistant listens on loopback only and is reached through Caddy at
@@ -40,12 +46,17 @@
 #      code printed on its underside.
 #   4. Kasa: Add → TP-Link Smart Home, once per plug, by IP. Newer firmware
 #      asks for the TP-Link account credentials the Kasa app uses.
-#   5. Mobile: install the Home Assistant app and point it at
+#   5. Homelab services: Add → Jellyfin, ntfy, AdGuard Home, qBittorrent,
+#      Sonarr, Radarr, each with that service's URL and an API key or login
+#      made in its own UI. Adaptive Lighting: Add → Adaptive Lighting, then
+#      pick its lights in the entry's options.
+#   6. Mobile: install the Home Assistant app and point it at
 #      https://home.<domain>. It works on the LAN only unless the host sets
 #      `cg.publish.home-assistant.localOnly = false`.
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
@@ -83,10 +94,24 @@ in
         "hue"
         "tradfri"
         "tplink"
+
+        "adguard"
+        "jellyfin"
+        "ntfy"
+        "prometheus"
+        "qbittorrent"
+        "radarr"
+        "sonarr"
       ];
+
+      customComponents = [ pkgs.home-assistant-custom-components.adaptive_lighting ];
 
       config = {
         default_config = { };
+
+        # YAML-only integration. The endpoint requires a long-lived access
+        # token, like the rest of the API.
+        prometheus = { };
 
         # See the header: any key here locks the General settings page. The
         # upstream module defaults `time_zone` from `time.timeZone`; null is
