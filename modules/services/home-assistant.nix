@@ -1,7 +1,50 @@
 # Home Assistant
+#
+# Provides:
+# - Local control of the house's lights and plugs from one UI and the mobile app
+# - Integrations for what is actually in the house: Philips Hue (via the Hue
+#   Bridge), IKEA TRÅDFRI (via the TRÅDFRI gateway) and TP-Link Kasa plugs
+#
+# Architecture:
+# - Home Assistant listens on loopback only and is reached through Caddy at
+#   https://home.<domain>, like every other published service.
+# - Devices are configured in the UI, not here: pairing state (the Hue
+#   bridge's app key, the TRÅDFRI gateway's PSK, Kasa credentials) lands in
+#   /var/lib/hass/.storage, which is backed up with the rest of the state
+#   directory.
+#
+# Non-obvious implementation notes:
+# - No core setting (name, location, time zone, units) is written to
+#   configuration.yaml. Home Assistant treats the presence of any one of
+#   them as "configured in YAML" and makes the whole General settings page
+#   read-only, location included. Leaving them out lets onboarding set them,
+#   which also keeps the home's coordinates out of this repository without
+#   needing a secret. The upstream module would otherwise emit `time_zone`
+#   from `time.timeZone`, so that one is nulled.
+# - Behind Caddy, Home Assistant answers 400 to any request carrying
+#   X-Forwarded-For unless `use_x_forwarded_for` is on and the proxy's
+#   address is in `trusted_proxies`. Caddy dials `localhost`, which may
+#   resolve to either loopback address, so both are trusted.
+# - Discovery: Hue bridges and TRÅDFRI gateways announce themselves over
+#   mDNS, so UDP 5353 is opened. Kasa discovery is a UDP broadcast whose
+#   replies conntrack does not match to the request, so Kasa plugs are added
+#   by IP - give them fixed DHCP leases. Nothing else listens beyond
+#   loopback: all three integrations poll or hold connections outbound.
+#
+# Post-deploy setup:
+#   1. Open https://home.<domain> and complete onboarding (owner account,
+#      location, time zone, units).
+#   2. Hue: Settings → Devices & services → Add → Philips Hue, then press the
+#      bridge's button when asked.
+#   3. TRÅDFRI: Add → IKEA TRÅDFRI, giving the gateway's IP and the security
+#      code printed on its underside.
+#   4. Kasa: Add → TP-Link Smart Home, once per plug, by IP. Newer firmware
+#      asks for the TP-Link account credentials the Kasa app uses.
+#   5. Mobile: install the Home Assistant app and point it at
+#      https://home.<domain>. It works on the LAN only unless the host sets
+#      `cg.publish.home-assistant.localOnly = false`.
 {
   config,
-  pkgs,
   lib,
   ...
 }:
@@ -10,71 +53,62 @@ let
   cfg = config.cg.service.home-assistant;
 in
 {
-  options.cg.service.home-assistant.enable = lib.mkEnableOption "home-assistant service";
+  imports = [ ../nixos/publish.nix ];
+
+  options.cg.service.home-assistant = {
+    enable = lib.mkEnableOption "Home Assistant";
+
+    port = lib.mkOption {
+      type = lib.types.port;
+      default = 8123;
+      description = "Port Home Assistant listens on (loopback only).";
+    };
+  };
 
   config = lib.mkIf cfg.enable {
+    cg.publish.home-assistant = {
+      subdomain = "home";
+      port = cfg.port;
+    };
+
     services.home-assistant = {
       enable = true;
-      openFirewall = true; # Opens port 8123
 
-      # Extra components to include
-      # Add integrations as you need them
       extraComponents = [
-        # Core functionality
-        "default_config"
-        "met" # Weather integration
+        # Onboarding has to be available on a fresh state directory, and the
+        # forecast it offers to set up during it needs `met`.
+        "met"
+        "mobile_app"
 
-        # Common integrations - uncomment as needed
-        "hue" # Philips Hue
-        "cast" # Google Cast
-        # "spotify"       # Spotify
-        # "esphome"       # ESPHome devices
-        "zha" # Zigbee Home Automation
-        "zwave_js" # Z-Wave JS
-        "mobile_app" # Home Assistant mobile app
-        "google_assistant"
+        "hue"
+        "tradfri"
+        "tplink"
       ];
 
-      # Extra Python packages for integrations that need them
-      extraPackages =
-        python3Packages: with python3Packages; [
-          # Add Python dependencies for integrations here
-          # gtts          # Google Text-to-Speech
-          # numpy         # For some integrations
-        ];
-
-      # Basic configuration
-      # Most configuration happens in the web UI and is stored in config files
       config = {
-        homeassistant = {
-          name = "Home";
-          unit_system = "metric";
-          time_zone = "Australia/Perth";
-          # Set your location for weather, sun-based automations, etc.
-          latitude = "!secret latitude";
-          longitude = "!secret longitude";
-          elevation = 0;
-        };
-
-        # Enable the default config bundle
         default_config = { };
 
-        # HTTP configuration
+        # See the header: any key here locks the General settings page. The
+        # upstream module defaults `time_zone` from `time.timeZone`; null is
+        # what it drops from the rendered file.
+        homeassistant.time_zone = lib.mkForce null;
+
         http = {
-          server_port = 8123;
-          # If you add a reverse proxy later:
-          # use_x_forwarded_for = true;
-          # trusted_proxies = [ "127.0.0.1" "::1" ];
+          server_host = [
+            "127.0.0.1"
+            "::1"
+          ];
+          server_port = cfg.port;
+          use_x_forwarded_for = true;
+          trusted_proxies = [
+            "127.0.0.1"
+            "::1"
+          ];
         };
       };
     };
 
-    # Create directory for Home Assistant secrets
-    # You'll need to create /var/lib/hass/secrets.yaml manually with:
-    # latitude: "-31.98"
-    # longitude: "115.87"
-    systemd.tmpfiles.rules = [
-      "d /var/lib/hass 0750 hass hass -"
-    ];
+    # mDNS, for discovering the Hue bridge and the TRÅDFRI gateway.
+    networking.firewall.allowedUDPPorts = [ 5353 ];
   };
 }
