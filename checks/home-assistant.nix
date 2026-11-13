@@ -12,13 +12,23 @@
 #   the upstream module's `time_zone` default, say - flips this.
 # - The integrations the module ships load, so adding one in the UI does not
 #   fail on a missing dependency.
-# - The Prometheus endpoint serves metrics to an authenticated scraper.
+# - The Prometheus endpoint serves metrics, and the host's Prometheus
+#   scrapes it with the token from sops. The token file is installed with
+#   the ownership the module declares (stub-secrets' `private`), so a
+#   missing `owner` fails here as it would in production; the test writes a
+#   real token into it, since one can only be minted at runtime.
 # - It listens on loopback only; Caddy is the way in.
 {
   name = "home-assistant";
 
   nodes.machine = {
-    imports = [ ../modules/services/home-assistant.nix ];
+    imports = [
+      ../modules/services/home-assistant.nix
+      (import ./stub-secrets.nix {
+        secrets."prometheus/ha-token" = "replaced-at-runtime";
+        private = [ "prometheus/ha-token" ];
+      })
+    ];
 
     networking.hostName = "hass";
     system.stateVersion = "24.11";
@@ -32,6 +42,14 @@
     virtualisation.memorySize = 2048;
 
     cg.service.home-assistant.enable = true;
+
+    services.prometheus = {
+      enable = true;
+      # As modules/services/monitoring/monitoring.nix sets it on the hosts:
+      # the token file does not exist when the config is checked at build.
+      checkConfig = "syntax-only";
+      globalConfig.scrape_interval = "5s";
+    };
   };
 
   testScript =
@@ -85,6 +103,22 @@
               f"curl -sf {auth} {base}/api/prometheus", timeout=300
           )
           assert "# TYPE" in metrics, metrics[:500]
+
+      with subtest("prometheus scrapes it with the token from sops"):
+          token_file = "/run/stub-secrets/prometheus/ha-token"
+          owner = machine.succeed(f"stat -c %U {token_file}").strip()
+          assert owner == "prometheus", f"token file owned by {owner}"
+          # Overwrite in place, keeping the declared ownership and mode.
+          machine.succeed(f"printf %s '{token}' > {token_file}")
+
+          def scraped_up(_):
+              result = json.loads(machine.succeed(
+                  "curl -sfG http://127.0.0.1:9090/api/v1/query "
+                  """--data-urlencode 'query=up{job="home-assistant"}'"""
+              ))["data"]["result"]
+              return bool(result) and result[0]["value"][1] == "1"
+
+          retry(scraped_up, timeout_seconds=120)
 
       for handler in [
           "hue", "tradfri", "tplink",

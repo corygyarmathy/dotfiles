@@ -637,6 +637,13 @@ in
 
         services.prometheus = {
           enable = true;
+          # The full check stats every file the config names, and a scrape's
+          # credentials_file is a sops secret that only exists at runtime
+          # (home-assistant.nix's is the first). Syntax and schema are still
+          # checked; the rule files get their own `promtool check rules` and
+          # `promtool test rules` in checks/default.nix.
+          checkConfig = "syntax-only";
+
           # Up from the 15d default, because the questions this stack is asked
           # are monthly ones: whether health-gated activation ever wanted to
           # roll back, whether a threshold was right, how often the lock update

@@ -9,7 +9,8 @@
 #   Radarr
 # - Adaptive Lighting (a custom component) for colour temperature that
 #   follows the day
-# - Its entities as Prometheus metrics at /api/prometheus
+# - Its entities as Prometheus metrics at /api/prometheus, scraped by the
+#   host's own Prometheus when it runs one
 #
 # Architecture:
 # - Home Assistant listens on loopback only and is reached through Caddy at
@@ -74,66 +75,100 @@ in
       default = 8123;
       description = "Port Home Assistant listens on (loopback only).";
     };
+
+    prometheusTokenSecret = lib.mkOption {
+      type = lib.types.str;
+      default = "prometheus/ha-token";
+      description = ''
+        Sops secret holding the long-lived Home Assistant access token the
+        host's Prometheus scrapes /api/prometheus with. Only declared when
+        the host runs Prometheus.
+      '';
+    };
   };
 
-  config = lib.mkIf cfg.enable {
-    cg.publish.home-assistant = {
-      subdomain = "home";
-      port = cfg.port;
-    };
-
-    services.home-assistant = {
-      enable = true;
-
-      extraComponents = [
-        # Onboarding has to be available on a fresh state directory, and the
-        # forecast it offers to set up during it needs `met`.
-        "met"
-        "mobile_app"
-
-        "hue"
-        "tradfri"
-        "tplink"
-
-        "adguard"
-        "jellyfin"
-        "ntfy"
-        "prometheus"
-        "qbittorrent"
-        "radarr"
-        "sonarr"
-      ];
-
-      customComponents = [ pkgs.home-assistant-custom-components.adaptive_lighting ];
-
-      config = {
-        default_config = { };
-
-        # YAML-only integration. The endpoint requires a long-lived access
-        # token, like the rest of the API.
-        prometheus = { };
-
-        # See the header: any key here locks the General settings page. The
-        # upstream module defaults `time_zone` from `time.timeZone`; null is
-        # what it drops from the rendered file.
-        homeassistant.time_zone = lib.mkForce null;
-
-        http = {
-          server_host = [
-            "127.0.0.1"
-            "::1"
-          ];
-          server_port = cfg.port;
-          use_x_forwarded_for = true;
-          trusted_proxies = [
-            "127.0.0.1"
-            "::1"
-          ];
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        cg.publish.home-assistant = {
+          subdomain = "home";
+          port = cfg.port;
         };
-      };
-    };
 
-    # mDNS, for discovering the Hue bridge and the TRÅDFRI gateway.
-    networking.firewall.allowedUDPPorts = [ 5353 ];
-  };
+        services.home-assistant = {
+          enable = true;
+
+          extraComponents = [
+            # Onboarding has to be available on a fresh state directory, and the
+            # forecast it offers to set up during it needs `met`.
+            "met"
+            "mobile_app"
+
+            "hue"
+            "tradfri"
+            "tplink"
+
+            "adguard"
+            "jellyfin"
+            "ntfy"
+            "prometheus"
+            "qbittorrent"
+            "radarr"
+            "sonarr"
+          ];
+
+          customComponents = [ pkgs.home-assistant-custom-components.adaptive_lighting ];
+
+          config = {
+            default_config = { };
+
+            # YAML-only integration. The endpoint requires a long-lived access
+            # token, like the rest of the API.
+            prometheus = { };
+
+            # See the header: any key here locks the General settings page. The
+            # upstream module defaults `time_zone` from `time.timeZone`; null is
+            # what it drops from the rendered file.
+            homeassistant.time_zone = lib.mkForce null;
+
+            http = {
+              server_host = [
+                "127.0.0.1"
+                "::1"
+              ];
+              server_port = cfg.port;
+              use_x_forwarded_for = true;
+              trusted_proxies = [
+                "127.0.0.1"
+                "::1"
+              ];
+            };
+          };
+        };
+
+        # mDNS, for discovering the Hue bridge and the TRÅDFRI gateway.
+        networking.firewall.allowedUDPPorts = [ 5353 ];
+      }
+
+      # Scraped by the host's own Prometheus over loopback, since that is all
+      # Home Assistant listens on; a peer's Prometheus could not reach it.
+      (lib.mkIf config.services.prometheus.enable {
+        sops.secrets.${cfg.prometheusTokenSecret}.owner = "prometheus";
+
+        services.prometheus.scrapeConfigs = [
+          {
+            job_name = "home-assistant";
+            metrics_path = "/api/prometheus";
+            authorization.credentials_file = config.sops.secrets.${cfg.prometheusTokenSecret}.path;
+            static_configs = [
+              {
+                targets = [ "127.0.0.1:${toString cfg.port}" ];
+                labels.instance = config.networking.hostName;
+              }
+            ];
+          }
+        ];
+      })
+    ]
+  );
 }
