@@ -45,6 +45,11 @@
 #     co-fires both. The last two fixtures pin that separation so nobody
 #     re-couples them.
 #
+#   - HighMemoryUsage needs swap pressure as well as RAM pressure on a host
+#     that has swap: full RAM over idle swap is the ZFS ARC doing its job and
+#     must stay silent, while full RAM over full swap fires. A host with no
+#     swap still fires on RAM alone.
+#
 #   - HighDriveTemperature compares each drive's reading against its own
 #     rated limit, never the limit series themselves: an NVMe drive reports
 #     both under the same metric name, told apart only by temperature_type.
@@ -419,3 +424,63 @@ tests:
               runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highdrivetemperature"
               summary: "Drive sda at its temperature limit on homelab02:9633"
               description: "Temperature is 61°C, at or past the rated operating limit"
+
+  # HighMemoryUsage. homelab02's RAM is full of ARC over a near-empty
+  # swapfile: silent. homelab01's RAM and swap are both full: fires. xps15
+  # has no swap at all (SwapTotal 0) and full RAM: fires on RAM alone. A host
+  # with full swap but plenty of RAM is not short of memory: silent.
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemTotal_bytes{job="node",instance="homelab02:9100"}'
+        values: "100+0x15"
+      - series: 'node_memory_MemAvailable_bytes{job="node",instance="homelab02:9100"}'
+        values: "5+0x15"
+      - series: 'node_memory_SwapTotal_bytes{job="node",instance="homelab02:9100"}'
+        values: "100+0x15"
+      - series: 'node_memory_SwapFree_bytes{job="node",instance="homelab02:9100"}'
+        values: "97+0x15"
+      - series: 'node_memory_MemTotal_bytes{job="node",instance="homelab01:9100"}'
+        values: "100+0x15"
+      - series: 'node_memory_MemAvailable_bytes{job="node",instance="homelab01:9100"}'
+        values: "5+0x15"
+      - series: 'node_memory_SwapTotal_bytes{job="node",instance="homelab01:9100"}'
+        values: "100+0x15"
+      - series: 'node_memory_SwapFree_bytes{job="node",instance="homelab01:9100"}'
+        values: "10+0x15"
+      - series: 'node_memory_MemTotal_bytes{job="node",instance="xps15:9100"}'
+        values: "100+0x15"
+      - series: 'node_memory_MemAvailable_bytes{job="node",instance="xps15:9100"}'
+        values: "5+0x15"
+      - series: 'node_memory_SwapTotal_bytes{job="node",instance="xps15:9100"}'
+        values: "0+0x15"
+      - series: 'node_memory_SwapFree_bytes{job="node",instance="xps15:9100"}'
+        values: "0+0x15"
+      - series: 'node_memory_MemTotal_bytes{job="node",instance="spare:9100"}'
+        values: "100+0x15"
+      - series: 'node_memory_MemAvailable_bytes{job="node",instance="spare:9100"}'
+        values: "50+0x15"
+      - series: 'node_memory_SwapTotal_bytes{job="node",instance="spare:9100"}'
+        values: "100+0x15"
+      - series: 'node_memory_SwapFree_bytes{job="node",instance="spare:9100"}'
+        values: "0+0x15"
+
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighMemoryUsage
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: homelab01:9100
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highmemoryusage"
+              summary: "High memory usage on homelab01:9100"
+              description: "Memory usage is 95.0%, with swap absent or over 80% full"
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: xps15:9100
+            exp_annotations:
+              runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highmemoryusage"
+              summary: "High memory usage on xps15:9100"
+              description: "Memory usage is 95.0%, with swap absent or over 80% full"

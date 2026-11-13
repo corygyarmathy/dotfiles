@@ -88,16 +88,28 @@ groups:
           summary: "Systemd unit failed on {{ $labels.instance }}"
           description: "Unit {{ $labels.name }} has been in failed state for 5+ minutes.{{ if $labels.tail }}\n\nRecent journal output:\n{{ $labels.tail }}{{ else }} No journal output was captured - check journalctl -u {{ $labels.name }}.{{ end }}"
 
-      # High memory usage
+      # High memory usage. RAM alone is not actionable on a ZFS host: the ARC
+      # grows into free memory and is reported as used, not available, so
+      # homelab02 sits above 90% by design. Memory is only exhausted once the
+      # kernel is also pushing pages out to swap, so a host with swap fires
+      # only when swap is also nearly full. A host without swap has nowhere
+      # to spill, and RAM alone stays the signal.
       - alert: HighMemoryUsage
-        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+          and on(instance)
+          (
+            (1 - (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes)) * 100 > 80
+            or on(instance)
+            node_memory_SwapTotal_bytes == 0
+          )
         for: 10m
         labels:
           severity: warning
         annotations:
           runbook_url: "https://github.com/corygyarmathy/dotfiles/blob/master/docs/runbooks/node#highmemoryusage"
           summary: "High memory usage on {{ $labels.instance }}"
-          description: 'Memory usage is {{ printf "%.1f" $value }}%'
+          description: 'Memory usage is {{ printf "%.1f" $value }}%, with swap absent or over 80% full'
 
       - alert: HighCpuUsage
         # 90% was chronic on hosts that transcode: an evening of Jellyfin

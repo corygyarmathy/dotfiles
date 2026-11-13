@@ -110,8 +110,7 @@ healthy. This is hardware telling you it is dying.
 
 ## HighMemoryUsage / HighCpuUsage
 
-**Severity:** warning · **Fires when:** memory >90% for 10m; CPU >95% for 30m
-(deliberately tolerant of transcoding).
+**Severity:** warning · **Fires when:** memory >90% for 10m and swap, where the host has any, is also >80% full (high RAM alone is the ZFS ARC on homelab02); CPU >95% for 30m (deliberately tolerant of transcoding).
 
 ### Do now
 
