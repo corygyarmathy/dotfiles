@@ -155,6 +155,11 @@ in
         "/var/lib/kavita"
         "/var/lib/recyclarr"
 
+        # Home Assistant: onboarding, device pairing (Hue app key, TRADFRI
+        # PSK, Kasa credentials), automations and history. None of it can be
+        # regenerated from this repository.
+        "/var/lib/hass"
+
         # Digital garden publication dates. The vault, staging and built site
         # all regenerate from Obsidian Sync / the filter, but dates.json records
         # the first day each note was published and exists nowhere else. Back up
@@ -327,7 +332,7 @@ in
     };
 
     immich.enable = false;
-    home-assistant.enable = false;
+    home-assistant.enable = true;
     miniflux.enable = true;
     wallabag.enable = true;
 

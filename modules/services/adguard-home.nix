@@ -64,6 +64,7 @@ let
     "read"
     "kavita"
     "audiobookshelf"
+    "home"
   ];
 
   # Services fronted by the storage host's own Caddy.

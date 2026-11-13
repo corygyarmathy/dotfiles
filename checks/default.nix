@@ -435,6 +435,7 @@ in
   # generated inside the check rather than checked in.
   fmt-gate = import ./fmt-gate.nix { inherit pkgs self; };
   grafana = testLib.mkTest ./grafana.nix;
+  home-assistant = testLib.mkTest ./home-assistant.nix;
   host-alive = testLib.mkTest ./host-alive.nix;
   media-nfs-recovery = testLib.mkTest ./media-nfs-recovery.nix;
   monitoring = testLib.mkTest ./monitoring.nix;
