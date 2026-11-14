@@ -566,6 +566,7 @@ in
     kavita.localOnly = false; # readers need it away from the LAN
     audiobookshelf.localOnly = false; # mobile apps stream from outside
     ntfy.localOnly = false; # push to phones on mobile data is the whole point
+    home-assistant.localOnly = false; # the mobile app, and presence, away from home
 
     # This host's own host-alive beacon (modules/services/host-alive.nix).
     # It is declared by the module with `localOnly` left to the host; it must
