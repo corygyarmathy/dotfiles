@@ -62,6 +62,9 @@ pkgs: {
   # .github/workflows/package-update.yml), so a drifted hash never reds CI.
   caddy-with-plugins = pkgs.callPackage ./caddy-with-plugins { };
 
+  # Seeley MagIQtouch custom component for Home Assistant
+  ha-magiqtouch = pkgs.callPackage ./ha-magiqtouch { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }

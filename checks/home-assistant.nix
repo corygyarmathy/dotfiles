@@ -122,8 +122,9 @@
 
       for handler in [
           "hue", "tradfri", "tplink",
+          "cast", "dlna_dmr", "samsungtv", "smartthings", "unifi", "unifi_discovery",
           "adguard", "jellyfin", "ntfy", "qbittorrent", "radarr", "sonarr",
-          "adaptive_lighting",
+          "adaptive_lighting", "magiqtouch",
       ]:
           with subtest(f"the {handler} integration loads"):
               flow = json.loads(machine.succeed(
