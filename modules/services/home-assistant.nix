@@ -3,12 +3,16 @@
 # Provides:
 # - Local control of the house's lights and plugs from one UI and the mobile app
 # - Integrations for what is actually in the house: Philips Hue (via the Hue
-#   Bridge), IKEA TRÅDFRI (via the TRÅDFRI gateway) and TP-Link Kasa plugs
+#   Bridge), IKEA TRÅDFRI (via the TRÅDFRI gateway), TP-Link Kasa plugs, the
+#   Samsung TV and Music Frame (Samsung TV, SmartThings, DLNA, Cast), the
+#   UniFi network and Seeley MagIQtouch climate controllers
 # - Integrations for the homelab's own services: Jellyfin (playback-driven
 #   lighting), ntfy (notifications), AdGuard Home, qBittorrent, Sonarr and
 #   Radarr
 # - Adaptive Lighting (a custom component) for colour temperature that
 #   follows the day
+# - MagIQtouch (a custom component, packages/ha-magiqtouch), which goes
+#   through Seeley's cloud rather than the LAN
 # - Its entities as Prometheus metrics at /api/prometheus, scraped by the
 #   host's own Prometheus when it runs one
 #
@@ -40,7 +44,12 @@
 #
 # Post-deploy setup:
 #   1. Open https://home.<domain> and complete onboarding (owner account,
-#      location, time zone, units).
+#      location, time zone, units). Then, with Advanced mode on in the user
+#      profile, set both URLs under Settings → System → Network to
+#      https://home.<domain>. Left unset, Home Assistant advertises
+#      http://<LAN address>:8123 over mDNS, where nothing listens, and the
+#      mobile app times out on it. They cannot go in configuration.yaml for
+#      the same reason as the core settings below.
 #   2. Hue: Settings → Devices & services → Add → Philips Hue, then press the
 #      bridge's button when asked.
 #   3. TRÅDFRI: Add → IKEA TRÅDFRI, giving the gateway's IP and the security
@@ -51,7 +60,13 @@
 #      Sonarr, Radarr, each with that service's URL and an API key or login
 #      made in its own UI. Adaptive Lighting: Add → Adaptive Lighting, then
 #      pick its lights in the entry's options.
-#   6. Mobile: install the Home Assistant app and point it at
+#   6. Samsung TV: Add → Samsung Smart TV, and accept the prompt on the TV.
+#      Music Frame: Add → SmartThings (signs in to the Samsung account), or
+#      DLNA Digital Media Renderer / Google Cast if it is discovered as one.
+#   7. UniFi: Add → UniFi Network, with a local-only account made on the
+#      console for Home Assistant.
+#   8. MagIQtouch: Add → Seeley MagIQtouch, with the MagIQtouch app's login.
+#   9. Mobile: install the Home Assistant app and point it at
 #      https://home.<domain>. It works on the LAN only unless the host sets
 #      `cg.publish.home-assistant.localOnly = false`.
 {
@@ -108,6 +123,13 @@ in
             "tradfri"
             "tplink"
 
+            "cast"
+            "dlna_dmr"
+            "samsungtv"
+            "smartthings"
+            "unifi"
+            "unifi_discovery"
+
             "adguard"
             "jellyfin"
             "ntfy"
@@ -117,7 +139,10 @@ in
             "sonarr"
           ];
 
-          customComponents = [ pkgs.home-assistant-custom-components.adaptive_lighting ];
+          customComponents = [
+            pkgs.home-assistant-custom-components.adaptive_lighting
+            pkgs.ha-magiqtouch
+          ];
 
           config = {
             default_config = { };
@@ -138,6 +163,12 @@ in
               ];
               server_port = cfg.port;
               use_x_forwarded_for = true;
+              # No `login_attempts_threshold`, so no automatic bans, although
+              # a host may publish this to the internet. Every request that
+              # skips a proxy arrives from loopback with no X-Forwarded-For -
+              # Prometheus's scrape, chiefly - so one stale token would ban
+              # 127.0.0.1 and lock all of them out until ip_bans.yaml is
+              # edited by hand. Turn on TOTP for every account instead.
               trusted_proxies = [
                 "127.0.0.1"
                 "::1"
