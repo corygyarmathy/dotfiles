@@ -100,6 +100,17 @@
   # ============================================================================
   services.mpris-proxy.enable = true; # Bluetooth media controls
 
+  # The OneDrive client (services.onedrive in default.nix) must never mirror
+  # backups/: the homelab hosts write live restic repositories there through
+  # rclone, and a desktop client that is out of step re-uploads files restic
+  # pruned, which corrupts the repositories (#405). Strict match anchors the
+  # path at the drive root, so other directories named "backups" still sync.
+  # Changing this file makes the client demand a one-off --resync.
+  xdg.configFile."onedrive/config".text = ''
+    skip_dir = "backups"
+    skip_dir_strict_match = "true"
+  '';
+
   # ============================================================================
   # Packages
   # ============================================================================
