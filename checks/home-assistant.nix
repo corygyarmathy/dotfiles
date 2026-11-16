@@ -156,6 +156,30 @@
               # Saving reloads the integration; the entity follows shortly.
               machine.wait_until_succeeds(f"curl -sf {auth} {base}/api/states/{entity}", timeout=60)
 
+      with subtest("the google_translate entry loads"):
+          # Its config flow does not import the library, so opening one
+          # (as the loop below does) passes without it. Only setting the
+          # entry up does, as onboarding's entry is set up on every start.
+          flow = json.loads(machine.succeed(
+              f"curl -sf -X POST {auth} {base}/api/config/config_entries/flow "
+              "-H 'Content-Type: application/json' "
+              """-d '{"handler": "google_translate"}' """
+          ))
+          entry = json.loads(machine.succeed(
+              f"curl -sf -X POST {auth} {base}/api/config/config_entries/flow/{flow['flow_id']} "
+              "-H 'Content-Type: application/json' -d '{}'"
+          ))["result"]
+
+          def entry_loaded(_):
+              entries = json.loads(machine.succeed(
+                  f"curl -sf {auth} {base}/api/config/config_entries/entry?domain=google_translate"
+              ))
+              state = next(e["state"] for e in entries if e["entry_id"] == entry["entry_id"])
+              assert state != "setup_error", f"google_translate entry: {state}"
+              return state == "loaded"
+
+          retry(entry_loaded, timeout_seconds=60)
+
       for handler in [
           "hue", "tradfri", "tplink",
           "cast", "dlna_dmr", "samsungtv", "smartthings", "unifi", "unifi_discovery",
