@@ -23,6 +23,10 @@
 #   bridge's app key, the TRÅDFRI gateway's PSK, Kasa credentials) lands in
 #   /var/lib/hass/.storage, which is backed up with the rest of the state
 #   directory.
+# - Automations, scripts and scenes are also made in the UI, not here: they
+#   name entities that only exist once devices are paired. The editors save
+#   to automations.yaml, scripts.yaml and scenes.yaml in the state directory,
+#   which configuration.yaml includes.
 #
 # Non-obvious implementation notes:
 # - No core setting (name, location, time zone, units) is written to
@@ -41,6 +45,11 @@
 #   replies conntrack does not match to the request, so Kasa plugs are added
 #   by IP - give them fixed DHCP leases. Nothing else listens beyond
 #   loopback: all three integrations poll or hold connections outbound.
+# - The UI editors only save when configuration.yaml includes their file,
+#   and Home Assistant refuses to start when an included file is missing.
+#   Its own first-run setup writes them, but only alongside a
+#   configuration.yaml it writes itself, so tmpfiles creates them instead -
+#   automations.yaml as `[]`, the content that first run would give it.
 #
 # Post-deploy setup:
 #   1. Open https://home.<domain> and complete onboarding (owner account,
@@ -147,6 +156,11 @@ in
           config = {
             default_config = { };
 
+            # Where the UI editors save; see the header.
+            automation = "!include automations.yaml";
+            script = "!include scripts.yaml";
+            scene = "!include scenes.yaml";
+
             # YAML-only integration. The endpoint requires a long-lived access
             # token, like the rest of the API.
             prometheus = { };
@@ -176,6 +190,25 @@ in
             };
           };
         };
+
+        # `f` only writes when the file is missing, so the editors' saves stay.
+        systemd.tmpfiles.settings."10-home-assistant" =
+          let
+            editorFile = argument: {
+              f = {
+                user = "hass";
+                group = "hass";
+                mode = "0644";
+                inherit argument;
+              };
+            };
+            dir = config.services.home-assistant.configDir;
+          in
+          {
+            "${dir}/automations.yaml" = editorFile "[]";
+            "${dir}/scripts.yaml" = editorFile "";
+            "${dir}/scenes.yaml" = editorFile "";
+          };
 
         # mDNS, for discovering the Hue bridge and the TRÅDFRI gateway.
         networking.firewall.allowedUDPPorts = [ 5353 ];
