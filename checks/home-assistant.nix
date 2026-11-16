@@ -17,7 +17,9 @@
 #   the ownership the module declares (stub-secrets' `private`), so a
 #   missing `owner` fails here as it would in production; the test writes a
 #   real token into it, since one can only be minted at runtime.
-# - It listens on loopback only; Caddy is the way in.
+# - It listens on loopback only; Caddy is the way in. That comes from the
+#   HTTP store the module writes, which Home Assistant must take as its
+#   stable config rather than a trial that later reverts.
 # - The automation, script and scene editors can save, and what they save is
 #   loaded. Without the includes in configuration.yaml the save is refused;
 #   without the files it fails to start at all.
@@ -76,6 +78,16 @@
           for line in listeners.splitlines():
               local = line.split()[3]
               assert local.startswith(("127.0.0.1:", "[::1]:")), f"listening on {local}"
+
+      with subtest("the HTTP settings are stable, not a trial"):
+          # A YAML `http:` block on a fresh state directory is staged as a
+          # pending trial, which reverts to the defaults after five minutes,
+          # long after the subtests above and below have passed.
+          store = json.loads(machine.succeed("cat /var/lib/hass/.storage/http"))["data"]
+          assert store["pending"] is None, f"pending HTTP config: {store['pending']}"
+          assert store["stable"]["server_host"] == ["127.0.0.1", "::1"], store["stable"]
+          config_yaml = machine.succeed("cat /var/lib/hass/configuration.yaml")
+          assert "\nhttp:" not in "\n" + config_yaml, "configuration.yaml has an http: block"
 
       with subtest("a request forwarded by a loopback proxy is accepted"):
           machine.succeed(f"curl -sf -H 'X-Forwarded-For: 192.0.2.10' {base}/manifest.json")
