@@ -40,6 +40,14 @@
 #   X-Forwarded-For unless `use_x_forwarded_for` is on and the proxy's
 #   address is in `trusted_proxies`. Caddy dials `localhost`, which may
 #   resolve to either loopback address, so both are trusted.
+# - The HTTP settings (bind address, port, proxy trust) are not in
+#   configuration.yaml either. Since 2026.11 Home Assistant keeps them in
+#   .storage/http, edited under Settings → System → Network: an `http:`
+#   block is imported once and then ignored with a repair warning, and on a
+#   fresh state directory the import is only a trial that reverts to the
+#   defaults (every interface, no proxy trust) unless confirmed in the UI
+#   within five minutes. So the store itself is written from Nix before
+#   every start; changes made on that page last until the next restart.
 # - Discovery: Hue bridges and TRÅDFRI gateways announce themselves over
 #   mDNS, so UDP 5353 is opened. Kasa discovery is a UDP broadcast whose
 #   replies conntrack does not match to the request, so Kasa plugs are added
@@ -87,6 +95,49 @@
 
 let
   cfg = config.cg.service.home-assistant;
+
+  # Home Assistant's HTTP store (`.storage/http`), in the shape its own
+  # schema produces: every key present, defaults filled in. `stable` is what
+  # it binds with; no `pending` means no trial config to revert, and
+  # `yaml_migration_done` stops it looking for an `http:` block.
+  httpSettings = {
+    server_host = [
+      "127.0.0.1"
+      "::1"
+    ];
+    server_port = cfg.port;
+    use_x_forwarded_for = true;
+    # Caddy dials `localhost`, which may resolve to either loopback address.
+    trusted_proxies = [
+      "127.0.0.1/32"
+      "::1/128"
+    ];
+    # No automatic bans, although a host may publish this to the internet.
+    # Every request that skips a proxy arrives from loopback with no
+    # X-Forwarded-For - Prometheus's scrape, chiefly - so one stale token
+    # would ban 127.0.0.1 and lock all of them out until ip_bans.yaml is
+    # edited by hand. Turn on TOTP for every account instead.
+    login_attempts_threshold = -1;
+    ip_ban_enabled = true;
+    cors_allowed_origins = [ "https://cast.home-assistant.io" ];
+    ssl_profile = "intermediate_v6";
+    use_x_frame_options = true;
+    created_at = "1970-01-01T00:00:00+00:00";
+    error = null;
+    error_message = null;
+  };
+  httpStore = pkgs.writeText "home-assistant-http-store.json" (
+    builtins.toJSON {
+      version = 3;
+      minor_version = 1;
+      key = "http";
+      data = {
+        stable = httpSettings;
+        pending = null;
+        yaml_migration_done = true;
+      };
+    }
+  );
 in
 {
   imports = [ ../nixos/publish.nix ];
@@ -175,25 +226,6 @@ in
             # upstream module defaults `time_zone` from `time.timeZone`; null is
             # what it drops from the rendered file.
             homeassistant.time_zone = lib.mkForce null;
-
-            http = {
-              server_host = [
-                "127.0.0.1"
-                "::1"
-              ];
-              server_port = cfg.port;
-              use_x_forwarded_for = true;
-              # No `login_attempts_threshold`, so no automatic bans, although
-              # a host may publish this to the internet. Every request that
-              # skips a proxy arrives from loopback with no X-Forwarded-For -
-              # Prometheus's scrape, chiefly - so one stale token would ban
-              # 127.0.0.1 and lock all of them out until ip_bans.yaml is
-              # edited by hand. Turn on TOTP for every account instead.
-              trusted_proxies = [
-                "127.0.0.1"
-                "::1"
-              ];
-            };
           };
         };
 
@@ -215,6 +247,12 @@ in
             "${dir}/scripts.yaml" = editorFile "";
             "${dir}/scenes.yaml" = editorFile "";
           };
+
+        # See the header: the HTTP settings live in Home Assistant's own store,
+        # rewritten from Nix on every start.
+        systemd.services.home-assistant.preStart = lib.mkAfter ''
+          install -D -m 600 ${httpStore} "${config.services.home-assistant.configDir}/.storage/http"
+        '';
 
         # mDNS, for discovering the Hue bridge and the TRÅDFRI gateway.
         networking.firewall.allowedUDPPorts = [ 5353 ];
