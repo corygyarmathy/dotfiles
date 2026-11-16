@@ -117,6 +117,12 @@ in
         cg.publish.home-assistant = {
           subdomain = "home";
           port = cfg.port;
+          # The default `admin` profile (300 requests per 10 minutes) is used
+          # up by one frontend load, which fetches hundreds of chunks, plus
+          # the API polling from the app and dashboards. Only LAN clients
+          # reach Caddy anyway, because the tunnel connects straight to the
+          # origin, so the limiter would only ever throttle the house.
+          rateLimitProfile = "none";
         };
 
         services.home-assistant = {
