@@ -6,6 +6,8 @@
 #   Bridge), IKEA TRÅDFRI (via the TRÅDFRI gateway), TP-Link Kasa plugs, the
 #   Samsung TV and Music Frame (Samsung TV, SmartThings, DLNA, Cast), the
 #   UniFi network and Seeley MagIQtouch climate controllers
+# - Google Translate text-to-speech, for spoken announcements on the Cast
+#   and Samsung speakers (onboarding offers to set it up)
 # - Integrations for devices Home Assistant discovers on the LAN and would
 #   otherwise log an error for on every attempt: AirPlay devices (Apple TV),
 #   Thread border routers and network printers (IPP)
@@ -187,6 +189,8 @@ in
             # forecast it offers to set up during it needs `met`.
             "met"
             "mobile_app"
+            # Onboarding also offers a text-to-speech engine.
+            "google_translate"
 
             "hue"
             "tradfri"
