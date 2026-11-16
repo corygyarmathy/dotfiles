@@ -6,6 +6,9 @@
 #   Bridge), IKEA TRÅDFRI (via the TRÅDFRI gateway), TP-Link Kasa plugs, the
 #   Samsung TV and Music Frame (Samsung TV, SmartThings, DLNA, Cast), the
 #   UniFi network and Seeley MagIQtouch climate controllers
+# - Integrations for devices Home Assistant discovers on the LAN and would
+#   otherwise log an error for on every attempt: AirPlay devices (Apple TV),
+#   Thread border routers and network printers (IPP)
 # - Integrations for the homelab's own services: Jellyfin (playback-driven
 #   lighting), ntfy (notifications), AdGuard Home, qBittorrent, Sonarr and
 #   Radarr
@@ -195,6 +198,10 @@ in
             "smartthings"
             "unifi"
             "unifi_discovery"
+
+            "apple_tv"
+            "ipp"
+            "thread"
 
             "adguard"
             "jellyfin"
