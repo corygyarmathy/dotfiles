@@ -159,6 +159,7 @@
       for handler in [
           "hue", "tradfri", "tplink",
           "cast", "dlna_dmr", "samsungtv", "smartthings", "unifi", "unifi_discovery",
+          "apple_tv", "ipp", "thread",
           "adguard", "jellyfin", "ntfy", "qbittorrent", "radarr", "sonarr",
           "adaptive_lighting", "magiqtouch",
       ]:
@@ -170,8 +171,10 @@
               ))
               # With no devices on the test network a flow may open on its
               # manual-entry form or abort for want of anything to find. Either
-              # means the integration imported; a missing dependency is an
-              # HTTP error, which -f has already failed on.
-              assert flow["type"] in ("form", "abort"), f"{handler}: {flow}"
+              # means the integration imported, as does creating its entry
+              # outright, which Thread does since it has nothing to ask. A
+              # missing dependency is an HTTP error, which -f has already
+              # failed on.
+              assert flow["type"] in ("form", "abort", "create_entry"), f"{handler}: {flow}"
     '';
 }
