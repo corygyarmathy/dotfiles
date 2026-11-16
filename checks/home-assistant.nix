@@ -18,6 +18,9 @@
 #   missing `owner` fails here as it would in production; the test writes a
 #   real token into it, since one can only be minted at runtime.
 # - It listens on loopback only; Caddy is the way in.
+# - The automation, script and scene editors can save, and what they save is
+#   loaded. Without the includes in configuration.yaml the save is refused;
+#   without the files it fails to start at all.
 {
   name = "home-assistant";
 
@@ -119,6 +122,27 @@
               return bool(result) and result[0]["value"][1] == "1"
 
           retry(scraped_up, timeout_seconds=120)
+
+      for kind, item_id, body, entity in [
+          ("automation", "test_automation",
+           {"alias": "Test automation", "triggers": [{"trigger": "sun", "event": "sunset"}],
+            "actions": [{"delay": 1}]},
+           "automation.test_automation"),
+          ("script", "test_script",
+           {"alias": "Test script", "sequence": [{"delay": 1}]},
+           "script.test_script"),
+          ("scene", "test_scene",
+           {"name": "Test scene", "entities": {}},
+           "scene.test_scene"),
+      ]:
+          with subtest(f"the {kind} editor saves and the {kind} loads"):
+              machine.succeed(
+                  f"curl -sf -X POST {auth} {base}/api/config/{kind}/config/{item_id} "
+                  "-H 'Content-Type: application/json' "
+                  f"-d '{json.dumps(body)}'"
+              )
+              # Saving reloads the integration; the entity follows shortly.
+              machine.wait_until_succeeds(f"curl -sf {auth} {base}/api/states/{entity}", timeout=60)
 
       for handler in [
           "hue", "tradfri", "tplink",
