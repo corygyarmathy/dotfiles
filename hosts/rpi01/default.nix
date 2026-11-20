@@ -36,6 +36,7 @@
     # here has to evaluate on both.
     ../../modules/nixos/deploy-rs.nix
     ../../modules/nixos/firewall.nix
+    ../../modules/nixos/fleet.nix # `cg.fleet`, which checks read on every host
     ../../modules/nixos/kernel-hardening.nix
     ../../modules/nixos/sops-nix.nix
     ../../modules/nixos/ssh-hardening.nix
