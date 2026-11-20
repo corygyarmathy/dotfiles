@@ -94,10 +94,22 @@
   # ============================================================================
   # The loader itself is in profiles/common.nix; what is here is specific to
   # this machine.
+  # rpi01's vendor kernel and firmware come prebuilt from nixos-raspberrypi's
+  # cache. Without it a local build of rpi01 - the SD image, a deploy-rs push -
+  # compiles that kernel under emulation, which takes hours. rpi01 and CI
+  # trust the same cache.
+  nix.settings = {
+    substituters = [ "https://nixos-raspberrypi.cachix.org" ];
+    trusted-public-keys = [
+      "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
+    ];
+  };
+
   boot = {
     # Builds rpi01 (aarch64-linux) here, under QEMU user emulation: its SD
-    # image, and the closures deploy-rs pushes to it. Most of it substitutes;
-    # only this flake's own derivations actually run emulated.
+    # image, and the closures deploy-rs pushes to it. Most of it substitutes
+    # (see the nixos-raspberrypi cache below); only this flake's own
+    # derivations actually run emulated.
     binfmt.emulatedSystems = [ "aarch64-linux" ];
     kernelPackages = pkgs.linuxPackages_latest;
     # Note: acpi_rev_override is handled by nixos-hardware dell-xps-15-9500 module
