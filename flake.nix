@@ -384,8 +384,8 @@
               path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.homelab02;
             };
           };
-          # No magicRollback concerns specific to it, but the closure is
-          # aarch64: building it on the laptop needs xps15's binfmt emulation.
+          # The closure is aarch64: building it on the laptop needs xps15's
+          # binfmt emulation.
           rpi01 = {
             hostname = "rpi01";
             sshUser = "deploy";

@@ -1,24 +1,25 @@
 # Cory's NixOS Configuration
 
-A three-machine NixOS fleet — two homelab servers and a laptop — deployed from this repository through a gated GitOps pipeline.
+A four-machine NixOS fleet — two homelab servers, a laptop and a Raspberry Pi appliance — deployed from this repository through a gated GitOps pipeline.
 
-Every machine runs a configuration built and proven by CI before it was allowed to reach them. Nothing is applied by hand, nothing is deployed from a developer's laptop, and a host that quietly stops updating raises an alert rather than drifting unnoticed.
+Every machine runs a configuration built and proven by CI before it was allowed to reach them. Nothing is applied by hand, nothing is deployed from a developer's laptop, and a server that quietly stops updating raises an alert rather than drifting unnoticed.
 
 ## How a change reaches a machine
 
 ```mermaid
 flowchart LR
     A[branch] --> B[pull request]
-    B --> C{"nixos ci<br/>builds all 3 hosts"}
+    B --> C{"nixos ci<br/>builds all 4 hosts"}
     C -->|fails| B
     C -->|passes| D[master]
     D -->|CI fast-forwards| E[deploy]
     E --> F[homelab01<br/>04:00]
     E --> I[homelab02<br/>04:15]
+    E --> J[rpi01<br/>04:30]
     E --> G[xps15<br/>on click]
 ```
 
-`master` is the integration branch and may be red. **`deploy` is the fleet's contract** — CI fast-forwards it only after every host configuration builds, so a host can never fetch a revision that fails to build for it. Every host follows it, and both servers take a promoted revision the same night; each defends itself at activation rather than relying on the other to have soaked it first ([ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md)).
+`master` is the integration branch and may be red. **`deploy` is the fleet's contract** — CI fast-forwards it only after every host configuration builds, so a host can never fetch a revision that fails to build for it. Every host follows it, and both servers take a promoted revision the same night; each defends itself at activation rather than relying on the other to have soaked it first ([ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md)). The Raspberry Pi appliance takes it unprotected ([ADR 0009](docs/adr/0009-an-appliance-runs-its-boards-release.md)).
 
 ## Documentation
 
@@ -28,6 +29,7 @@ flowchart LR
 | [ADR 0001](docs/adr/0001-gitops-deployment-with-a-promoted-ref.md)         | why the pipeline is designed this way, and what was rejected                  |
 | [ADR 0002](docs/adr/0002-protect-at-activation-not-in-the-rollout.md)      | why the staged rollout was retired, and what replaces it                      |
 | [ADR 0003](docs/adr/0003-service-confinement-is-bounded-by-hardlinking.md) | _proposed_ - why confining services to their own data is mostly not available |
+| [ADR 0009](docs/adr/0009-an-appliance-runs-its-boards-release.md)          | why the Pi is built from its own release and reboots without protection       |
 | [Deployment hardening plan](docs/plans/deployment-hardening.md)            | the gaps that remain and how they are meant to close                          |
 | [Documentation conventions](docs/agents/documentation.md)                  | which document owns a given fact, and when a plan entry gets deleted          |
 
