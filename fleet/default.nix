@@ -51,6 +51,16 @@
       kind = "workstation";
       system = "x86_64-linux";
     };
+    # A Raspberry Pi 4 driving an RGB LED matrix. An `appliance` is a machine
+    # that does one job and that nothing else in the fleet depends on: not
+    # scraped, peered or backed up, and on DHCP over Wi-Fi like the laptop.
+    rpi01 = {
+      kind = "appliance";
+      system = "aarch64-linux";
+      # Built from nixos-26.05 rather than unstable - see `mkHost` in
+      # ../flake.nix. Omitted, a host is on unstable.
+      channel = "stable";
+    };
   };
 
   # The duties that are fleet-wide rather than host-local - the ones another

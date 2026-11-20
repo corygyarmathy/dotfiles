@@ -95,6 +95,10 @@
   # The loader itself is in profiles/common.nix; what is here is specific to
   # this machine.
   boot = {
+    # Builds rpi01 (aarch64-linux) here, under QEMU user emulation: its SD
+    # image, and the closures deploy-rs pushes to it. Most of it substitutes;
+    # only this flake's own derivations actually run emulated.
+    binfmt.emulatedSystems = [ "aarch64-linux" ];
     kernelPackages = pkgs.linuxPackages_latest;
     # Note: acpi_rev_override is handled by nixos-hardware dell-xps-15-9500 module
     # WiFi power save fix (https://bugzilla.kernel.org/show_bug.cgi?id=213381)

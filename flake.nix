@@ -18,6 +18,13 @@
     stylix.url = "github:nix-community/stylix";
     stylix.inputs.nixpkgs.follows = "nixpkgs";
 
+    # The release-matched pair for hosts on the `stable` channel (see `mkHost`).
+    # Their master branches track unstable and set options 26.05 does not have.
+    home-manager-stable.url = "github:nix-community/home-manager/release-26.05";
+    home-manager-stable.inputs.nixpkgs.follows = "nixpkgs-stable";
+    stylix-stable.url = "github:nix-community/stylix/release-26.05";
+    stylix-stable.inputs.nixpkgs.follows = "nixpkgs-stable";
+
     # Secrets management
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
@@ -46,6 +53,13 @@
     # pull request through this repository's gate.
     digital-garden.url = "github:corygyarmathy/digital-garden";
     digital-garden.inputs.nixpkgs.follows = "nixpkgs";
+
+    # rpi01's board support: the Raspberry Pi vendor kernel, firmware and
+    # device trees, and `config.txt` as NixOS options. Its nixpkgs deliberately
+    # does NOT follow ours. The vendor kernel is built against its own pin and
+    # served from nixos-raspberrypi.cachix.org; following ours would turn every
+    # lock bump into a kernel compile on an arm64 builder.
+    nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
   };
 
   outputs =
@@ -80,10 +94,33 @@
       # Takes a host's name and its entry in `fleet.hosts`, so the set of
       # hosts and the facts about each of them are stated once, in ./fleet,
       # rather than restated here.
+      #
+      # `channel` picks the release a host is built from: nixpkgs and the two
+      # inputs whose NixOS modules have to match it. Every host tracks unstable
+      # except rpi01, whose vendor kernel comes from nixos-raspberrypi and is
+      # only maintained against the stable release - unstable's NixOS modules
+      # expect kernel attributes it does not have.
+      channels = {
+        unstable = {
+          inherit nixpkgs home-manager stylix;
+        };
+        stable = {
+          nixpkgs = nixpkgs-stable;
+          home-manager = inputs.home-manager-stable;
+          stylix = inputs.stylix-stable;
+        };
+      };
       mkHost =
         hostname:
-        { system, ... }:
-        nixpkgs.lib.nixosSystem {
+        {
+          system,
+          channel ? "unstable",
+          ...
+        }:
+        let
+          ch = channels.${channel};
+        in
+        ch.nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = {
             inherit inputs self;
@@ -93,6 +130,9 @@
             # ./modules do go through `config.cg.fleet`, so that a behaviour
             # test can hand one a different fleet.
             inherit fleet;
+            # The board modules for rpi01 read their own flake through this
+            # argument (they name its packages); unused by every other host.
+            nixos-raspberrypi = inputs.nixos-raspberrypi;
             # Make stable packages available as pkgs-stable
             pkgs-stable = import nixpkgs-stable {
               inherit system;
@@ -111,7 +151,7 @@
             # Core module schemas loaded globally
             sops-nix.nixosModules.sops
             disko.nixosModules.disko
-            stylix.nixosModules.stylix # Loaded here so all hosts recognize Stylix syntax
+            ch.stylix.nixosModules.stylix # Loaded here so all hosts recognize Stylix syntax
 
             # Apply custom overlays
             { nixpkgs.overlays = builtins.attrValues self.overlays; }
@@ -183,7 +223,7 @@
             }
 
             # Global Home Manager Configuration Setup
-            home-manager.nixosModules.home-manager
+            ch.home-manager.nixosModules.home-manager
 
             # Convert this block into an inline NixOS module function.
             # This gives native, clean access to the host's root `config` and `lib`.
@@ -204,7 +244,7 @@
                   # every host so `stylix-hm.nix` doesn't crash.
                   ++ lib.optional (!config.cg.stylix.enable) {
                     imports = [
-                      inputs.stylix.homeModules.stylix
+                      ch.stylix.homeModules.stylix
                     ];
                     # With `home-manager.useGlobalPkgs` the Home Manager
                     # `nixpkgs.*` options are inert and setting them is a
@@ -342,6 +382,16 @@
             profiles.system = {
               user = "root";
               path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.homelab02;
+            };
+          };
+          # No magicRollback concerns specific to it, but the closure is
+          # aarch64: building it on the laptop needs xps15's binfmt emulation.
+          rpi01 = {
+            hostname = "rpi01";
+            sshUser = "deploy";
+            profiles.system = {
+              user = "root";
+              path = deploy-rs.lib.aarch64-linux.activate.nixos self.nixosConfigurations.rpi01;
             };
           };
         };

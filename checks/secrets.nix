@@ -41,6 +41,7 @@ let
     "homelab01"
     "homelab02"
     "xps15"
+    "rpi01"
   ];
 
   configOf = name: self.nixosConfigurations.${name}.config;
@@ -79,6 +80,7 @@ let
     "homelab01.yaml"
     "homelab02.yaml"
     "xps15.yaml"
+    "rpi01.yaml"
     "operator.yaml"
   ];
 

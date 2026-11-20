@@ -241,21 +241,28 @@ jobs:
 
   build:
     name: build ${{ matrix.host }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       # Build every host even when one fails - knowing that two of three hosts
       # are broken is more useful than knowing one is.
       fail-fast: false
       matrix:
         host: [homelab01, homelab02, xps15]
+        runner: [ubuntu-latest]
+        # rpi01 is aarch64: built natively on GitHub's arm64 runner rather
+        # than emulated, and its vendor kernel comes from the
+        # nixos-raspberrypi cache instead of being compiled.
+        include:
+          - host: rpi01
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
         with:
           extra-conf: |
-            extra-substituters = https://hyprland.cachix.org
-            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
+            extra-substituters = https://hyprland.cachix.org https://nixos-raspberrypi.cachix.org
+            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc= nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI=
 
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
