@@ -198,17 +198,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
-        with:
-          # The hosts trust this cache for Hyprland; CI needs it too, or every
-          # Hyprland-adjacent path is built from source here.
-          extra-conf: |
-            extra-substituters = https://hyprland.cachix.org
-            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=
 
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: corygyarmathy-dotfiles
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # The hosts trust this cache for Hyprland; CI needs it too, or every
+          # Hyprland-adjacent path is built from source here.
+          # Extra caches go here, not in the installer's `extra-conf`: this
+          # action writes `substituters = ...` to the user nix.conf, which
+          # replaces the whole list - `extra-substituters` set system-wide
+          # included - so caches named there were silently never used.
+          extraPullNames: hyprland
           # Substitute only. This job does build things - the behaviour test
           # VMs in ./checks - but nothing a host will ever need, and the test
           # runners themselves have to execute on every commit regardless of
@@ -259,15 +260,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
-        with:
-          extra-conf: |
-            extra-substituters = https://hyprland.cachix.org https://nixos-raspberrypi.cachix.org
-            extra-trusted-public-keys = hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc= nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI=
 
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: corygyarmathy-dotfiles
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # Hyprland for xps15; nixos-raspberrypi for rpi01's vendor kernel,
+          # which is otherwise a 20+ minute compile on every lock bump.
+          # Extra caches go here, not in the installer's `extra-conf`: this
+          # action writes `substituters = ...` to the user nix.conf, which
+          # replaces the whole list - `extra-substituters` set system-wide
+          # included - so caches named there were silently never used.
+          extraPullNames: hyprland, nixos-raspberrypi
           # The action's own push runs as a post-job step, where a failure fails
           # the job - which would let a cache hiccup block a deployment. The
           # cache is a performance dependency, not a correctness one (ADR 0001),
