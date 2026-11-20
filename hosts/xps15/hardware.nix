@@ -28,6 +28,9 @@
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
 
+  # UEFI firmware, booted by systemd-boot.
+  cg.systemd-boot.enable = true;
+
   # ============================================================================
   # Hibernation / Resume
   # ============================================================================

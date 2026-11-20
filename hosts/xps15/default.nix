@@ -101,7 +101,7 @@
     extraModprobeConfig = ''
       options iwlwifi power_save=1
     '';
-    # The fleet default (profiles/common.nix) keeps 10 generations, but this
+    # The fleet default (modules/nixos/systemd-boot.nix) keeps 10 generations, but this
     # machine's ESP is 511M and each generation's initrd is ~48M, so 10 leaves
     # /boot at ~83% used and close enough to overflow that it already did once
     # (Sep 2026). 6 keeps the same rollback depth boot-counting and
