@@ -79,11 +79,12 @@ Every file is encrypted to the keys that read it and to nothing else:
 | `homelab01.yaml` | user, homelab01            |
 | `homelab02.yaml` | user, homelab02            |
 | `xps15.yaml`     | user, xps15                |
+| `rpi01.yaml`     | user, rpi01                |
 | `operator.yaml`  | user                       |
 
 So the laptop cannot decrypt a server secret, neither server can decrypt the other's, and `operator.yaml` is opened by the user key alone. That last row is the one with an operational consequence: **`operator.yaml` has no second key.** Lose `~/.config/sops/age/keys.txt` and nothing else can open it — the host keys, which survive a lost workstation, do not read that file by design.
 
-`checks/secrets.nix` holds this table to the file: all five names are in its `narrowedFiles`, so a key that reappears in a `creation_rule` fails `nix flake check` rather than quietly widening what a machine can read.
+`checks/secrets.nix` holds this table to the file: every file is in its `narrowedFiles`, so a key that reappears in a `creation_rule` fails `nix flake check` rather than quietly widening what a machine can read.
 
 This landed as a separate change from the per-host split, on purpose. The split moved secrets between files while every host could still decrypt everything, so a mis-scoped entry surfaced as a missing name in CI; narrowing the recipients afterwards meant a mistake in the split had already been caught. Doing both at once is what would have made the split unrecoverable.
 
