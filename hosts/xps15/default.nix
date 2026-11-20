@@ -90,10 +90,8 @@
   };
 
   # ============================================================================
-  # Boot Configuration
+  # Nix Substituters
   # ============================================================================
-  # The loader itself is in profiles/common.nix; what is here is specific to
-  # this machine.
   # rpi01's vendor kernel and firmware come prebuilt from nixos-raspberrypi's
   # cache. Without it a local build of rpi01 - the SD image, a deploy-rs push -
   # compiles that kernel under emulation, which takes hours. rpi01 and CI
@@ -105,10 +103,15 @@
     ];
   };
 
+  # ============================================================================
+  # Boot Configuration
+  # ============================================================================
+  # The loader is systemd-boot (cg.systemd-boot, in hardware.nix); what is here
+  # is specific to this machine.
   boot = {
     # Builds rpi01 (aarch64-linux) here, under QEMU user emulation: its SD
     # image, and the closures deploy-rs pushes to it. Most of it substitutes
-    # (see the nixos-raspberrypi cache below); only this flake's own
+    # (see the nixos-raspberrypi cache above); only this flake's own
     # derivations actually run emulated.
     binfmt.emulatedSystems = [ "aarch64-linux" ];
     kernelPackages = pkgs.linuxPackages_latest;

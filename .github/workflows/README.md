@@ -10,9 +10,9 @@ This document describes _behaviour_. The reasoning - what was rejected, and why 
 
 **`deploy` is the fleet's contract, and the only promoted ref.** CI fast-forwards it to `master` only after every host configuration builds, so a host can never fetch a revision that fails to build for it.
 
-| Ref      | Followed by                 | Takes a revision         |
-| -------- | --------------------------- | ------------------------ |
-| `deploy` | homelab01, homelab02, xps15 | the night it is promoted |
+| Ref      | Followed by                        | Takes a revision         |
+| -------- | ---------------------------------- | ------------------------ |
+| `deploy` | homelab01, homelab02, xps15, rpi01 | the night it is promoted |
 
 There used to be a second ref, `deploy-stable`, which trailed `deploy` by 24 hours and which homelab02 followed so that the storage node soaked each revision on homelab01 first. [ADR 0002](../../docs/adr/0002-protect-at-activation-not-in-the-rollout.md) retires it: the lag measured elapsed time rather than health, nothing read the result, and it made the host holding the data the host least able to receive a considered change. Protection now happens at activation on each host instead.
 
@@ -24,7 +24,7 @@ The laptop follows `deploy` too, but never switches on its own: it builds in the
 
 | Workflow                    | When                         | Does                                                                                                                    |
 | --------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`                    | every PR and push to master  | builds all three hosts, runs each check in `checks/` on its own runner, lints, fast-forwards `deploy`                   |
+| `ci.yml`                    | every PR and push to master  | builds all four hosts, runs each check in `checks/` on its own runner, lints, fast-forwards `deploy`                    |
 | `flake-update.yml`          | daily, 15:00 UTC             | `nix flake update`, rehash lock-dependent packages, per-host closure diff, PR, auto-merge on green                      |
 | `package-update.yml`        | Mondays, 03:00 UTC           | runs each package's own updater, one PR per package, auto-merged only when the package opts in via `passthru.autoMerge` |
 | `dependabot-auto-merge.yml` | every Dependabot PR          | schedules the merge; `nixos ci` is still the gate                                                                       |
@@ -63,13 +63,14 @@ The reason it is all noise is that `remote_and_local` assumes an attacker who co
 
 ### How a night runs
 
-All times Perth (UTC+8), which is what the hosts are set to. Both hosts add up to 10 minutes of jitter.
+All times Perth (UTC+8), which is what the hosts are set to. Each host adds up to 10 minutes of jitter.
 
-| Perth | UTC   | Event                                                                                                                      |
-| ----- | ----- | -------------------------------------------------------------------------------------------------------------------------- |
-| 23:00 | 15:00 | `flake-update` opens its PR; on green it auto-merges, and that push to `master` triggers `ci.yml`, which promotes `deploy` |
-| 04:00 | 20:00 | homelab01 fetches `deploy` and rebuilds                                                                                    |
-| 04:15 | 20:15 | homelab02 fetches `deploy` and rebuilds                                                                                    |
+| Perth | UTC   | Event                                                                                                                                                 |
+| ----- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 23:00 | 15:00 | `flake-update` opens its PR; on green it auto-merges, and that push to `master` triggers `ci.yml`, which promotes `deploy`                            |
+| 04:00 | 20:00 | homelab01 fetches `deploy` and rebuilds                                                                                                               |
+| 04:15 | 20:15 | homelab02 fetches `deploy` and rebuilds                                                                                                               |
+| 04:30 | 20:30 | rpi01 fetches `deploy`, rebuilds and reboots, with no activation protection ([ADR 0009](../../docs/adr/0009-an-appliance-runs-its-boards-release.md)) |
 
 Both servers land on the same revision the same night. The 15 minute offset is not a soak and is not load-bearing - homelab01 mounts NFS from homelab02, and two servers rebooting into a new kernel simultaneously is worth avoiding for its own sake.
 

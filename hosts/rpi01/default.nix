@@ -64,7 +64,9 @@
   # Auto-Upgrade
   # ============================================================================
   # Follows `deploy` like every host. CI builds this closure on an arm64 runner
-  # and pushes it to Cachix, so this substitutes rather than compiling.
+  # and pushes it to Cachix, so this substitutes rather than compiling. Reboots
+  # with no boot counting or upgrade-verify behind it: ADR 0009 accepts that
+  # for an appliance.
   system.autoUpgrade = {
     enable = true;
     flake = "github:corygyarmathy/dotfiles/deploy#${config.networking.hostName}";

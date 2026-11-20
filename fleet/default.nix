@@ -35,7 +35,8 @@
   # `kind` is what the rest of the fleet may assume, not what the host runs: a
   # `server` has a reserved address, is expected to be up, and is scraped,
   # peered and backed up by the others. `xps15` is a laptop on DHCP and is
-  # none of those, which is why it has no address to give.
+  # none of those, which is why it has no address to give. An `appliance` has
+  # a reserved address so it resolves by name, and is none of the rest.
   hosts = {
     homelab01 = {
       kind = "server";

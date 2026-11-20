@@ -30,7 +30,7 @@ nix flake check --print-build-logs
 nix build --print-build-logs ".#nixosConfigurations.<host>.config.system.build.toplevel"
 ```
 
-Use the host names `homelab01`, `homelab02`, and `xps15`. For local iteration,
+Use the host names `homelab01`, `homelab02`, `xps15`, and `rpi01`. For local iteration,
 `nixos-rebuild build --flake .#<host>` avoids activation.
 
 The checks in `checks/` are NixOS VM behavior tests and are part of

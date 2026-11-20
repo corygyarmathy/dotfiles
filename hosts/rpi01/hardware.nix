@@ -4,7 +4,7 @@
 # generic aarch64 SD image: the matrix library (hzeller/rpi-rgb-led-matrix)
 # drives the BCM2711's GPIO and PWM registers directly and is developed against
 # the vendor kernel and device tree, and this is what ships them - prebuilt, from
-# nixos-raspberrypi.cachix.org, which `trusted-nix-caches` adds below.
+# nixos-raspberrypi.cachix.org, which `trusted-nix-caches` adds.
 { nixos-raspberrypi, lib, ... }:
 {
   imports = [
