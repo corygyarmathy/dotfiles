@@ -39,10 +39,11 @@ let
     mapAttrsToList (_: v: v) cfg.repositories
   );
 
-  # Every fleet machine with a reserved address; the laptop has none and is
-  # never an SFTP backup target.
+  # The fleet's servers - the only SFTP backup targets. Not "every host with
+  # an address": rpi01 has one so that it resolves by name, and is never
+  # handed the backup key.
   fleetAddresses = mapAttrsToList (_: host: host.address) (
-    filterAttrs (_: host: host ? address) config.cg.fleet.hosts
+    filterAttrs (_: host: host.kind == "server") config.cg.fleet.hosts
   );
 
   # Submodule type for individual repository targets

@@ -53,10 +53,14 @@
     };
     # A Raspberry Pi 4 driving an RGB LED matrix. An `appliance` is a machine
     # that does one job and that nothing else in the fleet depends on: not
-    # scraped, peered or backed up, and on DHCP over Wi-Fi like the laptop.
+    # scraped, peered or backed up. It still has a reserved address (its Wi-Fi
+    # MAC, dc:a6:32:66:ea:87), because a name only resolves on this LAN if it
+    # is listed here - anything else under the domain falls through AdGuard's
+    # wildcard to the gateway.
     rpi01 = {
       kind = "appliance";
       system = "aarch64-linux";
+      address = "10.20.2.154";
       # Built from nixos-26.05 rather than unstable - see `mkHost` in
       # ../flake.nix. Omitted, a host is on unstable.
       channel = "stable";
