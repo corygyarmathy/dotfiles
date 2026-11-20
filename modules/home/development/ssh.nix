@@ -29,10 +29,10 @@ in
           IdentityFile = [ "~/.ssh/id_github" ];
         };
 
-        # The two homelab servers, reached by name. `User` is spelled out so a
-        # plain `ssh homelab01` works from the laptop; deploy-rs passes its own
+        # The hosts reached by name. `User` is spelled out so a plain
+        # `ssh homelab01` works from the laptop; deploy-rs passes its own
         # `sshUser` on the command line, which overrides it.
-        "homelab01 homelab02" = {
+        "homelab01 homelab02 rpi01" = {
           User = "coryg";
         };
 
@@ -49,7 +49,7 @@ in
         # authorizedKeys doesn't list, so auth failed at the very end of the
         # deploy run.
         deploy-homelab = {
-          header = "Match host homelab01,homelab02 user deploy";
+          header = "Match host homelab01,homelab02,rpi01 user deploy";
           User = "deploy";
           IdentitiesOnly = true;
           IdentityFile = [ "~/.ssh/deploy" ];
