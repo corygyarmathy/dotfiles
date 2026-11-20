@@ -24,6 +24,9 @@
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
 
+  # UEFI firmware, booted by systemd-boot.
+  cg.systemd-boot.enable = true;
+
   fileSystems."/" = {
     device = "/dev/disk/by-uuid/f032b9e5-d18d-4830-92a0-32110ba19096";
     fsType = "ext4";
