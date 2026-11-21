@@ -47,6 +47,7 @@
     # By hand for the same reason: the services index would import every
     # homelab service module.
     ../../modules/services/led-matrix.nix
+    ../../modules/services/matrix-display.nix
   ];
 
   # ============================================================================
@@ -137,6 +138,10 @@
       chain = 4;
       slowdownGpio = 4;
     };
+
+    # What the sink shows. Its location is `matrix-display/location` in
+    # secrets/rpi01.yaml.
+    service.matrix-display.enable = true;
   };
 
   system.stateVersion = "26.05";
