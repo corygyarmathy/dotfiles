@@ -43,6 +43,8 @@
     ../../modules/nixos/stylix.nix # declares `cg.stylix`, which flake.nix reads for every host
     ../../modules/nixos/user-security.nix
     ../../modules/nixos/wireless.nix
+
+    ../../modules/services/led-matrix.nix
   ];
 
   # ============================================================================
@@ -112,6 +114,18 @@
     };
     firewall.enable = true;
     user-security.enable = true;
+
+    # Four 64x64 panels in a row on the Adafruit RGB Matrix Bonnet, a 256x64
+    # canvas. The bonnet has GPIO4 bridged to GPIO18 for hardware pulsing,
+    # hence the -pwm mapping. Showing the demo until there is content.
+    service.led-matrix = {
+      enable = true;
+      gpioMapping = "adafruit-hat-pwm";
+      rows = 64;
+      cols = 64;
+      chain = 4;
+      slowdownGpio = 2;
+    };
   };
 
   system.stateVersion = "26.05";
