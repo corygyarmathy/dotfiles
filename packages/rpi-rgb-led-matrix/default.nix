@@ -29,11 +29,7 @@ stdenv.mkDerivation {
     hash = "sha256-nkmvOTcYRRlVjeLr4+hPNxqckrFYBE33pcbLuLehDN8=";
   };
 
-  nativeBuildInputs = [
-    pkg-config
-    # GraphicsMagick++-config, which utils/Makefile shells out to.
-    graphicsmagick
-  ];
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [
     graphicsmagick
@@ -53,11 +49,26 @@ stdenv.mkDerivation {
     "PREFIX=${placeholder "out"}"
   ];
 
+  # The Makefiles shell out to GraphicsMagick++-config unless these are set,
+  # and that script describes the build platform's GraphicsMagick: under cross
+  # compilation it hands the target linker the build machine's libraries.
+  # pkg-config resolves against the target.
+  preBuild = ''
+    export MAGICK_CXXFLAGS="$($PKG_CONFIG --cflags GraphicsMagick++)"
+    export MAGICK_LDFLAGS="$($PKG_CONFIG --libs GraphicsMagick++)"
+  '';
+
+  # Off by default for a plain Makefile build, and this one runs under QEMU on
+  # the laptop (hosts/xps15), where serial make takes over ten minutes. Each
+  # sub-make reaches lib/ through a single FORCE target, so no two jobs build
+  # the library at once.
+  enableParallelBuilding = true;
+
   # The top-level Makefile builds lib/ and examples-api-use/; utils/ (image
   # viewer, text scroller) is separate. `simple` is utils/ without the ffmpeg
-  # video viewer.
+  # video viewer. Hand-run, so it takes the job count buildPhase would.
   postBuild = ''
-    make -C utils $makeFlags simple
+    make -C utils -j$NIX_BUILD_CORES $makeFlags simple
   '';
 
   installPhase = ''
