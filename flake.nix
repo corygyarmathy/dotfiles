@@ -316,6 +316,10 @@
               ];
             });
             matrix-display-sink-cross = rpiCross.matrix-display-sink;
+            # The renderer is pure Go, so matrix-display builds it for arm64
+            # with GOARCH and the cached native toolchain; rpiCross would
+            # build a cross Go from source first.
+            inherit (inputs.matrix-display.packages.${system}) matrix-display-cross;
           }
         )
       );

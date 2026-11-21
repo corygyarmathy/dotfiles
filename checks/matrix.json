@@ -22,6 +22,7 @@
   "home-assistant",
   "host-alive",
   "led-matrix",
+  "matrix-display",
   "media-nfs-recovery",
   "monitoring",
   "ntfy",

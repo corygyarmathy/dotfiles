@@ -440,6 +440,7 @@ in
   # `nix fmt` hop execs, and the file says why the clean expectations are
   # generated inside the check rather than checked in.
   fmt-gate = import ./fmt-gate.nix { inherit pkgs self; };
+  matrix-display = testLib.mkTest (import ./matrix-display.nix { inherit pkgs; });
   grafana = testLib.mkTest ./grafana.nix;
   home-assistant = testLib.mkTest ./home-assistant.nix;
   host-alive = testLib.mkTest ./host-alive.nix;
