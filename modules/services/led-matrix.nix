@@ -80,7 +80,9 @@ in
         must parse the library's options (the sink and every program in the
         library's package do). The default is the frame sink, which shows
         nothing until a renderer connects to `socket.path`; the example is
-        the rotating-square demo, a panel test.
+        the rotating-square demo, a panel test. Any other program ignores the
+        socket, which still accepts connections, so while it runs a renderer
+        connects and then waits with no error.
       '';
     };
 
