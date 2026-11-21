@@ -1,6 +1,12 @@
 # Custom packages
 # Build with: nix build .#packageName
-pkgs: {
+pkgs:
+let
+  # Patched for lazy trees; passed to the packages that update through
+  # update-via-nix-update.sh. Internal, so not a flake output.
+  nix-update = pkgs.callPackage ./nix-update { };
+in
+{
   # NixOS upgrade management scripts
   nixos-upgrade-scripts = pkgs.callPackage ./nixos-upgrade-scripts { };
 
@@ -11,7 +17,7 @@ pkgs: {
   nixos-remote-install = pkgs.callPackage ./nixos-remote-install { };
 
   # Commercial skip
-  comskip = pkgs.callPackage ./comskip { };
+  comskip = pkgs.callPackage ./comskip { inherit nix-update; };
 
   # Argtable2 (dependency for comskip)
   argtable2 = pkgs.callPackage ./argtable2 { };
@@ -63,10 +69,10 @@ pkgs: {
   caddy-with-plugins = pkgs.callPackage ./caddy-with-plugins { };
 
   # Seeley MagIQtouch custom component for Home Assistant
-  ha-magiqtouch = pkgs.callPackage ./ha-magiqtouch { };
+  ha-magiqtouch = pkgs.callPackage ./ha-magiqtouch { inherit nix-update; };
 
   # HUB75 LED matrix driver for rpi01's Adafruit RGB Matrix Bonnet
-  rpi-rgb-led-matrix = pkgs.callPackage ./rpi-rgb-led-matrix { };
+  rpi-rgb-led-matrix = pkgs.callPackage ./rpi-rgb-led-matrix { inherit nix-update; };
 
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
