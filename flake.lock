@@ -469,11 +469,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795259058,
-        "narHash": "sha256-qojz55FQtvANabosQyt5BLhG5mnKtm6VIfmf8hneDgQ=",
+        "lastModified": 1795261749,
+        "narHash": "sha256-LLpnlQWe+UZ3m+Ad6YrgP9qtdLUwC4Xff/uzp15bX1s=",
         "owner": "corygyarmathy",
         "repo": "matrix-display",
-        "rev": "cd09fe88ad422535a7a839496ff6958aced2f010",
+        "rev": "a03e8c52d0273396daa17587e257e3c20475248c",
         "type": "github"
       },
       "original": {
