@@ -21,7 +21,7 @@
 # After that it follows `deploy` like every other host.
 {
   config,
-  inputs,
+  lib,
   ...
 }:
 {
@@ -48,10 +48,6 @@
     # homelab service module.
     ../../modules/services/led-matrix.nix
   ];
-
-  # matrix-display-sink, the display's default command, linked against
-  # this flake's rpi-rgb-led-matrix.
-  nixpkgs.overlays = [ inputs.matrix-display.overlays.default ];
 
   # ============================================================================
   # Users
