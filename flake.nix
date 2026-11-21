@@ -292,26 +292,32 @@
           # and ./packages is handed only `pkgs`.
           afk-agent = pkgs.callPackage ./packages/afk-agent { src = inputs.afk-agent; };
         }
-        // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
-          # rpi01's matrix library cross-compiled from the laptop: about thirty
-          # seconds, against several minutes for the real aarch64 build under
-          # QEMU. A check that it compiles, not what rpi01 runs - its store
-          # path differs from the one CI builds and caches. Built from
-          # nixpkgs-stable with the overlays, as rpi01 gets it. No autoUpdate:
-          # that belongs to rpi-rgb-led-matrix, and would run its updater twice.
-          rpi-rgb-led-matrix-cross =
-            (import nixpkgs-stable {
+        // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
+          let
+            # Built from nixpkgs-stable with the overlays, as rpi01 gets it.
+            rpiCross = import nixpkgs-stable {
               localSystem = system;
               crossSystem = "aarch64-linux";
               overlays = builtins.attrValues self.overlays;
-            }).rpi-rgb-led-matrix.overrideAttrs
-              (old: {
-                passthru = removeAttrs old.passthru [
-                  "autoUpdate"
-                  "updateScript"
-                ];
-              });
-        }
+            };
+          in
+          {
+            # rpi01's matrix library and frame sink cross-compiled from the
+            # laptop: seconds, against minutes for the real aarch64 builds
+            # under QEMU. Checks that they compile, not what rpi01 runs - their
+            # store paths differ from the ones CI builds and caches. The sink
+            # links the cross library, as rpi01's links its own. No autoUpdate:
+            # that belongs to rpi-rgb-led-matrix, and would run its updater
+            # twice.
+            rpi-rgb-led-matrix-cross = rpiCross.rpi-rgb-led-matrix.overrideAttrs (old: {
+              passthru = removeAttrs old.passthru [
+                "autoUpdate"
+                "updateScript"
+              ];
+            });
+            matrix-display-sink-cross = rpiCross.matrix-display-sink;
+          }
+        )
       );
 
       apps = forAllSystems (

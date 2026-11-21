@@ -177,6 +177,11 @@
     };
   };
 
+  # matrix-display-sink, the LED matrix's default command (ADR 0011). It links
+  # the `rpi-rgb-led-matrix` of the pkgs it lands in, so `additions` supplies
+  # ours. Lazy, so hosts without the display never build it.
+  matrix-display = inputs.matrix-display.overlays.default;
+
   # Access unstable-small packages via pkgs.unstable-small
   unstable-small-packages = _final: prev: {
     small = import inputs.nixpkgs-unstable-small {
