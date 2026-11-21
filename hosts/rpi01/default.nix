@@ -121,13 +121,20 @@
     # canvas. The bonnet has GPIO4 bridged to GPIO18 for hardware pulsing,
     # hence the -pwm mapping. The module relaxes /dev/mem for it (ADR 0010).
     # Showing the demo until there is content.
+    #
+    # Slowdown 2 and 3 sparkle at the full 1500 MHz clock; 4 is clean, and
+    # with hardware pulsing it costs almost no refresh (~100 Hz either way).
+    # The PWM flags stay at the library defaults: 11-bit colour at ~100 Hz
+    # showed no visible flicker, so nothing was worth trading for more.
+    # This only holds while the Pi is not undervoltage-throttled - see
+    # hardware.nix for the power wiring.
     service.led-matrix = {
       enable = true;
       gpioMapping = "adafruit-hat-pwm";
       rows = 64;
       cols = 64;
       chain = 4;
-      slowdownGpio = 2;
+      slowdownGpio = 4;
     };
   };
 

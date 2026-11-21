@@ -5,6 +5,13 @@
 # drives the BCM2711's GPIO and PWM registers directly and is developed against
 # the vendor kernel and device tree, and this is what ships them - prebuilt, from
 # nixos-raspberrypi.cachix.org, which `trusted-nix-caches` adds.
+#
+# POWER. The Pi runs from its own 5.1V USB-C supply; the panels run from two
+# separate 5V supplies, and the Bonnet's barrel jack and screw terminal are
+# left empty. Back-powered through the Bonnet, the Pi undervolted under the
+# refresh thread's load alone and throttled to 600 MHz, halving the refresh
+# rate. Never connect USB-C and a live Bonnet supply at once: nothing on a
+# Pi 4 stops two supplies on the 5V rail feeding each other.
 { nixos-raspberrypi, lib, ... }:
 {
   imports = [
