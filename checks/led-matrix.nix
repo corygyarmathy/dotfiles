@@ -66,6 +66,8 @@ let
     "keeps kernel tunables read-only" = unit.ProtectKernelTunables;
     "the renderer reads its location from sops" =
       renderer.LoadCredential == [ "location:${cfg.sops.secrets."matrix-display/location".path}" ];
+    "the renderer is on the PATH" =
+      lib.elem cfg.cg.service.matrix-display.package cfg.environment.systemPackages;
     "the renderer has no capabilities" = renderer.CapabilityBoundingSet == "";
     "the renderer can reach the socket" = lib.elem socket.SocketGroup renderer.SupplementaryGroups;
     "as written, the lock assertion holds" = !(firesFor rpi01);

@@ -55,6 +55,13 @@ in
       }
     ];
 
+    # On the PATH for running it by hand: `test-pattern`, or `serve --from`
+    # to see another time of day. Stop the service first, since the sink
+    # serves one client, and run it with sudo, for the socket and the
+    # location secret (which LoadCredential's copy is not, once the service
+    # stops).
+    environment.systemPackages = [ cfg.package ];
+
     # Root-only; only PID 1 reads it, for LoadCredential.
     sops.secrets.${locationSecret}.restartUnits = [ "matrix-display.service" ];
 
