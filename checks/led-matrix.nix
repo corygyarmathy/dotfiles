@@ -5,7 +5,9 @@
 # configuration. Losing the drop-privilege flags leaves the display working
 # while it runs as root with CAP_SYS_RAWIO, and losing the boot-time tunables
 # leaves it working with more flicker; neither shows on the panels as a
-# failure.
+# failure. Nor does a socket anyone can write to: the panels would still show
+# whatever a legitimate renderer sends, and so would anything else on the host
+# (ADR 0011).
 {
   lib,
   pkgs,
@@ -20,8 +22,17 @@ let
 
   cfg = rpi01.config;
   unit = cfg.systemd.services.led-matrix.serviceConfig;
+  socket = cfg.systemd.sockets.led-matrix.socketConfig;
 
   expectations = {
+    "runs the frame sink" =
+      lib.hasPrefix (lib.getExe cfg.cg.service.led-matrix.sinkPackage) unit.ExecStart;
+    "listens on the frame socket" = socket.ListenSequentialPacket == "/run/led-matrix/frames.sock";
+    "socket owned by root" = socket.SocketUser == "root";
+    "socket group is led-matrix" = socket.SocketGroup == "led-matrix";
+    "socket mode is 0660" = socket.SocketMode == "0660";
+    "socket starts at boot" = lib.elem "sockets.target" cfg.systemd.sockets.led-matrix.wantedBy;
+    "has no network" = unit.PrivateNetwork;
     "drops to led-matrix user" = lib.hasInfix "--led-drop-priv-user=led-matrix" unit.ExecStart;
     "drops to led-matrix group" = lib.hasInfix "--led-drop-priv-group=led-matrix" unit.ExecStart;
     "relaxes /dev/mem" = lib.elem "iomem=relaxed" cfg.boot.kernelParams;

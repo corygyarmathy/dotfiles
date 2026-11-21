@@ -3,9 +3,16 @@
 #
 # The module owns what is the same whatever is shown: the panel geometry, the
 # GPIO mapping, the kernel setup the library needs, and a confined unit to run
-# it in. What is shown is the host's choice - `command` is any program linked
-# against the library (the package's own demos and utilities, or something
-# else), and the `--led-*` flags are appended to it.
+# it in. By default that unit runs matrix-display's frame sink, which takes
+# frames from an unprivileged renderer over the unit's socket and holds the
+# hardware for it (ADR 0011). `command` can be any other program linked
+# against the library instead - the package's demos, for a panel test - and
+# the `--led-*` flags are appended to whichever runs.
+#
+# SOCKET. systemd creates the socket and hands it to the sink, which never
+# makes one itself, so who may send frames is decided here: root and the
+# `socket.group`, through the socket's mode. A program other than the sink
+# ignores the socket.
 #
 # PRIVILEGES. The library must start as root: it maps the SoC's GPIO, timer,
 # PWM and (for hardware pulsing) clock registers through /dev/mem, which needs
@@ -46,25 +53,46 @@ in
 
     package = lib.mkPackageOption pkgs "rpi-rgb-led-matrix" { };
 
+    sinkPackage = lib.mkPackageOption pkgs "matrix-display-sink" {
+      extraDescription = "Comes from matrix-display's overlay, which the host applies.";
+    };
+
     command = lib.mkOption {
       type = lib.types.nonEmptyListOf lib.types.str;
-      default = [
-        (lib.getExe' cfg.package "demo")
-        "-D0"
-      ];
-      defaultText = lib.literalExpression ''[ (lib.getExe' cfg.package "demo") "-D0" ]'';
+      default = [ (lib.getExe cfg.sinkPackage) ];
+      defaultText = lib.literalExpression "[ (lib.getExe cfg.sinkPackage) ]";
       example = lib.literalExpression ''
         [
-          (lib.getExe' cfg.package "text-scroller")
-          "-f" "''${cfg.package}/share/rpi-rgb-led-matrix/fonts/10x20.bdf"
-          "Hello"
+          (lib.getExe' cfg.package "demo")
+          "-D0"
         ]
       '';
       description = ''
         Program and arguments to run. The `--led-*` flags are appended, so it
-        must parse the library's options (every program in the package does).
-        The default is the rotating-square demo - a panel test, not content.
+        must parse the library's options (the sink and every program in the
+        library's package do). The default is the frame sink, which shows
+        nothing until a renderer connects to `socket.path`; the example is
+        the rotating-square demo, a panel test.
       '';
+    };
+
+    socket = {
+      path = lib.mkOption {
+        type = lib.types.path;
+        default = "/run/led-matrix/frames.sock";
+        readOnly = true;
+        description = "Where a renderer connects to send the sink frames.";
+      };
+
+      group = lib.mkOption {
+        type = lib.types.str;
+        default = "led-matrix";
+        readOnly = true;
+        description = ''
+          Group allowed to connect to `socket.path`. A renderer's unit joins
+          it (for example through `SupplementaryGroups`).
+        '';
+      };
     };
 
     gpioMapping = lib.mkOption {
@@ -160,9 +188,24 @@ in
     };
     users.groups.led-matrix = { };
 
+    # A connection socket-activates the service, which also starts at boot
+    # (below) so the panels are driven blank rather than left floating.
+    systemd.sockets.led-matrix = {
+      description = "RGB LED matrix frame socket";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenSequentialPacket = cfg.socket.path;
+        SocketUser = "root";
+        SocketGroup = cfg.socket.group;
+        SocketMode = "0660";
+      };
+    };
+
     systemd.services.led-matrix = {
       description = "RGB LED matrix display";
       wantedBy = [ "multi-user.target" ];
+      requires = [ "led-matrix.socket" ];
+      after = [ "led-matrix.socket" ];
 
       serviceConfig = {
         ExecStart = lib.escapeShellArgs (cfg.command ++ matrixFlags);

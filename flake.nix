@@ -60,6 +60,14 @@
     # served from nixos-raspberrypi.cachix.org; following ours would turn every
     # lock bump into a kernel compile on an arm64 builder.
     nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
+
+    # rpi01's display: the frame sink that holds the panels, and the renderer
+    # that feeds it (ADR 0011). Only its overlay is used, applied to rpi01's
+    # pkgs, so the sink links our packages/rpi-rgb-led-matrix. Its nixpkgs
+    # follows the release rpi01 is built from; nothing is built from it here,
+    # so a second pin would be locked and never used.
+    matrix-display.url = "github:corygyarmathy/matrix-display";
+    matrix-display.inputs.nixpkgs.follows = "nixpkgs-stable";
   };
 
   outputs =

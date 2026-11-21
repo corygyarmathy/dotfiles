@@ -462,6 +462,26 @@
         "type": "github"
       }
     },
+    "matrix-display": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-stable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795253802,
+        "narHash": "sha256-bobX9q8GvXHp8twSt/n2vyrEODEY4oXWT0gOgXf5g3o=",
+        "owner": "corygyarmathy",
+        "repo": "matrix-display",
+        "rev": "ecdae836f1f33670a0c86f9fc741b46f31ec7c1b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "corygyarmathy",
+        "repo": "matrix-display",
+        "type": "github"
+      }
+    },
     "nixos-images": {
       "inputs": {
         "nixos-stable": [
@@ -646,6 +666,7 @@
         "hardware": "hardware",
         "home-manager": "home-manager",
         "home-manager-stable": "home-manager-stable",
+        "matrix-display": "matrix-display",
         "nixos-raspberrypi": "nixos-raspberrypi",
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-stable": "nixpkgs-stable",
