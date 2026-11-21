@@ -1,6 +1,6 @@
 # ADR 0010: The LED matrix maps its registers through relaxed /dev/mem
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-21
 - **Related Artefacts:**
     - Builds on: ADR 0009 (rpi01 runs its board's release)
