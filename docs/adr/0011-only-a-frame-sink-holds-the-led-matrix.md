@@ -29,6 +29,7 @@ Only a frame sink holds the panel hardware. It does nothing but take finished fr
 - Two processes and a wire protocol between them, versioned across two repositories. They come from the same flake input, so they move together, but a renderer built elsewhere has to match the sink's version.
 - The sink still parses input from another process while it holds the mappings. That input is a fixed-size frame from a local, group-restricted peer, a far smaller surface than the network, but not none.
 - Anything in the socket's group can draw on the panels. That is a display, not a privilege, but membership is the boundary and has to be granted deliberately.
+- A library demo can still stand in for the sink, for a panel test. It takes no input, so the boundary holds, but while it runs the socket accepts connections that nothing reads.
 
 ## Alternatives considered
 
