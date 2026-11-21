@@ -120,13 +120,23 @@ jobs:
         run: |
           set -euo pipefail
 
+          attr=".#packages.x86_64-linux.${{ matrix.package }}.updateScript"
+
           # argv, executed from the repository root. Elements may be store paths
-          # (nix-update-script) or repo-relative script paths - both are just
-          # argv, so the runner does not care which.
-          mapfile -t argv < <(
-            nix eval --json ".#packages.x86_64-linux.${{ matrix.package }}.updateScript" \
+          # (`lib.getExe nix-update`) or repo-relative script paths.
+          mapfile -t argv < <(nix eval --json "$attr" | jq -r '.[]')
+
+          # `nix eval` prints a store path without realising it, and a fresh
+          # runner has none of them. Build every derivation the argv refers to
+          # - its string context - so the paths exist before they are run.
+          mapfile -t drvs < <(
+            nix eval --json "$attr" --apply \
+              'argv: builtins.attrNames (builtins.getContext (builtins.concatStringsSep " " argv))' \
               | jq -r '.[]'
           )
+          if [ "${#drvs[@]}" -gt 0 ]; then
+            nix build --no-link "${drvs[@]/%/^*}"
+          fi
 
           echo "::notice::Running: ${argv[*]}"
           out="$("${argv[@]}")"
