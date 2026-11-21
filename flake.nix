@@ -284,6 +284,26 @@
           # and ./packages is handed only `pkgs`.
           afk-agent = pkgs.callPackage ./packages/afk-agent { src = inputs.afk-agent; };
         }
+        // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          # rpi01's matrix library cross-compiled from the laptop: about thirty
+          # seconds, against several minutes for the real aarch64 build under
+          # QEMU. A check that it compiles, not what rpi01 runs - its store
+          # path differs from the one CI builds and caches. Built from
+          # nixpkgs-stable with the overlays, as rpi01 gets it. No autoUpdate:
+          # that belongs to rpi-rgb-led-matrix, and would run its updater twice.
+          rpi-rgb-led-matrix-cross =
+            (import nixpkgs-stable {
+              localSystem = system;
+              crossSystem = "aarch64-linux";
+              overlays = builtins.attrValues self.overlays;
+            }).rpi-rgb-led-matrix.overrideAttrs
+              (old: {
+                passthru = removeAttrs old.passthru [
+                  "autoUpdate"
+                  "updateScript"
+                ];
+              });
+        }
       );
 
       apps = forAllSystems (

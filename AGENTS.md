@@ -33,6 +33,11 @@ nix build --print-build-logs ".#nixosConfigurations.<host>.config.system.build.t
 Use the host names `homelab01`, `homelab02`, `xps15`, and `rpi01`. For local iteration,
 `nixos-rebuild build --flake .#<host>` avoids activation.
 
+`rpi01` is aarch64 and builds under QEMU emulation on x86_64. When changing a
+package it builds from source, iterate with that package's `-cross` output
+(e.g. `nix build .#rpi-rgb-led-matrix-cross`), which compiles natively in
+seconds, and build `rpi01` itself once at the end.
+
 The checks in `checks/` are NixOS VM behavior tests and are part of
 `nix flake check`; do not treat a successful evaluation alone as proof that a
 service starts or that its generated configuration is valid.
