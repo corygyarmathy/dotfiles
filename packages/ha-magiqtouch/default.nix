@@ -4,9 +4,8 @@
 # (AWS Cognito sign-in with the MagIQtouch app's account), so it works only
 # while that cloud does.
 #
-# Tracks the `hacs` branch rather than the last release: v5.1 predates Home
-# Assistant 2026.4, whose OptionsFlow change makes v5.1's options page throw.
-# The fix (#45) is on the branch and in no tag yet.
+# Needs v5.2 or later: v5.1 predates Home Assistant 2026.4, whose OptionsFlow
+# change makes v5.1's options page throw (fixed upstream in #45).
 #
 # The component vendors its Python dependencies (boto3, aiobotocore, mandate,
 # python-jose, ...) under custom_components/magiqtouch/vendor and appends that
@@ -20,15 +19,15 @@
   nix-update,
 }:
 
-buildHomeAssistantComponent {
+buildHomeAssistantComponent rec {
   owner = "andrewleech";
   domain = "magiqtouch";
-  version = "5.1-unstable-2026-04-15";
+  version = "5.2";
 
   src = fetchFromGitHub {
     owner = "andrewleech";
     repo = "ha_magiqtouch";
-    rev = "801fdeb321ffe6c6635f7d7d92ef6e7a4bbac980";
+    tag = "v${version}";
     hash = "sha256-Ny0tmOJ8Ov6TV35sX+K89I6nVl/gYtngglVp7hMHaLE=";
   };
 
@@ -40,7 +39,10 @@ buildHomeAssistantComponent {
       "packages/update-via-nix-update.sh"
       (lib.getExe nix-update)
       "ha-magiqtouch"
-      "--version=branch=hacs"
+      # buildHomeAssistantComponent re-declares `version`, so its position is in
+      # nixpkgs, outside this flake, and nix-update refuses it. Name the file.
+      "--override-filename"
+      "packages/ha-magiqtouch/default.nix"
     ];
   };
 
