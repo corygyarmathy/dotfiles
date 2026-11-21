@@ -65,6 +65,9 @@ pkgs: {
   # Seeley MagIQtouch custom component for Home Assistant
   ha-magiqtouch = pkgs.callPackage ./ha-magiqtouch { };
 
+  # HUB75 LED matrix driver for rpi01's Adafruit RGB Matrix Bonnet
+  rpi-rgb-led-matrix = pkgs.callPackage ./rpi-rgb-led-matrix { };
+
   # Example custom package:
   # bootdevcli = pkgs.callPackage ./bootdevcli {};
 }
