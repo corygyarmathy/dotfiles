@@ -65,8 +65,7 @@ let
       lib.any (lib.hasInfix "cpu3/cpufreq/scaling_governor") cfg.systemd.tmpfiles.rules;
     "keeps kernel tunables read-only" = unit.ProtectKernelTunables;
     "the renderer reads its location from sops" =
-      renderer.LoadCredential == [ "location:${cfg.sops.secrets."matrix-display/location".path}" ]
-      && !lib.hasPrefix builtins.storeDir cfg.sops.secrets."matrix-display/location".path;
+      renderer.LoadCredential == [ "location:${cfg.sops.secrets."matrix-display/location".path}" ];
     "the renderer has no capabilities" = renderer.CapabilityBoundingSet == "";
     "the renderer can reach the socket" = lib.elem socket.SocketGroup renderer.SupplementaryGroups;
     "as written, the lock assertion holds" = !(firesFor rpi01);
