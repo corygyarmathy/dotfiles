@@ -91,5 +91,11 @@ in
 
     with subtest("only the renderer can read its location"):
         machine.fail("runuser -u nobody -- cat /run/credentials/matrix-display.service/location")
+
+    with subtest("the renderer comes back with the socket"):
+        machine.succeed("systemctl stop led-matrix.socket")
+        machine.wait_until_fails("systemctl is-active matrix-display.service")
+        machine.succeed("systemctl start led-matrix.socket")
+        machine.wait_for_unit("matrix-display.service")
   '';
 }

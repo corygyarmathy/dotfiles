@@ -66,7 +66,12 @@ in
 
     systemd.services.matrix-display = {
       description = "matrix-display renderer";
-      wantedBy = [ "multi-user.target" ];
+      # Wanted by the socket too: the binding stops the renderer when the
+      # socket stops, and nothing else would start it again with the socket.
+      wantedBy = [
+        "multi-user.target"
+        "led-matrix.socket"
+      ];
       # Connecting starts the sink if it is not running. Bound to the socket
       # rather than the sink: the sink restarting is something the renderer
       # rides out by redialling, the socket going away is not. No
