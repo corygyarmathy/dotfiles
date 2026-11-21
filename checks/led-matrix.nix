@@ -24,6 +24,20 @@ let
   unit = cfg.systemd.services.led-matrix.serviceConfig;
   socket = cfg.systemd.sockets.led-matrix.socketConfig;
 
+  # A stand-in library, to show the sink follows `package` rather than
+  # whatever pkgs.rpi-rgb-led-matrix happens to be.
+  patched = rpi01.extendModules {
+    modules = [
+      (
+        { pkgs, ... }:
+        {
+          cg.service.led-matrix.package = pkgs.rpi-rgb-led-matrix.overrideAttrs { pname = "patched"; };
+        }
+      )
+    ];
+  };
+  patchedCfg = patched.config.cg.service.led-matrix;
+
   expectations = {
     "runs the frame sink" =
       lib.hasPrefix (lib.getExe cfg.cg.service.led-matrix.sinkPackage) unit.ExecStart;
@@ -33,6 +47,8 @@ let
     "socket mode is 0660" = socket.SocketMode == "0660";
     "socket starts at boot" = lib.elem "sockets.target" cfg.systemd.sockets.led-matrix.wantedBy;
     "has no network" = unit.PrivateNetwork;
+    "the sink links the module's library" =
+      lib.elem patchedCfg.package patchedCfg.sinkPackage.buildInputs;
     "drops to led-matrix user" = lib.hasInfix "--led-drop-priv-user=led-matrix" unit.ExecStart;
     "drops to led-matrix group" = lib.hasInfix "--led-drop-priv-group=led-matrix" unit.ExecStart;
     "relaxes /dev/mem" = lib.elem "iomem=relaxed" cfg.boot.kernelParams;

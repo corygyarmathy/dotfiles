@@ -53,8 +53,16 @@ in
 
     package = lib.mkPackageOption pkgs "rpi-rgb-led-matrix" { };
 
-    sinkPackage = lib.mkPackageOption pkgs "matrix-display-sink" {
-      extraDescription = "Comes from matrix-display's overlay, which the host applies.";
+    sinkPackage = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.matrix-display-sink.override { rpi-rgb-led-matrix = cfg.package; };
+      defaultText = lib.literalExpression "pkgs.matrix-display-sink.override { rpi-rgb-led-matrix = cfg.package; }";
+      description = ''
+        The frame sink, linked against `package`, so a patched library
+        reaches the panels through the sink as it does through the demos.
+        `pkgs.matrix-display-sink` comes from matrix-display's overlay, in
+        this flake's overlays.
+      '';
     };
 
     command = lib.mkOption {
