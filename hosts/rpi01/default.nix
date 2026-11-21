@@ -21,7 +21,7 @@
 # After that it follows `deploy` like every other host.
 {
   config,
-  lib,
+  inputs,
   ...
 }:
 {
@@ -48,6 +48,10 @@
     # homelab service module.
     ../../modules/services/led-matrix.nix
   ];
+
+  # matrix-display-sink, the display's default command, linked against
+  # this flake's rpi-rgb-led-matrix.
+  nixpkgs.overlays = [ inputs.matrix-display.overlays.default ];
 
   # ============================================================================
   # Users
@@ -120,7 +124,8 @@
     # Four 64x64 panels in a row on the Adafruit RGB Matrix Bonnet, a 256x64
     # canvas. The bonnet has GPIO4 bridged to GPIO18 for hardware pulsing,
     # hence the -pwm mapping. The module relaxes /dev/mem for it (ADR 0010).
-    # Showing the demo until there is content.
+    # It runs matrix-display's frame sink, so the panels stay dark until a
+    # renderer connects (ADR 0011).
     #
     # Slowdown 2 and 3 sparkle at the full 1500 MHz clock; 4 is clean, and
     # with hardware pulsing it costs almost no refresh (~100 Hz either way).
