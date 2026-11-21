@@ -430,6 +430,12 @@ in
     inherit pkgs inputs self;
     lib = pkgs.lib;
   };
+  # Not a VM: a VM has no BCM registers to map; the file says what evaluation
+  # can still catch.
+  led-matrix = import ./led-matrix.nix {
+    inherit pkgs self;
+    lib = pkgs.lib;
+  };
   # Also not a VM: the formatter gate is exit behaviour of the wrapper the
   # `nix fmt` hop execs, and the file says why the clean expectations are
   # generated inside the check rather than checked in.

@@ -44,6 +44,8 @@
     ../../modules/nixos/user-security.nix
     ../../modules/nixos/wireless.nix
 
+    # By hand for the same reason: the services index would import every
+    # homelab service module.
     ../../modules/services/led-matrix.nix
   ];
 
@@ -117,7 +119,8 @@
 
     # Four 64x64 panels in a row on the Adafruit RGB Matrix Bonnet, a 256x64
     # canvas. The bonnet has GPIO4 bridged to GPIO18 for hardware pulsing,
-    # hence the -pwm mapping. Showing the demo until there is content.
+    # hence the -pwm mapping. The module relaxes /dev/mem for it (ADR 0010).
+    # Showing the demo until there is content.
     service.led-matrix = {
       enable = true;
       gpioMapping = "adafruit-hat-pwm";
