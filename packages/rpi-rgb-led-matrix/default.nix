@@ -1,6 +1,6 @@
 # hzeller/rpi-rgb-led-matrix: drives HUB75 RGB LED panels from a Raspberry
 # Pi's GPIO header by writing the SoC's GPIO registers directly. rpi01 uses it
-# behind an Adafruit RGB Matrix Bonnet (`--led-gpio-mapping=adafruit-hat`).
+# behind an Adafruit RGB Matrix Bonnet (`--led-gpio-mapping=adafruit-hat-pwm`).
 #
 # Built with upstream's Makefiles rather than its CMakeLists.txt: the CMake
 # build exists for the Python bindings, requires a Python interpreter even for
@@ -28,17 +28,6 @@ stdenv.mkDerivation {
     rev = "a8dd6854580b7e2b18d0f697cec94415dd8824cd";
     hash = "sha256-nkmvOTcYRRlVjeLr4+hPNxqckrFYBE33pcbLuLehDN8=";
   };
-
-  patches = [
-    # rpi01's kernel (and nixpkgs' common kernel config) sets
-    # CONFIG_IO_STRICT_DEVMEM, so even root cannot mmap the GPIO block through
-    # /dev/mem: pinctrl has claimed it. Upstream falls back to /dev/gpiomem
-    # only when /dev/mem fails to *open*, which root's never does. With this,
-    # GPIO comes from /dev/gpiomem and the unclaimed 1MHz counter still from
-    # /dev/mem. The clock manager stays unmappable, so hardware pulsing
-    # (`adafruit-hat-pwm`) still needs `iomem=relaxed`.
-    ./gpiomem-fallback-on-strict-devmem.patch
-  ];
 
   nativeBuildInputs = [
     pkg-config

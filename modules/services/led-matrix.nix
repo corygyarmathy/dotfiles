@@ -7,14 +7,19 @@
 # against the library (the package's own demos and utilities, or something
 # else), and the `--led-*` flags are appended to it.
 #
-# PRIVILEGES. The library must start as root: it maps the SoC's timer, PWM and
-# (for hardware pulsing) clock registers through /dev/mem, which needs
+# PRIVILEGES. The library must start as root: it maps the SoC's GPIO, timer,
+# PWM and (for hardware pulsing) clock registers through /dev/mem, which needs
 # CAP_SYS_RAWIO, and it starts its refresh thread under SCHED_FIFO pinned to
 # core 3, which needs CAP_SYS_NICE. Once the thread is running it drops to
 # `led-matrix:led-matrix` (CAP_SETUID/CAP_SETGID), keeping the mappings. Its
 # default drop target is `daemon:daemon`, which NixOS does not have - and it
 # ignores that failure and carries on as root - so the user is always passed.
 # The capability bounding set is exactly those four.
+#
+# KERNEL TUNABLES. At startup the library also raises the RT throttling limit
+# and sets core 3's cpufreq governor, ignoring failure. The unit's
+# ProtectKernelTunables makes both writes fail, so the module sets them at
+# boot instead.
 {
   config,
   lib,
@@ -23,8 +28,6 @@
 }:
 let
   cfg = config.cg.service.led-matrix;
-
-  hardwarePulsing = cfg.gpioMapping == "adafruit-hat-pwm";
 
   matrixFlags = [
     "--led-gpio-mapping=${cfg.gpioMapping}"
@@ -75,9 +78,7 @@ in
         How the panels are wired to the header. `adafruit-hat-pwm` is the
         Adafruit HAT/Bonnet with GPIO4 bridged to GPIO18, which lets the PWM
         block time the output-enable pulses instead of software - the
-        library's fix for flicker. It needs the clock manager's registers,
-        which the kernel only lets /dev/mem map with `iomem=relaxed`, so this
-        mapping adds that kernel parameter.
+        library's fix for flicker.
       '';
     };
 
@@ -131,14 +132,27 @@ in
   config = lib.mkIf cfg.enable {
     boot.kernelParams =
       lib.optional cfg.isolateCore "isolcpus=3"
-      # The kernel's IO_STRICT_DEVMEM refuses /dev/mem mappings of any region
-      # a driver has claimed, even to root, and the clock driver has claimed
-      # the clock manager. `relaxed` lifts that for root only; it gives root
-      # little it lacks on a host that does not lock module loading, since a
-      # module can map anything. GPIO itself comes through /dev/gpiomem either
-      # way (packages/rpi-rgb-led-matrix's patch), so the plain mappings need
-      # none of this. The trade is ADR 0010.
-      ++ lib.optional hardwarePulsing "iomem=relaxed";
+      # IO_STRICT_DEVMEM refuses /dev/mem mappings of any region a driver has
+      # claimed, even to root, and pinctrl and the clock driver have claimed
+      # the GPIO block and the clock manager. Every mapping needs GPIO, so
+      # every mapping needs this. The trade is ADR 0010.
+      ++ [ "iomem=relaxed" ];
+
+    # `relaxed` gives root little it lacks only while module loading is open.
+    assertions = [
+      {
+        assertion = !config.security.lockKernelModules;
+        message = "cg.service.led-matrix: iomem=relaxed on a host that locks kernel modules is the widest root-to-kernel path left there; revisit ADR 0010 before combining them";
+      }
+    ];
+
+    # What the library writes at startup and the sandbox refuses (see the
+    # header). 990000 is the library's value: the kernel's default 950000
+    # leaves a 50ms gap a second that shows as flicker.
+    boot.kernel.sysctl."kernel.sched_rt_runtime_us" = 990000;
+    systemd.tmpfiles.rules = [
+      "w /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor - - - - performance"
+    ];
 
     users.users.led-matrix = {
       isSystemUser = true;
@@ -164,13 +178,10 @@ in
         ];
         NoNewPrivileges = true;
 
-        # Not PrivateDevices, which would hide /dev/mem; the two device nodes
-        # are allowed by name instead.
+        # Not PrivateDevices, which would hide /dev/mem; it is allowed by
+        # name instead.
         DevicePolicy = "closed";
-        DeviceAllow = [
-          "/dev/mem rw"
-          "/dev/gpiomem rw"
-        ];
+        DeviceAllow = [ "/dev/mem rw" ];
 
         # Displays need no network; a host whose command fetches content
         # overrides these.

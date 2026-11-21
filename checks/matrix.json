@@ -21,6 +21,7 @@
   "grafana",
   "home-assistant",
   "host-alive",
+  "led-matrix",
   "media-nfs-recovery",
   "monitoring",
   "ntfy",
