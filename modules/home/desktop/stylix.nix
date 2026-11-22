@@ -19,6 +19,12 @@ in
       vim.enable = false; # Custom config
       hyprlock.enable = false; # Custom config
       starship.enable = false; # Custom config
+      # home-manager removed programs.wayprompt (nixpkgs dropped the
+      # package), so any definition of it fails an assertion - and this
+      # auto-enabled target still defines it. Delete this line once stylix
+      # removes the target (nix-community/stylix#2557): the option will no
+      # longer exist and this will stop evaluating.
+      wayprompt.enable = false;
     };
 
     # An icon theme that is actually installed, and actually selected.
