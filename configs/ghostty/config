@@ -38,6 +38,17 @@ cursor-style-blink = true
 scrollback-limit = 10000
 
 # ==============================================================================
+# Process
+# ==============================================================================
+
+# Every window is opened in one long-lived instance (`ghostty +new-window`,
+# which D-Bus-activates the instance if none is running). Starting a fresh
+# GTK process costs ~1s before the window draws; asking the running one costs
+# ~0.2s. That only helps if the instance survives its last window closing,
+# which by default it does not.
+quit-after-last-window-closed = false
+
+# ==============================================================================
 # Key Bindings
 # ==============================================================================
 

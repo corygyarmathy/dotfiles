@@ -163,15 +163,22 @@ func switchToWorkspace(name string) error {
 	return nil
 }
 
+// ghosttyClass is the window class every Ghostty window carries.
+const ghosttyClass = "com.mitchellh.ghostty"
+
 // initWorkspace populates a fresh project workspace with editor + shell.
 //
-// Each spawn is pinned to the target workspace via the exec_cmd rules
-// table, so the result is independent of whichever workspace is focused
-// when the dispatch arrives. We subscribe to events BEFORE the first
-// spawn so we cannot miss an openwindow event, then block until each
-// window has actually mapped before issuing the next spawn — that gives
-// dwindle a deterministic split target rather than a race between two
-// concurrently-starting Ghostty processes.
+// Windows come from the running Ghostty instance (`ghostty +new-window`)
+// rather than a new process each: a fresh GTK process costs ~1s before it
+// draws, the running one ~0.2s. The window then belongs to that
+// long-lived process, not to anything this spawns, so Hyprland's exec_cmd
+// workspace rule (which matches by PID) cannot place it. Instead each
+// window is identified by the first Ghostty openwindow event after its
+// spawn and moved to the project workspace by address if it mapped
+// anywhere else - which keeps the result independent of focus changing
+// mid-launch. We subscribe to events BEFORE the first spawn so we cannot
+// miss an openwindow event, and wait for each window to map before the
+// next spawn so dwindle gets a deterministic split target.
 func initWorkspace(p Project) error {
 	ws := p.Workspace()
 
@@ -183,29 +190,34 @@ func initWorkspace(p Project) error {
 		return fmt.Errorf("subscribing to events: %w", err)
 	}
 
-	spawn := func(cmd string) error {
-		expr := fmt.Sprintf(`hl.dsp.exec_cmd(%q, { workspace = %q })`,
-			cmd, "name:"+ws)
-		return hyprDispatch(expr)
+	open := func(what string, command ...string) error {
+		args := []string{"+new-window", "--working-directory=" + p.Path}
+		if len(command) > 0 {
+			args = append(append(args, "-e"), command...)
+		}
+		if out, err := exec.Command("ghostty", args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("spawning %s: %w: %s", what, err, strings.TrimSpace(string(out)))
+		}
+
+		address, mappedOn, err := waitForOpenWindowOfClass(ctx, events, ghosttyClass)
+		if err != nil {
+			return fmt.Errorf("waiting for %s to map: %w", what, err)
+		}
+		if mappedOn == ws {
+			return nil
+		}
+		expr := fmt.Sprintf(`hl.dsp.window.move({ workspace = %q, window = %q, follow = false })`,
+			"name:"+ws, "address:0x"+address)
+		if err := hyprDispatch(expr); err != nil {
+			return fmt.Errorf("moving %s to %q: %w", what, ws, err)
+		}
+		return nil
 	}
 
-	editor := fmt.Sprintf("ghostty --working-directory=%q -e nvim", p.Path)
-	if err := spawn(editor); err != nil {
-		return fmt.Errorf("spawning editor: %w", err)
+	if err := open("editor", "nvim"); err != nil {
+		return err
 	}
-	if err := waitForOpenWindowOn(ctx, events, ws); err != nil {
-		return fmt.Errorf("waiting for editor to map: %w", err)
-	}
-
-	shell := fmt.Sprintf("ghostty --working-directory=%q", p.Path)
-	if err := spawn(shell); err != nil {
-		return fmt.Errorf("spawning shell: %w", err)
-	}
-	if err := waitForOpenWindowOn(ctx, events, ws); err != nil {
-		return fmt.Errorf("waiting for shell to map: %w", err)
-	}
-
-	return nil
+	return open("shell")
 }
 
 // subscribeEvents returns a channel of Hyprland event lines. The channel
@@ -242,25 +254,27 @@ func subscribeEvents(ctx context.Context) (<-chan string, error) {
 	return ch, nil
 }
 
-// waitForOpenWindowOn blocks until an openwindow event arrives for the
-// named workspace, or ctx is cancelled. The data payload format is
+// waitForOpenWindowOfClass blocks until an openwindow event arrives for a
+// window of the given class, or ctx is cancelled, and returns that window's
+// address (without the 0x prefix, as the event carries it) and the
+// workspace it mapped on. The data payload format is
 // "ADDRESS,WORKSPACENAME,WINDOWCLASS,WINDOWTITLE" per Hyprland's IPC spec.
-func waitForOpenWindowOn(ctx context.Context, events <-chan string, workspace string) error {
+func waitForOpenWindowOfClass(ctx context.Context, events <-chan string, class string) (address, workspace string, err error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("waiting for openwindow on %q: %w", workspace, ctx.Err())
+			return "", "", fmt.Errorf("waiting for a %s window: %w", class, ctx.Err())
 		case ev, ok := <-events:
 			if !ok {
-				return fmt.Errorf("event socket closed while waiting for openwindow on %q", workspace)
+				return "", "", fmt.Errorf("event socket closed while waiting for a %s window", class)
 			}
 			name, data, found := strings.Cut(ev, ">>")
 			if !found || name != "openwindow" {
 				continue
 			}
 			parts := strings.SplitN(data, ",", 4)
-			if len(parts) >= 2 && parts[1] == workspace {
-				return nil
+			if len(parts) >= 3 && parts[2] == class {
+				return parts[0], parts[1], nil
 			}
 		}
 	}

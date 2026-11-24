@@ -62,7 +62,7 @@ right)
 
 middle)
 	if command -v ghostty >/dev/null 2>&1; then
-		ghostty -e journalctl -u "nixos-upgrade-*" -f -n 200 &
+		ghostty +new-window -e journalctl -u "nixos-upgrade-*" -f -n 200 &
 	else
 		notify -u normal "No terminal found" "Run: journalctl -u 'nixos-upgrade-*' -f"
 	fi
