@@ -32,15 +32,19 @@ in
     # waybar's tray then cannot find either and logs as its own error. The
     # tray icon was simply missing.
     #
-    # Papirus rather than Adwaita because stylix recolours Papirus to the
-    # base16 scheme, so the icons arrive on the same palette as everything
-    # else lib/kanagawa-wave.nix feeds - and because it carries the full
-    # freedesktop names, which is what a tray asks for by convention.
+    # Breeze because it carries the full freedesktop names, which is what a
+    # tray asks for by convention, and is small enough not to tax every app
+    # launch. Adwaita lacks the full-colour device icons (no
+    # `drive-removable-media`). Papirus has the names but ~305k entries, and
+    # GTK4 indexes the whole theme each time a process starts, cache or not:
+    # it added ~0.5s of CPU to every Ghostty window, against ~0.15s for
+    # breeze-dark. stylix only selects the theme here; it does not recolour
+    # any icon package.
     stylix.icons = {
       enable = true;
-      package = pkgs.papirus-icon-theme;
-      dark = "Papirus-Dark";
-      light = "Papirus-Light";
+      package = pkgs.kdePackages.breeze-icons;
+      dark = "breeze-dark";
+      light = "breeze";
     };
   };
 }

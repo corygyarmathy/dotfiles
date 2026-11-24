@@ -6,9 +6,10 @@ local mod = "SUPER"
 ---------------------------------------------------------------------------
 -- Applications
 ---------------------------------------------------------------------------
-hl.bind(mod .. " + T", hl.dsp.exec_cmd("ghostty"))
+-- Terminals open in the running Ghostty instance; see configs/ghostty/config.
+hl.bind(mod .. " + T", hl.dsp.exec_cmd("ghostty +new-window"))
 hl.bind(mod .. " + B", hl.dsp.exec_cmd("vivaldi"))
-hl.bind(mod .. " + E", hl.dsp.exec_cmd("ghostty --working-directory=~ -e yazi"))
+hl.bind(mod .. " + E", hl.dsp.exec_cmd("ghostty +new-window --working-directory=$HOME -e yazi"))
 hl.bind(mod .. " + R", hl.dsp.exec_cmd("rofi -show drun -show-icons"))
 hl.bind(mod .. " + W", hl.dsp.exec_cmd("rofi -show window -show-icons"))
 hl.bind(mod .. " + S", hl.dsp.exec_cmd("pgrep hyprlock || hyprlock"))
