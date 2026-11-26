@@ -160,6 +160,11 @@ in
         # regenerated from this repository.
         "/var/lib/hass"
 
+        # Home Assistant's Matter fabric (matterjs-server, a DynamicUser
+        # service). Without it every Matter device has to be factory-reset
+        # and paired again.
+        "/var/lib/private/matterjs-server"
+
         # Digital garden publication dates. The vault, staging and built site
         # all regenerate from Obsidian Sync / the filter, but dates.json records
         # the first day each note was published and exists nowhere else. Back up

@@ -6,6 +6,9 @@
 #   Bridge), IKEA TRÅDFRI (via the TRÅDFRI gateway), TP-Link Kasa plugs, the
 #   Samsung TV and Music Frame (Samsung TV, SmartThings, DLNA, Cast), the
 #   UniFi network and Seeley MagIQtouch climate controllers
+# - Matter, for the LIFX bulbs, which join over Wi-Fi (no Thread). Home
+#   Assistant's `matter` integration is only a client: the Matter controller
+#   itself is matterjs-server, run alongside it on loopback
 # - Google Translate text-to-speech, for spoken announcements on the Cast
 #   and Samsung speakers (onboarding offers to set it up)
 # - Integrations for devices Home Assistant discovers on the LAN and would
@@ -32,6 +35,10 @@
 #   name entities that only exist once devices are paired. The editors save
 #   to automations.yaml, scripts.yaml and scenes.yaml in the state directory,
 #   which configuration.yaml includes.
+# - Matter devices join Home Assistant's own fabric, whose credentials
+#   matterjs-server keeps in /var/lib/private/matterjs-server. Losing that
+#   directory means factory-resetting and re-pairing every Matter device, so
+#   the host backs it up alongside /var/lib/hass.
 #
 # Non-obvious implementation notes:
 # - No core setting (name, location, time zone, units) is written to
@@ -58,6 +65,17 @@
 #   replies conntrack does not match to the request, so Kasa plugs are added
 #   by IP - give them fixed DHCP leases. Nothing else listens beyond
 #   loopback: all three integrations poll or hold connections outbound.
+# - The Matter controller is matterjs-server, not python-matter-server:
+#   the Python server was archived upstream in June 2026 and matterjs-server
+#   is its drop-in replacement, speaking the same WebSocket API. Its
+#   operational traffic is UDP over IPv6 link-local to whatever port each
+#   device advertises over mDNS, so no port is opened for it; the
+#   devices' reports come back on flows the controller opened. Those flows
+#   go quiet between subscription reports for longer than conntrack's
+#   default 120 s, after which the reports would be dropped as new inbound
+#   traffic, so the UDP stream timeout is raised to the hour upstream
+#   recommends. The key only exists once nf_conntrack is loaded, which the
+#   iptables firewall otherwise does too late for systemd-sysctl.
 # - The UI editors only save when configuration.yaml includes their file,
 #   and Home Assistant refuses to start when an included file is missing.
 #   Its own first-run setup writes them, but only alongside a
@@ -88,7 +106,13 @@
 #   7. UniFi: Add → UniFi Network, with a local-only account made on the
 #      console for Home Assistant.
 #   8. MagIQtouch: Add → Seeley MagIQtouch, with the MagIQtouch app's login.
-#   9. Mobile: install the Home Assistant app and point it at
+#   9. Matter: Add → Matter, accepting the default ws://localhost:5580/ws.
+#      Then pair each LIFX bulb from the Home Assistant mobile app (Settings
+#      → Devices & services → Add Matter device), which commissions it over
+#      the phone's Bluetooth and hands it to this server - the host itself
+#      has no Bluetooth. A bulb already in another Matter ecosystem is
+#      shared from that app with a pairing code instead.
+#  10. Mobile: install the Home Assistant app and point it at
 #      https://home.<domain>. It works on the LAN only unless the host sets
 #      `cg.publish.home-assistant.localOnly = false`.
 {
@@ -203,6 +227,8 @@ in
             "unifi"
             "unifi_discovery"
 
+            "matter"
+
             "apple_tv"
             "ipp"
             "thread"
@@ -265,8 +291,20 @@ in
           install -D -m 600 ${httpStore} "${config.services.home-assistant.configDir}/.storage/http"
         '';
 
-        # mDNS, for discovering the Hue bridge and the TRÅDFRI gateway.
+        # mDNS, for discovering the Hue bridge and the TRÅDFRI gateway, and
+        # for matterjs-server finding Matter devices.
         networking.firewall.allowedUDPPorts = [ 5353 ];
+
+        # The Matter controller; see the header. Its WebSocket API defaults to
+        # 127.0.0.1:5580, where the `matter` integration's default URL points.
+        services.matterjs-server.enable = true;
+        systemd.services.home-assistant.wants = [ "matterjs-server.service" ];
+        systemd.services.home-assistant.after = [ "matterjs-server.service" ];
+
+        # See the header: Matter subscription reports outlive the default
+        # UDP conntrack timeout.
+        boot.kernelModules = [ "nf_conntrack" ];
+        boot.kernel.sysctl."net.netfilter.nf_conntrack_udp_timeout_stream" = 3600;
       }
 
       # Scraped by the host's own Prometheus over loopback, since that is all
