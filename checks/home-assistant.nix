@@ -23,6 +23,9 @@
 # - The automation, script and scene editors can save, and what they save is
 #   loaded. Without the includes in configuration.yaml the save is refused;
 #   without the files it fails to start at all.
+# - The Matter integration connects to matterjs-server at its default URL,
+#   the server listens on loopback only, and the UDP conntrack timeout its
+#   subscriptions depend on is in effect after boot.
 {
   name = "home-assistant";
 
@@ -155,6 +158,44 @@
               )
               # Saving reloads the integration; the entity follows shortly.
               machine.wait_until_succeeds(f"curl -sf {auth} {base}/api/states/{entity}", timeout=60)
+
+      with subtest("matterjs-server listens on loopback only"):
+          machine.wait_for_unit("matterjs-server.service")
+          machine.wait_for_open_port(5580)
+          for line in machine.succeed("ss -Htln 'sport = :5580'").splitlines():
+              local = line.split()[3]
+              assert local.startswith(("127.0.0.1:", "[::1]:")), f"matterjs-server on {local}"
+
+      with subtest("the UDP conntrack timeout outlasts Matter subscriptions"):
+          timeout = machine.succeed("sysctl -n net.netfilter.nf_conntrack_udp_timeout_stream").strip()
+          assert timeout == "3600", f"nf_conntrack_udp_timeout_stream is {timeout}"
+
+      with subtest("the matter entry connects to matterjs-server"):
+          flow = json.loads(machine.succeed(
+              f"curl -sf -X POST {auth} {base}/api/config/config_entries/flow "
+              "-H 'Content-Type: application/json' "
+              """-d '{"handler": "matter"}' """
+          ))
+          assert flow["type"] == "form", f"matter: {flow}"
+          # The default the post-deploy step tells the user to accept.
+          result = json.loads(machine.succeed(
+              f"curl -sf -X POST {auth} {base}/api/config/config_entries/flow/{flow['flow_id']} "
+              "-H 'Content-Type: application/json' "
+              """-d '{"url": "ws://localhost:5580/ws"}' """
+          ))
+          # The flow only creates the entry after it has reached the server.
+          assert result["type"] == "create_entry", f"matter: {result}"
+          entry = result["result"]
+
+          def matter_loaded(_):
+              entries = json.loads(machine.succeed(
+                  f"curl -sf {auth} {base}/api/config/config_entries/entry?domain=matter"
+              ))
+              state = next(e["state"] for e in entries if e["entry_id"] == entry["entry_id"])
+              assert state != "setup_error", f"matter entry: {state}"
+              return state == "loaded"
+
+          retry(matter_loaded, timeout_seconds=120)
 
       with subtest("the google_translate entry loads"):
           # Its config flow does not import the library, so opening one
