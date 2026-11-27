@@ -7,8 +7,8 @@
 #
 # The interface is a dummy link that does not exist at boot, so the test
 # decides when the "switch port" comes up. It gets a 169.254 address first,
-# which is what dhcpcd assigns when it gives up on a lease, and which the
-# kernel reports as `scope global`: the wait must not accept it.
+# which is what a DHCP client falls back to when it gives up on a lease, and
+# which the kernel reports as `scope global`: the wait must not accept it.
 let
   probe =
     { pkgs, ... }:

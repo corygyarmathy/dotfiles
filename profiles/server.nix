@@ -69,9 +69,19 @@
   # Networking
   # ============================================================================
   # Addresses are DHCP reservations recorded in fleet/default.nix, not static
-  # configuration here. `mkForce` because the generated hardware.nix sets this
-  # too and there is no value in the two disagreeing quietly.
-  networking.useDHCP = lib.mkForce true;
+  # configuration here, and NetworkManager (./common.nix) is the one
+  # DHCP client that asks for them. NetworkManager's module turns
+  # `networking.useDHCP` off, but anything that forces it back on, or sets
+  # `networking.interfaces.<name>.useDHCP` (which `nixos-generate-config`
+  # writes into hardware.nix), starts dhcpcd as a second client on the same
+  # interface - and, with `networking.useDHCP`, on every podman veth too.
+  # Fail the build instead.
+  assertions = [
+    {
+      assertion = !(config.systemd.services ? dhcpcd);
+      message = "dhcpcd is enabled on a server, alongside NetworkManager. Remove the `useDHCP` lines from hosts/<host>/hardware.nix.";
+    }
+  ];
 
   # ============================================================================
   # Staying awake
