@@ -226,7 +226,7 @@
           "cast", "dlna_dmr", "samsungtv", "smartthings", "unifi", "unifi_discovery",
           "apple_tv", "ipp", "thread",
           "adguard", "jellyfin", "ntfy", "qbittorrent", "radarr", "sonarr",
-          "adaptive_lighting", "magiqtouch",
+          "adaptive_lighting", "magiqtouch", "opensprinkler",
       ]:
           with subtest(f"the {handler} integration loads"):
               flow = json.loads(machine.succeed(
