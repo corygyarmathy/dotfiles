@@ -3,14 +3,11 @@
 # Holds `network-online.target` until each named interface has a usable IPv4
 # address, so every service ordered after it starts on a working network.
 #
-# WHY THE STOCK TARGET IS NOT ENOUGH. On the servers, two things currently
-# vouch for `network-online.target`, and neither waits for the address:
-#
-# - `NetworkManager-wait-online` runs `nm-online -s`, which waits for
-#   NetworkManager's startup to finish. A port with no carrier counts as
-#   finished after a few seconds.
-# - dhcpcd forks into the background after its 30-second timeout whether or
-#   not it got a lease, and systemd takes that as started.
+# WHY THE STOCK TARGET IS NOT ENOUGH. On the servers,
+# `NetworkManager-wait-online` vouches for `network-online.target`, and it
+# runs `nm-online -s`, which waits for NetworkManager's startup to finish
+# rather than for an address. A port with no carrier counts as finished after
+# a few seconds.
 #
 # On 2026-11-26 homelab01's switch port took two and a half minutes to link.
 # The target was reached 30 seconds in, and everything ordered after it
@@ -19,9 +16,10 @@
 # when it starts and never joins later, so it could not see a single
 # commissionable device until it was restarted by hand.
 #
-# WHY 169.254 IS EXCLUDED. When dhcpcd gives up on a lease it assigns an
-# IPv4LL address, and on these hosts the kernel reports it as `scope global`,
-# so filtering on scope alone would treat a link with no DHCP as online.
+# WHY 169.254 IS EXCLUDED. A DHCP client that gives up on a lease can fall
+# back to an IPv4LL address (NetworkManager does when a connection sets
+# `ipv4.link-local`), and the kernel reports it as `scope global`, so
+# filtering on scope alone would treat a link with no DHCP as online.
 #
 # WHAT A TIMEOUT DOES. The unit fails, and `network-online.target` is reached
 # anyway: services only `Wants=` the target, so a NIC that never comes up

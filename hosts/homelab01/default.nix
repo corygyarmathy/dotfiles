@@ -617,7 +617,7 @@ in
   cg.wake-on-lan.interfaces = [ "eno1" ];
 
   # This machine's switch port can take minutes to link after boot, longer
-  # than either DHCP client waits before reporting the network online - see
+  # than NetworkManager waits before reporting the network online - see
   # modules/nixos/wait-online.nix.
   cg.wait-online = {
     enable = true;
