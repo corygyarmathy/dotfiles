@@ -100,6 +100,38 @@
   # ============================================================================
   services.mpris-proxy.enable = true; # Bluetooth media controls
 
+  # After resume, a monitor behind the TS3 Plus dock (MST) can come back with
+  # every mode rejected by i915; Hyprland gives up and leaves it enabled at
+  # 0x0, black. A config reload reconfigures all outputs together and clears
+  # it. The reload only runs when an output is stuck, because it also
+  # re-applies the eDP-1 rule, so the lid check is repeated afterwards.
+  services.hypridle.settings.general.after_sleep_cmd =
+    let
+      recover-monitors = pkgs.writeShellApplication {
+        name = "recover-stuck-monitors";
+        runtimeInputs = [ pkgs.jq ];
+        text = ''
+          hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'
+
+          stuck() {
+            hyprctl monitors -j | jq -e 'any(.[]; .disabled == false and .width == 0)' >/dev/null
+          }
+
+          # Hyprland retries a failed modeset three times, a second apart.
+          for _ in 1 2; do
+            sleep 5
+            stuck || exit 0
+            echo "recover-stuck-monitors: output stuck at 0x0, reloading Hyprland"
+            hyprctl reload
+            if grep -q closed /proc/acpi/button/lid/LID0/state; then
+              hyprctl eval 'hl.monitor({ output = "eDP-1", disabled = true })'
+            fi
+          done
+        '';
+      };
+    in
+    lib.mkForce (lib.getExe recover-monitors);
+
   # The OneDrive client (services.onedrive in default.nix) must never mirror
   # backups/: the homelab hosts write live restic repositories there through
   # rclone, and a desktop client that is out of step re-uploads files restic
