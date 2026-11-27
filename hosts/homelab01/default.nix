@@ -616,6 +616,14 @@ in
   # machine should wake; only the machine knows what its interface is called.
   cg.wake-on-lan.interfaces = [ "eno1" ];
 
+  # This machine's switch port can take minutes to link after boot, longer
+  # than either DHCP client waits before reporting the network online - see
+  # modules/nixos/wait-online.nix.
+  cg.wait-online = {
+    enable = true;
+    interfaces = [ "eno1" ];
+  };
+
   # Enable hardware acceleration for transcoding (Intel Quick Sync)
   hardware.graphics = {
     enable = true;

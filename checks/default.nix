@@ -459,4 +459,5 @@ in
   secrets = import ./secrets.nix { inherit pkgs self; };
 
   upgrade-verify = testLib.mkTest ./upgrade-verify.nix;
+  wait-online = testLib.mkTest ./wait-online.nix;
 }

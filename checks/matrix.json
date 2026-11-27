@@ -29,5 +29,6 @@
   "publish",
   "reverse-proxy",
   "secrets",
-  "upgrade-verify"
+  "upgrade-verify",
+  "wait-online"
 ]
