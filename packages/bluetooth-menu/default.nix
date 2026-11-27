@@ -1,6 +1,6 @@
 # bluetooth-menu: connect, disconnect and discover bluetooth devices.
 #
-# Item 9 of docs/plans/desktop-design.md. Bluetooth had no visual path either
+# Bluetooth had no visual path
 # - blueman was installed, its applet was explicitly off, and nothing used
 # either. This is the connect/disconnect/discover path, over bluetoothctl.
 #
@@ -10,8 +10,8 @@
 # devices appear. Connecting to an unpaired device lets bluetoothctl pair it
 # when no PIN is involved.
 #
-# A PIN is the one thing item 7 said a menu should not ask for, which is why
-# the package carries blueman: the "Pair a new device" entry opens
+# A PIN is the one thing a menu should not ask for (see packages/rofi-menu),
+# which is why the package carries blueman: the "Pair a new device" entry opens
 # blueman-manager, the on-demand pairing tool, and the half-installed blueman
 # package gains its stated purpose.
 {

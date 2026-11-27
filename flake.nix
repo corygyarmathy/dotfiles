@@ -332,7 +332,7 @@
             overlays = builtins.attrValues self.overlays;
             config.allowUnfree = true;
           };
-          # Item 5 of docs/plans/desktop-design.md. The colour half of the
+          # The colour half of the
           # waybar and rofi configuration is generated from lib/kanagawa-wave.nix
           # and *also* checked in, so that configs/ keeps working on a machine
           # without Nix. The host builds assert the two agree; this is how you

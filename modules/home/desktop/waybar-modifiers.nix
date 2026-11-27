@@ -32,8 +32,8 @@ let
   # The fifth place Kanagawa was not. This module emits pango markup, so its
   # colours cannot come from style.css - and being out of CSS's reach, it had
   # kept a hand-written *Rose Pine* palette from before the machine was
-  # themed, which nothing on the bar has matched for a long time. Item 5 of
-  # docs/plans/desktop-design.md; the colours are interpolated below.
+  # themed, which nothing on the bar has matched for a long time. The colours
+  # come from lib/kanagawa-wave.nix and are interpolated below.
   palette = import ../../../lib/kanagawa-wave.nix { inherit lib; };
   inherit (palette) roles;
 

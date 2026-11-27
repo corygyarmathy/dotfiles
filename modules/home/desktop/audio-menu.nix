@@ -1,4 +1,4 @@
-# Audio device menu - item 9 of docs/plans/desktop-design.md.
+# Audio device menu.
 #
 # The bar's pulseaudio module opens it on left click, and pavucontrol - the
 # full mixer - moves to middle click. See packages/audio-menu.

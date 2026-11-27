@@ -10,7 +10,7 @@ let
 
   # `term-run <command> [args...]` - open a command in a terminal window.
   #
-  # Item 3 of docs/plans/desktop-design.md: the terminal was named five times
+  # The terminal used to be named five times
   # in configs/waybar/config.jsonc, and it was still named `foot`. Which
   # terminal this desktop uses is decided here, so anything that needs to show
   # a TUI can shell out without restating the answer - and changing the

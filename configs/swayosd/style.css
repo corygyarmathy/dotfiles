@@ -11,9 +11,8 @@
  *     nix run .#write-palette
  *
  * The OSD is overlay-sized, so it takes the surface radius (12) and the
- * border (2) from lib/geometry.nix like every other surface. Item 12 of
- * docs/plans/desktop-design.md; the same two gates the bar and the
- * launcher sit behind.
+ * border (2) from lib/geometry.nix like every other surface, behind the
+ * same two gates as the bar and the launcher.
  */
 
 /* ── Backgrounds ─────────────────────────────────────────────────── */

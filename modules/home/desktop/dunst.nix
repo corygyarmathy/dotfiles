@@ -9,7 +9,7 @@
 let
   cfg = config.cg.home.dunst;
 
-  # Item 6 of docs/plans/desktop-design.md. dunst is configured in Nix, so
+  # dunst is configured in Nix, so
   # unlike waybar's CSS and rofi's theme it can read the scale rather than be
   # checked against it. A notification is overlay-sized, so it takes the
   # surface radius.
@@ -31,8 +31,8 @@ in
           width = 300;
           height = 300;
           origin = "top-right";
-          # Clear of the bar, on the scale. Item 21 rotates the bar, at which
-          # point this is the number that has to move with it.
+          # Clear of the bar, on the scale. If the bar moves, this is the
+          # number that has to move with it.
           offset = "8x56";
 
           # Progress bar

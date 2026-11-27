@@ -1,11 +1,11 @@
-# What is running, and what has failed - item 14 of docs/plans/desktop-design.md.
+# What is running, and what has failed.
 #
 # The custom/failed-units bar module is quiet when every user and system
 # unit is healthy and shows a marker when any has failed - the same pattern
 # as custom/nixos-upgrade. Clicking it lists the failed units and opens the
-# chosen one's journal in the terminal. The process half of the item (a
-# single consistent left click into btop on cpu, memory and temperature) was
-# already built as item 3; this is the half that was not. See
+# chosen one's journal in the terminal. The process half (a single
+# consistent left click into btop on cpu, memory and temperature) is the bar
+# modules' own; this is the other half. See
 # packages/failed-units.
 {
   config,

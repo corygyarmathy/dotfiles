@@ -6,7 +6,7 @@
  * generated from lib/kanagawa-wave.nix. No loose length appears either -
  * radius is 12 for a surface and 8 for a chip, borders are 2, and every space
  * is a multiple of 8. That scale is lib/geometry.nix, and the build asserts
- * this file honours it. Items 5 and 6 of docs/plans/desktop-design.md.
+ * this file honours it.
  */
 
 @import "./kanagawa-wave.css";
@@ -116,8 +116,8 @@ tooltip {
    * as 8 and 8 on screen - which is the thing being kept even, rather than
    * the two numbers in this rule.
    *
-   * Item 21 turns the bar on its side. These two lines swap axis with it, and
-   * the gaps_out reasoning above swaps with them. */
+   * A vertical bar would swap these two lines' axes, and the gaps_out
+   * reasoning above with them. */
   padding: 4px 16px;
   margin: 8px 0px 0px 0px;
   border: 2px solid @border;
@@ -163,7 +163,7 @@ tooltip {
   margin-right: 16px;
 }
 
-/* Item 13: do-not-disturb changes shape, not just colour, when it is on - a
+/* Do-not-disturb changes shape, not just colour, when it is on - a
  * bell while quiet, a labelled chip while paused, so the state cannot be
  * left on silently. The box is style.css's; these are the states.
  *
@@ -181,7 +181,7 @@ tooltip {
   font-weight: bold;
 }
 
-/* Item 14: the failed-units module is nothing at all when healthy - the same
+/* The failed-units module is nothing at all when healthy - the same
  * collapse the project module uses - and a danger chip when something has
  * failed. `.ok` is emitted by the script, so the collapse is keyed on real
  * state rather than on a class nobody sets. */
@@ -201,7 +201,7 @@ tooltip {
   margin-right: 8px;
 }
 
-/* Item 8: the power module closes the right end of the bar, beside the
+/* The power module closes the right end of the bar, beside the
  * backlight chip, with the same asymmetric radius the bar's other edge
  * modules carry. */
 #custom-power {

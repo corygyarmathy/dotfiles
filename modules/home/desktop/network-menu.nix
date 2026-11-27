@@ -1,8 +1,8 @@
-# Network menu - item 9 of docs/plans/desktop-design.md.
+# Network menu.
 #
 # The bar's network module opens it on left click (its format toggle stays on
 # right, via format-alt-click) and SUPER+SHIFT+W opens the same menu from the
-# keyboard - principle 2's two reachable surfaces, the same arrangement the
+# keyboard - ADR 0012's rule 2, two reachable surfaces, the same arrangement the
 # project picker has. See packages/network-menu.
 {
   config,

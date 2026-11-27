@@ -1,8 +1,8 @@
-# Do not disturb, and a history - item 13 of docs/plans/desktop-design.md.
+# Do not disturb, and a history.
 #
-# Principle 3's off switch, surfaced: the custom/dnd bar module reads dunst's
-# own state and toggles it on click (SUPER+N is the keyboard path), and its
-# right click opens the history menu for notifications that were missed. The
+# ADR 0012's rule 3 off switch, surfaced: the custom/dnd bar module reads
+# dunst's own state and toggles it on click (SUPER+N is the keyboard path), and
+# its right click opens the history menu for notifications that were missed. The
 # module changes shape rather than only colour when paused, so do-not-disturb
 # cannot be left on silently. See packages/dnd.
 {

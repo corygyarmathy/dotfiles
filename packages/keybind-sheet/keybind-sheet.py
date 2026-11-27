@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render binds.lua as the keybind sheet rofi-menu presents.
 
-Item 11 of docs/plans/desktop-design.md. binds.lua defines around sixty
+binds.lua defines around sixty
 bindings across labelled sections, and the only way to see them used to be
 opening the file. This parses the deployed copy and renders every hl.bind(...)
 call, grouped by the section comments the file already has.

@@ -1,6 +1,6 @@
 # The build gate for swayosd's stylesheet.
 #
-# Item 12 of docs/plans/desktop-design.md gives swayosd the same three gates
+# swayosd sits behind the same three gates
 # the bar and the launcher sit behind, so it joins the palette scheme rather
 # than arriving as a fourth hand-written copy: the generated-file gate (the
 # checked-in copy under configs/ must match lib/kanagawa-wave.nix), the

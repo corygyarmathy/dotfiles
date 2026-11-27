@@ -1,18 +1,18 @@
-# SwayOSD - item 12 of docs/plans/desktop-design.md.
+# SwayOSD.
 #
 # Volume, mute and brightness keys had no immediate confirmation - the bar's
-# module is small, may be on another monitor, and after item 21 rotates the
-# bar there is no room for a number at all. swayosd-client both performs the
+# module is small, may be on another monitor, and a vertical bar would have no
+# room for a number at all. swayosd-client both performs the
 # change and shows the OSD, centred over the focused output, and it is
 # transient and undismissable, which is a different job from a notification -
-# the reason this item exists even though dunst already has a progress bar.
+# the reason this exists even though dunst already has a progress bar.
 #
-# It is a new daemon, which principle 6's ordering asks to justify: the
+# It is a new daemon, which ADR 0012's rule 6 asks to justify: the
 # justification is that this is a surface that should appear centred, over
 # the focused output, and disappear without being dismissed - a different job
 # from a notification, done by a process whose only job that is.
 #
-# And it has no stylix target, so it joins item 5's generated-colour scheme
+# And it has no stylix target, so it joins the generated-colour scheme
 # from its first commit: configs/swayosd/style.css is generated from
 # lib/kanagawa-wave.nix and checked in, and the build gates the copy - the
 # palette match, the geometry scale, and (because swayosd only warns and
@@ -60,8 +60,7 @@ in
     # default theme when the file is absent - so the deployed file is the
     # check's output, and a hand-edited colour or an off-scale length cannot
     # be switched to. The OSD sits at the server's default top-margin (0.85,
-    # near the bottom); item 21 positions it against the new bar geometry
-    # when that lands.
+    # near the bottom).
     xdg.configFile."swayosd/style.css".source = checkedStyle;
   };
 }

@@ -1,6 +1,6 @@
 # audio-menu: switch the default sink or source, from a menu.
 #
-# Item 9 of docs/plans/desktop-design.md. Switching audio devices meant
+# Switching audio devices used to mean
 # opening pavucontrol - a full mixer - for a question that is "which
 # headphones". This is that question, over wpctl: a list of sinks and
 # sources, and picking one makes it the default.

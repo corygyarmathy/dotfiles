@@ -1,13 +1,13 @@
 # The build gate for the geometry scale.
 #
-# Item 6 of docs/plans/desktop-design.md. The scale lives in lib/geometry.nix;
+# The scale lives in lib/geometry.nix;
 # dunst reads it directly because dunst is configured in Nix. waybar's CSS,
 # rofi's theme and hyprland's settings.lua cannot: they are deployed verbatim
 # so that configs/ works on a machine without Nix, and neither GTK 3 CSS nor
 # rasi nor Lua has anywhere for a length variable to come from.
 #
-# So the scale reaches them backwards, the same way item 1 reached the bar's
-# commands: a check at build time, whose output is what gets deployed. A radius
+# So the scale reaches them backwards, the same way the bar's commands are
+# checked: a check at build time, whose output is what gets deployed. A radius
 # that is not 12 or 8, a border that is not 2, or a margin that is not a
 # multiple of 8 fails `nixos-rebuild switch` and fails CI.
 #

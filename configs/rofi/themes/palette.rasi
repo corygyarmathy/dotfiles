@@ -11,7 +11,8 @@
  *     nix run .#write-palette
  *
  * The role names are waybar's. Two files calling the same colour by two
- * names is what item 5 was about; this is the half that stops it.
+ * names is what the shared palette prevents; this is the half that stops
+ * it.
  */
 
 * {

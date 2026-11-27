@@ -10,7 +10,7 @@ let
   cfg = config.cg.stylix;
   stylixAvailable = lib.hasAttr "stylix" options;
 
-  # Item 5 of docs/plans/desktop-design.md: one palette, one source, and this
+  # One palette, one source (ADR 0012's rule 5), and this
   # is the source. It used to be `${pkgs.base16-schemes}/share/themes/
   # kanagawa.yaml`, which is a sixteen-slot reduction of Kanagawa Wave - eight
   # of the colours the bar, the launcher and the calendar actually render have

@@ -1,4 +1,4 @@
-# Clipboard history - item 10 of docs/plans/desktop-design.md.
+# Clipboard history.
 #
 # Two daemons and one menu. cliphist stores the history (skipping offers that
 # carry the secret hint, which is what makes it safe to keep password-manager

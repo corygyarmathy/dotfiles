@@ -1,12 +1,12 @@
 # The geometry scale, named once.
 #
-# Item 6 of docs/plans/desktop-design.md. Every surface used to pick its own
+# Every surface used to pick its own
 # numbers: window rounding 16, waybar modules 8, rofi 16 outside and 10 inside,
 # dunst 10; borders 1px on windows and 2px on everything beside them; gaps 5,
 # and waybar margins of 3, 10, 15 and 20 in four different places. Nothing was
 # wrong on its own and nothing agreed.
 #
-# Item 21 rotates the bar, which is the moment a scale either exists or gets
+# Rotating the bar to vertical is the moment a scale either exists or gets
 # reinvented. This is so that it exists.
 #
 # WHAT READS THIS. dunst is configured in Nix and reads these values directly.
@@ -19,9 +19,8 @@
 # lib/kanagawa-wave.nix - hand-written, portable, and gated.
 {
   # Two radii, and the relationship between them is the point: 12 is
-  # window-sized or overlay-sized (windows, rofi, dunst, and hyprlock and
-  # swayosd when items 17 and 12 land), 8 is a chip inside a surface (waybar
-  # modules, rofi rows).
+  # window-sized or overlay-sized (windows, rofi, dunst, and swayosd), 8 is a
+  # chip inside a surface (waybar modules, rofi rows).
   radius = {
     surface = 12;
     chip = 8;
