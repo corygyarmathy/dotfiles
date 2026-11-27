@@ -10,15 +10,13 @@ Problem statement and acceptance criteria. Doesn't move once implementation star
 
 See [`domain.md`](domain.md): what counts as a decision versus a parameter, and how an ADR changes.
 
-## Plan - the work, disposable
+## Plan - the intended work, written once
 
-Tracks only what is currently in flight: which items are active, what each is blocked on. Not a spec (the issue's job) and not a changelog (the PR's and commit's job).
+States what is going to be built, why, and in what order. Written once and not edited after: no status, no progress markers, no amendments, no dated decision logs. Progress lives in the issues and PRs the plan produces. If the plan turns out wrong, replace it with a new plan or delete it; don't patch it.
 
-A shipped item's entry becomes one line - issue, PR or code path, nothing else - not an archived section. Its Problem/Approach/Testing content is deleted, not kept for reference.
+Never cited by path or section from anything that has to keep working - an ADR, a code comment, another doc. A plan is expected to be deleted, so point at the issue or the code instead.
 
-Never cited by path or item number from anything that has to keep working after the plan changes shape - an ADR, a code comment, another doc pointing at "item 7" ties its own correctness to a document that is expected to empty out. Point at the issue or the code instead.
-
-Delete the plan file once nothing in it is active. It has no standing as a historical record - that's the issue, the PR, and, if something was actually measured, a findings note.
+Delete the plan file once its work has landed or been abandoned. It has no standing as a historical record - that's the issue, the PR, and, if something was actually measured, a findings note.
 
 ## Findings note - measured evidence, historical
 
