@@ -244,6 +244,7 @@ in
 
           customComponents = [
             pkgs.home-assistant-custom-components.adaptive_lighting
+            pkgs.home-assistant-custom-components.opensprinkler
             pkgs.ha-magiqtouch
           ];
 
