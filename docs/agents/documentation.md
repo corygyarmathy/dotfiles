@@ -24,6 +24,10 @@ Delete the plan file once nothing in it is active. It has no standing as a histo
 
 Exists only when something was actually run and produced numbers worth keeping: a pilot, an experiment, a load test. Not a spec, not a decision, not expected to change - dated evidence, cited by the ADR whose decision it justified. If nothing was measured, this document doesn't exist; don't create one to hold prose that isn't evidence.
 
+## Research note - sourced survey, dated
+
+Lives in `docs/research/` next to findings notes. It surveys outside sources ahead of a design: what other projects do, what a tool supports. Each claim cites the primary source it came from, and the note records the date and the versions it read. It is not a decision; the ADR or plan that acts on it cites it and owns the conclusion. It goes stale and is not kept up to date: re-survey instead of editing it.
+
 ## PR description - the bridge
 
 Links the issue. Summarises what changed and why, for a reviewer. Becomes the permanent changelog entry once merged - this is what a plan item's history collapses into, not a preserved plan section.
