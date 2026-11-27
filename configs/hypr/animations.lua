@@ -1,7 +1,7 @@
 -- Animations
 -- https://wiki.hypr.land/Configuring/Advanced-and-Cool/Animations/
 --
--- Off, deliberately. See item 22 of docs/plans/desktop-design.md.
+-- Off, deliberately: ADR 0012's rule 1 allows no motion.
 --
 -- The desktop is faster without motion and the previous settings were well
 -- over any sensible budget: layersIn ran at 400ms, so rofi spent four tenths

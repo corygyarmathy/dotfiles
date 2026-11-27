@@ -1,17 +1,16 @@
 # The build gate for the palette's generated files.
 #
-# Item 5 of docs/plans/desktop-design.md struck a deal: the colour half of the
+# The palette strikes a deal: the colour half of the
 # waybar and rofi configuration is generated from lib/kanagawa-wave.nix, and a
 # copy is *also* checked in under configs/ so that those configurations keep
 # working on a machine that has never heard of Nix. A deal like that is only
 # worth having if something notices when the two halves stop agreeing.
 #
-# This is that something, and it is the same shape as the command check item 1
-# added: it runs at build time and its output is what gets deployed, so there
-# is no way to ship a colour file the check has not passed on. A hand-edited
-# theme fails `nixos-rebuild switch` on the laptop and fails the host build in
-# CI, rather than drifting until somebody notices the bar and the launcher no
-# longer match.
+# This is that something, and it is the same shape as the bar's command check:
+# it runs at build time and its output is what gets deployed, so there is no way
+# to ship a colour file the check has not passed on. A hand-edited theme fails
+# `nixos-rebuild switch` on the laptop and fails the host build in CI, rather
+# than drifting until somebody notices the bar and the launcher no longer match.
 { pkgs }:
 {
   # `files` is a list of { path, deployed, expected }:

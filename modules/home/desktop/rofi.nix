@@ -17,15 +17,15 @@ let
   # The same bargain waybar.nix makes, for the same reason: themes/palette.rasi
   # is generated from lib/kanagawa-wave.nix and checked in so that configs/rofi
   # works standalone, and the build is what keeps the copy honest. See
-  # ./lib/generated.nix, and item 5 of docs/plans/desktop-design.md.
+  # ./lib/generated.nix.
   #
   # themes/kanagawa-wave.rasi is hand-written and carries no hex; it imports
   # palette.rasi by a relative name, which rofi resolves against the including
   # file's own directory, so the pair travels together. Nor does it carry a
-  # loose length: item 6's geometry scale is checked here too, the same way
+  # loose length: the geometry scale is checked here too, the same way
   # waybar's stylesheets are. See ./lib/scale.nix.
   #
-  # The second gate is the one this item earned the hard way. rofi does not
+  # The second gate is the one earned the hard way. rofi does not
   # fail when a theme does not parse: it logs a warning nobody is reading and
   # silently loads its own default, so a broken theme looks like a launcher
   # that has quietly reverted to Solarized. `-dump-theme` parses the file and
@@ -82,7 +82,7 @@ in
     home.packages = [
       pkgs.rofi
 
-      # Item 7: rofi is the menu system, and this is the shared front door to
+      # rofi is the menu system, and this is the shared front door to
       # it - one theme, one interaction model, one place to change how a menu
       # behaves. It is installed here rather than by each menu's own module
       # because "rofi owns every list of things to pick" is this module's
@@ -91,7 +91,7 @@ in
       #
       # Its first caller is the project picker (project-launcher pick, bound to
       # SUPER+P and clickable on the bar - the rule that every menu is reachable
-      # both ways, already satisfied). Items 8 to 11 and 13 add the rest.
+      # both ways). The other menus followed.
       (pkgs.rofi-menu or (pkgs.callPackage ../../../packages/rofi-menu { }))
     ];
   };

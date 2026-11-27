@@ -1,11 +1,11 @@
 # The build gate for waybar's stylesheets.
 #
-# The fourth gate on the bar, and the one the other three left room for. Item
-# 1's check asks whether the commands the bar names exist; item 5's asks
-# whether the colour file still matches the palette; item 6's asks whether the
-# lengths honour the scale. None of them asks the question waybar actually
-# asks at startup, which is whether GTK can parse the file at all - and a
-# stylesheet GTK rejects is not a bar that looks wrong, it is a bar that does
+# The fourth gate on the bar, and the one the other three left room for. The
+# command check asks whether the commands the bar names exist; the palette check
+# asks whether the colour file still matches the palette; the scale check asks
+# whether the lengths honour the scale. None of them asks the question waybar
+# actually asks at startup, which is whether GTK can parse the file at all - and
+# a stylesheet GTK rejects is not a bar that looks wrong, it is a bar that does
 # not appear.
 #
 # So this hands the stylesheets to GTK itself, at build time, and a file GTK

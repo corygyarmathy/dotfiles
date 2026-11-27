@@ -13,7 +13,7 @@
   // reach - those four colours live in calendar.jsonc, generated from
   // lib/kanagawa-wave.nix. waybar merges an include recursively and lets this
   // file win any key it already sets, so every other decision about the
-  // calendar stays below. See item 5 of docs/plans/desktop-design.md.
+  // calendar stays below. See lib/kanagawa-wave.nix.
   "include": ["calendar.jsonc"],
 
   // A minimum: the bar grows to fit its modules. On the geometry scale
@@ -63,7 +63,7 @@
     "tooltip": true,
   },
 
-  // Item 14 of the desktop plan. Quiet when every user and system unit is
+  // Quiet when every user and system unit is
   // healthy, a visible marker when any has failed; the click lists the
   // failed units and opens the chosen one's journal. Same shape as the
   // nixos-upgrade module above: no news, no noise.
@@ -75,7 +75,7 @@
     "tooltip": true,
   },
 
-  // Item 8 of the desktop plan. One click away from every action that ends
+  // One click away from every action that ends
   // the session - lock, suspend, log out, reboot, power off - with the
   // destructive entries last so the fast path lands on Lock. SUPER+Escape is
   // the keyboard path; neither one is the real one.
@@ -126,7 +126,7 @@
     "on-click": "project-launcher pick",
   },
 
-  // Item 13 of the desktop plan. Reads dunst's own paused state - a bell
+  // Reads dunst's own paused state - a bell
   // when quiet, a "DND" label when notifications are paused, so the state
   // cannot be left on silently. Left toggles, right opens the history of
   // missed notifications. SUPER+N is the keyboard path.
@@ -170,8 +170,8 @@
     "interval": 120,
     "format": "{percentage_used}% ",
     // Left = open file manager, Right = show details
-    // Middle was a `dust` tree in a terminal; item 14 of the desktop plan owns
-    // "what is using this disk" and gives it a menu instead.
+    // Middle was a `dust` tree in a terminal; "what is using this disk"
+    // belongs in a menu instead.
     "on-click": "xdg-open ~",
     "on-click-right": "notify-send 'Disk' \"$(df -h / --output=source,size,used,avail,pcent | tail -1)\"",
   },
@@ -200,7 +200,7 @@
     // Right was a `sensors` notification with no `sensors` to run, so it fired
     // an empty body - which reads as "nothing to report" rather than "broken".
     // waybar's own tooltip already answers this module's question at hover
-    // depth; per-zone detail belongs to item 14 of the desktop plan.
+    // depth; per-zone detail belongs one pick deeper.
     "on-click": "term-run btop",
   },
 
@@ -254,7 +254,7 @@
   "network": {
     "interval": 30,
     "format-alt": "{ifname}: {ipaddr}/{cidr}",
-    // The plan (item 9) wanted the format toggle kept after the menu took
+    // The format toggle is kept after the menu took
     // the left click. Waybar's format-alt toggles on left click by default;
     // format-alt-click moves it, here to the right button, so neither
     // surface eats the other.
@@ -263,19 +263,19 @@
     "format-ethernet": "{ifname}: {ipaddr}/{cidr}   up: {bandwidthUpBits} down: {bandwidthDownBits}",
     "format-linked": "{ifname} (No IP) ",
     "format-wifi": "{signalStrength}% ",
-    // Left = the wifi menu (item 9 of the desktop plan), SUPER+SHIFT+W the
+    // Left = the wifi menu, SUPER+SHIFT+W the
     // keyboard half. Right = the alternate format, kept via format-alt-click
-    // above rather than lost to the menu. Middle stays nothing: item 3
-    // dropped the dead nm-connection-editor middle click and the menu
+    // above rather than lost to the menu. Middle stays nothing: the dead
+    // nm-connection-editor middle click was dropped, and the menu
     // connects to networks without editing profiles, which is `full` depth
     // and belongs to an application.
     "on-click": "network-menu",
   },
 
-  // Item 9 of the desktop plan. The native bluetooth module - a glyph in
+  // The native bluetooth module - a glyph in
   // each adapter state, the connected device in the tooltip - with its left
   // click opening the device menu. The CSS has been waiting for this module
-  // since before the plan existed.
+  // since long before the module was enabled.
   "bluetooth": {
     "format-disabled": "󰂲",
     "format-off": "󰂯",
@@ -305,10 +305,10 @@
     "format-muted": " {format_source}",
     "format-source": "{volume}% ",
     "format-source-muted": "",
-    // Left = the audio device menu (item 9 of the desktop plan) - "which
+    // Left = the audio device menu - "which
     // headphones" is a pick, not a full mixer. Right = toggle mute.
     // Middle = pavucontrol, the full mixer, moved here from the dead
-    // pulsemixer binding (item 3).
+    // pulsemixer binding.
     "on-click": "audio-menu",
     "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "on-click-middle": "pavucontrol",

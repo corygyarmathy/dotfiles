@@ -1,6 +1,6 @@
 """Assert that every length a hand-written config names is on the geometry scale.
 
-Item 6 of docs/plans/desktop-design.md gave the desktop one scale: two radii,
+The desktop has one scale: two radii,
 one border width, and spacing in multiples of eight. Three of the files that
 have to honour it - waybar's style.css, rofi's theme, hyprland's settings.lua -
 are deployed verbatim so they keep working without Nix, so they cannot read the

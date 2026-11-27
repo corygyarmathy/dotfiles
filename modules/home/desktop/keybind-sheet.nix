@@ -1,4 +1,4 @@
-# Keybind sheet - item 11 of docs/plans/desktop-design.md.
+# Keybind sheet.
 #
 # SUPER+slash opens the sheet, parsed live from the deployed binds.lua. The
 # parse is gated at build time too - hyprland.nix runs the same parser over

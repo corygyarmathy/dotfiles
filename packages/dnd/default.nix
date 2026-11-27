@@ -1,6 +1,6 @@
 # dnd: do-not-disturb's two surfaces - the bar module and the history menu.
 #
-# Item 13 of docs/plans/desktop-design.md. Principle 3's off switch did not
+# ADR 0012's rule 3 asks for a one-keystroke off switch, and it did not
 # exist: dunst can be paused and nothing offered it, and the twenty
 # notifications it keeps in history had no way in. Two scripts:
 #
@@ -44,11 +44,11 @@ let
     '';
   };
 
-  # The history view, as item 7's menu shape. dunstctl history is JSON here -
-  # an array of arrays of notifications - and every value is itself wrapped
-  # as {type, data}. The jq unwraps both and cuts the body to a preview, and
-  # the row is ID<TAB>summary<TAB>body so the id survives the menu.
-  # history-pop re-displays the picked notification in full.
+  # The history view, in the shared menu shape (packages/lib/mk-menu.nix).
+  # dunstctl history is JSON here - an array of arrays of notifications - and
+  # every value is itself wrapped as {type, data}. The jq unwraps both and cuts
+  # the body to a preview, and the row is ID<TAB>summary<TAB>body so the id
+  # survives the menu. history-pop re-displays the picked notification in full.
   history = mkMenu {
     name = "dnd-history";
     prompt = "Notification history";

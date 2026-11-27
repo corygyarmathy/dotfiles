@@ -1,9 +1,9 @@
 # keybind-sheet: the documentation binds.lua never had.
 #
-# Item 11 of docs/plans/desktop-design.md. Around sixty bindings across nine
+# Around sixty bindings across nine
 # labelled sections, and no way to see them except by opening the file - which
 # makes a keyboard-first desktop keyboard-first only for the bindings already
-# memorised, and the eight new menus this plan adds are eight more things to
+# memorised, and every menu is one more binding to
 # forget. SUPER+slash shows them all.
 #
 # It reads the *deployed* binds.lua, so it shows what is actually bound rather

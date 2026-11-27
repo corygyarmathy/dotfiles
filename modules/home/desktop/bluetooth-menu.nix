@@ -1,4 +1,4 @@
-# Bluetooth menu - item 9 of docs/plans/desktop-design.md.
+# Bluetooth menu.
 #
 # The bar's bluetooth module opens it on left click. The menu owns
 # connect/disconnect for known devices; pairing goes through blueman-manager,

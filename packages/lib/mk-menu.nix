@@ -1,12 +1,11 @@
 # mkMenu: the one shape a desktop menu is allowed to have.
 #
-# Item 7 of docs/plans/desktop-design.md made rofi the menu system and gave
-# every menu the same shape - a list you filter by typing, pick with the
-# keyboard or the pointer, dismiss with Escape - and then said it out loud:
-# "whoever writes the second menu should extract a `mkMenu` builder and put
-# the rule in it." Every menu written since (items 8, 9, 10, 13, 14 and 15 -
-# the annotation prompt included) goes through this, so the rule lives here
-# rather than being restated in each package's header.
+# rofi is the menu system, and every menu has the same shape - a list you filter
+# by typing, pick with the keyboard or the pointer, dismiss with Escape. Whoever
+# wrote the second menu was to extract a `mkMenu` builder and put the rule in
+# it. Every menu since (the screenshot annotation prompt included) goes through
+# this, so the rule lives here rather than being restated in each package's
+# header.
 #
 # The rule, in one sentence: a menu is <list> piped through rofi-menu with a
 # prompt and a row count, and the picked line is $choice. That is everything.
@@ -37,7 +36,7 @@ writeShellApplication {
   runtimeInputs = [ rofi-menu ] ++ runtimeInputs;
 
   text = ''
-    # ${name}: item 7's menu shape. <list> emits one choice per line;
+    # ${name}: the shared menu shape. <list> emits one choice per line;
     # rofi-menu presents them with the shared theme; the picked line is
     # $choice below. Rows is the only knob a menu is allowed to turn.
     #

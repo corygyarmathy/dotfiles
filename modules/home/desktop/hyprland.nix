@@ -13,7 +13,7 @@ let
 
   configs = ../../../configs/hypr;
 
-  # Item 6 of docs/plans/desktop-design.md. settings.lua is deployed verbatim
+  # settings.lua is deployed verbatim
   # so it keeps working on a machine without Nix, which means it cannot read
   # the geometry scale - so the build reads it instead. Gaps, border width and
   # window rounding are the compositor's half of the same four numbers waybar,
@@ -31,11 +31,11 @@ let
   # See ../../../packages/keybind-sheet.
   keybind-sheet = pkgs.keybind-sheet or (pkgs.callPackage ../../../packages/keybind-sheet { });
 
-  # Item 1's extension, taken with items 8-15. binds.lua names binaries in
+  # The bar's command check, extended to binds. binds.lua names binaries in
   # its exec_cmd strings and no check covered them; a bind that runs nothing
   # is the bar's dead click wearing a keyboard. See ./binds-commands.py.
   #
-  # The same runCommand also gates item 11's keybind sheet: the parser reads
+  # The same runCommand also gates the keybind sheet: the parser reads
   # the *deployed* binds.lua at runtime, and keybind-sheet-parse - the
   # package's own command - runs the identical parser over the checked-in
   # file so a binds.lua the sheet stops understanding fails the build instead

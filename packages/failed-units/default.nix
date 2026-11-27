@@ -1,6 +1,6 @@
 # failed-units: the one question the tray cannot answer - what has failed.
 #
-# Item 14 of docs/plans/desktop-design.md. The escalation ladder had a rung
+# The escalation ladder (ADR 0012) had a rung
 # missing: glance should say "something is wrong", pick should say what, and
 # full is journalctl. The tray covers applications that ship a tray icon and
 # nothing else; a user service that dies under graphical-session.target just
@@ -12,9 +12,9 @@
 #                        and a visible marker when any user or system unit
 #                        has failed. Reading is event-free: it shells out to
 #                        systemctl on an interval, which is exactly the
-#                        poller principle 1 warns about - but unit failures
-#                        change at human speed, so a 30s interval is far
-#                        slower than the thing it watches.
+#                        poller ADR 0012's rule 1 warns about - but unit
+#                        failures change at human speed, so a 30s interval
+#                        is far slower than the thing it watches.
 #
 #   failed-units-click   a rofi menu over the failed units; picking one opens
 #                        its journal in the terminal. User units read

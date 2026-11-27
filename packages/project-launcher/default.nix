@@ -10,8 +10,8 @@
 # rather than wrapped paths. This keeps the binary portable across hosts
 # that may have slightly different versions of those tools.
 #
-# The picker calls `rofi-menu` rather than `rofi`: item 7 of
-# docs/plans/desktop-design.md makes one wrapper the way every list on this
+# The picker calls `rofi-menu` rather than `rofi`: one
+# wrapper is the way every list on this
 # desktop is presented, so that they cannot drift into looking like four
 # different menus. modules/home/desktop/rofi.nix installs it.
 {

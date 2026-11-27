@@ -27,7 +27,7 @@ in
       }
     ];
 
-    # Item 4 of docs/plans/desktop-design.md. This was an `hl.exec_cmd` line in
+    # This was an `hl.exec_cmd` line in
     # configs/hypr/autostart.lua, which is the one thing in the session that
     # starts daemons outside systemd: nothing supervises it, nothing orders it
     # against graphical-session.target, and a crash is silent. Everything else

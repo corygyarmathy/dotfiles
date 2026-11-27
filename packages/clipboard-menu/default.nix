@@ -1,6 +1,6 @@
 # clipboard-menu: the clipboard history that survives its window.
 #
-# Item 10 of docs/plans/desktop-design.md. Under Wayland the clipboard is
+# Under Wayland the clipboard is
 # owned by the source window, so copying from a terminal and closing it lost
 # the copy - a papercut that fires several times a day. cliphist stores
 # history (and, by way of wl-clipboard's CLIPBOARD_STATE, skips offers

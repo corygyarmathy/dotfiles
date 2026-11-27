@@ -7,8 +7,8 @@
  *  Designed for drun / run / window modes with icons enabled.
  *
  *  LAYOUT ONLY. Every colour comes from palette.rasi, which is generated from
- *  lib/kanagawa-wave.nix and shares its role names with waybar's style.css -
- *  item 5 of docs/plans/desktop-design.md. There is no hex below this line.
+ *  lib/kanagawa-wave.nix and shares its role names with waybar's style.css.
+ *  There is no hex below this line.
  *  Relative imports resolve against this file's own directory, so the two
  *  travel together onto a machine without Nix. One rule lives over there
  *  rather than here - element-text's `highlight` - because rofi's grammar
@@ -16,8 +16,7 @@
  *
  *  There is no loose length below either: radius is 12 for the window and 8
  *  for a row, borders are 2, and every space is a multiple of 8. That scale
- *  is lib/geometry.nix, and the build asserts this file honours it - item 6
- *  of the same plan.
+ *  is lib/geometry.nix, and the build asserts this file honours it.
  ******************************************************************************/
 
 @import "palette.rasi"

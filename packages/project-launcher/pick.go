@@ -51,8 +51,8 @@ func runPick() error {
 // project. A nil project (with nil error) signals the user dismissed the
 // picker without selecting anything.
 //
-// It goes through `rofi-menu` rather than calling rofi directly: item 7 of
-// docs/plans/desktop-design.md makes rofi the menu system for every list this
+// It goes through `rofi-menu` rather than calling rofi directly: rofi is
+// the menu system for every list this
 // desktop asks the user to pick from, and a menu that sets its own flags is
 // a second menu system. rofi-menu is also where the flags this picker used to
 // need live now - it turns off history and sidebar-mode, which is what the

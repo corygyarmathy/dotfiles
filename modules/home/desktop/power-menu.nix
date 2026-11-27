@@ -1,4 +1,4 @@
-# Power and session menu - item 8 of docs/plans/desktop-design.md.
+# Power and session menu.
 #
 # The bar's custom/power module and SUPER+Escape both reach the same menu:
 # every action is keybound and every action that can be a pointer target is

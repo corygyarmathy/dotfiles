@@ -1,6 +1,6 @@
 # screenshot: the full screenshot suite under Print.
 #
-# Item 15 of docs/plans/desktop-design.md. One binding used to exist - Print
+# One binding used to exist - Print
 # ran `grimblast copy area` - and there was no way to save to a file, capture
 # a window or a monitor, annotate, or pick a colour. This is the full set,
 # with the region-to-clipboard case kept exactly as it was.
@@ -26,10 +26,11 @@ let
     inherit lib writeShellApplication rofi-menu;
   };
 
-  # The annotation decision, as item 7's menu shape. "Annotate in satty" is
-  # the only entry with an action; a dismissed prompt and "Save without
-  # annotating" both mean "save it as it is", never a captured frame that
-  # vanished. The file being annotated arrives as $1.
+  # The annotation decision, in the shared menu shape
+  # (packages/lib/mk-menu.nix). "Annotate in satty" is the only entry with an
+  # action; a dismissed prompt and "Save without annotating" both mean "save it
+  # as it is", never a captured frame that vanished. The file being annotated
+  # arrives as $1.
   annotate = mkMenu {
     name = "screenshot-annotate";
     prompt = "Screenshot";

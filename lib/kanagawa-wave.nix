@@ -1,6 +1,6 @@
 # Kanagawa Wave, named once.
 #
-# Item 5 of docs/plans/desktop-design.md. Principle 5's rule is that a colour
+# ADR 0012's rule 5 is that a colour
 # is named in exactly one file; before this, Kanagawa Wave was written out by
 # hand in five - the waybar CSS, the rofi rasi, the clock's calendar markup,
 # the modifier indicator's Python, and (as a different design entirely) the
@@ -17,15 +17,15 @@
 # draws roninYellow. So "generate the colour files from
 # `config.lib.stylix.colors`" could not have been done without either shifting
 # the palette or naming those eight colours somewhere else - which is the
-# duplication this item exists to remove.
+# duplication this file exists to remove.
 #
 # So the direction is inverted: this file is the source, and stylix is handed
 # `scheme` below. GTK, Qt, dunst, hyprland's borders, ghostty and nvim now come
-# from the same file as waybar, rofi and (when items 12 and 17 land) swayosd and
-# hyprlock. `scheme` is byte-identical to the upstream YAML, so adopting it
-# changed nothing that was already themed; what it bought is that the extra
-# eight colours have somewhere to live, and that the palette stops moving
-# underneath the machine when `base16-schemes` updates.
+# from the same file as waybar, rofi and swayosd. `scheme` is byte-identical to
+# the upstream YAML, so adopting it changed nothing that was already themed;
+# what it bought is that the extra eight colours have somewhere to live, and
+# that the palette stops moving underneath the machine when `base16-schemes`
+# updates.
 #
 # TWO LAYERS, AND WHICH ONE TO USE.
 #
@@ -350,7 +350,7 @@ rec {
     ${defineColors}
   '';
 
-  # swayosd (item 12 of docs/plans/desktop-design.md). The OSD reads a plain
+  # swayosd. The OSD reads a plain
   # ~/.config/swayosd/style.css and stylix has no target for it, so it joins
   # the generated scheme from its first commit rather than arriving as a
   # fourth hand-written copy of the palette and being cleaned up afterwards.
@@ -368,9 +368,8 @@ rec {
     ${comment " *" (banner "swayosd")}
      *
      * The OSD is overlay-sized, so it takes the surface radius (12) and the
-     * border (2) from lib/geometry.nix like every other surface. Item 12 of
-     * docs/plans/desktop-design.md; the same two gates the bar and the
-     * launcher sit behind.
+     * border (2) from lib/geometry.nix like every other surface, behind the
+     * same two gates as the bar and the launcher.
      */
     ${defineColors}
 
@@ -437,7 +436,8 @@ rec {
     ${comment " *" (banner "rofi")}
      *
      * The role names are waybar's. Two files calling the same colour by two
-     * names is what item 5 was about; this is the half that stops it.
+     * names is what the shared palette prevents; this is the half that stops
+     * it.
      */
 
     * {
@@ -476,8 +476,8 @@ rec {
   # It is Pango markup inside JSON, where CSS cannot reach and there is no
   # widget to give a role to: the four spans are typography, not state. Rather
   # than invent four roles with one user each, it names the pigment directly -
-  # which still satisfies principle 5, because the pigment is named here and
-  # nowhere else.
+  # which still satisfies ADR 0012's rule 5, because the pigment is named here
+  # and nowhere else.
   #
   # waybar merges `include` into the top-level config recursively and lets the
   # including file win any key it already sets, so config.jsonc keeps every

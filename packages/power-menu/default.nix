@@ -1,6 +1,6 @@
 # power-menu: shut down, reboot, suspend, log out or lock, from one menu.
 #
-# Item 8 of docs/plans/desktop-design.md. There was no visual way to shut
+# There was no visual way to shut
 # down or reboot - SUPER+S only locks, everything else was a terminal command.
 # This is that visual path: a rofi menu over loginctl and systemctl.
 #

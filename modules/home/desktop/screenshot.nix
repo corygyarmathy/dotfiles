@@ -1,4 +1,4 @@
-# Screenshot suite - item 15 of docs/plans/desktop-design.md.
+# Screenshot suite.
 #
 # The full set under Print with modifiers: region to clipboard (the common
 # case, unchanged), region to file, active window, current monitor - with

@@ -157,7 +157,7 @@
     settings.General.Enable = "Source,Sink,Media,Socket";
   };
   # No blueman-applet, on purpose: the bluetooth-menu owns connect/disconnect
-  # (item 9 of the desktop plan) and item 7 rejected the applet as the UI.
+  # and rofi is the menu system, so the applet was rejected as the UI.
   # The blueman *package* is carried by the bluetooth-menu module instead of
   # the host's package list, so the pairing flow that menu should not attempt
   # stays one keystroke away in blueman-manager and the package gains the

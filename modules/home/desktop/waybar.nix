@@ -22,8 +22,6 @@ let
   # hand-written list that could disagree with them. See ./lib/session-path.nix.
   searchPath = import ./lib/session-path.nix { inherit lib config osConfig; };
 
-  # Item 1 of docs/plans/desktop-design.md.
-  #
   # This is a check, but it is not in `checks/`: it gates the *build* rather
   # than a test run, so a configuration whose bar has a dead button cannot be
   # switched to in the first place - not on this laptop and not in CI, which
@@ -33,12 +31,12 @@ let
   #
   # See ./waybar-commands.py for what it does and does not look at.
   #
-  # It gates four things now. The second is item 5's half of the same
+  # It gates four things now. The second is the palette's half of the same
   # bargain: the colour file and the calendar's four hexes are generated from
   # lib/kanagawa-wave.nix and checked in, and this is what stops the copy from
-  # drifting away from the palette. The third is item 6's: the stylesheets are
-  # hand-written and cannot read the geometry scale, so they are checked
-  # against it instead.
+  # drifting away from the palette. The third is the geometry scale's: the
+  # stylesheets are hand-written and cannot read the geometry scale, so they are
+  # checked against it instead.
   #
   # The fourth exists because the first three all passed on a stylesheet GTK
   # could not parse, and the bar spent a night refusing to start: they check

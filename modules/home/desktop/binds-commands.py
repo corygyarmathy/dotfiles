@@ -1,11 +1,10 @@
 """Assert that every command binds.lua hands to a shell actually exists.
 
-Item 1 of docs/plans/desktop-design.md checked waybar's config and noted that
-the same question applies to binds.lua, which also names binaries -
-"extending it is cheap afterwards". This is that extension, taken when items
-8-15 added about a dozen commands to the file and made the keybind sheet
-worth gating: a bind that runs a binary the closure does not carry is the
-same dead-interaction defect the bar's check exists to stop.
+The bar's command check covers waybar's config, and the same question
+applies to binds.lua, which also names binaries. This is that extension,
+taken when the menus added about a dozen commands to the file and made the
+keybind sheet worth gating: a bind that runs a binary the closure does not
+carry is the same dead-interaction defect the bar's check exists to stop.
 
 Scope, deliberately narrow, like the waybar check: the *head* of every
 exec_cmd("...") string, resolved against the same two closures the session

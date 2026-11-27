@@ -5,7 +5,7 @@
 -- this desktop's other surfaces read too: 12 for a window-sized radius, 2 for
 -- a border, 8 for a space. A 1px window border beside a 2px bar is the kind of
 -- inconsistency that is felt without being seen. The build asserts this file
--- honours the scale - item 6 of docs/plans/desktop-design.md.
+-- honours the scale (lib/geometry.nix).
 
 hl.config({
 	general = {

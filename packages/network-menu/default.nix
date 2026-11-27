@@ -1,14 +1,14 @@
 # network-menu: connect to a wifi network, from a menu.
 #
-# Item 9 of docs/plans/desktop-design.md. Changing wifi networks had no
+# Changing wifi networks had no
 # visual path at all before this - nmtui in a terminal or nothing. The menu
 # lists saved and visible networks with signal strength, connects on pick,
 # and asks for a passphrase when the network is not saved yet.
 #
-# One deliberate boundary, from the item: a menu does one thing, and editing
-# connection profiles is not that thing - that is `full` depth on the
-# escalation ladder and belongs to nm-connection-editor. This connects to
-# networks. It does not edit them.
+# One deliberate boundary: a menu does one thing, and editing connection
+# profiles is not that thing - that is `full` depth on the escalation ladder
+# (ADR 0012) and belongs to nm-connection-editor. This connects to networks. It
+# does not edit them.
 #
 # The passphrase is the one case that does not go through rofi-menu: it is a
 # prompt, not a list of answers, so rofi's own -password flag is used for it.
