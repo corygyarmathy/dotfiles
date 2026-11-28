@@ -116,7 +116,6 @@
   # ============================================================================
   home.packages = with pkgs; [
     # Productivity
-    vivaldi
     obsidian
     libreoffice
     google-chrome
