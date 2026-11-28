@@ -74,7 +74,7 @@ in
           history_length = 20;
 
           # Misc
-          browser = "vivaldi";
+          browser = "firefox";
           always_run_script = true;
           title = "Dunst";
           class = "Dunst";

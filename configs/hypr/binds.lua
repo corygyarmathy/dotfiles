@@ -8,7 +8,7 @@ local mod = "SUPER"
 ---------------------------------------------------------------------------
 -- Terminals open in the running Ghostty instance; see configs/ghostty/config.
 hl.bind(mod .. " + T", hl.dsp.exec_cmd("ghostty +new-window"))
-hl.bind(mod .. " + B", hl.dsp.exec_cmd("vivaldi"))
+hl.bind(mod .. " + B", hl.dsp.exec_cmd("firefox"))
 hl.bind(mod .. " + E", hl.dsp.exec_cmd("ghostty +new-window --working-directory=$HOME -e yazi"))
 hl.bind(mod .. " + R", hl.dsp.exec_cmd("rofi -show drun -show-icons"))
 hl.bind(mod .. " + W", hl.dsp.exec_cmd("rofi -show window -show-icons"))
@@ -24,7 +24,7 @@ hl.bind(mod .. " + Q", hl.dsp.exec_cmd("project-launcher close"))
 -- sentence). These are the keyboard half; the pointer half lives on the bar
 -- modules. The network, bluetooth and audio menus take SHIFT + the first letter
 -- of the domain, which keeps the plain letters for their applications (B =
--- vivaldi, W = window picker, A = togglesplit).
+-- firefox, W = window picker, A = togglesplit).
 hl.bind(mod .. " + escape", hl.dsp.exec_cmd("power-menu"))
 hl.bind(mod .. " + SHIFT + V", hl.dsp.exec_cmd("clipboard-menu"))
 hl.bind(mod .. " + slash", hl.dsp.exec_cmd("keybind-sheet"))
