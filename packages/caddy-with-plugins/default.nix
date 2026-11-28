@@ -21,7 +21,7 @@
     "github.com/mholt/caddy-ratelimit@v0.1.0"
   ];
   # Refreshed by ./update.sh - never hand-edit.
-  hash = "sha256-xCTT4Hmf8NjZ9O0z0q+jxd1m7bF9Q2Ef0lJdFEUD1SM=";
+  hash = "sha256-oXc0r+4cmcNk8UooFUFKWMttadMf1ANv+lkYYj493pw=";
 }).overrideAttrs
   (old: {
     passthru = (old.passthru or { }) // {
